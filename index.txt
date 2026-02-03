@@ -508,7 +508,6 @@
         // ▼▼▼ 여기에 재생할 2개의 동영상 파일 주소를 넣어주세요 ▼▼▼
         const playlist = [
             "nucks_mood.mp4" // 첫 번째 영상
-            ,"nucks_mood1.mp4"  // 두 번째 영상 (여기를 수정하세요)
             ,"nucks.mp4","nucks1.mp4","nucks1-1.mp4"
         ];
 
@@ -524,4 +523,5 @@
     </script>
 
 </body>
+
 </html>
