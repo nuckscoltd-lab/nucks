@@ -289,7 +289,7 @@
                     <img src="dsc01376.jpg" alt="홍천대상웰라움">
                     <div class="project-info"><h3>UNIT</h3> <p>홍천대상웰라움</p></div>
                 </div>
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images='["alt-03.jpg", "08_주방 OPT2(우측-닫힘)(보정).jpg", "Enscape_2025-04-15-11-08-39.jpg"]'>
+                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images='["ALT-03.jpg", "08_living.jpg", "Enscape_20250415.jpg"]'>
                     <img src="alt-03.jpg" alt="HWASUNG">
                     <div class="project-info"><h3>UNIT</h3> <p>HWASUNG</p></div>
                 </div>
