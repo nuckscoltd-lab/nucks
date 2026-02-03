@@ -273,8 +273,8 @@
             </div>
 
             <div class="grid">
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images='["224마스터.jpg","거실_alt.png", "toilet.jpg", "273_alt.jpg"]'>
-                    <img src="224마스터.jpg" alt="아페르한강">
+                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images='["224master.jpg","living_alt.png", "toilet.jpg", "273_alt.jpg"]'>
+                    <img src="224master.jpg" alt="아페르한강">
                     <div class="project-info"><h3>UNIT</h3> <p>아페르한강</p></div>
                 </div>
                 <div class="project-item" data-category="unit" onclick="openModal(this)" data-images='["dsc01194.jpg","dsc00477.jpg", "dsc00480.jpg", "dsc01454.jpg"]'>
