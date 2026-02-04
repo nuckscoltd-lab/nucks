@@ -1,14 +1,15 @@
-<html lang="ko"><head>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Designed by Nucks | Interior Re-modeling &amp; Design</title>
+    <title>Designed by Nucks | Interior Re-modeling & Design</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&amp;family=Playfair+Display:wght@400;700;900&amp;display=swap" rel="stylesheet" "="">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&family=Playfair+Display:wght@400;700;900&display=swap" rel="stylesheet">
 
     <style>
-        /* [스타일은 기존과 동일합니다] */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -19,20 +20,33 @@
             overflow-x: hidden;
         }
 
+        /* [수정됨] 헤더 스타일: 햄버거 메뉴 대응 */
         header {
             position: fixed;
             top: 0; width: 100%;
-            padding: 40px 60px;
+            padding: 25px 60px; /* 높이 약간 조정 */
             display: flex;
             justify-content: space-between;
             align-items: center;
             z-index: 1000;
-            background: rgba(255,255,255,0.9);
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(5px);
         }
-        .logo { font-size: 24px; font-weight: 800; text-decoration: none; color: #000; }
+        .logo { font-size: 24px; font-weight: 800; text-decoration: none; color: #000; z-index: 1001; }
+        
+        /* PC 버전 네비게이션 */
         nav { display: flex; gap: 40px; }
-        nav a { text-decoration: none; color: #666; font-size: 14px; text-transform: uppercase; transition: 0.3s; }
+        nav a { text-decoration: none; color: #666; font-size: 14px; text-transform: uppercase; transition: 0.3s; font-weight: 500; }
         nav a:hover { color: #000; }
+
+        /* [추가됨] 햄버거 버튼 (PC에선 숨김) */
+        .mobile-menu-icon {
+            display: none;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 1001;
+            padding: 5px;
+        }
 
         .hero {
             min-height: 80vh;
@@ -40,7 +54,7 @@
             align-items: center;
             justify-content: space-between;
             padding: 0 60px;
-            margin-top: 125px;
+            margin-top: 100px;
             gap: 50px;
             background: linear-gradient(to right, #ffffff, #eaeff2);
             margin-bottom: 0;
@@ -96,10 +110,19 @@
             font-size: 12px; text-transform: uppercase; color: #999;
             border-bottom: none !important; margin-bottom: 0 !important; padding-bottom: 0 !important;
         }
-        .filter-container { margin-bottom: 0 !important; }
+        
+        /* [수정됨] 필터 컨테이너: 자동 줄바꿈 및 간격 설정 */
+        .filter-container { 
+            margin-bottom: 0 !important;
+            display: flex;
+            gap: 8px; /* 버튼 사이 간격 */
+            flex-wrap: wrap; /* 화면 좁으면 줄바꿈 */
+        }
         .filter-btn {
-            background: none; border: 1px solid #ddd; padding: 8px 20px; margin-left: 10px;
+            background: none; border: 1px solid #ddd; padding: 8px 20px;
+            /* margin-left 제거하고 gap 사용 */
             cursor: pointer; font-size: 13px; color: #666; transition: 0.3s; border-radius: 20px;
+            white-space: nowrap; /* 글자 줄바꿈 방지 */
         }
         .filter-btn:hover, .filter-btn.active { background-color: #1a1a1a; color: #fff; border-color: #1a1a1a; }
         
@@ -149,7 +172,7 @@
             display: block; max-width: 100%; max-height: 85vh; object-fit: contain; 
             box-shadow: 0 5px 30px rgba(0,0,0,0.3);
         }
-        .zoom-frame { /* 모달 돋보기 프레임 */
+        .zoom-frame {
             position: relative; overflow: hidden; max-width: 100%; max-height: 85vh;
             display: flex; justify-content: center; align-items: center; cursor: crosshair;
         }
@@ -193,26 +216,58 @@
         .page-num:hover, .page-num.active { background-color: #1a1a1a; color: #fff; border-color: #1a1a1a; }
         .hide { display: none !important; }
 
+        /* [모바일 반응형 수정 구간] */
         @media (max-width: 768px) {
-            .hero { flex-direction: column; padding: 0 30px; height: auto; padding-bottom: 60px; margin-top: 100px; gap: 30px; }
+            /* 1. 헤더 수정: 햄버거 메뉴 보이기 */
+            header { padding: 15px 20px; }
+            .mobile-menu-icon { display: block; } /* 햄버거 보이기 */
+            
+            nav {
+                display: none; /* 기본 메뉴 숨김 */
+                position: absolute;
+                top: 100%; left: 0; width: 100%;
+                background: rgba(255,255,255,0.98);
+                flex-direction: column;
+                align-items: center;
+                padding: 30px 0;
+                box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+                border-top: 1px solid #eee;
+            }
+            nav.active { display: flex; } /* active 클래스 붙으면 보임 */
+            nav a { margin: 15px 0; font-size: 18px; font-weight: 700; color: #333; }
+
+            /* 2. 본문 레이아웃 */
+            .hero { flex-direction: column; padding: 0 20px; height: auto; padding-bottom: 60px; margin-top: 80px; gap: 30px; }
             .hero-content { max-width: 100%; width: 100%; }
             .hero-video-area { width: 100%; height: 300px; }
             .hero h1 { font-size: 3rem; }
             .grid { grid-template-columns: repeat(2, 1fr); }
-            header { padding: 20px; }
+            
+            /* 3. 프로젝트 헤더 및 필터 버튼 수정 */
             #projects.container { padding: 0 0 80px; }
-            .projects-header { padding: 20px 20px 30px; } 
+            .projects-header { 
+                padding: 20px 20px 30px; 
+                flex-direction: column; 
+                align-items: center; /* 중앙 정렬 */
+                gap: 15px; 
+                text-align: center;
+            } 
+            .filter-container { 
+                margin-top: 10px; 
+                justify-content: center; /* 버튼 가운데 정렬 */
+            }
+            .filter-btn { padding: 8px 14px; font-size: 12px; } /* 버튼 크기 미세 조정 */
+
+            /* 4. 푸터 수정 */
             .footer-grid { grid-template-columns: 1fr; }
             .footer-center { justify-content: flex-start; }
             .footer-grid > div:nth-child(1), .footer-grid > div:nth-child(3) { text-align: left; margin-bottom: 30px; }
             .contact-content-row { flex-direction: column; gap: 20px; }
-            .projects-header { flex-direction: column; align-items: flex-start; gap: 10px; }
-            .filter-container { margin-top: 10px; }
-            .filter-btn { margin-left: 0; margin-right: 5px; }
             .gallery-nav.prev { left: -40px; }
             .gallery-nav.next { right: -40px; }
             .close { top: 20px; right: 20px; font-size: 40px; }
         }
+        
         html { scroll-behavior: smooth; }
         #about, #projects, #contact { scroll-margin-top: 120px; }
 
@@ -224,10 +279,15 @@
         <a href="#" class="logo">
             <img src="nuckslogo1.png" alt="Nucks Logo" style="height: 25px;"> 
         </a>
-        <nav>
-            <a href="#about">About</a>
-            <a href="#projects">Projects</a>
-            <a href="#contact">Contact</a>
+        
+        <div class="mobile-menu-icon" onclick="toggleMenu()">
+            ☰
+        </div>
+
+        <nav id="navbar">
+            <a href="#about" onclick="toggleMenu()">About</a>
+            <a href="#projects" onclick="toggleMenu()">Projects</a>
+            <a href="#contact" onclick="toggleMenu()">Contact</a>
         </nav>
     </header>
 
@@ -251,7 +311,7 @@
             </div>
 
             <div class="hero-video-area">
-                <video id="mainVideo" autoplay="" muted="" playsinline="" src="nucks1-2.mp4">
+                <video id="mainVideo" autoplay muted playsinline>
                     <source src="nucks_mood.mp4">
                     Your browser does not support the video tag.
                 </video>
@@ -271,56 +331,56 @@
             </div>
 
             <div class="grid">
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;224master.jpg&quot;,&quot;living_alt.png&quot;, &quot;toilet.jpg&quot;, &quot;273_alt.jpg&quot;]">
-                    <img src="224master.jpg" alt="아페르한강" loading="lazy">
+                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images='["224master.jpg","living_alt.png", "toilet.jpg", "273_alt.jpg"]'>
+                    <img src="224master.jpg" alt="아페르한강">
                     <div class="project-info"><h3>UNIT</h3> <p>아페르한강</p></div>
                 </div>
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;DSC01194.jpg&quot;,&quot;DSC00477.jpg&quot;, &quot;DSC00480.jpg&quot;, &quot;DSC01454.jpg&quot;]">
-                    <img src="DSC01194.jpg" alt="익산부송4지구" loading="lazy">
+                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images='["DSC01194.jpg","DSC00477.jpg", "DSC00480.jpg", "DSC01454.jpg"]'>
+                    <img src="DSC01194.jpg" alt="익산부송4지구">
                     <div class="project-info"><h3>UNIT</h3> <p>익산부송4지구</p></div>
                 </div>
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;6.jpg&quot;, &quot;2.jpg&quot;, &quot;3.jpg&quot;, &quot;DSC00930.jpg&quot;, &quot;DSC01447.jpg&quot;, &quot;DSC01527.jpg&quot;, &quot;DSC01543-DSC00036.jpg&quot;]">
-                    <img src="6.jpg" alt="진주극동" loading="lazy">
+                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images='["6.jpg", "2.jpg", "3.jpg", "DSC00930.jpg", "DSC01447.jpg", "DSC01527.jpg", "DSC01543-DSC00036.jpg"]'>
+                    <img src="6.jpg" alt="진주극동">
                     <div class="project-info"><h3>UNIT</h3> <p>진주극동</p></div>
                 </div>
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;DSC01376.jpg&quot;, &quot;DSC00225.jpg&quot;, &quot;03-DSC00284.jpg&quot;, &quot;04-DSC00159.jpg&quot;, &quot;DSC01378.jpg&quot;, &quot;DSC01629.jpg&quot;, &quot;DSC01049.jpg&quot;]">
-                    <img src="DSC01376.jpg" alt="홍천대상웰라움" loading="lazy">
+                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images='["DSC01376.jpg", "DSC00225.jpg", "03-DSC00284.jpg", "04-DSC00159.jpg", "DSC01378.jpg", "DSC01629.jpg", "DSC01049.jpg"]'>
+                    <img src="DSC01376.jpg" alt="홍천대상웰라움">
                     <div class="project-info"><h3>UNIT</h3> <p>홍천대상웰라움</p></div>
                 </div>
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;ALT-03.jpg&quot;, &quot;08_living.jpg&quot;, &quot;Enscape_20250415.jpg&quot;]">
-                    <img src="ALT-03.jpg" alt="HWASUNG" loading="lazy">
+                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images='["ALT-03.jpg", "08_living.jpg", "Enscape_20250415.jpg"]'>
+                    <img src="ALT-03.jpg" alt="HWASUNG">
                     <div class="project-info"><h3>UNIT</h3> <p>HWASUNG</p></div>
                 </div>
-                <div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;iparkcity.jpg&quot;]">
-                    <img src="iparkcity.jpg" alt="천안부성" loading="lazy">
+                <div class="project-item" data-category="mh" onclick="openModal(this)" data-images='["iparkcity.jpg"]'>
+                    <img src="iparkcity.jpg" alt="천안부성">
                     <div class="project-info"><h3>M/H</h3> <p>천안부성</p></div>
                 </div>
-                <div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;0E7A5379.jpg&quot;, &quot;0E7A5370 copy.jpg&quot;, &quot;0E7A5243 copy.jpg&quot;, &quot;0E7A5226 copy.jpg&quot;, &quot;0E7A5560.jpg&quot;, &quot;0E7A5505 copy.jpg&quot;, &quot;0E7A5522_Panorama 1 copy.jpg&quot;, &quot;0E7A5525_Panorama copy.jpg&quot;, &quot;0E7A5569 copy.jpg&quot;, &quot;0E7A5579 copy.jpg&quot; ]">
-                    <img src="0E7A5379.jpg" alt="서초르니드" loading="lazy">
+                <div class="project-item" data-category="mh" onclick="openModal(this)" data-images='["0E7A5379.jpg", "0E7A5370 copy.jpg", "0E7A5243 copy.jpg", "0E7A5226 copy.jpg", "0E7A5560.jpg", "0E7A5505 copy.jpg", "0E7A5522_Panorama 1 copy.jpg", "0E7A5525_Panorama copy.jpg", "0E7A5569 copy.jpg", "0E7A5579 copy.jpg" ]'>
+                    <img src="0E7A5379.jpg" alt="서초르니드">
                     <div class="project-info"><h3>M/H</h3> <p>서초르니드</p></div>
                 </div>
-                 <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;0E7A9057.jpg&quot;, &quot;0E7A9123_Panorama.jpg&quot;, &quot;0E7A9189.jpg&quot;, &quot;0E7A9093_Panorama.jpg&quot;, &quot;0E7A9301.jpg&quot;]">
-                    <img src="0E7A9057.jpg" alt="밥장인/부산중앙점" loading="lazy">
+                 <div class="project-item" data-category="menual" onclick="openModal(this)" data-images='["0E7A9057.jpg", "0E7A9123_Panorama.jpg", "0E7A9189.jpg", "0E7A9093_Panorama.jpg", "0E7A9301.jpg"]'>
+                    <img src="0E7A9057.jpg" alt="밥장인/부산중앙점">
                     <div class="project-info"><h3>Menual</h3> <p>밥장인</p><p>부산중앙점</p></div>
                 </div>
-                <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;★IMG_6785(보정).jpg&quot;, &quot;★IMG_6761(보정).jpg&quot;, &quot;★IMG_6766(보정).jpg&quot;]">
-                    <img src="★IMG_6785(보정).jpg" alt="밥장인/경성부경대점" loading="lazy">
+                <div class="project-item" data-category="menual" onclick="openModal(this)" data-images='["★IMG_6785(보정).jpg", "★IMG_6761(보정).jpg", "★IMG_6766(보정).jpg"]'>
+                    <img src="★IMG_6785(보정).jpg" alt="밥장인/경성부경대점">
                     <div class="project-info"><h3>Menual</h3> <p>밥장인</p><p>경성부경대점</p></div>
                 </div>
-                    <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;DSC4657.jpg&quot;, &quot;DSC4650.jpg&quot;, &quot;DSC4654.jpg&quot;]">
-                    <img src="DSC4657.jpg" alt="밥장인/홍대점" loading="lazy">
+                    <div class="project-item" data-category="menual" onclick="openModal(this)" data-images='["DSC4657.jpg", "DSC4650.jpg", "DSC4654.jpg"]'>
+                    <img src="DSC4657.jpg" alt="밥장인/홍대점">
                     <div class="project-info"><h3>Menual</h3> <p>밥장인</p><p>홍대점</p></div>
                 </div>
-                <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images="[&quot;sk4-1.jpg&quot;,&quot;sk4.jpg&quot;]">
-                    <img src="sk4-1.jpg" alt="조감도" loading="lazy">
+                <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images='["sk4-1.jpg","sk4.jpg"]'>
+                    <img src="sk4-1.jpg" alt="조감도">
                     <div class="project-info"><h3>평면조감도</h3> <p></p></div>
                 </div>
-                <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images="[&quot;sk3-2.jpg&quot;,&quot;sk3.jpg&quot;]">
-                    <img src="sk3-2.jpg" alt="조감도" loading="lazy">
+                <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images='["sk3-2.jpg","sk3.jpg"]'>
+                    <img src="sk3-2.jpg" alt="조감도">
                     <div class="project-info"><h3>평면조감도</h3> <p></p></div>
                 </div>
-                 <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images="[&quot;sk-2-2.jpg&quot;,&quot;sk2.jpg&quot;]">
-                    <img src="sk-2-2.jpg" alt="조감도" loading="lazy">
+                 <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images='["sk-2-2.jpg","sk2.jpg"]'>
+                    <img src="sk-2-2.jpg" alt="조감도">
                     <div class="project-info"><h3>평면조감도</h3> <p></p></div>
                 </div>
             </div>
@@ -387,6 +447,17 @@
                 window.scrollTo(0, 0);
             }
             filterSelection('all', document.querySelector('.filter-btn.active'));
+        }
+        
+        /* [추가됨] 햄버거 메뉴 토글 기능 */
+        function toggleMenu() {
+            var navbar = document.getElementById("navbar");
+            // nav 태그에 'active' 클래스를 붙였다 뗐다 함
+            if (navbar.classList.contains("active")) {
+                navbar.classList.remove("active");
+            } else {
+                navbar.classList.add("active");
+            }
         }
 
         /* [필터 및 페이지네이션 기능] */
@@ -500,25 +571,23 @@
             modalImgElement.style.transformOrigin = `${xPercent}% ${yPercent}%`;
         });
 
-        /* [동영상 연속 재생 로직 (새로 추가됨)] */
+        /* [동영상 연속 재생 로직] */
         const videoPlayer = document.getElementById('mainVideo');
 
-        // ▼▼▼ 여기에 재생할 2개의 동영상 파일 주소를 넣어주세요 ▼▼▼
         const playlist = [
-            "nucks_mood.mp4" // 첫 번째 영상
-           ,"nucks.mp4","nucks1-1.mp4","nucks1-2.mp4"
+            "nucks_mood.mp4" 
+            ,"nucks.mp4","nucks1-1.mp4","nucks1-2.mp4"
         ];
 
         let videoIndex = 0;
 
-        // 영상이 끝나면 다음 영상으로 교체
         videoPlayer.addEventListener('ended', function() {
-            videoIndex = (videoIndex + 1) % playlist.length; // 0, 1, 0, 1... 순환
+            videoIndex = (videoIndex + 1) % playlist.length; 
             videoPlayer.src = playlist[videoIndex];
             videoPlayer.play();
         });
 
     </script>
 
-
-</body></html>
+</body>
+</html>
