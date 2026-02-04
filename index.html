@@ -161,6 +161,8 @@
         .modal-content {
             display: block; max-width: 100%; max-height: 80vh; object-fit: contain; 
             box-shadow: 0 5px 30px rgba(0,0,0,0.3);
+            user-select: none; /* 드래그 시 파란색 블록 방지 */
+            -webkit-user-drag: none;
         }
         .zoom-frame {
             position: relative; overflow: hidden; max-width: 100%; max-height: 85vh;
@@ -209,7 +211,7 @@
         .page-num:hover, .page-num.active { background-color: #1a1a1a; color: #fff; border-color: #1a1a1a; }
         .hide { display: none !important; }
 
-        /* [모바일 반응형 수정 구간] */
+        /* [모바일 반응형 수정 구간 - !important로 강제 적용] */
         @media (max-width: 768px) {
             header { padding: 15px 20px; }
             .mobile-menu-icon { display: block; }
@@ -255,24 +257,26 @@
             
             .close { top: 20px; right: 20px; font-size: 40px; }
 
-            /* [모바일 모달 화살표 위치 수정] */
+            /* [모바일 모달 화살표 강제 수정 (!important 추가)] */
             .gallery-nav.prev { 
-                left: 15px; 
-                font-size: 30px;
-                background: rgba(0,0,0,0.3);
-                padding: 10px;
+                left: 10px !important;  /* 무조건 화면 안쪽 */
+                font-size: 24px !important; /* 크기 적당하게 */
+                background: rgba(0,0,0,0.4) !important; /* 배경 더 진하게 */
+                padding: 15px !important; /* 터치 영역 확대 */
                 border-radius: 50%;
                 width: 50px; height: 50px;
                 display: flex; justify-content: center; align-items: center;
+                z-index: 9999 !important; /* 제일 위로 */
             }
             .gallery-nav.next { 
-                right: 15px; 
-                font-size: 30px;
-                background: rgba(0,0,0,0.3);
-                padding: 10px;
+                right: 10px !important; 
+                font-size: 24px !important;
+                background: rgba(0,0,0,0.4) !important;
+                padding: 15px !important;
                 border-radius: 50%;
                 width: 50px; height: 50px;
                 display: flex; justify-content: center; align-items: center;
+                z-index: 9999 !important;
             }
         }
         
@@ -564,29 +568,28 @@
             });
         }
 
-        /* [추가됨] 모바일 스와이프 로직 */
+        /* [수정됨] 모바일 스와이프 기능 (감도 향상 및 clientX 사용) */
         let touchStartX = 0;
         let touchEndX = 0;
         
-        // 모달 래퍼에 터치 이벤트 감지 추가
         const modalWrapper = document.querySelector('.modal-gallery-wrapper');
         
         modalWrapper.addEventListener('touchstart', function(e) {
-            touchStartX = e.changedTouches[0].screenX;
+            touchStartX = e.changedTouches[0].clientX;
         }, false);
         
         modalWrapper.addEventListener('touchend', function(e) {
-            touchEndX = e.changedTouches[0].screenX;
+            touchEndX = e.changedTouches[0].clientX;
             handleSwipe();
         }, false);
         
         function handleSwipe() {
-            // 터치 이동 거리가 50px 이상일 때만 동작
+            // 민감도: 50px 이상 밀면 인식
             if (touchEndX < touchStartX - 50) {
-                changeSlide(1); // 왼쪽으로 밀면 다음 사진 (Next)
+                changeSlide(1); // 왼쪽으로 밀면 다음
             }
             if (touchEndX > touchStartX + 50) {
-                changeSlide(-1); // 오른쪽으로 밀면 이전 사진 (Prev)
+                changeSlide(-1); // 오른쪽으로 밀면 이전
             }
         }
 
