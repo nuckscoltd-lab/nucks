@@ -20,11 +20,11 @@
             overflow-x: hidden;
         }
 
-        /* [수정됨] 헤더 스타일: 햄버거 메뉴 대응 */
+        /* 헤더 스타일 */
         header {
             position: fixed;
             top: 0; width: 100%;
-            padding: 25px 60px; /* 높이 약간 조정 */
+            padding: 25px 60px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -34,12 +34,10 @@
         }
         .logo { font-size: 24px; font-weight: 800; text-decoration: none; color: #000; z-index: 1001; }
         
-        /* PC 버전 네비게이션 */
         nav { display: flex; gap: 40px; }
         nav a { text-decoration: none; color: #666; font-size: 14px; text-transform: uppercase; transition: 0.3s; font-weight: 500; }
         nav a:hover { color: #000; }
 
-        /* [추가됨] 햄버거 버튼 (PC에선 숨김) */
         .mobile-menu-icon {
             display: none;
             font-size: 24px;
@@ -61,9 +59,7 @@
             padding-bottom: 60px;
         }
         
-        .hero-content { 
-            flex: 1; max-width: 500px; text-align: left; z-index: 2; 
-        }
+        .hero-content { flex: 1; max-width: 500px; text-align: left; z-index: 2; }
         
         .hero-video-area {
             flex: 1.2;
@@ -75,10 +71,7 @@
         }
 
         .hero-video-area video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
+            width: 100%; height: 100%; object-fit: cover; display: block;
         }
 
         .hero h1 { 
@@ -111,18 +104,14 @@
             border-bottom: none !important; margin-bottom: 0 !important; padding-bottom: 0 !important;
         }
         
-        /* [수정됨] 필터 컨테이너: 자동 줄바꿈 및 간격 설정 */
         .filter-container { 
             margin-bottom: 0 !important;
-            display: flex;
-            gap: 8px; /* 버튼 사이 간격 */
-            flex-wrap: wrap; /* 화면 좁으면 줄바꿈 */
+            display: flex; gap: 8px; flex-wrap: wrap; 
         }
         .filter-btn {
             background: none; border: 1px solid #ddd; padding: 8px 20px;
-            /* margin-left 제거하고 gap 사용 */
             cursor: pointer; font-size: 13px; color: #666; transition: 0.3s; border-radius: 20px;
-            white-space: nowrap; /* 글자 줄바꿈 방지 */
+            white-space: nowrap; 
         }
         .filter-btn:hover, .filter-btn.active { background-color: #1a1a1a; color: #fff; border-color: #1a1a1a; }
         
@@ -160,16 +149,17 @@
         .modal {
             display: none; position: fixed; z-index: 2000; left: 0; top: 0;
             width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.6); 
-            backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+            background-color: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
             justify-content: center; align-items: center;
         }
         .modal-gallery-wrapper {
             position: relative; display: flex; align-items: center; justify-content: center;
             max-width: 90%; max-height: 90%;
+            width: 100%;
         }
         .modal-content {
-            display: block; max-width: 100%; max-height: 85vh; object-fit: contain; 
+            display: block; max-width: 100%; max-height: 80vh; object-fit: contain; 
             box-shadow: 0 5px 30px rgba(0,0,0,0.3);
         }
         .zoom-frame {
@@ -184,16 +174,19 @@
             font-size: 50px; font-weight: bold; cursor: pointer; z-index: 2002; 
             text-shadow: 0 0 10px rgba(0,0,0,0.5);
         }
+        
+        /* PC 버전 화살표 */
         .gallery-nav {
             cursor: pointer; position: absolute; top: 50%; transform: translateY(-50%);
             padding: 16px; color: white; font-weight: bold; font-size: 40px;
             transition: 0.3s ease; user-select: none; text-shadow: 0 0 10px rgba(0,0,0,0.5); z-index: 2001;
         }
-        .gallery-nav.prev { left: -60px; }
-        .gallery-nav.next { right: -60px; }
+        .gallery-nav.prev { left: -80px; }
+        .gallery-nav.next { right: -80px; }
         .gallery-nav:hover { color: rgba(255,255,255,0.7); }
+        
         .image-counter {
-            position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%);
+            position: absolute; bottom: -40px; left: 50%; transform: translateX(-50%);
             color: #fff; font-size: 14px; font-weight: 300;
         }
 
@@ -218,12 +211,11 @@
 
         /* [모바일 반응형 수정 구간] */
         @media (max-width: 768px) {
-            /* 1. 헤더 수정: 햄버거 메뉴 보이기 */
             header { padding: 15px 20px; }
-            .mobile-menu-icon { display: block; } /* 햄버거 보이기 */
+            .mobile-menu-icon { display: block; }
             
             nav {
-                display: none; /* 기본 메뉴 숨김 */
+                display: none;
                 position: absolute;
                 top: 100%; left: 0; width: 100%;
                 background: rgba(255,255,255,0.98);
@@ -233,39 +225,55 @@
                 box-shadow: 0 10px 20px rgba(0,0,0,0.05);
                 border-top: 1px solid #eee;
             }
-            nav.active { display: flex; } /* active 클래스 붙으면 보임 */
+            nav.active { display: flex; }
             nav a { margin: 15px 0; font-size: 18px; font-weight: 700; color: #333; }
 
-            /* 2. 본문 레이아웃 */
             .hero { flex-direction: column; padding: 0 20px; height: auto; padding-bottom: 60px; margin-top: 80px; gap: 30px; }
             .hero-content { max-width: 100%; width: 100%; }
             .hero-video-area { width: 100%; height: 300px; }
             .hero h1 { font-size: 3rem; }
             .grid { grid-template-columns: repeat(2, 1fr); }
             
-            /* 3. 프로젝트 헤더 및 필터 버튼 수정 */
             #projects.container { padding: 0 0 80px; }
             .projects-header { 
                 padding: 20px 20px 30px; 
                 flex-direction: column; 
-                align-items: center; /* 중앙 정렬 */
+                align-items: center; 
                 gap: 15px; 
                 text-align: center;
             } 
             .filter-container { 
                 margin-top: 10px; 
-                justify-content: center; /* 버튼 가운데 정렬 */
+                justify-content: center; 
             }
-            .filter-btn { padding: 8px 14px; font-size: 12px; } /* 버튼 크기 미세 조정 */
+            .filter-btn { padding: 8px 14px; font-size: 12px; }
 
-            /* 4. 푸터 수정 */
             .footer-grid { grid-template-columns: 1fr; }
             .footer-center { justify-content: flex-start; }
             .footer-grid > div:nth-child(1), .footer-grid > div:nth-child(3) { text-align: left; margin-bottom: 30px; }
             .contact-content-row { flex-direction: column; gap: 20px; }
-            .gallery-nav.prev { left: -40px; }
-            .gallery-nav.next { right: -40px; }
+            
             .close { top: 20px; right: 20px; font-size: 40px; }
+
+            /* [모바일 모달 화살표 위치 수정] */
+            .gallery-nav.prev { 
+                left: 15px; 
+                font-size: 30px;
+                background: rgba(0,0,0,0.3);
+                padding: 10px;
+                border-radius: 50%;
+                width: 50px; height: 50px;
+                display: flex; justify-content: center; align-items: center;
+            }
+            .gallery-nav.next { 
+                right: 15px; 
+                font-size: 30px;
+                background: rgba(0,0,0,0.3);
+                padding: 10px;
+                border-radius: 50%;
+                width: 50px; height: 50px;
+                display: flex; justify-content: center; align-items: center;
+            }
         }
         
         html { scroll-behavior: smooth; }
@@ -437,7 +445,6 @@
     </div>
 
     <script>
-        /* [기본 설정 및 페이지 로드] */
         if ('scrollRestoration' in history) { history.scrollRestoration = 'manual'; }
         window.scrollTo(0, 0);
 
@@ -449,10 +456,9 @@
             filterSelection('all', document.querySelector('.filter-btn.active'));
         }
         
-        /* [추가됨] 햄버거 메뉴 토글 기능 */
+        /* 햄버거 메뉴 토글 */
         function toggleMenu() {
             var navbar = document.getElementById("navbar");
-            // nav 태그에 'active' 클래스를 붙였다 뗐다 함
             if (navbar.classList.contains("active")) {
                 navbar.classList.remove("active");
             } else {
@@ -460,7 +466,7 @@
             }
         }
 
-        /* [필터 및 페이지네이션 기능] */
+        /* 필터 및 페이지네이션 */
         const itemsPerPage = 50;
         let currentPage = 1;
         let currentCategory = 'all';
@@ -505,7 +511,7 @@
             }
         }
 
-        /* [모달 팝업 기능] */
+        /* 모달 및 스와이프 기능 */
         let currentImages = [];
         let currentImageIndex = 0;
 
@@ -558,7 +564,33 @@
             });
         }
 
-        /* [모달 이미지 돋보기 기능] */
+        /* [추가됨] 모바일 스와이프 로직 */
+        let touchStartX = 0;
+        let touchEndX = 0;
+        
+        // 모달 래퍼에 터치 이벤트 감지 추가
+        const modalWrapper = document.querySelector('.modal-gallery-wrapper');
+        
+        modalWrapper.addEventListener('touchstart', function(e) {
+            touchStartX = e.changedTouches[0].screenX;
+        }, false);
+        
+        modalWrapper.addEventListener('touchend', function(e) {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        }, false);
+        
+        function handleSwipe() {
+            // 터치 이동 거리가 50px 이상일 때만 동작
+            if (touchEndX < touchStartX - 50) {
+                changeSlide(1); // 왼쪽으로 밀면 다음 사진 (Next)
+            }
+            if (touchEndX > touchStartX + 50) {
+                changeSlide(-1); // 오른쪽으로 밀면 이전 사진 (Prev)
+            }
+        }
+
+        /* 돋보기 기능 */
         const zoomFrame = document.getElementById("zoomFrame");
         const modalImgElement = document.getElementById("modalImg");
 
@@ -571,14 +603,9 @@
             modalImgElement.style.transformOrigin = `${xPercent}% ${yPercent}%`;
         });
 
-        /* [동영상 연속 재생 로직] */
+        /* 동영상 재생 */
         const videoPlayer = document.getElementById('mainVideo');
-
-        const playlist = [
-            "nucks_mood.mp4" 
-            ,"nucks.mp4","nucks1-1.mp4","nucks1-2.mp4"
-        ];
-
+        const playlist = ["nucks_mood.mp4", "nucks.mp4", "nucks1-1.mp4", "nucks1-2.mp4"];
         let videoIndex = 0;
 
         videoPlayer.addEventListener('ended', function() {
