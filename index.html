@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Designed by Nucks | Interior Re-modeling & Design</title>
+    
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Designed by Nucks">
+    <meta property="og:description" content="Soulful Space Creator NUCKS">
+    <meta property="og:image" content="icon.png"> <meta property="og:url" content="https://nuckscoltd-lab.github.io">
 
-<meta property="og:type" content="website">
-<meta property="og:title" content="Designed by Nucks">
-<meta property="og:description" content="Soulful Space Creator NUCKS">
-<meta property="og:image" content="icon.png"> <meta property="og:url" content="https://nuckscoltd-lab.github.io">
-
-<link rel="apple-touch-icon" href="nuckslogo.jpg">
-<link rel="shortcut icon" href="nuckslogo.jpg">
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="shortcut icon" href="icon.png">
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -169,7 +169,7 @@
         .modal-content {
             display: block; max-width: 100%; max-height: 80vh; object-fit: contain; 
             box-shadow: 0 5px 30px rgba(0,0,0,0.3);
-            user-select: none; /* 드래그 시 파란색 블록 방지 */
+            user-select: none;
             -webkit-user-drag: none;
         }
         .zoom-frame {
@@ -265,26 +265,28 @@
             
             .close { top: 20px; right: 20px; font-size: 40px; }
 
-            /* [모바일 모달 화살표 강제 수정 (!important 추가)] */
+            /* [모바일 모달 화살표 강제 수정 (!important 추가 및 중앙 정렬 개선)] */
             .gallery-nav.prev { 
-                left: 10px !important;  /* 무조건 화면 안쪽 */
-                font-size: 24px !important; /* 크기 적당하게 */
-                background: rgba(0,0,0,0.4) !important; /* 배경 더 진하게 */
-                padding: 15px !important; /* 터치 영역 확대 */
+                left: 10px !important; 
+                font-size: 24px !important;
+                background: rgba(0,0,0,0.5) !important; /* 배경 진하게 */
+                padding: 0 !important; /* padding 제거 */
                 border-radius: 50%;
                 width: 50px; height: 50px;
-                display: flex; justify-content: center; align-items: center;
-                z-index: 9999 !important; /* 제일 위로 */
+                display: flex; justify-content: center; align-items: center; /* 중앙 정렬 */
+                z-index: 9999 !important;
+                line-height: 1 !important; /* 줄 높이 초기화 */
             }
             .gallery-nav.next { 
                 right: 10px !important; 
                 font-size: 24px !important;
-                background: rgba(0,0,0,0.4) !important;
-                padding: 15px !important;
+                background: rgba(0,0,0,0.5) !important;
+                padding: 0 !important;
                 border-radius: 50%;
                 width: 50px; height: 50px;
-                display: flex; justify-content: center; align-items: center;
+                display: flex; justify-content: center; align-items: center; /* 중앙 정렬 */
                 z-index: 9999 !important;
+                line-height: 1 !important;
             }
         }
         
@@ -576,7 +578,7 @@
             });
         }
 
-        /* [수정됨] 모바일 스와이프 기능 (감도 향상 및 clientX 사용) */
+        /* [모바일 스와이프 기능] */
         let touchStartX = 0;
         let touchEndX = 0;
         
@@ -592,12 +594,11 @@
         }, false);
         
         function handleSwipe() {
-            // 민감도: 50px 이상 밀면 인식
             if (touchEndX < touchStartX - 50) {
-                changeSlide(1); // 왼쪽으로 밀면 다음
+                changeSlide(1); // Next
             }
             if (touchEndX > touchStartX + 50) {
-                changeSlide(-1); // 오른쪽으로 밀면 이전
+                changeSlide(-1); // Prev
             }
         }
 
