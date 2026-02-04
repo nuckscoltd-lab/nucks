@@ -1,13 +1,11 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
+<html lang="ko"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nucks Style Concept | Interior Re-modeling & Design</title>
+    <title>Designed by Nucks | Interior Re-modeling &amp; Design</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Helvetica+Neue:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&amp;family=Playfair+Display:wght@400;700;900&amp;display=swap" rel="stylesheet" "="">
 
     <style>
         /* [스타일은 기존과 동일합니다] */
@@ -253,7 +251,7 @@
             </div>
 
             <div class="hero-video-area">
-                <video id="mainVideo" autoplay muted playsinline>
+                <video id="mainVideo" autoplay="" muted="" playsinline="" src="nucks1-2.mp4">
                     <source src="nucks_mood.mp4">
                     Your browser does not support the video tag.
                 </video>
@@ -273,57 +271,57 @@
             </div>
 
             <div class="grid">
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images='["224master.jpg","living_alt.png", "toilet.jpg", "273_alt.jpg"]'>
+                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;224master.jpg&quot;,&quot;living_alt.png&quot;, &quot;toilet.jpg&quot;, &quot;273_alt.jpg&quot;]">
                     <img src="224master.jpg" alt="아페르한강">
                     <div class="project-info"><h3>UNIT</h3> <p>아페르한강</p></div>
                 </div>
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images='["dsc01194.jpg","dsc00477.jpg", "dsc00480.jpg", "dsc01454.jpg"]'>
-                    <img src="dsc01194.jpg" alt="익산부송4지구">
+                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;DSC01194.jpg&quot;,&quot;DSC00477.jpg&quot;, &quot;DSC00480.jpg&quot;, &quot;DSC01454.jpg&quot;]">
+                    <img src="DSC01194.jpg" alt="익산부송4지구">
                     <div class="project-info"><h3>UNIT</h3> <p>익산부송4지구</p></div>
                 </div>
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images='["6.jpg", "2.jpg", "3.jpg", "dsc00930.jpg", "dsc01447.jpg", "dsc01527.jpg", "dsc01543-dsc00036.jpg"]'>
+                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;6.jpg&quot;, &quot;2.jpg&quot;, &quot;3.jpg&quot;, &quot;DSC00930.jpg&quot;, &quot;DSC01447.jpg&quot;, &quot;DSC01527.jpg&quot;, &quot;DSC01543-DSC00036.jpg&quot;]">
                     <img src="6.jpg" alt="진주극동">
                     <div class="project-info"><h3>UNIT</h3> <p>진주극동</p></div>
                 </div>
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images='["dsc01376.jpg", "dsc00225.jpg", "03-dsc00284.jpg", "04-dsc00159.jpg", "dsc01378.jpg", "dsc01629.jpg", "dsc01049.jpg"]'>
-                    <img src="dsc01376.jpg" alt="홍천대상웰라움">
+                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;DSC01376.jpg&quot;, &quot;DSC00225.jpg&quot;, &quot;03-DSC00284.jpg&quot;, &quot;04-DSC00159.jpg&quot;, &quot;DSC01378.jpg&quot;, &quot;DSC01629.jpg&quot;, &quot;DSC01049.jpg&quot;]">
+                    <img src="DSC01376.jpg" alt="홍천대상웰라움">
                     <div class="project-info"><h3>UNIT</h3> <p>홍천대상웰라움</p></div>
                 </div>
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images='["ALT-03.jpg", "08_living.jpg", "Enscape_20250415.jpg"]'>
-                    <img src="alt-03.jpg" alt="HWASUNG">
+                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;ALT-03.jpg&quot;, &quot;08_living.jpg&quot;, &quot;Enscape_20250415.jpg&quot;]">
+                    <img src="ALT-03.jpg" alt="HWASUNG">
                     <div class="project-info"><h3>UNIT</h3> <p>HWASUNG</p></div>
                 </div>
-                <div class="project-item" data-category="mh" onclick="openModal(this)" data-images='["IPARKCITY.jpg"]'>
-                    <img src="IPARKCITY.jpg" alt="천안부성">
+                <div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;iparkcity.jpg&quot;]">
+                    <img src="iparkcity.jpg" alt="천안부성">
                     <div class="project-info"><h3>M/H</h3> <p>천안부성</p></div>
                 </div>
-                <div class="project-item" data-category="mh" onclick="openModal(this)" data-images='["0E7A5379.JPG", "0E7A5370 copy.jpg", "0E7A5243 copy.jpg", "0E7A5226 copy.JPG", "0E7A5560.jpg", "0E7A5505 copy.JPG", "0E7A5522_Panorama 1 copy.JPG", "0E7A5525_Panorama copy.JPG", "0E7A5569 copy.JPG", "0E7A5579 copy.JPG" ]'>
-                    <img src="0E7A5379.JPG" alt="서초르니드">
+                <div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;0E7A5379.jpg&quot;, &quot;0E7A5370 copy.jpg&quot;, &quot;0E7A5243 copy.jpg&quot;, &quot;0E7A5226 copy.jpg&quot;, &quot;0E7A5560.jpg&quot;, &quot;0E7A5505 copy.jpg&quot;, &quot;0E7A5522_Panorama 1 copy.jpg&quot;, &quot;0E7A5525_Panorama copy.jpg&quot;, &quot;0E7A5569 copy.jpg&quot;, &quot;0E7A5579 copy.jpg&quot; ]">
+                    <img src="0E7A5379.jpg" alt="서초르니드">
                     <div class="project-info"><h3>M/H</h3> <p>서초르니드</p></div>
                 </div>
-                 <div class="project-item" data-category="menual" onclick="openModal(this)" data-images='["0E7A9057.jpg", "0E7A9123_Panorama.jpg", "0E7A9189.jpg", "0E7A9093_Panorama.jpg", "0E7A9301.jpg"]'>
+                 <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;0E7A9057.jpg&quot;, &quot;0E7A9123_Panorama.jpg&quot;, &quot;0E7A9189.jpg&quot;, &quot;0E7A9093_Panorama.jpg&quot;, &quot;0E7A9301.jpg&quot;]">
                     <img src="0E7A9057.jpg" alt="밥장인/부산중앙점">
                     <div class="project-info"><h3>Menual</h3> <p>밥장인</p><p>부산중앙점</p></div>
                 </div>
-                <div class="project-item" data-category="menual" onclick="openModal(this)" data-images='["★IMG_6785(보정).jpg", "★IMG_6761(보정).jpg", "★IMG_6766(보정).jpg"]'>
+                <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;★IMG_6785(보정).jpg&quot;, &quot;★IMG_6761(보정).jpg&quot;, &quot;★IMG_6766(보정).jpg&quot;]">
                     <img src="★IMG_6785(보정).jpg" alt="밥장인/경성부경대점">
                     <div class="project-info"><h3>Menual</h3> <p>밥장인</p><p>경성부경대점</p></div>
                 </div>
-                    <div class="project-item" data-category="menual" onclick="openModal(this)" data-images='["_DSC4657.jpg", "_DSC4650.jpg", "_DSC4654.jpg"]'>
-                    <img src="_DSC4657.jpg" alt="밥장인/홍대점">
+                    <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;DSC4657.jpg&quot;, &quot;DSC4650.jpg&quot;, &quot;DSC4654.jpg&quot;]">
+                    <img src="DSC4657.jpg" alt="밥장인/홍대점">
                     <div class="project-info"><h3>Menual</h3> <p>밥장인</p><p>홍대점</p></div>
                 </div>
-                <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images='["sk4.jpg"]'>
+                <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images="[&quot;sk4-1.jpg&quot;,&quot;sk4.jpg&quot;]">
                     <img src="sk4-1.jpg" alt="조감도">
-                    <div class="project-info"><h3>평면조감도</h3> <p>ㅇㅇㅇ</p></div>
+                    <div class="project-info"><h3>평면조감도</h3> <p></p></div>
                 </div>
-                <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images='["sk3.jpg"]'>
+                <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images="[&quot;sk3-2.jpg&quot;,&quot;sk3.jpg&quot;]">
                     <img src="sk3-2.jpg" alt="조감도">
-                    <div class="project-info"><h3>평면조감도</h3> <p>ㅇㅇㅇ</p></div>
+                    <div class="project-info"><h3>평면조감도</h3> <p></p></div>
                 </div>
-                 <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images='["sk2.jpg"]'>
+                 <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images="[&quot;sk-2-2.jpg&quot;,&quot;sk2.jpg&quot;]">
                     <img src="sk-2-2.jpg" alt="조감도">
-                    <div class="project-info"><h3>평면조감도</h3> <p>ㅇㅇㅇ</p></div>
+                    <div class="project-info"><h3>평면조감도</h3> <p></p></div>
                 </div>
             </div>
             <div class="pagination" id="pagination"></div>
@@ -370,11 +368,11 @@
             <a class="gallery-nav prev" onclick="changeSlide(-1)" style="display: block;">❮</a>
             
             <div id="zoomFrame" class="zoom-frame">
-                <img class="modal-content" id="modalImg" src="">
+                <img class="modal-content" id="modalImg" src="sk3.jpg" style="transform-origin: 43.1144% 3.28295%;">
             </div>
             
             <a class="gallery-nav next" onclick="changeSlide(1)" style="display: block;">❯</a>
-            <div class="image-counter" id="imageCounter"></div>
+            <div class="image-counter" id="imageCounter">2 / 2</div>
         </div>
     </div>
 
@@ -508,8 +506,7 @@
         // ▼▼▼ 여기에 재생할 2개의 동영상 파일 주소를 넣어주세요 ▼▼▼
         const playlist = [
             "nucks_mood.mp4" // 첫 번째 영상
-            ,"nucks_mood1.mp4"  // 두 번째 영상 (여기를 수정하세요)
-            ,"nucks.mp4","nucks1.mp4","nucks1-1.mp4"
+           ,"nucks.mp4","nucks1-1.mp4","nucks1-2.mp4"
         ];
 
         let videoIndex = 0;
@@ -523,5 +520,5 @@
 
     </script>
 
-</body>
-</html>
+
+</body></html>
