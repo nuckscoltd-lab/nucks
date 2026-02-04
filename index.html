@@ -8,7 +8,8 @@
     <meta property="og:type" content="website">
     <meta property="og:title" content="Designed by Nucks">
     <meta property="og:description" content="Soulful Space Creator NUCKS">
-    <meta property="og:image" content="icon.png"> <meta property="og:url" content="https://nuckscoltd-lab.github.io">
+    <meta property="og:image" content="icon.png">
+    <meta property="og:url" content="https://nuckscoltd-lab.github.io">
 
     <link rel="apple-touch-icon" href="icon.png">
     <link rel="shortcut icon" href="icon.png">
@@ -265,28 +266,28 @@
             
             .close { top: 20px; right: 20px; font-size: 40px; }
 
-            /* [모바일 모달 화살표 강제 수정 (!important 추가 및 중앙 정렬 개선)] */
+            /* [모바일 모달 화살표 수정: 검은 동그라미 삭제] */
             .gallery-nav.prev { 
                 left: 10px !important; 
-                font-size: 24px !important;
-                background: rgba(0,0,0,0.5) !important; /* 배경 진하게 */
-                padding: 0 !important; /* padding 제거 */
-                border-radius: 50%;
-                width: 50px; height: 50px;
-                display: flex; justify-content: center; align-items: center; /* 중앙 정렬 */
+                font-size: 30px !important; /* 화살표 조금 더 크게 */
+                background: none !important; /* 검은 배경 삭제 */
+                padding: 0 !important;
+                border-radius: 0;
+                width: auto; height: auto;
+                display: block;
                 z-index: 9999 !important;
-                line-height: 1 !important; /* 줄 높이 초기화 */
+                text-shadow: 0 0 5px rgba(0,0,0,0.8) !important; /* 그림자 추가 */
             }
             .gallery-nav.next { 
                 right: 10px !important; 
-                font-size: 24px !important;
-                background: rgba(0,0,0,0.5) !important;
+                font-size: 30px !important;
+                background: none !important; /* 검은 배경 삭제 */
                 padding: 0 !important;
-                border-radius: 50%;
-                width: 50px; height: 50px;
-                display: flex; justify-content: center; align-items: center; /* 중앙 정렬 */
+                border-radius: 0;
+                width: auto; height: auto;
+                display: block;
                 z-index: 9999 !important;
-                line-height: 1 !important;
+                text-shadow: 0 0 5px rgba(0,0,0,0.8) !important; /* 그림자 추가 */
             }
         }
         
