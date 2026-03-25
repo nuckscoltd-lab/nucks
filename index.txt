@@ -1,14 +1,23 @@
+
 <html lang="ko"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Designed by Nucks | Interior Re-modeling &amp; Design</title>
     
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Designed by Nucks">
+    <meta property="og:description" content="Soulful Space Creator NUCKS">
+    <meta property="og:image" content="icon.png">
+    <meta property="og:url" content="https://nuckscoltd-lab.github.io">
+
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="shortcut icon" href="icon.png">
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&amp;family=Playfair+Display:wght@400;700;900&amp;display=swap" rel="stylesheet" "="">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&amp;family=Playfair+Display:wght@400;700;900&amp;display=swap" rel="stylesheet">
 
     <style>
-        /* [스타일은 기존과 동일합니다] */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -19,20 +28,31 @@
             overflow-x: hidden;
         }
 
+        /* 헤더 스타일 */
         header {
             position: fixed;
             top: 0; width: 100%;
-            padding: 40px 60px;
+            padding: 25px 60px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             z-index: 1000;
-            background: rgba(255,255,255,0.9);
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(5px);
         }
-        .logo { font-size: 24px; font-weight: 800; text-decoration: none; color: #000; }
+        .logo { font-size: 24px; font-weight: 800; text-decoration: none; color: #000; z-index: 1001; }
+        
         nav { display: flex; gap: 40px; }
-        nav a { text-decoration: none; color: #666; font-size: 14px; text-transform: uppercase; transition: 0.3s; }
+        nav a { text-decoration: none; color: #666; font-size: 14px; text-transform: uppercase; transition: 0.3s; font-weight: 500; }
         nav a:hover { color: #000; }
+
+        .mobile-menu-icon {
+            display: none;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 1001;
+            padding: 5px;
+        }
 
         .hero {
             min-height: 80vh;
@@ -40,16 +60,14 @@
             align-items: center;
             justify-content: space-between;
             padding: 0 60px;
-            margin-top: 125px;
+            margin-top: 100px;
             gap: 50px;
             background: linear-gradient(to right, #ffffff, #eaeff2);
             margin-bottom: 0;
             padding-bottom: 60px;
         }
         
-        .hero-content { 
-            flex: 1; max-width: 500px; text-align: left; z-index: 2; 
-        }
+        .hero-content { flex: 1; max-width: 500px; text-align: left; z-index: 2; }
         
         .hero-video-area {
             flex: 1.2;
@@ -61,10 +79,7 @@
         }
 
         .hero-video-area video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
+            width: 100%; height: 100%; object-fit: cover; display: block;
         }
 
         .hero h1 { 
@@ -96,10 +111,15 @@
             font-size: 12px; text-transform: uppercase; color: #999;
             border-bottom: none !important; margin-bottom: 0 !important; padding-bottom: 0 !important;
         }
-        .filter-container { margin-bottom: 0 !important; }
+        
+        .filter-container { 
+            margin-bottom: 0 !important;
+            display: flex; gap: 8px; flex-wrap: wrap; 
+        }
         .filter-btn {
-            background: none; border: 1px solid #ddd; padding: 8px 20px; margin-left: 10px;
+            background: none; border: 1px solid #ddd; padding: 8px 20px;
             cursor: pointer; font-size: 13px; color: #666; transition: 0.3s; border-radius: 20px;
+            white-space: nowrap; 
         }
         .filter-btn:hover, .filter-btn.active { background-color: #1a1a1a; color: #fff; border-color: #1a1a1a; }
         
@@ -137,19 +157,22 @@
         .modal {
             display: none; position: fixed; z-index: 2000; left: 0; top: 0;
             width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.6); 
-            backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+            background-color: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
             justify-content: center; align-items: center;
         }
         .modal-gallery-wrapper {
             position: relative; display: flex; align-items: center; justify-content: center;
             max-width: 90%; max-height: 90%;
+            width: 100%;
         }
         .modal-content {
-            display: block; max-width: 100%; max-height: 85vh; object-fit: contain; 
+            display: block; max-width: 100%; max-height: 80vh; object-fit: contain; 
             box-shadow: 0 5px 30px rgba(0,0,0,0.3);
+            user-select: none;
+            -webkit-user-drag: none;
         }
-        .zoom-frame { /* 모달 돋보기 프레임 */
+        .zoom-frame {
             position: relative; overflow: hidden; max-width: 100%; max-height: 85vh;
             display: flex; justify-content: center; align-items: center; cursor: crosshair;
         }
@@ -161,22 +184,27 @@
             font-size: 50px; font-weight: bold; cursor: pointer; z-index: 2002; 
             text-shadow: 0 0 10px rgba(0,0,0,0.5);
         }
+        
+        /* PC 버전 화살표 */
         .gallery-nav {
             cursor: pointer; position: absolute; top: 50%; transform: translateY(-50%);
             padding: 16px; color: white; font-weight: bold; font-size: 40px;
             transition: 0.3s ease; user-select: none; text-shadow: 0 0 10px rgba(0,0,0,0.5); z-index: 2001;
         }
-        .gallery-nav.prev { left: -60px; }
-        .gallery-nav.next { right: -60px; }
+        .gallery-nav.prev { left: -80px; }
+        .gallery-nav.next { right: -80px; }
         .gallery-nav:hover { color: rgba(255,255,255,0.7); }
+        
         .image-counter {
-            position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%);
+            position: absolute; bottom: -40px; left: 50%; transform: translateX(-50%);
             color: #fff; font-size: 14px; font-weight: 300;
         }
 
         .project-info {
             position: absolute; top: 0; left: 0;
-            width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.4);
+            width: 100%; height: 100%; 
+            /* PC 기본 스타일: 호버 시 나타나도록 */
+            background-color: rgba(0, 0, 0, 0.4);
             color: #fff; opacity: 0; transition: opacity 0.3s ease;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
             text-align: center; pointer-events: none; 
@@ -184,6 +212,7 @@
         .project-item:hover .project-info { opacity: 1; }
         .project-info h3 { font-size: 18px; font-weight: 500; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
         .project-info p { font-size: 14px; font-weight: 300; opacity: 0.8; }
+        
         .pagination { margin-top: 30px; margin-bottom: 10px; text-align: center; display: flex; justify-content: center; gap: 10px; }
         .page-num {
             display: inline-block; width: 35px; height: 35px; line-height: 35px;
@@ -193,26 +222,88 @@
         .page-num:hover, .page-num.active { background-color: #1a1a1a; color: #fff; border-color: #1a1a1a; }
         .hide { display: none !important; }
 
+        /* [모바일 반응형 수정 구간 - !important로 강제 적용] */
         @media (max-width: 768px) {
-            .hero { flex-direction: column; padding: 0 30px; height: auto; padding-bottom: 60px; margin-top: 100px; gap: 30px; }
+            header { padding: 15px 20px; }
+            .mobile-menu-icon { display: block; }
+            
+            nav {
+                display: none;
+                position: absolute;
+                top: 100%; left: 0; width: 100%;
+                background: rgba(255,255,255,0.98);
+                flex-direction: column;
+                align-items: center;
+                padding: 30px 0;
+                box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+                border-top: 1px solid #eee;
+            }
+            nav.active { display: flex; }
+            nav a { margin: 15px 0; font-size: 18px; font-weight: 700; color: #333; }
+
+            .hero { flex-direction: column; padding: 0 20px; height: auto; padding-bottom: 60px; margin-top: 80px; gap: 30px; }
             .hero-content { max-width: 100%; width: 100%; }
             .hero-video-area { width: 100%; height: 300px; }
             .hero h1 { font-size: 3rem; }
             .grid { grid-template-columns: repeat(2, 1fr); }
-            header { padding: 20px; }
+            
             #projects.container { padding: 0 0 80px; }
-            .projects-header { padding: 20px 20px 30px; } 
+            .projects-header { 
+                padding: 20px 20px 30px; 
+                flex-direction: column; 
+                align-items: center; 
+                gap: 15px; 
+                text-align: center;
+            } 
+            .filter-container { 
+                margin-top: 10px; 
+                justify-content: center; 
+            }
+            .filter-btn { padding: 8px 14px; font-size: 12px; }
+
             .footer-grid { grid-template-columns: 1fr; }
             .footer-center { justify-content: flex-start; }
             .footer-grid > div:nth-child(1), .footer-grid > div:nth-child(3) { text-align: left; margin-bottom: 30px; }
             .contact-content-row { flex-direction: column; gap: 20px; }
-            .projects-header { flex-direction: column; align-items: flex-start; gap: 10px; }
-            .filter-container { margin-top: 10px; }
-            .filter-btn { margin-left: 0; margin-right: 5px; }
-            .gallery-nav.prev { left: -40px; }
-            .gallery-nav.next { right: -40px; }
+            
             .close { top: 20px; right: 20px; font-size: 40px; }
+
+            /* 모바일 모달 화살표 */
+            .gallery-nav.prev { 
+                left: 10px !important; 
+                font-size: 30px !important; 
+                background: none !important; 
+                padding: 0 !important;
+                border-radius: 0;
+                width: auto; height: auto;
+                display: block;
+                z-index: 9999 !important;
+                text-shadow: 0 0 5px rgba(0,0,0,0.8) !important;
+            }
+            .gallery-nav.next { 
+                right: 10px !important; 
+                font-size: 30px !important;
+                background: none !important;
+                padding: 0 !important;
+                border-radius: 0;
+                width: auto; height: auto;
+                display: block;
+                z-index: 9999 !important;
+                text-shadow: 0 0 5px rgba(0,0,0,0.8) !important;
+            }
+
+            /* [추가됨] 모바일 프로젝트 텍스트 항상 표시 */
+            .project-info {
+                opacity: 1 !important; /* 항상 보이게 강제 */
+                background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%) !important; /* 하단 그라데이션 */
+                justify-content: flex-end !important; /* 글자 아래로 */
+                padding-bottom: 10px !important; /* 간격 */
+                align-items: center !important;
+            }
+            .project-info h3 { font-size: 14px !important; margin-bottom: 2px !important; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+            .project-info p { font-size: 12px !important; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
         }
+        
         html { scroll-behavior: smooth; }
         #about, #projects, #contact { scroll-margin-top: 120px; }
 
@@ -224,10 +315,15 @@
         <a href="#" class="logo">
             <img src="nuckslogo1.png" alt="Nucks Logo" style="height: 25px;"> 
         </a>
-        <nav>
-            <a href="#about">About</a>
-            <a href="#projects">Projects</a>
-            <a href="#contact">Contact</a>
+        
+        <div class="mobile-menu-icon" onclick="toggleMenu()">
+            ☰
+        </div>
+
+        <nav id="navbar">
+            <a href="#about" onclick="toggleMenu()">About</a>
+            <a href="#projects" onclick="toggleMenu()">Projects</a>
+            <a href="#contact" onclick="toggleMenu()">Contact</a>
         </nav>
     </header>
 
@@ -251,7 +347,7 @@
             </div>
 
             <div class="hero-video-area">
-                <video id="mainVideo" autoplay="" muted="" playsinline="" src="nucks1-2.mp4">
+                <video id="mainVideo" autoplay="" muted="" playsinline="" src="nucks.mp4">
                     <source src="nucks_mood.mp4">
                     Your browser does not support the video tag.
                 </video>
@@ -276,24 +372,24 @@
                     <div class="project-info"><h3>UNIT</h3> <p>아페르한강</p></div>
                 </div>
                 <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;DSC01194.jpg&quot;,&quot;DSC00477.jpg&quot;, &quot;DSC00480.jpg&quot;, &quot;DSC01454.jpg&quot;]">
-                    <img src="DSC01194.jpg" alt="익산부송4지구">
-                    <div class="project-info"><h3>UNIT</h3> <p>익산부송4지구</p></div>
+                    <img src="DSC01194.jpg" alt="익산부송 아이파크">
+                    <div class="project-info"><h3>UNIT</h3> <p>익산부송 아이파크</p></div>
                 </div>
                 <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;6.jpg&quot;, &quot;2.jpg&quot;, &quot;3.jpg&quot;, &quot;DSC00930.jpg&quot;, &quot;DSC01447.jpg&quot;, &quot;DSC01527.jpg&quot;, &quot;DSC01543-DSC00036.jpg&quot;]">
-                    <img src="6.jpg" alt="진주극동">
-                    <div class="project-info"><h3>UNIT</h3> <p>진주극동</p></div>
+                    <img src="6.jpg" alt="진주 백년문화공원 극동스타클래스">
+                    <div class="project-info"><h3>UNIT</h3> <p>진주 백년문화공원 극동스타클래스</p></div>
                 </div>
                 <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;DSC01376.jpg&quot;, &quot;DSC00225.jpg&quot;, &quot;03-DSC00284.jpg&quot;, &quot;04-DSC00159.jpg&quot;, &quot;DSC01378.jpg&quot;, &quot;DSC01629.jpg&quot;, &quot;DSC01049.jpg&quot;]">
-                    <img src="DSC01376.jpg" alt="홍천대상웰라움">
-                    <div class="project-info"><h3>UNIT</h3> <p>홍천대상웰라움</p></div>
+                    <img src="DSC01376.jpg" alt="대상 웰라움 홍천">
+                    <div class="project-info"><h3>UNIT</h3> <p>대상 웰라움 홍천</p></div>
                 </div>
                 <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;ALT-03.jpg&quot;, &quot;08_living.jpg&quot;, &quot;Enscape_20250415.jpg&quot;]">
                     <img src="ALT-03.jpg" alt="HWASUNG">
-                    <div class="project-info"><h3>UNIT</h3> <p>HWASUNG</p></div>
+                    <div class="project-info"><h3>UNIT</h3> <p>HWASUNG 만촌 파크드림 에디움</p> <p>HWASUNG 범어역 파크드림 디아르</p></div>
                 </div>
                 <div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;iparkcity.jpg&quot;]">
-                    <img src="iparkcity.jpg" alt="천안부성">
-                    <div class="project-info"><h3>M/H</h3> <p>천안부성</p></div>
+                    <img src="iparkcity.jpg" alt="천안부성 아이파크">
+                    <div class="project-info"><h3>M/H</h3> <p>천안부성 아이파크</p></div>
                 </div>
                 <div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;0E7A5379.jpg&quot;, &quot;0E7A5370 copy.jpg&quot;, &quot;0E7A5243 copy.jpg&quot;, &quot;0E7A5226 copy.jpg&quot;, &quot;0E7A5560.jpg&quot;, &quot;0E7A5505 copy.jpg&quot;, &quot;0E7A5522_Panorama 1 copy.jpg&quot;, &quot;0E7A5525_Panorama copy.jpg&quot;, &quot;0E7A5569 copy.jpg&quot;, &quot;0E7A5579 copy.jpg&quot; ]">
                     <img src="0E7A5379.jpg" alt="서초르니드">
@@ -311,19 +407,11 @@
                     <img src="DSC4657.jpg" alt="밥장인/홍대점">
                     <div class="project-info"><h3>Menual</h3> <p>밥장인</p><p>홍대점</p></div>
                 </div>
-                <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images="[&quot;sk4-1.jpg&quot;,&quot;sk4.jpg&quot;]">
+                <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images="[&quot;sk4-1.jpg&quot;,&quot;sk4.jpg&quot;,&quot;sk3-2.jpg&quot;,&quot;sk3.jpg&quot;,&quot;sk-2-2.jpg&quot;,&quot;sk2.jpg&quot;]">
                     <img src="sk4-1.jpg" alt="조감도">
                     <div class="project-info"><h3>평면조감도</h3> <p></p></div>
                 </div>
-                <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images="[&quot;sk3-2.jpg&quot;,&quot;sk3.jpg&quot;]">
-                    <img src="sk3-2.jpg" alt="조감도">
-                    <div class="project-info"><h3>평면조감도</h3> <p></p></div>
                 </div>
-                 <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images="[&quot;sk-2-2.jpg&quot;,&quot;sk2.jpg&quot;]">
-                    <img src="sk-2-2.jpg" alt="조감도">
-                    <div class="project-info"><h3>평면조감도</h3> <p></p></div>
-                </div>
-            </div>
             <div class="pagination" id="pagination"></div>
         </section>
 
@@ -368,16 +456,15 @@
             <a class="gallery-nav prev" onclick="changeSlide(-1)" style="display: block;">❮</a>
             
             <div id="zoomFrame" class="zoom-frame">
-                <img class="modal-content" id="modalImg" src="sk3.jpg" style="transform-origin: 43.1144% 3.28295%;">
+                <img class="modal-content" id="modalImg" src="">
             </div>
             
             <a class="gallery-nav next" onclick="changeSlide(1)" style="display: block;">❯</a>
-            <div class="image-counter" id="imageCounter">2 / 2</div>
+            <div class="image-counter" id="imageCounter"></div>
         </div>
     </div>
 
     <script>
-        /* [기본 설정 및 페이지 로드] */
         if ('scrollRestoration' in history) { history.scrollRestoration = 'manual'; }
         window.scrollTo(0, 0);
 
@@ -388,8 +475,18 @@
             }
             filterSelection('all', document.querySelector('.filter-btn.active'));
         }
+        
+        /* 햄버거 메뉴 토글 */
+        function toggleMenu() {
+            var navbar = document.getElementById("navbar");
+            if (navbar.classList.contains("active")) {
+                navbar.classList.remove("active");
+            } else {
+                navbar.classList.add("active");
+            }
+        }
 
-        /* [필터 및 페이지네이션 기능] */
+        /* 필터 및 페이지네이션 */
         const itemsPerPage = 50;
         let currentPage = 1;
         let currentCategory = 'all';
@@ -434,7 +531,7 @@
             }
         }
 
-        /* [모달 팝업 기능] */
+        /* 모달 및 스와이프 기능 */
         let currentImages = [];
         let currentImageIndex = 0;
 
@@ -487,7 +584,31 @@
             });
         }
 
-        /* [모달 이미지 돋보기 기능] */
+        /* [모바일 스와이프 기능] */
+        let touchStartX = 0;
+        let touchEndX = 0;
+        
+        const modalWrapper = document.querySelector('.modal-gallery-wrapper');
+        
+        modalWrapper.addEventListener('touchstart', function(e) {
+            touchStartX = e.changedTouches[0].clientX;
+        }, false);
+        
+        modalWrapper.addEventListener('touchend', function(e) {
+            touchEndX = e.changedTouches[0].clientX;
+            handleSwipe();
+        }, false);
+        
+        function handleSwipe() {
+            if (touchEndX < touchStartX - 50) {
+                changeSlide(1); // Next
+            }
+            if (touchEndX > touchStartX + 50) {
+                changeSlide(-1); // Prev
+            }
+        }
+
+        /* 돋보기 기능 */
         const zoomFrame = document.getElementById("zoomFrame");
         const modalImgElement = document.getElementById("modalImg");
 
@@ -500,20 +621,13 @@
             modalImgElement.style.transformOrigin = `${xPercent}% ${yPercent}%`;
         });
 
-        /* [동영상 연속 재생 로직 (새로 추가됨)] */
+        /* 동영상 재생 */
         const videoPlayer = document.getElementById('mainVideo');
-
-        // ▼▼▼ 여기에 재생할 2개의 동영상 파일 주소를 넣어주세요 ▼▼▼
-        const playlist = [
-            "nucks_mood.mp4" // 첫 번째 영상
-           ,"nucks.mp4","nucks1-1.mp4","nucks1-2.mp4"
-        ];
-
+        const playlist = ["nucks_mood.mp4", "nucks.mp4", "nucks1-1.mp4", "nucks1-2.mp4"];
         let videoIndex = 0;
 
-        // 영상이 끝나면 다음 영상으로 교체
         videoPlayer.addEventListener('ended', function() {
-            videoIndex = (videoIndex + 1) % playlist.length; // 0, 1, 0, 1... 순환
+            videoIndex = (videoIndex + 1) % playlist.length; 
             videoPlayer.src = playlist[videoIndex];
             videoPlayer.play();
         });
