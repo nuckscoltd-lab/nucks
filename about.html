@@ -1,0 +1,35 @@
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About NUCKS | Company History</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&amp;family=Playfair+Display:wght@700&amp;display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1a1a1a; line-height: 1.8; background: #fff; }
+        
+        .container { max-width: 1200px; margin: 0 auto; padding: 100px 60px; }
+        
+        /* 히어로 섹션 */
+        .about-header { margin-bottom: 80px; }
+        .about-header h1 { font-family: 'Playfair Display', serif; font-size: 4rem; margin-bottom: 20px; }
+        .back-btn { text-decoration: none; color: #666; font-size: 14px; text-transform: uppercase; border-bottom: 1px solid #666; }
+
+        /* 연혁 섹션 */
+        .history-section { display: flex; gap: 80px; margin-bottom: 120px; }
+        .section-title { flex: 1; font-size: 24px; font-weight: 700; text-transform: uppercase; border-top: 2px solid #000; padding-top: 20px; }
+        .history-list { flex: 2; list-style: none; }
+        .history-item { display: flex; gap: 30px; margin-bottom: 25px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
+        .year { font-weight: 700; color: #FF7F27; min-width: 60px; }
+
+        /* 갤러리 섹션 */
+        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .gallery-item { width: 100%; aspect-ratio: 4/3; background: #f4f4f4; overflow: hidden; border-radius: 10px; }
+        .gallery-item img { width: 100%; height: 100%; object-fit: cover; transition: 0.5s; }
+        .gallery-item:hover img { transform: scale(1.05); }
+
+        @media (max-width: 768px) {
+            .history-section { flex-direction: column; gap: 30px; }
+            .about-header h1 { font-size: 2.5rem; }
+        }
+    </style>
+</head>
