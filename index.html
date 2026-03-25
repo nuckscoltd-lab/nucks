@@ -67,7 +67,47 @@
             padding-bottom: 60px;
         }
         
-        .hero-content { flex: 1; max-width: 500px; text-align: left; z-index: 2; }
+        .hero-content { flex: 1; max-width: 500px; text-align: left; z-index: 2; 
+/* 추가: 영상 높이에 맞추기 위해 내부 요소 간격을 균등하게 조절 */
+    display: flex;
+    flex-direction: column;
+    justify-content: center; 
+    height: 620px; /* 오른쪽 영상(.hero-video-area)의 height와 동일하게 설정 */
+    gap: 15px;
+}
+
+/* 제목 폰트 크기 축소 (영상 높이에 맞게) */
+.hero h1 { 
+    font-family: 'Playfair Display', serif;
+    font-size: 4rem; /* 기존 5rem에서 축소하여 세로 폭 확보 */
+    font-weight: 700; 
+    line-height: 1.1; 
+    color: #000;
+    margin-bottom: 0;
+}
+
+/* 설명 문구 간격 조정 */
+.hero-desc {
+    font-family: 'Helvetica Neue', sans-serif;
+    font-size: 1.05rem; 
+    margin: 10px 0; /* 상하 여백을 줄여 전체 높이 압축 */
+    max-width: 450px; 
+    line-height: 1.4; 
+    color: #1a1a1a;
+}
+
+/* 리스트 간격 조정 */
+.hero-list { 
+    list-style: none; 
+    font-family: 'Helvetica Neue', sans-serif; 
+    font-size: 0.95rem; 
+    color: #1a1a1a; 
+}
+.hero-list li { 
+    margin-bottom: 4px; /* 리스트 사이 간격 축소 */
+    display: flex; 
+    align-items: center; 
+}
         
         .hero-video-area {
             flex: 1.2;
@@ -82,11 +122,6 @@
             width: 100%; height: 100%; object-fit: cover; display: block;
         }
 
-        .hero h1 { 
-            font-family: 'Playfair Display', serif;
-            font-size: 5rem; font-weight: 700; line-height: 1.0; color: #000;
-            margin-bottom: 10px;
-        }
         .hero h1 .highlight { color: #FF7F27; font-weight: 900; display: block; margin-top: 5px; }
         .hero-desc {
             font-family: 'Helvetica Neue', sans-serif;
