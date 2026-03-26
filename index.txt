@@ -1,9 +1,7 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
+<html lang="ko"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Designed by Nucks | Interior Re-modeling & Design</title>
+    <title>Designed by Nucks | Interior Re-modeling &amp; Design</title>
     
     <meta property="og:type" content="website">
     <meta property="og:title" content="Designed by Nucks">
@@ -16,7 +14,7 @@
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&family=Playfair+Display:wght@400;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&amp;family=Playfair+Display:wght@400;700;900&amp;display=swap" rel="stylesheet">
 
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -55,57 +53,98 @@
             padding: 5px;
         }
 
+        /* [원본 유지] 히어로 섹션 기본 레이아웃 */
         .hero {
             min-height: 80vh;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0 60px;
+            padding: 40px 80px;
             margin-top: 100px;
-            gap: 50px;
+            gap: 60px;
             background: linear-gradient(to right, #ffffff, #eaeff2);
             margin-bottom: 0;
-            padding-bottom: 60px;
         }
         
-        .hero-content { flex: 1; max-width: 500px; text-align: left; z-index: 2; }
+        /* [원본 유지] 히어로 콘텐츠 (영상 높이에 맞춤) */
+        .hero-content { 
+            flex: 1; 
+            max-width: 500px; 
+            text-align: left; 
+            z-index: 2; 
+            display: flex;
+            flex-direction: column;
+            justify-content: center; 
+            height: 600px; /* 영상 높이와 동일 */
+            gap: 15px;
+        }
+
+        /* [원본 유지] 제목 폰트 크기 */
+        .hero h1 { 
+            font-family: 'Playfair Display', serif;
+            font-size: 3.5rem;
+            font-weight: 700; 
+            line-height: 1.1; 
+            color: #000;
+            margin-bottom: 0;
+        }
+        .hero h1 .highlight { color: #FF7F27; font-weight: 900; display: block;}
+
+        /* [원본 유지] 설명 문구 */
+        .hero-desc {
+            font-family: 'Helvetica Neue', sans-serif;
+            font-size: 1.05rem; 
+            margin: 10px 0;
+            max-width: 450px; 
+            line-height: 1.4; 
+            color: #1a1a1a;
+        }
+        .hero-desc strong { border-bottom: 1px dotted #000; }
+
+        /* [원본 유지] 리스트 */
+        .hero-list { 
+            list-style: none; 
+            font-family: 'Helvetica Neue', sans-serif; 
+            font-size: 0.95rem; 
+            color: #1a1a1a; 
+        }
+        .hero-list li { 
+            margin-bottom: 4px; 
+            display: flex; 
+            align-items: center; 
+        }
+        .hero-list li::before { content: "•"; margin-right: 10px; font-size: 1.2rem; }
         
-        /* 비디오 영역 수정: 페이드 효과를 위해 relative 설정 */
+        /* [원본 유지 + 수정] 비디오 영역 */
         .hero-video-area {
-            flex: 1.2;
-            height: 620px;
+            flex: 0 0 75%;
+            height: 600px;
             position: relative;
             overflow: hidden;
             border-radius: 20px;
             box-shadow: 20px 20px 60px rgba(0,0,0,0.05);
-            background: #000;
+            background: #000; /* 페이드 시 검은 배경 */
         }
 
-        /* 두 개의 비디오를 겹쳐서 페이드 효과 구현 */
+        /* [추가] 페이드 효과를 위한 비디오 공통 스타일 */
         .hero-video-area video {
-            position: absolute;
+            position: absolute; /* 영상을 겹치기 위해 필수 */
             top: 0; left: 0;
             width: 100%; height: 100%; 
             object-fit: cover; 
             display: block;
-            transition: opacity 1.5s ease-in-out; /* 페이드 속도 조절 */
+            transition: opacity 1.2s ease-in-out; /* 페이드 시간 조절 */
+            opacity: 0; /* 기본적으로 숨김 */
+            z-index: 1;
         }
 
-        .hero h1 { 
-            font-family: 'Playfair Display', serif;
-            font-size: 5rem; font-weight: 700; line-height: 1.0; color: #000;
-            margin-bottom: 10px;
+        /* [추가] 현재 재생 중인 영상 스타일 */
+        .hero-video-area video.active {
+            opacity: 1;
+            z-index: 2; /* 위로 올림 */
         }
-        .hero h1 .highlight { color: #FF7F27; font-weight: 900; display: block; margin-top: 5px; }
-        .hero-desc {
-            font-family: 'Helvetica Neue', sans-serif;
-            font-size: 1.2rem; margin: 40px 0; max-width: 500px; line-height: 1.5; color: #1a1a1a;
-        }
-        .hero-desc strong { border-bottom: 1px dotted #000; }
-        .hero-list { list-style: none; font-family: 'Helvetica Neue', sans-serif; font-size: 1.1rem; color: #1a1a1a; }
-        .hero-list li { margin-bottom: 8px; display: flex; align-items: center; }
-        .hero-list li::before { content: "•"; margin-right: 10px; font-size: 1.2rem; }
 
+        /* 프로젝트 섹션 (원본 유지) */
         .container { padding: 0 60px 100px; }
         #projects.container { padding-top: 0; padding-left: 0; padding-right: 0; max-width: 100%; }
 
@@ -248,8 +287,8 @@
             nav a { margin: 15px 0; font-size: 18px; font-weight: 700; color: #333; }
 
             .hero { flex-direction: column; padding: 0 20px; height: auto; padding-bottom: 60px; margin-top: 80px; gap: 30px; }
-            .hero-content { max-width: 100%; width: 100%; }
-            .hero-video-area { width: 100%; height: 300px; }
+            .hero-content { max-width: 100%; width: 100%; height: auto !important; } /* 모바일에선 높이 고정 해제 */
+            .hero-video-area { width: 100%; height: 300px; flex: none; } /* 모바일 비디오 높이 조정 */
             .hero h1 { font-size: 3rem; }
             .grid { grid-template-columns: repeat(2, 1fr); }
             
@@ -280,6 +319,7 @@
                 background: none !important; 
                 padding: 0 !important;
                 z-index: 9999 !important;
+                text-shadow: 0 0 5px rgba(0,0,0,0.8) !important;
             }
             .gallery-nav.next { 
                 right: 10px !important; 
@@ -287,6 +327,7 @@
                 background: none !important;
                 padding: 0 !important;
                 z-index: 9999 !important;
+                text-shadow: 0 0 5px rgba(0,0,0,0.8) !important;
             }
 
             .project-info {
@@ -294,9 +335,10 @@
                 background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%) !important;
                 justify-content: flex-end !important;
                 padding-bottom: 10px !important;
+                align-items: center !important;
             }
-            .project-info h3 { font-size: 14px !important; }
-            .project-info p { font-size: 12px !important; }
+            .project-info h3 { font-size: 14px !important; margin-bottom: 2px !important; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+            .project-info p { font-size: 12px !important; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
         }
         
         html { scroll-behavior: smooth; }
@@ -307,7 +349,7 @@
 <body>
 
     <header>
-        <a href="#" class="logo">
+        <a href="about.html" class="logo">
             <img src="nuckslogo1.png" alt="Nucks Logo" style="height: 25px;"> 
         </a>
         
@@ -342,8 +384,8 @@
             </div>
 
             <div class="hero-video-area">
-                <video id="video1" class="main-video" autoplay muted playsinline style="opacity: 1; z-index: 2;"></video>
-                <video id="video2" class="main-video" muted playsinline style="opacity: 0; z-index: 1;"></video>
+                <video id="video1" class="main-video active" autoplay="" muted="" playsinline="" src="nucks1-1.mp4" style="z-index: 1; opacity: 0;"></video>
+                <video id="video2" class="main-video" muted="" playsinline="" src="nucks.mp4" style="z-index: 2; opacity: 1;"></video>
             </div>
         </section>
 
@@ -360,49 +402,101 @@
             </div>
 
             <div class="grid">
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;224master.jpg&quot;,&quot;living_alt.png&quot;, &quot;toilet.jpg&quot;, &quot;273_alt.jpg&quot;]">
-                    <img src="224master.jpg" alt="아페르한강">
-                    <div class="project-info"><h3>UNIT</h3> <p>아페르한강</p></div>
+                                     
+<div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;01 260112_외부-4.jpg&quot;,&quot;02 입구.jpg&quot;,&quot;03 공용홀_1026-DSC00988.jpg&quot;,&quot;04 공용홀2028-DSC00990.jpg&quot;,&quot;05-DSC00128.jpg&quot;,&quot;06 260205_14-1_ALT2.jpg&quot;,&quot;07 상담공간155-DSC00930.jpg&quot;,&quot;08 -2층홀DSC00004.jpg&quot;,&quot;09 062-DSC00032.jpg&quot;]">
+                    <img src="01 260112_외부-4.jpg" alt="천안부성 아이파크">
+                    <div class="project-info"><h3>천안부성 아이파크<p>견본주택</p></h3> <p>2026년</p></div>
                 </div>
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;DSC01194.jpg&quot;,&quot;DSC00477.jpg&quot;, &quot;DSC00480.jpg&quot;, &quot;DSC01454.jpg&quot;]">
-                    <img src="DSC01194.jpg" alt="익산부송 아이파크">
-                    <div class="project-info"><h3>UNIT</h3> <p>익산부송 아이파크</p></div>
+<div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;01 84DSC02077.jpg&quot;,&quot;01-2DSC02080.jpg&quot;,&quot;02 102DSC01627.jpg&quot;,&quot;03 116DSC02797.jpg&quot;,&quot;04 116DSC03119.jpg&quot;,&quot;05 120DSC00845.jpg&quot;,&quot;06 120DSC00917.jpg&quot;]">
+                    <img src="01 84DSC02077.jpg" alt="천안부성 아이파크">
+                    <div class="project-info"><h3>천안부성 아이파크</h3> <p>2026년</p></div>
                 </div>
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;6.jpg&quot;, &quot;2.jpg&quot;, &quot;3.jpg&quot;, &quot;DSC00930.jpg&quot;, &quot;DSC01447.jpg&quot;, &quot;DSC01527.jpg&quot;, &quot;DSC01543-DSC00036.jpg&quot;]">
-                    <img src="6.jpg" alt="진주 백년문화공원 극동스타클래스">
-                    <div class="project-info"><h3>UNIT</h3> <p>진주 백년문화공원 극동스타클래스</p></div>
-                </div>
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;DSC01376.jpg&quot;, &quot;DSC00225.jpg&quot;, &quot;03-DSC00284.jpg&quot;, &quot;04-DSC00159.jpg&quot;, &quot;DSC01378.jpg&quot;, &quot;DSC01629.jpg&quot;, &quot;DSC01049.jpg&quot;]">
-                    <img src="DSC01376.jpg" alt="대상 웰라움 홍천">
-                    <div class="project-info"><h3>UNIT</h3> <p>대상 웰라움 홍천</p></div>
-                </div>
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;ALT-03.jpg&quot;, &quot;08_living.jpg&quot;, &quot;Enscape_20250415.jpg&quot;]">
+                    
+<div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;ALT-03.jpg&quot;, &quot;08_living.jpg&quot;, &quot;Enscape_20250415.jpg&quot;]">
                     <img src="ALT-03.jpg" alt="HWASUNG">
-                    <div class="project-info"><h3>UNIT</h3> <p>HWASUNG 만촌 파크드림 에디움 / 범어역 파크드림 디아르</p></div>
+                    <div class="project-info"><h3>HWASUNG</h3> <p>만촌 파크드림 에디움</p> <p>범어역 파크드림 디아르</p><p>2026년</p></div>
                 </div>
-                <div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;iparkcity.jpg&quot;]">
-                    <img src="iparkcity.jpg" alt="천안부성 아이파크">
-                    <div class="project-info"><h3>M/H</h3> <p>천안부성 아이파크</p></div>
+<div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;DSC01615.jpg&quot;,&quot;DSC01695.jpg&quot;,&quot;DSC01734.jpg&quot;,&quot;DSC01738.jpg&quot;]">
+                    <img src="DSC01615.jpg" alt="익산 부송4지구 아이파크 견본주택">
+                    <div class="project-info"><h3>익산 부송4지구 아이파크 <p>견본주택</p></h3> <p>2024년</p></div>
                 </div>
-                <div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;0E7A5379.jpg&quot;, &quot;0E7A5370 copy.jpg&quot;, &quot;0E7A5243 copy.jpg&quot;, &quot;0E7A5226 copy.jpg&quot;, &quot;0E7A5560.jpg&quot;, &quot;0E7A5505 copy.jpg&quot;]">
+                <div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;0E7A5379.jpg&quot;, &quot;0E7A5370 copy.jpg&quot;, &quot;0E7A5243 copy.jpg&quot;, &quot;0E7A5226 copy.jpg&quot;, &quot;0E7A5560.jpg&quot;, &quot;0E7A5505 copy.jpg&quot;, &quot;0E7A5522_Panorama 1 copy.jpg&quot;, &quot;0E7A5525_Panorama copy.jpg&quot;, &quot;0E7A5569 copy.jpg&quot;, &quot;0E7A5579 copy.jpg&quot; ]">
                     <img src="0E7A5379.jpg" alt="서초르니드">
-                    <div class="project-info"><h3>M/H</h3> <p>서초르니드</p></div>
+                    <div class="project-info"><h3>서초르니드<p>견본주택</p></h3> <p>2024년</p></div>
                 </div>
-                 <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;0E7A9057.jpg&quot;, &quot;0E7A9123_Panorama.jpg&quot;, &quot;0E7A9189.jpg&quot;]">
+                 <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;0E7A9057.jpg&quot;, &quot;0E7A9123_Panorama.jpg&quot;, &quot;0E7A9189.jpg&quot;, &quot;0E7A9093_Panorama.jpg&quot;, &quot;0E7A9301.jpg&quot;]">
                     <img src="0E7A9057.jpg" alt="밥장인/부산중앙점">
-                    <div class="project-info"><h3>Menual</h3> <p>밥장인 부산중앙점</p></div>
+                    <div class="project-info"><h3>밥장인(부산중앙점)</h3> <p>2024년</p></div>
                 </div>
-                <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;★IMG_6785(보정).jpg&quot;, &quot;★IMG_6761(보정).jpg&quot;]">
+                <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;★IMG_6785(보정).jpg&quot;, &quot;★IMG_6761(보정).jpg&quot;, &quot;★IMG_6766(보정).jpg&quot;]">
                     <img src="★IMG_6785(보정).jpg" alt="밥장인/경성부경대점">
-                    <div class="project-info"><h3>Menual</h3> <p>밥장인 경성부경대점</p></div>
+                    <div class="project-info"><h3>밥장인(경성부경대점)</h3> <p>2024년</p></div>
                 </div>
-                <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images="[&quot;sk4-1.jpg&quot;,&quot;sk4.jpg&quot;]">
-                    <img src="sk4-1.jpg" alt="조감도">
+                    <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;DSC4657.jpg&quot;, &quot;DSC4650.jpg&quot;, &quot;DSC4654.jpg&quot;]">
+                    <img src="DSC4657.jpg" alt="밥장인/홍대점">
+                    <div class="project-info"><h3>밥장인(홍대점)</h3> <p>2024년</p></div>
+                </div>
+<div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;DSC01376.jpg&quot;, &quot;DSC00225.jpg&quot;, &quot;03-DSC00284.jpg&quot;, &quot;04-DSC00159.jpg&quot;, &quot;DSC01378.jpg&quot;, &quot;DSC01629.jpg&quot;, &quot;DSC01049.jpg&quot;]">
+                    <img src="DSC01376.jpg" alt="대상 웰라움 홍천">
+                    <div class="project-info"><h3>대상 웰라움 홍천</h3> <p>2024년</p></div>
+                </div>
+<div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;DSC01194.jpg&quot;,&quot;DSC00477.jpg&quot;, &quot;DSC00480.jpg&quot;, &quot;DSC01454.jpg&quot;]">
+                    <img src="DSC01194.jpg" alt="익산부송 아이파크">
+                    <div class="project-info"><h3>익산부송 아이파크</h3> <p>2024년</p></div>
+                </div>
+<div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;01DSC01026.jpg&quot;,&quot;02DSC01029-DSC00042.jpg&quot;,&quot;03DSC00008 (수정).jpg&quot;,&quot;04DSC00943.jpg&quot;]">
+                    <img src="01DSC01026.jpg" alt="호현 센트럴 아이파크">
+                    <div class="project-info"><h3>호현 센트럴 아이파크/59"</h3> <p>2024년</p></div>
+                </div>
+<div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;01 DSC00364 (수정).jpg&quot;,&quot;02 DSC00367 (수정).jpg&quot;,&quot;03 DSC00413 (수정).jpg&quot;,&quot;04 DSC00572 (수정).jpg&quot;]">
+                    <img src="01 DSC00364 (수정).jpg" alt="호현 센트럴 아이파크">
+                    <div class="project-info"><h3>호현 센트럴 아이파크/84"</h3> <p>2024년</p></div>
+                </div>
+<div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;01DSC01563.jpg&quot;,&quot;02DSC01564.jpg&quot;,&quot;03DSC01811.jpg&quot;,&quot;04DSC01616.jpg&quot;]">
+                    <img src="01DSC01563.jpg" alt="힐스테이트 속초 금호동">
+                    <div class="project-info"><h3>힐스테이트 속초 금호동/84A"</h3> <p>2023년</p></div>
+                </div>
+<div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;01DSC00301.jpg&quot;,&quot;02DSC01038.jpg&quot;,&quot;03DSC01043.jpg&quot;,&quot;04DSC01047.jpg&quot;]">
+                    <img src="01DSC00301.jpg" alt="힐스테이트 속초 금호동">
+                    <div class="project-info"><h3>힐스테이트 속초 금호동/84B"</h3> <p>2023년</p></div>
+                </div>
+<div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;01거실 ALT.2-1.png&quot;,&quot;02주방 입면.jpg&quot;,&quot;03.png&quot;,&quot;04패밀리 라운지.jpg&quot;,&quot;05계단 입면.jpg&quot;,&quot;06 입구측 입면.png&quot;,&quot;07수정.jpg&quot;]">
+                    <img src="01거실 ALT.2-1.png" alt="세종 6-4 블럭형 단독주택">
+                    <div class="project-info"><h3>세종 6-4 블럭형 단독주택</h3> <p>2022년</p></div>
+                </div>
+ <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;6.jpg&quot;, &quot;2.jpg&quot;, &quot;3.jpg&quot;, &quot;DSC00930.jpg&quot;, &quot;DSC01447.jpg&quot;, &quot;DSC01527.jpg&quot;, &quot;DSC01543-DSC00036.jpg&quot;]">
+                    <img src="6.jpg" alt="진주 백년문화공원 극동스타클래스">
+                    <div class="project-info"><h3>극동스타클래스 <p>진주 백년문화공원</p></h3> <p>2022년</p></div>
+                </div>
+<div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;01 DSC00806.jpg&quot;,&quot;02 DSC00827.jpg&quot;,&quot;03 DSC00733(수정).jpg&quot;]">
+                    <img src="01 DSC00806.jpg" alt="경산 2차 아이파크 견본주택">
+                    <div class="project-info"><h3>경산 2차 아이파크<p>견본주택</p></h3> <p>2022년</p></div>
+                </div>
+  <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;224master.jpg&quot;,&quot;living_alt.png&quot;, &quot;toilet.jpg&quot;, &quot;273_alt.jpg&quot;]">
+                    <img src="224master.jpg" alt="아페르한강">
+                    <div class="project-info"><h3>아페르한강</h3> <p>2021년</p></div>
+                </div>
+<div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;01DSC00789.jpg&quot;,&quot;02DSC00797.jpg&quot;,&quot;03DSC01002.jpg&quot;]">
+                    <img src="01DSC00789.jpg" alt="장안 센트럴 힐스테이트59D" "="">
+                    <div class="project-info"><h3>장안 센트럴 힐스테이트59D"</h3> <p>2021년</p></div>
+                </div>
+<div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;01DSC00131.jpg&quot;,&quot;02DSC00214.jpg&quot;,&quot;03DSC00459.jpg&quot;]">
+                    <img src="01DSC00131.jpg" alt="장안 센트럴 힐스테이트78A" "="">
+                    <div class="project-info"><h3>장안 센트럴 힐스테이트78A"</h3> <p>2021년</p></div>
+                </div>
+<div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;01.JPG&quot;,&quot;02.JPG&quot;,&quot;03.JPG&quot;,&quot;04.JPG&quot;,&quot;05.JPG&quot;]">
+                    <img src="01.JPG" alt="세종 라포르테">
+                    <div class="project-info"><h3>세종 라포르테</h3> <p>2020년</p></div>
+                </div>
+
+                <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images="[&quot;sk4-1.jpg&quot;,&quot;sk4.jpg&quot;,&quot;sk3-2.jpg&quot;,&quot;sk3.jpg&quot;,&quot;sk-2-2.jpg&quot;,&quot;sk2.jpg&quot;]">
+                    <img src="sk4.jpg" alt="조감도">
                     <div class="project-info"><h3>평면조감도</h3> <p></p></div>
                 </div>
             </div>
             <div class="pagination" id="pagination"></div>
         </section>
+
     </main>
 
     <footer id="contact">
@@ -411,19 +505,22 @@
                 <h4>ADDRESS</h4>
                 <p>05033 Nucks Building 2F, 26, Gwangnaru-ro 46-gil,</p>
                 <p>Gwangjin-gu, Seoul, Korea</p>
-                <p>TEL: 02-6463-1773 / FAX: 02-6463-1774</p>
+                <p>TEL: 02-6463-1773</p>
+                <p>FAX: 02-6463-1774</p>
             </div>
             <div class="footer-center">
                 <div class="contact-group">
                     <h4>CONTACT</h4> 
                     <div class="contact-content-row">
                         <div class="contact-info">
-                            <p>E-mail: <a href="mailto:nuckscoltd@gmail.com" style="color: #ffffff; text-decoration: underline;">nuckscoltd@gmail.com</a></p>
-                            <p>Instagram: <a href="https://www.instagram.com/nucks_interior" target="_blank" style="color: #ffffff; text-decoration: underline;">@nucks_interior</a></p>
+                            <p>E-mail: <a href="mailto:nuckscoltd@gmail.com" style="color: #ffffff; text-decoration: underline; text-underline-offset: 5px;">nuckscoltd@gmail.com</a></p>
+                            <p>Open Kakao: <a href="https://open.kakao.com/o/s9k4QC9e" target="_blank" style="color: #ffffff; text-decoration: underline; text-underline-offset: 5px;">Start Chat</a></p>
+                            <p>Instagram: <a href="https://www.instagram.com/nucks_interior" target="_blank" style="color: #ffffff; text-decoration: underline; text-underline-offset: 5px;">@nucks_interior</a></p>
                         </div>
                         <div class="qr-container">
                             <div class="qr-box"><p class="qr-text">E-mail</p><img src="qr_email.jpg" alt="E-mail QR" class="qr-img"></div>
                             <div class="qr-box"><p class="qr-text">Kakao</p><img src="qr_open.jpg" alt="Kakao QR" class="qr-img"></div>
+                            <div class="qr-box"><p class="qr-text">Instagram</p><img src="qr_insta.jpg" alt="Insta QR" class="qr-img"></div>
                         </div>
                     </div>
                 </div>
@@ -434,30 +531,45 @@
         </div>
     </footer>
 
-    <div id="imageModal" class="modal" onclick="closeModalOnClickOutside(event)">
+    <div id="imageModal" class="modal" onclick="closeModalOnClickOutside(event)" style="display: none;">
         <span class="close" onclick="closeModal()">×</span>
         <div class="modal-gallery-wrapper">
-            <a class="gallery-nav prev" onclick="changeSlide(-1)">❮</a>
+            <a class="gallery-nav prev" onclick="changeSlide(-1)" style="display: block;">❮</a>
+            
             <div id="zoomFrame" class="zoom-frame">
                 <img class="modal-content" id="modalImg" src="">
             </div>
-            <a class="gallery-nav next" onclick="changeSlide(1)">❯</a>
+            
+            <a class="gallery-nav next" onclick="changeSlide(1)" style="display: block;">❯</a>
             <div class="image-counter" id="imageCounter"></div>
         </div>
     </div>
 
     <script>
-        // 초기 설정
+        // 원본 스크립트 로직 유지
         if ('scrollRestoration' in history) { history.scrollRestoration = 'manual'; }
         window.scrollTo(0, 0);
 
-        // 메뉴 토글
+        window.onload = function() {
+            if (window.location.hash) {
+                history.replaceState(null, null, window.location.pathname);
+                window.scrollTo(0, 0);
+            }
+            filterSelection('all', document.querySelector('.filter-btn.active'));
+            initVideo(); // 동영상 초기화 함수 호출 추가
+        }
+        
+        /* 햄버거 메뉴 토글 */
         function toggleMenu() {
             var navbar = document.getElementById("navbar");
-            navbar.classList.toggle("active");
+            if (navbar.classList.contains("active")) {
+                navbar.classList.remove("active");
+            } else {
+                navbar.classList.add("active");
+            }
         }
 
-        // 필터링 기능
+        /* 필터 및 페이지네이션 */
         const itemsPerPage = 50;
         let currentPage = 1;
         let currentCategory = 'all';
@@ -476,13 +588,13 @@
             var filteredItems = [];
             for (var i = 0; i < items.length; i++) {
                 items[i].classList.add("hide");
-                if (currentCategory === "all" || items[i].getAttribute("data-category") === currentCategory) { 
-                    filteredItems.push(items[i]); 
-                }
+                var itemCat = items[i].getAttribute("data-category");
+                if (currentCategory === "all" || itemCat === currentCategory) { filteredItems.push(items[i]); }
             }
             var startIndex = (currentPage - 1) * itemsPerPage;
-            for (var j = startIndex; j < startIndex + itemsPerPage && j < filteredItems.length; j++) {
-                filteredItems[j].classList.remove("hide");
+            var endIndex = startIndex + itemsPerPage;
+            for (var j = 0; j < filteredItems.length; j++) {
+                if (j >= startIndex && j < endIndex) { filteredItems[j].classList.remove("hide"); }
             }
             createPagination(filteredItems.length);
         }
@@ -494,39 +606,105 @@
             if (totalPages <= 1) return;
             for (var i = 1; i <= totalPages; i++) {
                 var btn = document.createElement("div");
-                btn.innerText = i; btn.classList.add("page-num");
+                btn.innerText = i;
+                btn.classList.add("page-num");
                 if (i === currentPage) btn.classList.add("active");
                 btn.onclick = function() { currentPage = parseInt(this.innerText); renderPage(); };
                 pagination.appendChild(btn);
             }
         }
 
-        // 모달 기능
+        /* 모달 및 스와이프 기능 */
         let currentImages = [];
         let currentImageIndex = 0;
 
         function openModal(element) {
+            var modal = document.getElementById("imageModal");
+            
             let imagesData = element.getAttribute('data-images');
-            currentImages = imagesData ? JSON.parse(imagesData) : [element.querySelector('img').src];
+            if (imagesData) {
+                try {
+                    currentImages = JSON.parse(imagesData);
+                } catch(e) {
+                    currentImages = [element.querySelector('img').src];
+                }
+            } else {
+                currentImages = [element.querySelector('img').src];
+            }
+
             currentImageIndex = 0;
-            showSlide(0);
-            document.getElementById("imageModal").style.display = "flex";
+            showSlide(currentImageIndex);
+            modal.style.display = "flex";
         }
 
-        function closeModal() { document.getElementById("imageModal").style.display = "none"; }
-        function closeModalOnClickOutside(e) { if (e.target.id === "imageModal") closeModal(); }
+        function closeModal() {
+            document.getElementById("imageModal").style.display = "none";
+            currentImages = [];
+        }
         
+        function closeModalOnClickOutside(event) {
+            if (event.target === document.getElementById("imageModal")) {
+                closeModal();
+            }
+        }
+
         function changeSlide(n) {
-            currentImageIndex = (currentImageIndex + n + currentImages.length) % currentImages.length;
+            currentImageIndex += n;
+            if (currentImageIndex >= currentImages.length) { currentImageIndex = 0; }
+            if (currentImageIndex < 0) { currentImageIndex = currentImages.length - 1; }
             showSlide(currentImageIndex);
         }
 
         function showSlide(index) {
-            document.getElementById("modalImg").src = currentImages[index];
-            document.getElementById("imageCounter").innerText = (index + 1) + " / " + currentImages.length;
+            var modalImg = document.getElementById("modalImg");
+            var counter = document.getElementById("imageCounter");
+            modalImg.src = currentImages[index];
+            counter.innerText = (index + 1) + " / " + currentImages.length;
+            
+            const navs = document.querySelectorAll('.gallery-nav');
+            navs.forEach(nav => {
+                nav.style.display = (currentImages.length > 1) ? 'block' : 'none';
+            });
         }
 
-        /* [핵심 기능] 비디오 자연스러운 교차 페이드 재생 */
+        /* [모바일 스와이프 기능] */
+        let touchStartX = 0;
+        let touchEndX = 0;
+        
+        const modalWrapper = document.querySelector('.modal-gallery-wrapper');
+        
+        modalWrapper.addEventListener('touchstart', function(e) {
+            touchStartX = e.changedTouches[0].clientX;
+        }, false);
+        
+        modalWrapper.addEventListener('touchend', function(e) {
+            touchEndX = e.changedTouches[0].clientX;
+            handleSwipe();
+        }, false);
+        
+        function handleSwipe() {
+            if (touchEndX < touchStartX - 50) {
+                changeSlide(1); // Next
+            }
+            if (touchEndX > touchStartX + 50) {
+                changeSlide(-1); // Prev
+            }
+        }
+
+        /* 돋보기 기능 */
+        const zoomFrame = document.getElementById("zoomFrame");
+        const modalImgElement = document.getElementById("modalImg");
+
+        zoomFrame.addEventListener("mousemove", function(e) {
+            const rect = zoomFrame.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const xPercent = (x / rect.width) * 100;
+            const yPercent = (y / rect.height) * 100;
+            modalImgElement.style.transformOrigin = `${xPercent}% ${yPercent}%`;
+        });
+
+        /* [추가] 동영상 자연스러운 교차 페이드 재생 로직 */
         const videoList = ["nucks_mood.mp4", "nucks.mp4", "nucks1-1.mp4", "nucks1-2.mp4"];
         let currentIdx = 0;
         const v1 = document.getElementById('video1');
@@ -535,53 +713,47 @@
         let idleVideo = v2;
 
         function initVideo() {
-            v1.src = videoList[0];
-            v1.load();
-            v1.play();
-            // 다음 영상 미리 준비
-            prepareNextVideo();
+            activeVideo.src = videoList[currentIdx];
+            activeVideo.load();
+            activeVideo.play();
+            prepareNextVideo(); // 다음 영상 미리 로드
         }
 
         function prepareNextVideo() {
             const nextIdx = (currentIdx + 1) % videoList.length;
             idleVideo.src = videoList[nextIdx];
-            idleVideo.load();
+            idleVideo.load(); // 배경에서 미리 로드
         }
 
-        // 영상이 끝나기 약 1.5초 전에 교차 페이드 시작
-        function checkVideoTime() {
-            const fadeTime = 1.5; 
-            if (activeVideo.duration - activeVideo.currentTime < fadeTime) {
-                // 한 번만 실행되도록 이벤트 제거
-                activeVideo.ontimeupdate = null;
-                
-                // 다음 영상 재생 시작 및 페이드 인
-                idleVideo.style.opacity = "1";
-                idleVideo.style.zIndex = "2";
-                idleVideo.play();
-                
-                // 현재 영상 페이드 아웃
-                activeVideo.style.opacity = "0";
-                activeVideo.style.zIndex = "1";
+        // 영상 전환 함수 (페이드 효과)
+        function swapVideo() {
+            // 1. 다음 비디오 재생 시작 및 위로 올리기
+            idleVideo.style.zIndex = "2";
+            idleVideo.style.opacity = "1";
+            idleVideo.play();
+            
+            // 2. 현재 비디오 아래로 내리고 숨기기
+            activeVideo.style.zIndex = "1";
+            activeVideo.style.opacity = "0";
 
-                // 역할 교체
-                [activeVideo, idleVideo] = [idleVideo, activeVideo];
-                currentIdx = (currentIdx + 1) % videoList.length;
+            // 3. 역할 교체 (활성 <-> 대기)
+            let temp = activeVideo;
+            activeVideo = idleVideo;
+            idleVideo = temp;
 
-                // 다음 교차 지점 감시 시작
-                activeVideo.ontimeupdate = checkVideoTime;
-                
-                // 다음 영상 대기열 로드
-                setTimeout(prepareNextVideo, 2000); 
-            }
+            // 4. 인덱스 업데이트 및 다음 영상 미리 준비
+            currentIdx = (currentIdx + 1) % videoList.length;
+            
+            // 페이드 애니메이션(1.2초)이 끝난 후 소스 교체 및 종료 이벤트 부착
+            setTimeout(function() {
+                prepareNextVideo();
+                activeVideo.onended = swapVideo; // 새 활성 영상에 이벤트 부착
+            }, 1200); 
         }
 
-        v1.ontimeupdate = checkVideoTime;
+        // 첫 번째 영상에 종료 이벤트 리스너 등록
+        activeVideo.onended = swapVideo;
 
-        window.onload = function() {
-            initVideo();
-            filterSelection('all', document.querySelector('.filter-btn.active'));
-        };
     </script>
-</body>
-</html>
+
+</body></html>
