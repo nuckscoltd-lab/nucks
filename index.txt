@@ -1,8 +1,9 @@
-
-<html lang="ko"><head>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Designed by Nucks | Interior Re-modeling &amp; Design</title>
+    <title>Designed by Nucks | Interior Re-modeling & Design</title>
     
     <meta property="og:type" content="website">
     <meta property="og:title" content="Designed by Nucks">
@@ -15,7 +16,7 @@
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&amp;family=Playfair+Display:wght@400;700;900&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&family=Playfair+Display:wght@400;700;900&display=swap" rel="stylesheet">
 
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -69,6 +70,7 @@
         
         .hero-content { flex: 1; max-width: 500px; text-align: left; z-index: 2; }
         
+        /* 비디오 영역 수정: 페이드 효과를 위해 relative 설정 */
         .hero-video-area {
             flex: 1.2;
             height: 620px;
@@ -76,10 +78,17 @@
             overflow: hidden;
             border-radius: 20px;
             box-shadow: 20px 20px 60px rgba(0,0,0,0.05);
+            background: #000;
         }
 
+        /* 두 개의 비디오를 겹쳐서 페이드 효과 구현 */
         .hero-video-area video {
-            width: 100%; height: 100%; object-fit: cover; display: block;
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%; 
+            object-fit: cover; 
+            display: block;
+            transition: opacity 1.5s ease-in-out; /* 페이드 속도 조절 */
         }
 
         .hero h1 { 
@@ -185,7 +194,6 @@
             text-shadow: 0 0 10px rgba(0,0,0,0.5);
         }
         
-        /* PC 버전 화살표 */
         .gallery-nav {
             cursor: pointer; position: absolute; top: 50%; transform: translateY(-50%);
             padding: 16px; color: white; font-weight: bold; font-size: 40px;
@@ -203,7 +211,6 @@
         .project-info {
             position: absolute; top: 0; left: 0;
             width: 100%; height: 100%; 
-            /* PC 기본 스타일: 호버 시 나타나도록 */
             background-color: rgba(0, 0, 0, 0.4);
             color: #fff; opacity: 0; transition: opacity 0.3s ease;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
@@ -222,7 +229,6 @@
         .page-num:hover, .page-num.active { background-color: #1a1a1a; color: #fff; border-color: #1a1a1a; }
         .hide { display: none !important; }
 
-        /* [모바일 반응형 수정 구간 - !important로 강제 적용] */
         @media (max-width: 768px) {
             header { padding: 15px 20px; }
             .mobile-menu-icon { display: block; }
@@ -268,40 +274,29 @@
             
             .close { top: 20px; right: 20px; font-size: 40px; }
 
-            /* 모바일 모달 화살표 */
             .gallery-nav.prev { 
                 left: 10px !important; 
                 font-size: 30px !important; 
                 background: none !important; 
                 padding: 0 !important;
-                border-radius: 0;
-                width: auto; height: auto;
-                display: block;
                 z-index: 9999 !important;
-                text-shadow: 0 0 5px rgba(0,0,0,0.8) !important;
             }
             .gallery-nav.next { 
                 right: 10px !important; 
                 font-size: 30px !important;
                 background: none !important;
                 padding: 0 !important;
-                border-radius: 0;
-                width: auto; height: auto;
-                display: block;
                 z-index: 9999 !important;
-                text-shadow: 0 0 5px rgba(0,0,0,0.8) !important;
             }
 
-            /* [추가됨] 모바일 프로젝트 텍스트 항상 표시 */
             .project-info {
-                opacity: 1 !important; /* 항상 보이게 강제 */
-                background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%) !important; /* 하단 그라데이션 */
-                justify-content: flex-end !important; /* 글자 아래로 */
-                padding-bottom: 10px !important; /* 간격 */
-                align-items: center !important;
+                opacity: 1 !important;
+                background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%) !important;
+                justify-content: flex-end !important;
+                padding-bottom: 10px !important;
             }
-            .project-info h3 { font-size: 14px !important; margin-bottom: 2px !important; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
-            .project-info p { font-size: 12px !important; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+            .project-info h3 { font-size: 14px !important; }
+            .project-info p { font-size: 12px !important; }
         }
         
         html { scroll-behavior: smooth; }
@@ -347,10 +342,8 @@
             </div>
 
             <div class="hero-video-area">
-                <video id="mainVideo" autoplay="" muted="" playsinline="" src="nucks.mp4">
-                    <source src="nucks_mood.mp4">
-                    Your browser does not support the video tag.
-                </video>
+                <video id="video1" class="main-video" autoplay muted playsinline style="opacity: 1; z-index: 2;"></video>
+                <video id="video2" class="main-video" muted playsinline style="opacity: 0; z-index: 1;"></video>
             </div>
         </section>
 
@@ -385,36 +378,31 @@
                 </div>
                 <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;ALT-03.jpg&quot;, &quot;08_living.jpg&quot;, &quot;Enscape_20250415.jpg&quot;]">
                     <img src="ALT-03.jpg" alt="HWASUNG">
-                    <div class="project-info"><h3>UNIT</h3> <p>HWASUNG 만촌 파크드림 에디움</p> <p>HWASUNG 범어역 파크드림 디아르</p></div>
+                    <div class="project-info"><h3>UNIT</h3> <p>HWASUNG 만촌 파크드림 에디움 / 범어역 파크드림 디아르</p></div>
                 </div>
                 <div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;iparkcity.jpg&quot;]">
                     <img src="iparkcity.jpg" alt="천안부성 아이파크">
                     <div class="project-info"><h3>M/H</h3> <p>천안부성 아이파크</p></div>
                 </div>
-                <div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;0E7A5379.jpg&quot;, &quot;0E7A5370 copy.jpg&quot;, &quot;0E7A5243 copy.jpg&quot;, &quot;0E7A5226 copy.jpg&quot;, &quot;0E7A5560.jpg&quot;, &quot;0E7A5505 copy.jpg&quot;, &quot;0E7A5522_Panorama 1 copy.jpg&quot;, &quot;0E7A5525_Panorama copy.jpg&quot;, &quot;0E7A5569 copy.jpg&quot;, &quot;0E7A5579 copy.jpg&quot; ]">
+                <div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;0E7A5379.jpg&quot;, &quot;0E7A5370 copy.jpg&quot;, &quot;0E7A5243 copy.jpg&quot;, &quot;0E7A5226 copy.jpg&quot;, &quot;0E7A5560.jpg&quot;, &quot;0E7A5505 copy.jpg&quot;]">
                     <img src="0E7A5379.jpg" alt="서초르니드">
                     <div class="project-info"><h3>M/H</h3> <p>서초르니드</p></div>
                 </div>
-                 <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;0E7A9057.jpg&quot;, &quot;0E7A9123_Panorama.jpg&quot;, &quot;0E7A9189.jpg&quot;, &quot;0E7A9093_Panorama.jpg&quot;, &quot;0E7A9301.jpg&quot;]">
+                 <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;0E7A9057.jpg&quot;, &quot;0E7A9123_Panorama.jpg&quot;, &quot;0E7A9189.jpg&quot;]">
                     <img src="0E7A9057.jpg" alt="밥장인/부산중앙점">
-                    <div class="project-info"><h3>Menual</h3> <p>밥장인</p><p>부산중앙점</p></div>
+                    <div class="project-info"><h3>Menual</h3> <p>밥장인 부산중앙점</p></div>
                 </div>
-                <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;★IMG_6785(보정).jpg&quot;, &quot;★IMG_6761(보정).jpg&quot;, &quot;★IMG_6766(보정).jpg&quot;]">
+                <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;★IMG_6785(보정).jpg&quot;, &quot;★IMG_6761(보정).jpg&quot;]">
                     <img src="★IMG_6785(보정).jpg" alt="밥장인/경성부경대점">
-                    <div class="project-info"><h3>Menual</h3> <p>밥장인</p><p>경성부경대점</p></div>
+                    <div class="project-info"><h3>Menual</h3> <p>밥장인 경성부경대점</p></div>
                 </div>
-                    <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;DSC4657.jpg&quot;, &quot;DSC4650.jpg&quot;, &quot;DSC4654.jpg&quot;]">
-                    <img src="DSC4657.jpg" alt="밥장인/홍대점">
-                    <div class="project-info"><h3>Menual</h3> <p>밥장인</p><p>홍대점</p></div>
-                </div>
-                <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images="[&quot;sk4-1.jpg&quot;,&quot;sk4.jpg&quot;,&quot;sk3-2.jpg&quot;,&quot;sk3.jpg&quot;,&quot;sk-2-2.jpg&quot;,&quot;sk2.jpg&quot;]">
+                <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images="[&quot;sk4-1.jpg&quot;,&quot;sk4.jpg&quot;]">
                     <img src="sk4-1.jpg" alt="조감도">
                     <div class="project-info"><h3>평면조감도</h3> <p></p></div>
                 </div>
-                </div>
+            </div>
             <div class="pagination" id="pagination"></div>
         </section>
-
     </main>
 
     <footer id="contact">
@@ -423,70 +411,53 @@
                 <h4>ADDRESS</h4>
                 <p>05033 Nucks Building 2F, 26, Gwangnaru-ro 46-gil,</p>
                 <p>Gwangjin-gu, Seoul, Korea</p>
-                <p>TEL: 02-6463-1773</p>
-                <p>FAX: 02-6463-1774</p>
+                <p>TEL: 02-6463-1773 / FAX: 02-6463-1774</p>
             </div>
             <div class="footer-center">
                 <div class="contact-group">
                     <h4>CONTACT</h4> 
                     <div class="contact-content-row">
                         <div class="contact-info">
-                            <p>E-mail: <a href="mailto:nuckscoltd@gmail.com" style="color: #ffffff; text-decoration: underline; text-underline-offset: 5px;">nuckscoltd@gmail.com</a></p>
-                            <p>Open Kakao: <a href="https://open.kakao.com/o/s9k4QC9e" target="_blank" style="color: #ffffff; text-decoration: underline; text-underline-offset: 5px;">Start Chat</a></p>
-                            <p>Instagram: <a href="https://www.instagram.com/nucks_interior" target="_blank" style="color: #ffffff; text-decoration: underline; text-underline-offset: 5px;">@nucks_interior</a></p>
+                            <p>E-mail: <a href="mailto:nuckscoltd@gmail.com" style="color: #ffffff; text-decoration: underline;">nuckscoltd@gmail.com</a></p>
+                            <p>Instagram: <a href="https://www.instagram.com/nucks_interior" target="_blank" style="color: #ffffff; text-decoration: underline;">@nucks_interior</a></p>
                         </div>
                         <div class="qr-container">
                             <div class="qr-box"><p class="qr-text">E-mail</p><img src="qr_email.jpg" alt="E-mail QR" class="qr-img"></div>
                             <div class="qr-box"><p class="qr-text">Kakao</p><img src="qr_open.jpg" alt="Kakao QR" class="qr-img"></div>
-                            <div class="qr-box"><p class="qr-text">Instagram</p><img src="qr_insta.jpg" alt="Insta QR" class="qr-img"></div>
                         </div>
                     </div>
                 </div>
             </div>
             <div>
                 <h4>© 2025 Copyright by NUCKS Co.,Ltd</h4>
-                
             </div>
         </div>
     </footer>
 
-    <div id="imageModal" class="modal" onclick="closeModalOnClickOutside(event)" style="display: none;">
+    <div id="imageModal" class="modal" onclick="closeModalOnClickOutside(event)">
         <span class="close" onclick="closeModal()">×</span>
         <div class="modal-gallery-wrapper">
-            <a class="gallery-nav prev" onclick="changeSlide(-1)" style="display: block;">❮</a>
-            
+            <a class="gallery-nav prev" onclick="changeSlide(-1)">❮</a>
             <div id="zoomFrame" class="zoom-frame">
                 <img class="modal-content" id="modalImg" src="">
             </div>
-            
-            <a class="gallery-nav next" onclick="changeSlide(1)" style="display: block;">❯</a>
+            <a class="gallery-nav next" onclick="changeSlide(1)">❯</a>
             <div class="image-counter" id="imageCounter"></div>
         </div>
     </div>
 
     <script>
+        // 초기 설정
         if ('scrollRestoration' in history) { history.scrollRestoration = 'manual'; }
         window.scrollTo(0, 0);
 
-        window.onload = function() {
-            if (window.location.hash) {
-                history.replaceState(null, null, window.location.pathname);
-                window.scrollTo(0, 0);
-            }
-            filterSelection('all', document.querySelector('.filter-btn.active'));
-        }
-        
-        /* 햄버거 메뉴 토글 */
+        // 메뉴 토글
         function toggleMenu() {
             var navbar = document.getElementById("navbar");
-            if (navbar.classList.contains("active")) {
-                navbar.classList.remove("active");
-            } else {
-                navbar.classList.add("active");
-            }
+            navbar.classList.toggle("active");
         }
 
-        /* 필터 및 페이지네이션 */
+        // 필터링 기능
         const itemsPerPage = 50;
         let currentPage = 1;
         let currentCategory = 'all';
@@ -505,13 +476,13 @@
             var filteredItems = [];
             for (var i = 0; i < items.length; i++) {
                 items[i].classList.add("hide");
-                var itemCat = items[i].getAttribute("data-category");
-                if (currentCategory === "all" || itemCat === currentCategory) { filteredItems.push(items[i]); }
+                if (currentCategory === "all" || items[i].getAttribute("data-category") === currentCategory) { 
+                    filteredItems.push(items[i]); 
+                }
             }
             var startIndex = (currentPage - 1) * itemsPerPage;
-            var endIndex = startIndex + itemsPerPage;
-            for (var j = 0; j < filteredItems.length; j++) {
-                if (j >= startIndex && j < endIndex) { filteredItems[j].classList.remove("hide"); }
+            for (var j = startIndex; j < startIndex + itemsPerPage && j < filteredItems.length; j++) {
+                filteredItems[j].classList.remove("hide");
             }
             createPagination(filteredItems.length);
         }
@@ -523,116 +494,94 @@
             if (totalPages <= 1) return;
             for (var i = 1; i <= totalPages; i++) {
                 var btn = document.createElement("div");
-                btn.innerText = i;
-                btn.classList.add("page-num");
+                btn.innerText = i; btn.classList.add("page-num");
                 if (i === currentPage) btn.classList.add("active");
                 btn.onclick = function() { currentPage = parseInt(this.innerText); renderPage(); };
                 pagination.appendChild(btn);
             }
         }
 
-        /* 모달 및 스와이프 기능 */
+        // 모달 기능
         let currentImages = [];
         let currentImageIndex = 0;
 
         function openModal(element) {
-            var modal = document.getElementById("imageModal");
-            
             let imagesData = element.getAttribute('data-images');
-            if (imagesData) {
-                try {
-                    currentImages = JSON.parse(imagesData);
-                } catch(e) {
-                    currentImages = [element.querySelector('img').src];
-                }
-            } else {
-                currentImages = [element.querySelector('img').src];
-            }
-
+            currentImages = imagesData ? JSON.parse(imagesData) : [element.querySelector('img').src];
             currentImageIndex = 0;
-            showSlide(currentImageIndex);
-            modal.style.display = "flex";
+            showSlide(0);
+            document.getElementById("imageModal").style.display = "flex";
         }
 
-        function closeModal() {
-            document.getElementById("imageModal").style.display = "none";
-            currentImages = [];
-        }
+        function closeModal() { document.getElementById("imageModal").style.display = "none"; }
+        function closeModalOnClickOutside(e) { if (e.target.id === "imageModal") closeModal(); }
         
-        function closeModalOnClickOutside(event) {
-            if (event.target === document.getElementById("imageModal")) {
-                closeModal();
-            }
-        }
-
         function changeSlide(n) {
-            currentImageIndex += n;
-            if (currentImageIndex >= currentImages.length) { currentImageIndex = 0; }
-            if (currentImageIndex < 0) { currentImageIndex = currentImages.length - 1; }
+            currentImageIndex = (currentImageIndex + n + currentImages.length) % currentImages.length;
             showSlide(currentImageIndex);
         }
 
         function showSlide(index) {
-            var modalImg = document.getElementById("modalImg");
-            var counter = document.getElementById("imageCounter");
-            modalImg.src = currentImages[index];
-            counter.innerText = (index + 1) + " / " + currentImages.length;
-            
-            const navs = document.querySelectorAll('.gallery-nav');
-            navs.forEach(nav => {
-                nav.style.display = (currentImages.length > 1) ? 'block' : 'none';
-            });
+            document.getElementById("modalImg").src = currentImages[index];
+            document.getElementById("imageCounter").innerText = (index + 1) + " / " + currentImages.length;
         }
 
-        /* [모바일 스와이프 기능] */
-        let touchStartX = 0;
-        let touchEndX = 0;
-        
-        const modalWrapper = document.querySelector('.modal-gallery-wrapper');
-        
-        modalWrapper.addEventListener('touchstart', function(e) {
-            touchStartX = e.changedTouches[0].clientX;
-        }, false);
-        
-        modalWrapper.addEventListener('touchend', function(e) {
-            touchEndX = e.changedTouches[0].clientX;
-            handleSwipe();
-        }, false);
-        
-        function handleSwipe() {
-            if (touchEndX < touchStartX - 50) {
-                changeSlide(1); // Next
-            }
-            if (touchEndX > touchStartX + 50) {
-                changeSlide(-1); // Prev
+        /* [핵심 기능] 비디오 자연스러운 교차 페이드 재생 */
+        const videoList = ["nucks_mood.mp4", "nucks.mp4", "nucks1-1.mp4", "nucks1-2.mp4"];
+        let currentIdx = 0;
+        const v1 = document.getElementById('video1');
+        const v2 = document.getElementById('video2');
+        let activeVideo = v1;
+        let idleVideo = v2;
+
+        function initVideo() {
+            v1.src = videoList[0];
+            v1.load();
+            v1.play();
+            // 다음 영상 미리 준비
+            prepareNextVideo();
+        }
+
+        function prepareNextVideo() {
+            const nextIdx = (currentIdx + 1) % videoList.length;
+            idleVideo.src = videoList[nextIdx];
+            idleVideo.load();
+        }
+
+        // 영상이 끝나기 약 1.5초 전에 교차 페이드 시작
+        function checkVideoTime() {
+            const fadeTime = 1.5; 
+            if (activeVideo.duration - activeVideo.currentTime < fadeTime) {
+                // 한 번만 실행되도록 이벤트 제거
+                activeVideo.ontimeupdate = null;
+                
+                // 다음 영상 재생 시작 및 페이드 인
+                idleVideo.style.opacity = "1";
+                idleVideo.style.zIndex = "2";
+                idleVideo.play();
+                
+                // 현재 영상 페이드 아웃
+                activeVideo.style.opacity = "0";
+                activeVideo.style.zIndex = "1";
+
+                // 역할 교체
+                [activeVideo, idleVideo] = [idleVideo, activeVideo];
+                currentIdx = (currentIdx + 1) % videoList.length;
+
+                // 다음 교차 지점 감시 시작
+                activeVideo.ontimeupdate = checkVideoTime;
+                
+                // 다음 영상 대기열 로드
+                setTimeout(prepareNextVideo, 2000); 
             }
         }
 
-        /* 돋보기 기능 */
-        const zoomFrame = document.getElementById("zoomFrame");
-        const modalImgElement = document.getElementById("modalImg");
+        v1.ontimeupdate = checkVideoTime;
 
-        zoomFrame.addEventListener("mousemove", function(e) {
-            const rect = zoomFrame.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            const xPercent = (x / rect.width) * 100;
-            const yPercent = (y / rect.height) * 100;
-            modalImgElement.style.transformOrigin = `${xPercent}% ${yPercent}%`;
-        });
-
-        /* 동영상 재생 */
-        const videoPlayer = document.getElementById('mainVideo');
-        const playlist = ["nucks_mood.mp4", "nucks.mp4", "nucks1-1.mp4", "nucks1-2.mp4"];
-        let videoIndex = 0;
-
-        videoPlayer.addEventListener('ended', function() {
-            videoIndex = (videoIndex + 1) % playlist.length; 
-            videoPlayer.src = playlist[videoIndex];
-            videoPlayer.play();
-        });
-
+        window.onload = function() {
+            initVideo();
+            filterSelection('all', document.querySelector('.filter-btn.active'));
+        };
     </script>
-
-
-</body></html>
+</body>
+</html>

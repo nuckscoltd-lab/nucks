@@ -1,8 +1,9 @@
-
-<html lang="ko"><head>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Designed by Nucks | Interior Re-modeling &amp; Design</title>
+    <title>Designed by Nucks | Interior Re-modeling & Design</title>
     
     <meta property="og:type" content="website">
     <meta property="og:title" content="Designed by Nucks">
@@ -15,7 +16,7 @@
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&amp;family=Playfair+Display:wght@400;700;900&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&family=Playfair+Display:wght@400;700;900&display=swap" rel="stylesheet">
 
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -54,6 +55,7 @@
             padding: 5px;
         }
 
+        /* [원본 유지] 히어로 섹션 기본 레이아웃 */
         .hero {
             min-height: 80vh;
             display: flex;
@@ -64,50 +66,58 @@
             gap: 60px;
             background: linear-gradient(to right, #ffffff, #eaeff2);
             margin-bottom: 0;
-                    }
+        }
         
-        .hero-content { flex: 1; max-width: 500px; text-align: left; z-index: 2; 
-/* 추가: 영상 높이에 맞추기 위해 내부 요소 간격을 균등하게 조절 */
-    display: flex;
-    flex-direction: column;
-    justify-content: center; 
-    height: 600px; /* 오른쪽 영상(.hero-video-area)의 height와 동일하게 설정 */
-    gap: 15px;
-}
+        /* [원본 유지] 히어로 콘텐츠 (영상 높이에 맞춤) */
+        .hero-content { 
+            flex: 1; 
+            max-width: 500px; 
+            text-align: left; 
+            z-index: 2; 
+            display: flex;
+            flex-direction: column;
+            justify-content: center; 
+            height: 600px; /* 영상 높이와 동일 */
+            gap: 15px;
+        }
 
-/* 제목 폰트 크기 축소 (영상 높이에 맞게) */
-.hero h1 { 
-    font-family: 'Playfair Display', serif;
-    font-size: 3.5rem; /* 기존 5rem에서 축소하여 세로 폭 확보 */
-    font-weight: 700; 
-    line-height: 1.1; 
-    color: #000;
-    margin-bottom: 0;
-}
+        /* [원본 유지] 제목 폰트 크기 */
+        .hero h1 { 
+            font-family: 'Playfair Display', serif;
+            font-size: 3.5rem;
+            font-weight: 700; 
+            line-height: 1.1; 
+            color: #000;
+            margin-bottom: 0;
+        }
+        .hero h1 .highlight { color: #FF7F27; font-weight: 900; display: block;}
 
-/* 설명 문구 간격 조정 */
-.hero-desc {
-    font-family: 'Helvetica Neue', sans-serif;
-    font-size: 1.05rem; 
-    margin: 10px 0; /* 상하 여백을 줄여 전체 높이 압축 */
-    max-width: 450px; 
-    line-height: 1.4; 
-    color: #1a1a1a;
-}
+        /* [원본 유지] 설명 문구 */
+        .hero-desc {
+            font-family: 'Helvetica Neue', sans-serif;
+            font-size: 1.05rem; 
+            margin: 10px 0;
+            max-width: 450px; 
+            line-height: 1.4; 
+            color: #1a1a1a;
+        }
+        .hero-desc strong { border-bottom: 1px dotted #000; }
 
-/* 리스트 간격 조정 */
-.hero-list { 
-    list-style: none; 
-    font-family: 'Helvetica Neue', sans-serif; 
-    font-size: 0.95rem; 
-    color: #1a1a1a; 
-}
-.hero-list li { 
-    margin-bottom: 4px; /* 리스트 사이 간격 축소 */
-    display: flex; 
-    align-items: center; 
-}
+        /* [원본 유지] 리스트 */
+        .hero-list { 
+            list-style: none; 
+            font-family: 'Helvetica Neue', sans-serif; 
+            font-size: 0.95rem; 
+            color: #1a1a1a; 
+        }
+        .hero-list li { 
+            margin-bottom: 4px; 
+            display: flex; 
+            align-items: center; 
+        }
+        .hero-list li::before { content: "•"; margin-right: 10px; font-size: 1.2rem; }
         
+        /* [원본 유지 + 수정] 비디오 영역 */
         .hero-video-area {
             flex: 0 0 75%;
             height: 600px;
@@ -115,22 +125,28 @@
             overflow: hidden;
             border-radius: 20px;
             box-shadow: 20px 20px 60px rgba(0,0,0,0.05);
+            background: #000; /* 페이드 시 검은 배경 */
         }
 
+        /* [추가] 페이드 효과를 위한 비디오 공통 스타일 */
         .hero-video-area video {
-            width: 100%; height: 100%; object-fit: cover; display: block;
+            position: absolute; /* 영상을 겹치기 위해 필수 */
+            top: 0; left: 0;
+            width: 100%; height: 100%; 
+            object-fit: cover; 
+            display: block;
+            transition: opacity 1.2s ease-in-out; /* 페이드 시간 조절 */
+            opacity: 0; /* 기본적으로 숨김 */
+            z-index: 1;
         }
 
-        .hero h1 .highlight { color: #FF7F27; font-weight: 900; display: block;}
-        .hero-desc {
-            font-family: 'Helvetica Neue', sans-serif;
-            font-size: 1.2rem; margin: 40px 0; max-width: 500px; line-height: 1.5; color: #1a1a1a;
+        /* [추가] 현재 재생 중인 영상 스타일 */
+        .hero-video-area video.active {
+            opacity: 1;
+            z-index: 2; /* 위로 올림 */
         }
-        .hero-desc strong { border-bottom: 1px dotted #000; }
-        .hero-list { list-style: none; font-family: 'Helvetica Neue', sans-serif; font-size: 1.1rem; color: #1a1a1a; }
-        .hero-list li { margin-bottom: 8px; display: flex; align-items: center; }
-        .hero-list li::before { content: "•"; margin-right: 10px; font-size: 1.2rem; }
 
+        /* 프로젝트 섹션 (원본 유지) */
         .container { padding: 0 60px 100px; }
         #projects.container { padding-top: 0; padding-left: 0; padding-right: 0; max-width: 100%; }
 
@@ -219,7 +235,6 @@
             text-shadow: 0 0 10px rgba(0,0,0,0.5);
         }
         
-        /* PC 버전 화살표 */
         .gallery-nav {
             cursor: pointer; position: absolute; top: 50%; transform: translateY(-50%);
             padding: 16px; color: white; font-weight: bold; font-size: 40px;
@@ -237,7 +252,6 @@
         .project-info {
             position: absolute; top: 0; left: 0;
             width: 100%; height: 100%; 
-            /* PC 기본 스타일: 호버 시 나타나도록 */
             background-color: rgba(0, 0, 0, 0.4);
             color: #fff; opacity: 0; transition: opacity 0.3s ease;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
@@ -256,7 +270,6 @@
         .page-num:hover, .page-num.active { background-color: #1a1a1a; color: #fff; border-color: #1a1a1a; }
         .hide { display: none !important; }
 
-        /* [모바일 반응형 수정 구간 - !important로 강제 적용] */
         @media (max-width: 768px) {
             header { padding: 15px 20px; }
             .mobile-menu-icon { display: block; }
@@ -276,8 +289,8 @@
             nav a { margin: 15px 0; font-size: 18px; font-weight: 700; color: #333; }
 
             .hero { flex-direction: column; padding: 0 20px; height: auto; padding-bottom: 60px; margin-top: 80px; gap: 30px; }
-            .hero-content { max-width: 100%; width: 100%; }
-            .hero-video-area { width: 100%; height: 300px; }
+            .hero-content { max-width: 100%; width: 100%; height: auto !important; } /* 모바일에선 높이 고정 해제 */
+            .hero-video-area { width: 100%; height: 300px; flex: none; } /* 모바일 비디오 높이 조정 */
             .hero h1 { font-size: 3rem; }
             .grid { grid-template-columns: repeat(2, 1fr); }
             
@@ -302,15 +315,11 @@
             
             .close { top: 20px; right: 20px; font-size: 40px; }
 
-            /* 모바일 모달 화살표 */
             .gallery-nav.prev { 
                 left: 10px !important; 
                 font-size: 30px !important; 
                 background: none !important; 
                 padding: 0 !important;
-                border-radius: 0;
-                width: auto; height: auto;
-                display: block;
                 z-index: 9999 !important;
                 text-shadow: 0 0 5px rgba(0,0,0,0.8) !important;
             }
@@ -319,19 +328,15 @@
                 font-size: 30px !important;
                 background: none !important;
                 padding: 0 !important;
-                border-radius: 0;
-                width: auto; height: auto;
-                display: block;
                 z-index: 9999 !important;
                 text-shadow: 0 0 5px rgba(0,0,0,0.8) !important;
             }
 
-            /* [추가됨] 모바일 프로젝트 텍스트 항상 표시 */
             .project-info {
-                opacity: 1 !important; /* 항상 보이게 강제 */
-                background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%) !important; /* 하단 그라데이션 */
-                justify-content: flex-end !important; /* 글자 아래로 */
-                padding-bottom: 10px !important; /* 간격 */
+                opacity: 1 !important;
+                background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%) !important;
+                justify-content: flex-end !important;
+                padding-bottom: 10px !important;
                 align-items: center !important;
             }
             .project-info h3 { font-size: 14px !important; margin-bottom: 2px !important; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
@@ -381,10 +386,8 @@
             </div>
 
             <div class="hero-video-area">
-                <video id="mainVideo" autoplay="" muted="" playsinline="" src="nucks.mp4">
-                    <source src="nucks_mood.mp4">
-                    Your browser does not support the video tag.
-                </video>
+                <video id="video1" class="main-video active" autoplay muted playsinline></video>
+                <video id="video2" class="main-video" muted playsinline></video>
             </div>
         </section>
 
@@ -400,31 +403,23 @@
                 </div>
             </div>
 
-         
             <div class="grid">
+                                           
                     <div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;iparkcity.jpg&quot;]">
                     <img src="iparkcity.jpg" alt="천안부성 아이파크">
                     <div class="project-info"><h3>천안부성 아이파크</h3> <p>2026년</p></div>
                 </div>
-                    <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;ALT-03.jpg&quot;, &quot;08_living.jpg&quot;, &quot;Enscape_20250415.jpg&quot;]">
+<div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;ALT-03.jpg&quot;, &quot;08_living.jpg&quot;, &quot;Enscape_20250415.jpg&quot;]">
                     <img src="ALT-03.jpg" alt="HWASUNG">
-                    <div class="project-info"><h3>Hwasung</h3> <p>만촌 파크드림 에디움</p> <p>범어역 파크드림 디아르</p> <p>2026년</p></div>
+                    <div class="project-info"><h3>HWASUNG</h3> <p>만촌 파크드림 에디움</p> <p>범어역 파크드림 디아르</p><p>2026년</p></div>
                 </div>
-                 <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;DSC01194.jpg&quot;,&quot;DSC00477.jpg&quot;, &quot;DSC00480.jpg&quot;, &quot;DSC01454.jpg&quot;]">
-                    <img src="DSC01194.jpg" alt="익산부송 아이파크">
-                    <div class="project-info"><h3>익산부송 아이파크</h3> <p>2024년</p></div>
-                </div>
-                    <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;DSC01376.jpg&quot;, &quot;DSC00225.jpg&quot;, &quot;03-DSC00284.jpg&quot;, &quot;04-DSC00159.jpg&quot;, &quot;DSC01378.jpg&quot;, &quot;DSC01629.jpg&quot;, &quot;DSC01049.jpg&quot;]">
-                    <img src="DSC01376.jpg" alt="대상 웰라움 홍천">
-                    <div class="project-info"><h3>대상 웰라움 홍천</h3><p>2024년</p></div>
-                </div>
-                    <div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;0E7A5379.jpg&quot;, &quot;0E7A5370 copy.jpg&quot;, &quot;0E7A5243 copy.jpg&quot;, &quot;0E7A5226 copy.jpg&quot;, &quot;0E7A5560.jpg&quot;, &quot;0E7A5505 copy.jpg&quot;, &quot;0E7A5522_Panorama 1 copy.jpg&quot;, &quot;0E7A5525_Panorama copy.jpg&quot;, &quot;0E7A5569 copy.jpg&quot;, &quot;0E7A5579 copy.jpg&quot; ]">
+                <div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;0E7A5379.jpg&quot;, &quot;0E7A5370 copy.jpg&quot;, &quot;0E7A5243 copy.jpg&quot;, &quot;0E7A5226 copy.jpg&quot;, &quot;0E7A5560.jpg&quot;, &quot;0E7A5505 copy.jpg&quot;, &quot;0E7A5522_Panorama 1 copy.jpg&quot;, &quot;0E7A5525_Panorama copy.jpg&quot;, &quot;0E7A5569 copy.jpg&quot;, &quot;0E7A5579 copy.jpg&quot; ]">
                     <img src="0E7A5379.jpg" alt="서초르니드">
                     <div class="project-info"><h3>서초르니드</h3> <p>2024년</p></div>
                 </div>
                  <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;0E7A9057.jpg&quot;, &quot;0E7A9123_Panorama.jpg&quot;, &quot;0E7A9189.jpg&quot;, &quot;0E7A9093_Panorama.jpg&quot;, &quot;0E7A9301.jpg&quot;]">
                     <img src="0E7A9057.jpg" alt="밥장인/부산중앙점">
-                    <div class="project-info"><h3>밥장인(부산중앙점)</h3><p>2024년</p></div>
+                    <div class="project-info"><h3>밥장인(부산중앙점)</h3> <p>2024년</p></div>
                 </div>
                 <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;★IMG_6785(보정).jpg&quot;, &quot;★IMG_6761(보정).jpg&quot;, &quot;★IMG_6766(보정).jpg&quot;]">
                     <img src="★IMG_6785(보정).jpg" alt="밥장인/경성부경대점">
@@ -432,21 +427,29 @@
                 </div>
                     <div class="project-item" data-category="menual" onclick="openModal(this)" data-images="[&quot;DSC4657.jpg&quot;, &quot;DSC4650.jpg&quot;, &quot;DSC4654.jpg&quot;]">
                     <img src="DSC4657.jpg" alt="밥장인/홍대점">
-                    <div class="project-info"><h3>밥장인(홍대점)</h3><p>2024년</p></div>
+                    <div class="project-info"><h3>밥장인(홍대점)</h3> <p>2024년</p></div>
                 </div>
-                    <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;6.jpg&quot;, &quot;2.jpg&quot;, &quot;3.jpg&quot;, &quot;DSC00930.jpg&quot;, &quot;DSC01447.jpg&quot;, &quot;DSC01527.jpg&quot;, &quot;DSC01543-DSC00036.jpg&quot;]">
+<div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;DSC01376.jpg&quot;, &quot;DSC00225.jpg&quot;, &quot;03-DSC00284.jpg&quot;, &quot;04-DSC00159.jpg&quot;, &quot;DSC01378.jpg&quot;, &quot;DSC01629.jpg&quot;, &quot;DSC01049.jpg&quot;]">
+                    <img src="DSC01376.jpg" alt="대상 웰라움 홍천">
+                    <div class="project-info"><h3>대상 웰라움 홍천</h3> <p>2024년</p></div>
+                </div>
+<div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;DSC01194.jpg&quot;,&quot;DSC00477.jpg&quot;, &quot;DSC00480.jpg&quot;, &quot;DSC01454.jpg&quot;]">
+                    <img src="DSC01194.jpg" alt="익산부송 아이파크">
+                    <div class="project-info"><h3>익산부송 아이파크</h3> <p>2024년</p></div>
+                </div>
+ <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;6.jpg&quot;, &quot;2.jpg&quot;, &quot;3.jpg&quot;, &quot;DSC00930.jpg&quot;, &quot;DSC01447.jpg&quot;, &quot;DSC01527.jpg&quot;, &quot;DSC01543-DSC00036.jpg&quot;]">
                     <img src="6.jpg" alt="진주 백년문화공원 극동스타클래스">
-                    <div class="project-info"><h3>극동스타클래스 <p>진주 백년문화공원<p></h3><p>2023년</p></div>
+                    <div class="project-info"><h3>극동스타클래스 <p>진주 백년문화공원</p></h3> <p>2022년</p></div>
                 </div>
-                <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;224master.jpg&quot;,&quot;living_alt.png&quot;, &quot;toilet.jpg&quot;, &quot;273_alt.jpg&quot;]">
+  <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;224master.jpg&quot;,&quot;living_alt.png&quot;, &quot;toilet.jpg&quot;, &quot;273_alt.jpg&quot;]">
                     <img src="224master.jpg" alt="아페르한강">
-                    <div class="project-info"><h3>아페르한강</h3> <p>2020년</p></div>
+                    <div class="project-info"><h3>아페르한강</h3> <p>2021년</p></div>
                 </div>
                 <div class="project-item" data-category="평면조감도" onclick="openModal(this)" data-images="[&quot;sk4-1.jpg&quot;,&quot;sk4.jpg&quot;,&quot;sk3-2.jpg&quot;,&quot;sk3.jpg&quot;,&quot;sk-2-2.jpg&quot;,&quot;sk2.jpg&quot;]">
                     <img src="sk4.jpg" alt="조감도">
                     <div class="project-info"><h3>평면조감도</h3> <p></p></div>
                 </div>
-                </div>
+            </div>
             <div class="pagination" id="pagination"></div>
         </section>
 
@@ -480,7 +483,6 @@
             </div>
             <div>
                 <h4>© 2025 Copyright by NUCKS Co.,Ltd</h4>
-                
             </div>
         </div>
     </footer>
@@ -500,6 +502,7 @@
     </div>
 
     <script>
+        // 원본 스크립트 로직 유지
         if ('scrollRestoration' in history) { history.scrollRestoration = 'manual'; }
         window.scrollTo(0, 0);
 
@@ -509,6 +512,7 @@
                 window.scrollTo(0, 0);
             }
             filterSelection('all', document.querySelector('.filter-btn.active'));
+            initVideo(); // 동영상 초기화 함수 호출 추가
         }
         
         /* 햄버거 메뉴 토글 */
@@ -656,18 +660,56 @@
             modalImgElement.style.transformOrigin = `${xPercent}% ${yPercent}%`;
         });
 
-        /* 동영상 재생 */
-        const videoPlayer = document.getElementById('mainVideo');
-        const playlist = ["nucks_mood.mp4", "nucks.mp4", "nucks1-1.mp4", "nucks1-2.mp4"];
-        let videoIndex = 0;
+        /* [추가] 동영상 자연스러운 교차 페이드 재생 로직 */
+        const videoList = ["nucks_mood.mp4", "nucks.mp4", "nucks1-1.mp4", "nucks1-2.mp4"];
+        let currentIdx = 0;
+        const v1 = document.getElementById('video1');
+        const v2 = document.getElementById('video2');
+        let activeVideo = v1;
+        let idleVideo = v2;
 
-        videoPlayer.addEventListener('ended', function() {
-            videoIndex = (videoIndex + 1) % playlist.length; 
-            videoPlayer.src = playlist[videoIndex];
-            videoPlayer.play();
-        });
+        function initVideo() {
+            activeVideo.src = videoList[currentIdx];
+            activeVideo.load();
+            activeVideo.play();
+            prepareNextVideo(); // 다음 영상 미리 로드
+        }
+
+        function prepareNextVideo() {
+            const nextIdx = (currentIdx + 1) % videoList.length;
+            idleVideo.src = videoList[nextIdx];
+            idleVideo.load(); // 배경에서 미리 로드
+        }
+
+        // 영상 전환 함수 (페이드 효과)
+        function swapVideo() {
+            // 1. 다음 비디오 재생 시작 및 위로 올리기
+            idleVideo.style.zIndex = "2";
+            idleVideo.style.opacity = "1";
+            idleVideo.play();
+            
+            // 2. 현재 비디오 아래로 내리고 숨기기
+            activeVideo.style.zIndex = "1";
+            activeVideo.style.opacity = "0";
+
+            // 3. 역할 교체 (활성 <-> 대기)
+            let temp = activeVideo;
+            activeVideo = idleVideo;
+            idleVideo = temp;
+
+            // 4. 인덱스 업데이트 및 다음 영상 미리 준비
+            currentIdx = (currentIdx + 1) % videoList.length;
+            
+            // 페이드 애니메이션(1.2초)이 끝난 후 소스 교체 및 종료 이벤트 부착
+            setTimeout(function() {
+                prepareNextVideo();
+                activeVideo.onended = swapVideo; // 새 활성 영상에 이벤트 부착
+            }, 1200); 
+        }
+
+        // 첫 번째 영상에 종료 이벤트 리스너 등록
+        activeVideo.onended = swapVideo;
 
     </script>
-
-
-</body></html>
+</body>
+</html>

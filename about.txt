@@ -1,35 +1,283 @@
-<head>
+<html lang="ko"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>About NUCKS | Company History</title>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&amp;family=Playfair+Display:wght@700&amp;display=swap" rel="stylesheet">
+    <title>About NUCKS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500&amp;display=swap" rel="stylesheet">
     <style>
+        /* 기본 스타일 */
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1a1a1a; line-height: 1.8; background: #fff; }
+        body { 
+            font-family: 'Helvetica Neue', Arial, 'Noto Sans KR', sans-serif; 
+            color: #1a1a1a; 
+            line-height: 1.8; 
+            background: #fff; 
+            overflow-x: hidden;
+        }
         
-        .container { max-width: 1200px; margin: 0 auto; padding: 100px 60px; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 60px 60px; }
         
-        /* 히어로 섹션 */
-        .about-header { margin-bottom: 80px; }
-        .about-header h1 { font-family: 'Playfair Display', serif; font-size: 4rem; margin-bottom: 20px; }
-        .back-btn { text-decoration: none; color: #666; font-size: 14px; text-transform: uppercase; border-bottom: 1px solid #666; }
+        /* 헤더 섹션 (우측 정렬) */
+        .about-header { 
+            margin-bottom: 20px; 
+            text-align: right; 
+        }
+        
+        .back-btn { 
+            text-decoration: none; 
+            color: #888; 
+            font-size: 13px; 
+            text-transform: uppercase; 
+            display: inline-block;
+            margin-bottom: 20px;
+        }
 
-        /* 연혁 섹션 */
-        .history-section { display: flex; gap: 80px; margin-bottom: 120px; }
-        .section-title { flex: 1; font-size: 24px; font-weight: 700; text-transform: uppercase; border-top: 2px solid #000; padding-top: 20px; }
-        .history-list { flex: 2; list-style: none; }
-        .history-item { display: flex; gap: 30px; margin-bottom: 25px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
-        .year { font-weight: 700; color: #FF7F27; min-width: 60px; }
+        .about-header h1 { 
+            font-size: 4.5rem; 
+            font-weight: 500; 
+            text-transform: uppercase; 
+            letter-spacing: -2px;
+            line-height: 1;
+            color: #000;
+        }
+
+        .header-line {
+            border-bottom: 1px solid #eee;
+            margin: 40px 0 80px 0;
+        }
+
+        /* 디자인 철학 섹션 (우측 정렬) */
+        .philosophy-section {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end; 
+            margin-bottom: 120px;
+            text-align: right;
+        }
+
+        .philosophy-title {
+            font-size: 32px;
+            font-weight: 500; 
+            margin-bottom: 40px;
+            color: #000;
+            letter-spacing: -1px;
+        }
+
+        .philosophy-content p {
+            font-size: 1.15rem;
+            color: #333;
+            line-height: 2.2;
+            margin-bottom: 12px;
+            word-break: keep-all;
+        }
 
         /* 갤러리 섹션 */
-        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-        .gallery-item { width: 100%; aspect-ratio: 4/3; background: #f4f4f4; overflow: hidden; border-radius: 10px; }
-        .gallery-item img { width: 100%; height: 100%; object-fit: cover; transition: 0.5s; }
-        .gallery-item:hover img { transform: scale(1.05); }
+        .gallery-title {
+            font-size: 22px;
+            font-weight: 500;
+            text-transform: uppercase;
+            margin-bottom: 40px;
+            border-top: 2px solid #000;
+            padding-top: 20px;
+            text-align: right;
+        }
+        
+        .gallery-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); 
+            gap: 25px; 
+        }
+        
+        /* 갤러리 아이템: 오버레이 효과를 위해 relative 설정 */
+        .gallery-item { 
+            position: relative;
+            aspect-ratio: 16/10; 
+            background: #f8f8f8; 
+            overflow: hidden;
+            border-radius: 4px;
+            cursor: zoom-in;
+        }
+        
+        .gallery-item img { 
+            width: 100%; height: 100%; object-fit: cover; 
+            transition: transform 0.6s ease; /* 이미지 확대 애니메이션 */
+        }
 
+        /* 캡션 오버레이: 평소에는 투명하게 숨김 */
+        .gallery-caption {
+            position: absolute;
+            bottom: 0; left: 0;
+            width: 100%; height: 100%;
+            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%); /* 하단 그라데이션 */
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end; /* 문구를 하단에 배치 */
+            padding: 25px;
+            color: #fff;
+            opacity: 0; /* 평소에는 숨김 */
+            transform: translateY(20px); /* 평소에는 아래에 위치 */
+            transition: opacity 0.4s ease, transform 0.4s ease; /* 부드러운 애니메이션 */
+        }
+
+        /* 캡션 제목 및 설명 스타일 */
+        .gallery-caption h3 {
+            font-size: 1.2rem;
+            font-weight: 500;
+            margin-bottom: 5px;
+            letter-spacing: -0.5px;
+        }
+        
+        .gallery-caption p {
+            font-size: 0.95rem;
+            font-weight: 300;
+            opacity: 0.9;
+        }
+
+        /* Hover 효과: 마우스를 올리면 이미지 확대 및 캡션 올라옴 */
+        .gallery-item:hover img {
+            transform: scale(1.08); /* 이미지 살짝 확대 */
+        }
+        
+        .gallery-item:hover .gallery-caption {
+            opacity: 1; /* 투명도 복원 */
+            transform: translateY(0); /* 원래 위치로 올라옴 */
+        }
+
+        /* 이미지 모달 팝업 스타일 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.95);
+            cursor: zoom-out;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal.open {
+            display: block;
+            opacity: 1;
+        }
+
+        .modal-content {
+            margin: auto;
+            display: block;
+            max-width: 90%;
+            max-height: 85vh;
+            position: relative;
+            top: 50%;
+            transform: translateY(-50%) scale(0.9); /* 기본 상태 */
+            border-radius: 4px;
+            transition: transform 0.3s ease; /* 확대 애니메이션 */
+        }
+
+        .modal.open .modal-content {
+            transform: translateY(-50%) scale(1); /* 확대된 상태 */
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 30px;
+            right: 50px;
+            color: #fff;
+            font-size: 50px;
+            font-weight: 200;
+            cursor: pointer;
+        }
+
+        /* 모바일 대응 */
         @media (max-width: 768px) {
-            .history-section { flex-direction: column; gap: 30px; }
-            .about-header h1 { font-size: 2.5rem; }
+            .about-header h1 { font-size: 3rem; }
+            .container { padding: 40px 20px; }
+            .philosophy-title { font-size: 24px; }
+            .modal-content { max-width: 95%; }
+            .gallery-caption { opacity: 1; transform: translateY(0); padding: 15px; } /* 모바일에서는 항상 보이게 */
         }
     </style>
 </head>
+<body>
+
+    <div class="container">
+        <header class="about-header">
+            <a href="index.html" class="back-btn">← Back to Home</a>
+            <h1>ABOUT NUCKS</h1>
+        </header>
+
+        <div class="header-line"></div>
+
+        <section class="philosophy-section">
+            <h2 class="philosophy-title">Our design philosophy ;</h2>
+            <div class="philosophy-content">
+                <p>사람의 삶은 공간과 시간 속에 있습니다.</p>
+                <p>그 속에는 이야기가 있으며 많은 이야기를 담을 수 있는 공간은 우리의 인생을 풍요롭게 합니다.</p>
+                <p>현대인에게 공간은 더 이상 물리적 구조체가 아닌 우리의 생각과 미래를 만들어내는 자원으로</p>
+                <p>또는 가족과 사람과의 소통의 틀로 우리 삶의 커다란 원천입니다.</p>
+                <p>넉스의 공간 철학은 이 시대의 바름과 아름다움에 대한 이야기 입니다.</p>
+            </div>
+        </section>
+
+        <section>
+            <div class="gallery-title">Gallery</div>
+            <div class="gallery-grid">
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="회사 구조.jpg" alt="조직도">
+                    <div class="gallery-caption">
+                        <h3>nucks Org Chart.</h3>
+                     
+                    </div>
+                </div>
+                
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="협력사.jpg" alt="협력업체">
+                    <div class="gallery-caption">
+                        <h3>nucks Bp.</h3>
+                      
+                    </div>
+                </div>
+                
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="각종 인증.jpg" alt="등록증">
+                    <div class="gallery-caption">
+                        <h3>nucks Lic.</h3>
+                        
+                    </div>
+                </div>
+                
+            </div>
+        </section>
+    </div>
+
+    <div id="imageModal" class="modal" onclick="closeModal()">
+        <span class="close-modal">×</span>
+        <img class="modal-content" id="imgFull">
+    </div>
+
+    <script>
+        /* 모달 팝업 제어 스크립트: 캡션 효과 적용으로 인해 수정 */
+        function openModal(element) {
+            const imgSrc = element.querySelector('img').src; // 이미지 태그의 src를 가져옴
+            document.getElementById("imgFull").src = imgSrc;
+            const modal = document.getElementById("imageModal");
+            modal.style.display = "block";
+            setTimeout(() => { modal.classList.add('open'); }, 10); // 애니메이션을 위한 클래스 추가
+            document.body.style.overflow = "hidden"; // 배경 스크롤 방지
+        }
+
+        function closeModal() {
+            const modal = document.getElementById("imageModal");
+            modal.classList.remove('open');
+            setTimeout(() => { modal.style.display = "none"; }, 300); // 애니메이션 후 숨김
+            document.body.style.overflow = "auto"; // 스크롤 복구
+        }
+
+        // ESC 키로 닫기
+        document.addEventListener('keydown', function(event) {
+            if (event.key === "Escape") {
+                closeModal();
+            }
+        });
+    </script>
+
+
+</body></html>

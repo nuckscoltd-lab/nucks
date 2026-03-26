@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>About NUCKS</title>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@200;300;400&amp;display=swap" rel="stylesheet">
     <style>
         /* 기본 스타일 */
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -12,7 +12,7 @@
             font-family: 'Helvetica Neue', Arial, 'Noto Sans KR', sans-serif; 
             color: #1a1a1a; 
             line-height: 1.8; 
-            background: #fff; 
+            background: #fff; /* 전체 배경은 흰색 */
             overflow-x: hidden;
         }
         
@@ -33,12 +33,14 @@
             margin-bottom: 20px;
         }
 
+        /* [수정] About NUCKS 폰트 크기 조정 */
         .about-header h1 { 
-            font-size: 4.5rem; 
+            /* 기존: font-size: 3rem (약 48px) */
+            font-size: 38px; /* Our design philosophy (32px)보다 아주 조금 크게 설정 */
             font-weight: 500; 
             text-transform: uppercase; 
-            letter-spacing: -2px;
-            line-height: 1;
+            letter-spacing: -1px; /* 폰트가 작아졌으므로 자간 압축률 완화 (-2px -> -1px) */
+            line-height: 1.2; /* 자간 축소에 맞춰 행간 미세 조정 */
             color: #000;
         }
 
@@ -47,21 +49,50 @@
             margin: 40px 0 80px 0;
         }
 
-        /* 디자인 철학 섹션 (우측 정렬) */
+        /* 디자인 철학 섹션 */
         .philosophy-section {
             display: flex;
             flex-direction: column;
-            align-items: flex-end; 
             margin-bottom: 120px;
+            background-color: #fff; /* 배경을 순수한 흰색으로 설정 */
+            padding: 40px;
+            border-radius: 8px;
+        }
+
+        /* 로고와 문구를 감싸는 컨테이너 */
+        .philosophy-container {
+            display: flex;
+            align-items: center; /* 세로 중앙 정렬 */
+            gap: 40px; /* 로고와 문구 사이 간격 */
+            margin-bottom: 40px;
+        }
+
+        .philosophy-logo {
+            width: 200px; /* 로고 크기 증가 */
+            flex-shrink: 0; /* 로고 크기 고정 */
+        }
+
+        .philosophy-logo img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .philosophy-text-wrap {
+            flex-grow: 1;
             text-align: right;
         }
 
+        /* [참고] Our design philosophy 폰트 크기 (기준점) */
         .philosophy-title {
             font-size: 32px;
             font-weight: 500; 
-            margin-bottom: 40px;
             color: #000;
             letter-spacing: -1px;
+        }
+
+        .philosophy-content {
+            text-align: right;
         }
 
         .philosophy-content p {
@@ -70,6 +101,22 @@
             line-height: 2.2;
             margin-bottom: 12px;
             word-break: keep-all;
+        }
+
+        /* 대표 사인 이미지 스타일 및 우측 정렬 */
+        .ceo-signature-wrap {
+            text-align: right;
+            margin-top: 20px;
+        }
+
+        .ceo-signature {
+            max-width: 250px; /* 사인 이미지 최대 너비 */
+            height: auto;
+            display: inline-block; /* 우측 정렬을 위해 inline-block 사용 */
+            
+            /* [배경 제거 핵심 속성 추가] */
+            background-color: transparent; /* 이미지 자체 배경 투명화 */
+            filter: contrast(1.1) brightness(1.05); /* 글씨를 조금 더 또렷하게 만드는 효과 */
         }
 
         /* 갤러리 섹션 */
@@ -190,11 +237,30 @@
 
         /* 모바일 대응 */
         @media (max-width: 768px) {
-            .about-header h1 { font-size: 3rem; }
+            /* [수정] 모바일 About NUCKS 폰트 크기 조정 */
+            .about-header h1 { 
+                /* 기존: font-size: 2.2rem (약 35px) */
+                font-size: 28px; /* 모바일에서도 미세하게 축소 */
+            } 
             .container { padding: 40px 20px; }
+            .philosophy-container {
+                flex-direction: column; /* 세로 배치 */
+                align-items: flex-end; /* 우측 정렬 유지 */
+                gap: 20px;
+            }
+            .philosophy-logo {
+                width: 150px; /* 로고 크기 조절 */
+                align-self: flex-end; /* 로고 자체도 우측 정렬 */
+            }
+            .philosophy-text-wrap {
+                text-align: right;
+                width: 100%;
+            }
+            /* [참고] 모바일 Our design philosophy 폰트 크기 */
             .philosophy-title { font-size: 24px; }
             .modal-content { max-width: 95%; }
             .gallery-caption { opacity: 1; transform: translateY(0); padding: 15px; } /* 모바일에서는 항상 보이게 */
+            .ceo-signature { max-width: 180px; } /* 모바일에서 사인 크기 축소 */
         }
     </style>
 </head>
@@ -209,7 +275,14 @@
         <div class="header-line"></div>
 
         <section class="philosophy-section">
-            <h2 class="philosophy-title">Our design philosophy ;</h2>
+            <div class="philosophy-container">
+                <div class="philosophy-logo">
+                    <img src="넉스로고.jpg" alt="NUCKS Logo">
+                </div>
+                <div class="philosophy-text-wrap">
+                    <h2 class="philosophy-title">Our design philosophy ;</h2>
+                </div>
+            </div>
             <div class="philosophy-content">
                 <p>사람의 삶은 공간과 시간 속에 있습니다.</p>
                 <p>그 속에는 이야기가 있으며 많은 이야기를 담을 수 있는 공간은 우리의 인생을 풍요롭게 합니다.</p>
@@ -217,32 +290,33 @@
                 <p>또는 가족과 사람과의 소통의 틀로 우리 삶의 커다란 원천입니다.</p>
                 <p>넉스의 공간 철학은 이 시대의 바름과 아름다움에 대한 이야기 입니다.</p>
             </div>
+
+            <div class="ceo-signature-wrap">
+                <img src="대표사인.jpg" alt="대표이사 윤상원 사인" class="ceo-signature">
+            </div>
         </section>
 
         <section>
-            <div class="gallery-title">Gallery</div>
+            <div class="gallery-title">Profile</div>
             <div class="gallery-grid">
                 <div class="gallery-item" onclick="openModal(this)">
-                    <img src="넉스_조직도.png" alt="조직도">
+                    <img src="회사 구조.jpg" alt="조직도">
                     <div class="gallery-caption">
                         <h3>nucks Org Chart.</h3>
-                     
                     </div>
                 </div>
                 
                 <div class="gallery-item" onclick="openModal(this)">
-                    <img src="넉스_협력업체.png" alt="협력업체">
+                    <img src="협력사.jpg" alt="협력업체">
                     <div class="gallery-caption">
                         <h3>nucks Bp.</h3>
-                      
                     </div>
                 </div>
                 
                 <div class="gallery-item" onclick="openModal(this)">
-                    <img src="넉스_등록증.png" alt="등록증">
+                    <img src="각종 인증.jpg" alt="등록증">
                     <div class="gallery-caption">
                         <h3>nucks Lic.</h3>
-                        
                     </div>
                 </div>
                 
@@ -251,12 +325,12 @@
     </div>
 
     <div id="imageModal" class="modal" onclick="closeModal()">
-        <span class="close-modal">&times;</span>
+        <span class="close-modal">×</span>
         <img class="modal-content" id="imgFull">
     </div>
 
     <script>
-        /* 모달 팝업 제어 스크립트: 캡션 효과 적용으로 인해 수정 */
+        /* 모달 팝업 제어 스크립트 */
         function openModal(element) {
             const imgSrc = element.querySelector('img').src; // 이미지 태그의 src를 가져옴
             document.getElementById("imgFull").src = imgSrc;
