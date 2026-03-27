@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -6,22 +5,20 @@
     <title>About NUCKS</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@200;300;400&amp;display=swap" rel="stylesheet">
     <style>
-        /* 기본 스타일 */
+        /* 기본 스타일 및 컨테이너 */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
             font-family: 'Helvetica Neue', Arial, 'Noto Sans KR', sans-serif; 
-            color: #1a1a1a; 
-            line-height: 1.8; 
-            background: #fff; /* 전체 배경은 흰색 */
-            overflow-x: hidden;
+            color: #1a1a1a; line-height: 1.8; background: #fff; overflow-x: hidden;
         }
-        
         .container { max-width: 1200px; margin: 0 auto; padding: 60px 60px; }
         
-        /* 헤더 섹션 (우측 정렬) */
+        /* 헤더 스타일: 로고 우측 정렬 */
         .about-header { 
-            margin-bottom: 20px; 
-            text-align: right; 
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end; /* 우측 정렬 */
         }
         
         .back-btn { 
@@ -29,97 +26,79 @@
             color: #888; 
             font-size: 13px; 
             text-transform: uppercase; 
-            display: inline-block;
-            margin-bottom: 20px;
+            display: inline-block; 
+            margin-bottom: 20px; 
+            transition: 0.3s; 
+        }
+        .back-btn:hover { color: #000; }
+
+        .header-logo-wrap {
+            margin-top: 8px;
         }
 
-        /* [수정] About NUCKS 폰트 크기 조정 */
-        .about-header h1 { 
-            /* 기존: font-size: 3rem (약 48px) */
-            font-size: 38px; /* Our design philosophy (32px)보다 아주 조금 크게 설정 */
-            font-weight: 500; 
-            text-transform: uppercase; 
-            letter-spacing: -1px; /* 폰트가 작아졌으므로 자간 압축률 완화 (-2px -> -1px) */
-            line-height: 1.2; /* 자간 축소에 맞춰 행간 미세 조정 */
-            color: #000;
-        }
-
-        .header-line {
-            border-bottom: 1px solid #eee;
-            margin: 40px 0 80px 0;
-        }
-
-        /* 디자인 철학 섹션 */
-        .philosophy-section {
-            display: flex;
-            flex-direction: column;
-            margin-bottom: 120px;
-            background-color: #fff; /* 배경을 순수한 흰색으로 설정 */
-            padding: 40px;
-            border-radius: 8px;
-        }
-
-        /* 로고와 문구를 감싸는 컨테이너 */
-        .philosophy-container {
-            display: flex;
-            align-items: center; /* 세로 중앙 정렬 */
-            gap: 40px; /* 로고와 문구 사이 간격 */
-            margin-bottom: 40px;
-        }
-
-        .philosophy-logo {
-            width: 200px; /* 로고 크기 증가 */
-            flex-shrink: 0; /* 로고 크기 고정 */
-        }
-
-        .philosophy-logo img {
-            width: 100%;
-            height: auto;
+        .header-logo {
+            height: 200px; /* 상단 디자인에 맞춰 적절한 크기로 조정 */
+            width: auto;
             display: block;
         }
 
-        .philosophy-text-wrap {
-            flex-grow: 1;
-            text-align: right;
+        .header-line { border-bottom: 1px solid #eee; margin: 40px 0 80px 0; }
+
+        /* 철학 섹션 (하단 로고 삭제 반영) */
+        .philosophy-section { 
+            display: flex; 
+            flex-direction: column; 
+            margin-bottom: 120px; 
+            background-color: #fff; 
+            padding: 40px 0; /* 좌우 패딩을 조절하여 텍스트 라인 밀착 */
+            border-radius: 8px; 
         }
 
-        /* [참고] Our design philosophy 폰트 크기 (기준점) */
-        .philosophy-title {
-            font-size: 32px;
+        .philosophy-container { 
+            display: flex; 
+            justify-content: flex-end; /* 제목도 우측으로 */
+            margin-bottom: 40px; 
+        }
+
+        .philosophy-title { 
+            font-size: 32px; 
             font-weight: 500; 
-            color: #000;
-            letter-spacing: -1px;
-        }
-
-        .philosophy-content {
+            color: #000; 
+            letter-spacing: -1px; 
             text-align: right;
         }
 
-        .philosophy-content p {
-            font-size: 1.15rem;
-            color: #333;
-            line-height: 2.2;
-            margin-bottom: 12px;
-            word-break: keep-all;
-        }
-
-        /* 대표 사인 이미지 스타일 및 우측 정렬 */
-        .ceo-signature-wrap {
+        .philosophy-content { 
             text-align: right;
-            margin-top: 20px;
+            padding-right: 0; 
+        }
+        
+        .philosophy-content p { 
+            font-size: 1.15rem; 
+            color: #333; 
+            line-height: 2.2; 
+            margin-bottom: 12px; 
+            word-break: keep-all; 
         }
 
-        .ceo-signature {
-            max-width: 250px; /* 사인 이미지 최대 너비 */
+        /* 대표사인 우측 정렬 */
+        .ceo-signature-wrap { 
+            display: flex;
+            justify-content: flex-end; 
+            margin-top: 30px;
+            margin-right: -10px;
+        }
+        
+        .ceo-signature { 
+            max-width: 200px; 
             height: auto;
-            display: inline-block; /* 우측 정렬을 위해 inline-block 사용 */
-            
-            /* [배경 제거 핵심 속성 추가] */
-            background-color: transparent; /* 이미지 자체 배경 투명화 */
-            filter: contrast(1.1) brightness(1.05); /* 글씨를 조금 더 또렷하게 만드는 효과 */
+            display: block;
+            filter: contrast(1.1) brightness(1.05);
         }
 
-        /* 갤러리 섹션 */
+        /* --- 그리드 섹션 공통 스타일 --- */
+        .section-wrapper { margin-bottom: 100px; }
+
         .gallery-title {
             font-size: 22px;
             font-weight: 500;
@@ -128,139 +107,60 @@
             border-top: 2px solid #000;
             padding-top: 20px;
             text-align: right;
+            letter-spacing: 1px;
         }
         
         .gallery-grid { 
             display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); 
-            gap: 25px; 
+            grid-template-columns: repeat(4, 1fr); 
+            gap: 20px; 
         }
         
-        /* 갤러리 아이템: 오버레이 효과를 위해 relative 설정 */
         .gallery-item { 
             position: relative;
-            aspect-ratio: 16/10; 
-            background: #f8f8f8; 
+            aspect-ratio: 1 / 1; 
+            background: #fff; 
             overflow: hidden;
             border-radius: 4px;
             cursor: zoom-in;
+            border: 1px solid #eee;
         }
         
         .gallery-item img { 
-            width: 100%; height: 100%; object-fit: cover; 
-            transition: transform 0.6s ease; /* 이미지 확대 애니메이션 */
+            width: 100%; height: 100%; object-fit: contain;
+            padding: 15px; 
+            transition: transform 0.6s ease, opacity 0.5s ease;
+            opacity: 0;
         }
+        
+        .gallery-item img.loaded { opacity: 1; }
 
-        /* 캡션 오버레이: 평소에는 투명하게 숨김 */
         .gallery-caption {
             position: absolute;
-            bottom: 0; left: 0;
-            width: 100%; height: 100%;
-            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%); /* 하단 그라데이션 */
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end; /* 문구를 하단에 배치 */
-            padding: 25px;
-            color: #fff;
-            opacity: 0; /* 평소에는 숨김 */
-            transform: translateY(20px); /* 평소에는 아래에 위치 */
-            transition: opacity 0.4s ease, transform 0.4s ease; /* 부드러운 애니메이션 */
+            bottom: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%);
+            display: flex; flex-direction: column; justify-content: flex-end;
+            padding: 20px; color: #fff; opacity: 0; transform: translateY(15px); transition: all 0.4s ease;
         }
 
-        /* 캡션 제목 및 설명 스타일 */
-        .gallery-caption h3 {
-            font-size: 1.2rem;
-            font-weight: 500;
-            margin-bottom: 5px;
-            letter-spacing: -0.5px;
-        }
-        
-        .gallery-caption p {
-            font-size: 0.95rem;
-            font-weight: 300;
-            opacity: 0.9;
-        }
+        .gallery-caption h3 { font-size: 1rem; font-weight: 500; margin-bottom: 2px; }
+        .gallery-item:hover img { transform: scale(1.08); }
+        .gallery-item:hover .gallery-caption { opacity: 1; transform: translateY(0); }
 
-        /* Hover 효과: 마우스를 올리면 이미지 확대 및 캡션 올라옴 */
-        .gallery-item:hover img {
-            transform: scale(1.08); /* 이미지 살짝 확대 */
-        }
-        
-        .gallery-item:hover .gallery-caption {
-            opacity: 1; /* 투명도 복원 */
-            transform: translateY(0); /* 원래 위치로 올라옴 */
-        }
+        /* 모달 스타일 */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.95); cursor: zoom-out; opacity: 0; transition: opacity 0.3s ease; }
+        .modal.open { display: block; opacity: 1; }
+        .modal-content { margin: auto; display: block; max-width: 90%; max-height: 85vh; position: relative; top: 50%; transform: translateY(-50%) scale(0.9); border-radius: 4px; transition: transform 0.3s ease; }
+        .modal.open .modal-content { transform: translateY(-50%) scale(1); }
+        .close-modal { position: absolute; top: 30px; right: 50px; color: #fff; font-size: 50px; font-weight: 200; cursor: pointer; }
 
-        /* 이미지 모달 팝업 스타일 */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0; top: 0;
-            width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.95);
-            cursor: zoom-out;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        .modal.open {
-            display: block;
-            opacity: 1;
-        }
-
-        .modal-content {
-            margin: auto;
-            display: block;
-            max-width: 90%;
-            max-height: 85vh;
-            position: relative;
-            top: 50%;
-            transform: translateY(-50%) scale(0.9); /* 기본 상태 */
-            border-radius: 4px;
-            transition: transform 0.3s ease; /* 확대 애니메이션 */
-        }
-
-        .modal.open .modal-content {
-            transform: translateY(-50%) scale(1); /* 확대된 상태 */
-        }
-
-        .close-modal {
-            position: absolute;
-            top: 30px;
-            right: 50px;
-            color: #fff;
-            font-size: 50px;
-            font-weight: 200;
-            cursor: pointer;
-        }
-
-        /* 모바일 대응 */
+        /* 반응형 */
+        @media (max-width: 1024px) { .gallery-grid { grid-template-columns: repeat(3, 1fr); } }
         @media (max-width: 768px) {
-            /* [수정] 모바일 About NUCKS 폰트 크기 조정 */
-            .about-header h1 { 
-                /* 기존: font-size: 2.2rem (약 35px) */
-                font-size: 28px; /* 모바일에서도 미세하게 축소 */
-            } 
             .container { padding: 40px 20px; }
-            .philosophy-container {
-                flex-direction: column; /* 세로 배치 */
-                align-items: flex-end; /* 우측 정렬 유지 */
-                gap: 20px;
-            }
-            .philosophy-logo {
-                width: 150px; /* 로고 크기 조절 */
-                align-self: flex-end; /* 로고 자체도 우측 정렬 */
-            }
-            .philosophy-text-wrap {
-                text-align: right;
-                width: 100%;
-            }
-            /* [참고] 모바일 Our design philosophy 폰트 크기 */
-            .philosophy-title { font-size: 24px; }
-            .modal-content { max-width: 95%; }
-            .gallery-caption { opacity: 1; transform: translateY(0); padding: 15px; } /* 모바일에서는 항상 보이게 */
-            .ceo-signature { max-width: 180px; } /* 모바일에서 사인 크기 축소 */
+            .philosophy-container { flex-direction: column; align-items: flex-end; }
+            .gallery-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+            .header-logo { height: 30px; }
         }
     </style>
 </head>
@@ -269,16 +169,15 @@
     <div class="container">
         <header class="about-header">
             <a href="index.html" class="back-btn">← Back to Home</a>
-            <h1>ABOUT NUCKS</h1>
+            <div class="header-logo-wrap">
+                <img src="넉스로고.jpg" alt="NUCKS Logo" class="header-logo">
+            </div>
         </header>
 
         <div class="header-line"></div>
 
         <section class="philosophy-section">
             <div class="philosophy-container">
-                <div class="philosophy-logo">
-                    <img src="넉스로고.jpg" alt="NUCKS Logo">
-                </div>
                 <div class="philosophy-text-wrap">
                     <h2 class="philosophy-title">Our design philosophy ;</h2>
                 </div>
@@ -290,36 +189,108 @@
                 <p>또는 가족과 사람과의 소통의 틀로 우리 삶의 커다란 원천입니다.</p>
                 <p>넉스의 공간 철학은 이 시대의 바름과 아름다움에 대한 이야기 입니다.</p>
             </div>
-
             <div class="ceo-signature-wrap">
-                <img src="대표사인.jpg" alt="대표이사 윤상원 사인" class="ceo-signature">
+                <img src="대표사인.jpg" alt="대표이사 사인" class="ceo-signature">
             </div>
         </section>
 
-        <section>
-            <div class="gallery-title">Profile</div>
+        <section class="section-wrapper">
+            <div class="gallery-title">PARTNER</div>
             <div class="gallery-grid">
                 <div class="gallery-item" onclick="openModal(this)">
-                    <img src="회사 구조.jpg" alt="조직도">
-                    <div class="gallery-caption">
-                        <h3>nucks Org Chart.</h3>
-                    </div>
+                    <img src="01 협력사 로고-01.jpg" alt="현대엔지니어링" loading="lazy">
+                    <div class="gallery-caption"><h3>현대엔지니어링</h3></div>
                 </div>
-                
                 <div class="gallery-item" onclick="openModal(this)">
-                    <img src="협력사.jpg" alt="협력업체">
-                    <div class="gallery-caption">
-                        <h3>nucks Bp.</h3>
-                    </div>
+                    <img src="01 협력사 로고-02.jpg" alt="현대건설" loading="lazy">
+                    <div class="gallery-caption"><h3>현대건설</h3></div>
                 </div>
-                
                 <div class="gallery-item" onclick="openModal(this)">
-                    <img src="각종 인증.jpg" alt="등록증">
-                    <div class="gallery-caption">
-                        <h3>nucks Lic.</h3>
-                    </div>
+                    <img src="01 협력사 로고-03.jpg" alt="삼성물산" loading="lazy">
+                    <div class="gallery-caption"><h3>삼성물산</h3></div>
                 </div>
-                
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="01 협력사 로고-04.jpg" alt="SK 에코플랜트" loading="lazy">
+                    <div class="gallery-caption"><h3>SK 에코플랜트</h3></div>
+                </div>
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="01 협력사 로고-05.jpg" alt="HDC현대산업개발" loading="lazy">
+                    <div class="gallery-caption"><h3>HDC현대산업개발</h3></div>
+                </div>
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="01 협력사 로고-06.jpg" alt="롯데건설" loading="lazy">
+                    <div class="gallery-caption"><h3>롯데건설</h3></div>
+                </div>
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="01 협력사 로고-07.jpg" alt="SGC이테크건설" loading="lazy">
+                    <div class="gallery-caption"><h3>SGC이테크건설</h3></div>
+                </div>
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="01 협력사 로고-08.jpg" alt="극동건설" loading="lazy">
+                    <div class="gallery-caption"><h3>극동건설</h3></div>
+                </div>
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="01 협력사 로고-09.jpg" alt="DONG IL" loading="lazy">
+                    <div class="gallery-caption"><h3>DONG IL</h3></div>
+                </div>
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="01 협력사 로고-10.jpg" alt="천일개발그룹" loading="lazy">
+                    <div class="gallery-caption"><h3>천일개발그룹</h3></div>
+                </div>
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="01 협력사 로고-11.jpg" alt="KunYoung" loading="lazy">
+                    <div class="gallery-caption"><h3>KunYoung</h3></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section-wrapper">
+            <div class="gallery-title">License</div>
+            <div class="gallery-grid">
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="각종인증-01.jpg" alt="License 1" loading="lazy">
+                    <div class="gallery-caption"><h3>사업자등록증</h3></div>
+                </div>
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="각종인증-02.jpg" alt="License 2" loading="lazy">
+                    <div class="gallery-caption"><h3>건설업등록증</h3></div>
+                </div>
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="각종인증-03.jpg" alt="License 3" loading="lazy">
+                    <div class="gallery-caption"><h3>상표등록증</h3></div>
+                </div>
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="각종인증-04.jpg" alt="License 4" loading="lazy">
+                    <div class="gallery-caption"><h3>ISO/14001</h3></div>
+                </div>
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="각종인증-05.jpg" alt="License 5" loading="lazy">
+                    <div class="gallery-caption"><h3>ISO/9001</h3></div>
+                </div>
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="각종인증-06.jpg" alt="License 6" loading="lazy">
+                    <div class="gallery-caption"><h3>벤처기업확인서</h3></div>
+                </div>
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="각종인증-07.jpg" alt="License 7" loading="lazy">
+                    <div class="gallery-caption"><h3>여성기업확인서</h3></div>
+                </div>
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="각종인증-08.jpg" alt="License 8" loading="lazy">
+                    <div class="gallery-caption"><h3>연구개발전담부서 인정서</h3></div>
+                </div>
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="각종인증-09.jpg" alt="License 9" loading="lazy">
+                    <div class="gallery-caption"><h3>건설협회원증</h3></div>
+                </div>
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="각종인증-10.jpg" alt="License 10" loading="lazy">
+                    <div class="gallery-caption"><h3>중소기업확인서</h3></div>
+                </div>
+                <div class="gallery-item" onclick="openModal(this)">
+                    <img src="각종인증-11.jpg" alt="License 11" loading="lazy">
+                    <div class="gallery-caption"><h3>메인비즈(MAIN-BIZ)확인서</h3></div>
+                </div>
             </div>
         </section>
     </div>
@@ -330,30 +301,33 @@
     </div>
 
     <script>
-        /* 모달 팝업 제어 스크립트 */
+        document.addEventListener("DOMContentLoaded", function() {
+            const images = document.querySelectorAll('.gallery-item img');
+            images.forEach(img => {
+                img.onload = function() { this.classList.add('loaded'); };
+                if (img.complete) img.classList.add('loaded');
+            });
+        });
+
         function openModal(element) {
-            const imgSrc = element.querySelector('img').src; // 이미지 태그의 src를 가져옴
+            const imgSrc = element.querySelector('img').src;
             document.getElementById("imgFull").src = imgSrc;
             const modal = document.getElementById("imageModal");
             modal.style.display = "block";
-            setTimeout(() => { modal.classList.add('open'); }, 10); // 애니메이션을 위한 클래스 추가
-            document.body.style.overflow = "hidden"; // 배경 스크롤 방지
+            setTimeout(() => { modal.classList.add('open'); }, 10);
+            document.body.style.overflow = "hidden";
         }
 
         function closeModal() {
             const modal = document.getElementById("imageModal");
             modal.classList.remove('open');
-            setTimeout(() => { modal.style.display = "none"; }, 300); // 애니메이션 후 숨김
-            document.body.style.overflow = "auto"; // 스크롤 복구
+            setTimeout(() => { modal.style.display = "none"; }, 300);
+            document.body.style.overflow = "auto";
         }
 
-        // ESC 키로 닫기
         document.addEventListener('keydown', function(event) {
-            if (event.key === "Escape") {
-                closeModal();
-            }
+            if (event.key === "Escape") closeModal();
         });
     </script>
-
 </body>
 </html>
