@@ -117,28 +117,17 @@
         .project-info h3 { font-size: 14px; }
         .project-info p { font-size: 10px; }
 
-      .footer-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 40px;
-            text-align: left; /* 전체 왼쪽 정렬 강제 */
-        }
-        .footer-center {
-            justify-content: flex-start; /* 중앙 정렬 해제 */
-        }
-        .contact-group {
-            width: 100%;
-        }
-        .contact-content-row {
-            flex-direction: column;
-            gap: 20px;
-            align-items: flex-start; /* 내용물도 왼쪽으로 */
-        }
-        .qr-container {
-            justify-content: flex-start; /* QR 코드도 왼쪽 정렬 */
-            margin-top: 10px;
-        }
-        .qr-img { width: 60px; height: 60px; filter: invert(100%); mix-blend-mode: screen; }
+    footer { padding: 40px 60px; background: #1a1a1a; color: #fff; font-size: 13px; }
+    .footer-grid { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 20px; }
+    .footer-center { display: flex; justify-content: center; text-align: left; }
+    
+    .contact-group h4 { margin-bottom: 15px; }
+    .contact-content-row { display: flex; gap: 40px; align-items: flex-start; }
+    
+    .qr-container { display: flex; gap: 15px; }
+    .qr-box { text-align: center; }
+    .qr-text { font-size: 10px; margin-bottom: 5px; color: #aaa; }
+   .qr-img { width: 60px; height: 60px; filter: invert(100%); mix-blend-mode: screen; }
 
         .modal {
             display: none; position: fixed; z-index: 2000; left: 0; top: 0;
@@ -163,8 +152,16 @@
             .hero { flex-direction: column; padding: 20px; margin-top: 70px; gap: 30px;}
             .hero-video-area { width: 100%; height: auto; aspect-ratio: 16 / 9; flex: none; }
             .grid { grid-template-columns: repeat(2, 1fr); }
-            .footer-grid { grid-template-columns: 1fr; }
-            .contact-content-row { flex-direction: column; }
+            .footer-grid { grid-template-columns: 1fr; gap: 35px;}
+.footer-center { 
+            justify-content: flex-start; /* 중앙 정렬 해제하고 왼쪽으로 */
+            text-align: left;}
+            .contact-content-row { flex-direction: column; gap: 25px;}
+.qr-container { 
+            justify-content: flex-start; /* QR 코드 왼쪽 정렬 */
+            gap: 12px; 
+        }
+
 .projects-header {
             flex-direction: column;
             padding: 30px 20px;
@@ -250,7 +247,7 @@
 
                 <div class="project-item" data-category="대안설계" onclick="openModal(this)" data-images="[&quot;수정본01 013-랜드마크 투시_0627_고가.webp&quot;, &quot;수정본02 140.webp&quot;, &quot;수정본03 스카이폰드_0620.webp&quot;]">
                     <img src="수정본01 013-랜드마크 투시_0627_고가.webp" alt="힐스테이트 장위">
-                    <div class="project-info"><h3>힐스테이트 장위 시그니처</h3><p>2025년</p></div>
+                    <div class="project-info"><h3>힐스테이트<p>장위 시그니처</p></h3><p>2025년</p></div>
                 </div>
 
                 <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;sk4-1.jpg&quot;,&quot;sk4.jpg&quot;,&quot;sk3-2.jpg&quot;,&quot;sk3.jpg&quot;,&quot;sk-2-2.jpg&quot;,&quot;sk2.jpg&quot;]">
@@ -315,17 +312,17 @@
 
                 <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;수정본01DSC01563.webp&quot;,&quot;수정본02DSC01564.webp&quot;,&quot;수정본03DSC01811.webp&quot;,&quot;수정본04DSC01616.webp&quot;]">
                     <img src="수정본01DSC01563.webp" alt="힐스테이트 속초 금호">
-                    <div class="project-info"><h3>힐스테이트 속초 금호</h3> <p>2023년</p></div>
+                    <div class="project-info"><h3>힐스테이트<p>속초 금호</p></h3> <p>2023년</p></div>
                 </div>
 
                 <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;수정본01DSC00301.webp&quot;,&quot;수정본02DSC01038.webp&quot;,&quot;수정본03DSC01043.webp&quot;,&quot;수정본04DSC01047.webp&quot;]">
                     <img src="수정본01DSC00301.webp" alt="힐스테이트 속초 금호">
-                    <div class="project-info"><h3>힐스테이트 속초 금호</h3> <p>2023년</p></div>
+                    <div class="project-info"><h3>힐스테이트<p>속초 금호</p></h3> <p>2023년</p></div>
                 </div>
 
                 <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;수정본01거실 ALT.2-1.webp&quot;,&quot;수정본02주방 입면.webp&quot;,&quot;수정본03.webp&quot;,&quot;수정본04패밀리 라운지.webp&quot;,&quot;수정본05계단 입면.webp&quot;,&quot;수정본06 입구측 입면.webp&quot;,&quot;수정본07수정.webp&quot;]">
                     <img src="수정본01거실 ALT.2-1.webp" alt="세종 6-4 블럭형 단독주택">
-                    <div class="project-info"><h3>세종 6-4 블럭형 단독주택</h3> <p>2022년</p></div>
+                    <div class="project-info"><h3>세종 6-4 블럭형 <p>단독주택</p></h3> <p>2022년</p></div>
                 </div>
 
                 <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;수정본6.webp&quot;, &quot;수정본DSC01447.webp&quot;, &quot;수정본DSC01527.webp&quot;, &quot;수정본2.webp&quot;, &quot;수정본3.webp&quot;, &quot;수정본DSC01543-DSC00036.webp&quot;, &quot;수정본DSC00930.webp&quot;]">
@@ -345,22 +342,22 @@
 
                 <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;수정본01DSC00789.webp&quot;,&quot;수정본02DSC00797.webp&quot;,&quot;수정본03DSC01002.webp&quot;]">
                     <img src="수정본01DSC00789.webp" alt="장안 센트럴 힐스테이트">
-                    <div class="project-info"><h3>장안 센트럴 힐스테이트</h3> <p>2021년</p></div>
+                    <div class="project-info"><h3>힐스테이트<p>장안 센트럴</p></h3> <p>2021년</p></div>
                 </div>
 
                 <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;수정본01DSC00131.webp&quot;,&quot;수정본02DSC00214.webp&quot;,&quot;수정본03DSC00459.webp&quot;]">
                     <img src="수정본01DSC00131.webp" alt="장안 센트럴 힐스테이트">
-                    <div class="project-info"><h3>장안 센트럴 힐스테이트</h3> <p>2021년</p></div>
+                    <div class="project-info"><h3>힐스테이트<p>장안 센트럴</p></h3> <p>2021년</p></div>
                 </div>
 
                 <div class="project-item" data-category="대안설계" onclick="openModal(this)" data-images="[&quot;수정본01 Asset 1.webp&quot;, &quot;수정본02 Asset 1.webp&quot;, &quot;수정본03 Asset 1.webp&quot;, &quot;수정본04 Asset 1.webp&quot;, &quot;수정본05 Asset 1.webp&quot;, &quot;수정본06 Asset 2.webp&quot;, &quot;수정본07 Asset 3.webp&quot;]">
                     <img src="수정본01 Asset 1.webp" alt="잠원동 디에이치">
-                    <div class="project-info"><h3>잠원동 디에이치 르 헤븐</h3> <p>2021년</p></div>
+                    <div class="project-info"><h3>디에이치 르 헤븐 <p>잠원동</p></h3> <p>2021년</p></div>
                 </div>
 
                 <div class="project-item" data-category="대안설계" onclick="openModal(this)" data-images="[&quot;수정본01 Asset 1-1.webp&quot;,&quot;수정본02 Asset 1-1.webp&quot;,&quot;수정본03 Asset 1-1.webp&quot;]">
                     <img src="수정본01 Asset 1-1.webp" alt="성수동 롯데캐슬">
-                    <div class="project-info"><h3>성수동 롯데캐슬 클라시엘</h3> <p>2021년</p></div>
+                    <div class="project-info"><h3>롯데캐슬 클라시엘 <p>성수동</p></h3> <p>2021년</p></div>
                 </div>
 
                 <div class="project-item" data-category="unit" onclick="openModal(this)" data-images="[&quot;수정본01.webp&quot;,&quot;수정본02.webp&quot;,&quot;수정본03.webp&quot;,&quot;수정본04.webp&quot;,&quot;수정본05.webp&quot;]">
