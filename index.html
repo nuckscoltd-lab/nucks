@@ -193,6 +193,7 @@
             <a href="#about">About</a>
             <a href="#projects">Projects</a>
             <a href="#contact">Contact</a>
+            <a href="login.html" id="authNavLink">로그인</a>
         </nav>
     </header>
 
@@ -500,5 +501,30 @@
         function closeModalOnClickOutside(e) { if (e.target.id === "imageModal") closeModal(); }
     </script>
 
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="auth.js"></script>
+    <script>
+        // 로그인 상태에 따라 네비게이션의 "로그인" 링크를 바꿔줌
+        watchAuthState(
+            (user, role) => {
+                const link = document.getElementById('authNavLink');
+                link.textContent = '로그아웃';
+                link.href = '#';
+                link.onclick = async (e) => {
+                    e.preventDefault();
+                    await logOut();
+                    window.location.reload();
+                };
+            },
+            () => {
+                const link = document.getElementById('authNavLink');
+                link.textContent = '로그인';
+                link.href = 'login.html';
+            }
+        );
+    </script>
 
 </body></html>
