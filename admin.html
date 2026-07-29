@@ -36,6 +36,15 @@
     font-family:'Cormorant Garamond', serif;
     font-weight:500; font-size:32px; margin:0; letter-spacing:.01em;
   }
+  .header-right{
+    display:flex;
+    align-items:center;
+    gap:24px;
+  }
+  .home-link{
+    font-size:13px; color:var(--muted); text-decoration:none;
+    border-bottom:1px solid var(--muted);
+  }
   .logout{
     font-size:13px; color:var(--muted); text-decoration:none;
     border-bottom:1px solid var(--muted); cursor:pointer;
@@ -87,7 +96,10 @@
     <div class="eyebrow">NUCKS · Secret Mode</div>
     <h1>회원 관리</h1>
   </div>
-  <a href="#" class="logout" id="logoutBtn">Logout</a>
+  <div class="header-right">
+    <a href="index.html" class="home-link">Home</a>
+    <a href="#" class="logout" id="logoutBtn">Logout</a>
+  </div>
 </header>
 
 <main>
