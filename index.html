@@ -193,6 +193,7 @@
             <a href="#about">About</a>
             <a href="#projects">Projects</a>
             <a href="#contact">Contact</a>
+            <a href="files.html" id="filesNavLink" style="display:none;">Files</a>
             <a href="admin.html" id="adminNavLink" style="display:none;">Admin</a>
             <a href="login.html" id="authNavLink">Login</a>
         </nav>
@@ -523,6 +524,10 @@
                 // 관리자로 로그인한 경우에만 Admin 링크 표시
                 const adminLink = document.getElementById('adminNavLink');
                 adminLink.style.display = (role === 'admin') ? 'inline-block' : 'none';
+
+                // 근로자 또는 관리자인 경우 Files 링크 표시
+                const filesLink = document.getElementById('filesNavLink');
+                filesLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
             },
             () => {
                 const link = document.getElementById('authNavLink');
@@ -531,6 +536,9 @@
 
                 const adminLink = document.getElementById('adminNavLink');
                 adminLink.style.display = 'none';
+
+                const filesLink = document.getElementById('filesNavLink');
+                filesLink.style.display = 'none';
             }
         );
     </script>

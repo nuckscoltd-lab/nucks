@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>업무 파일 | NUCKS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
+
+  :root{
+    --ink:#141414;
+    --paper:#f7f6f3;
+    --line:#d8d5cd;
+    --muted:#8a8578;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background:var(--paper);
+    font-family:'Pretendard', -apple-system, sans-serif; color:var(--ink);
+  }
+  header{
+    padding:28px 48px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .eyebrow{
+    font-size:11px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:6px;
+  }
+  h1{
+    font-family:'Cormorant Garamond', serif; font-weight:500;
+    font-size:32px; margin:0; letter-spacing:.01em;
+  }
+  .header-right{ display:flex; align-items:center; gap:24px; }
+  .header-right a{
+    font-size:13px; color:var(--muted); text-decoration:none;
+    border-bottom:1px solid var(--muted); cursor:pointer;
+  }
+  main{ max-width:960px; margin:0 auto; padding:48px; }
+
+  /* 업로드 패널 (관리자 전용) */
+  .upload-panel{
+    display:none;
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:24px; margin-bottom:48px;
+  }
+  .upload-panel.show{ display:block; }
+  .upload-panel .panel-title{
+    font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:18px;
+  }
+  .upload-row{
+    display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;
+  }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field label{ font-size:11.5px; color:var(--muted); }
+  .field input[type=text], .field input[list]{
+    padding:9px 10px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13.5px; min-width:180px; background:#fff;
+  }
+  .field input[type=file]{ font-size:13px; }
+  .upload-btn{
+    padding:10px 20px; background:var(--ink); color:var(--paper);
+    border:none; font-size:12.5px; letter-spacing:.05em; text-transform:uppercase;
+    cursor:pointer; border-radius:4px; white-space:nowrap;
+  }
+  .upload-btn:disabled{ opacity:.4; cursor:default; }
+  .upload-status{ margin-top:12px; font-size:13px; min-height:18px; }
+
+  /* 카테고리 탭 */
+  .tabs{
+    display:flex; gap:8px; flex-wrap:wrap; margin-bottom:28px;
+  }
+  .tab{
+    padding:7px 16px; border-radius:20px; border:1px solid var(--line);
+    background:#fff; font-size:13px; color:var(--muted); cursor:pointer;
+  }
+  .tab.active{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+
+  table{ width:100%; border-collapse:collapse; }
+  th{
+    text-align:left; font-size:12px; color:var(--muted); font-weight:500;
+    padding:10px 12px; border-bottom:1px solid var(--line);
+  }
+  td{
+    padding:14px 12px; font-size:14px; border-bottom:1px solid var(--line);
+    vertical-align:middle;
+  }
+  .cat-badge{
+    display:inline-block; font-size:11px; padding:3px 10px; border-radius:20px;
+    background:#ece9e2; color:#7a766c;
+  }
+  .dl-link{ color:var(--ink); text-decoration:none; border-bottom:1px solid var(--ink); font-size:13px; }
+  .del-btn{
+    margin-left:12px; font-size:12px; color:#a4453c; background:none; border:none;
+    cursor:pointer; text-decoration:underline;
+  }
+  .empty{ font-size:13px; color:var(--muted); padding:24px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">NUCKS</div>
+    <h1>업무 파일</h1>
+  </div>
+  <div class="header-right">
+    <a href="index.html">Home</a>
+    <a href="#" id="logoutBtn">Logout</a>
+  </div>
+</header>
+
+<main>
+  <!-- 관리자 전용 업로드 패널 -->
+  <div class="upload-panel" id="uploadPanel">
+    <div class="panel-title">파일 업로드 (관리자)</div>
+    <div class="upload-row">
+      <div class="field">
+        <label for="categoryInput">카테고리 (프로젝트/부서)</label>
+        <input type="text" id="categoryInput" list="categoryList" placeholder="예: 힐스테이트장위">
+        <datalist id="categoryList"></datalist>
+      </div>
+      <div class="field">
+        <label for="fileInput">파일 선택</label>
+        <input type="file" id="fileInput">
+      </div>
+      <button class="upload-btn" id="uploadBtn">업로드</button>
+    </div>
+    <div class="upload-status" id="uploadStatus"></div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>파일명</th>
+        <th>카테고리</th>
+        <th>업로더</th>
+        <th>날짜</th>
+        <th>다운로드</th>
+      </tr>
+    </thead>
+    <tbody id="fileTableBody"></tbody>
+  </table>
+  <div class="empty" id="emptyMsg" style="display:none;">등록된 파일이 없습니다.</div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+  // 근로자, 관리자 모두 접근 가능
+  requireRole(['worker', 'admin']);
+
+  const storage = firebase.storage();
+  let allFiles = [];
+  let activeCategory = '전체';
+  let isAdmin = false;
+
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) return;
+    const role = await getCurrentUserRole();
+    isAdmin = (role === 'admin');
+    document.getElementById('uploadPanel').classList.toggle('show', isAdmin);
+    loadFiles();
+  });
+
+  async function loadFiles() {
+    const snapshot = await db.collection('files').orderBy('uploadedAt', 'desc').get();
+    allFiles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    renderCategoryTabs();
+    renderTable();
+    populateCategoryDatalist();
+  }
+
+  function renderCategoryTabs() {
+    const categories = ['전체', ...new Set(allFiles.map(f => f.category))];
+    const tabsEl = document.getElementById('tabs');
+    tabsEl.innerHTML = '';
+    categories.forEach(cat => {
+      const btn = document.createElement('div');
+      btn.className = 'tab' + (cat === activeCategory ? ' active' : '');
+      btn.textContent = cat;
+      btn.addEventListener('click', () => {
+        activeCategory = cat;
+        renderCategoryTabs();
+        renderTable();
+      });
+      tabsEl.appendChild(btn);
+    });
+  }
+
+  function populateCategoryDatalist() {
+    const list = document.getElementById('categoryList');
+    const categories = [...new Set(allFiles.map(f => f.category))];
+    list.innerHTML = categories.map(c => `<option value="${c}">`).join('');
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('fileTableBody');
+    const emptyMsg = document.getElementById('emptyMsg');
+    const filtered = activeCategory === '전체'
+      ? allFiles
+      : allFiles.filter(f => f.category === activeCategory);
+
+    tbody.innerHTML = '';
+    if (filtered.length === 0) {
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+
+    filtered.forEach(f => {
+      const dateStr = f.uploadedAt?.toDate ? f.uploadedAt.toDate().toLocaleDateString('ko-KR') : '-';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${f.name}</td>
+        <td><span class="cat-badge">${f.category}</span></td>
+        <td>${f.uploaderEmail || ''}</td>
+        <td>${dateStr}</td>
+        <td>
+          <a class="dl-link" href="${f.url}" target="_blank" rel="noopener">다운로드</a>
+          ${isAdmin ? `<button class="del-btn" data-id="${f.id}" data-path="${f.storagePath}">삭제</button>` : ''}
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    if (isAdmin) {
+      document.querySelectorAll('.del-btn').forEach(btn => {
+        btn.addEventListener('click', () => deleteFile(btn.dataset.id, btn.dataset.path));
+      });
+    }
+  }
+
+  async function deleteFile(docId, storagePath) {
+    if (!confirm('이 파일을 삭제하시겠습니까?')) return;
+    try {
+      await storage.ref(storagePath).delete();
+      await db.collection('files').doc(docId).delete();
+      await loadFiles();
+    } catch (err) {
+      alert('삭제 실패: ' + err.message);
+    }
+  }
+
+  // 업로드 처리
+  document.getElementById('uploadBtn').addEventListener('click', async () => {
+    const category = document.getElementById('categoryInput').value.trim();
+    const fileInput = document.getElementById('fileInput');
+    const file = fileInput.files[0];
+    const statusEl = document.getElementById('uploadStatus');
+    const btn = document.getElementById('uploadBtn');
+
+    statusEl.textContent = '';
+    if (!category) {
+      statusEl.style.color = '#a4453c';
+      statusEl.textContent = '카테고리를 입력해 주세요.';
+      return;
+    }
+    if (!file) {
+      statusEl.style.color = '#a4453c';
+      statusEl.textContent = '파일을 선택해 주세요.';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = '업로드 중...';
+    statusEl.style.color = 'var(--muted)';
+    statusEl.textContent = '업로드 중입니다...';
+
+    const storagePath = `files/${category}/${Date.now()}_${file.name}`;
+
+    try {
+      const ref = storage.ref(storagePath);
+      await ref.put(file);
+      const url = await ref.getDownloadURL();
+
+      await db.collection('files').add({
+        name: file.name,
+        category: category,
+        uploaderEmail: auth.currentUser.email,
+        storagePath: storagePath,
+        url: url,
+        size: file.size,
+        uploadedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+      statusEl.style.color = '#3f6b52';
+      statusEl.textContent = '업로드가 완료되었습니다.';
+      document.getElementById('categoryInput').value = '';
+      fileInput.value = '';
+      await loadFiles();
+    } catch (err) {
+      statusEl.style.color = '#a4453c';
+      statusEl.textContent = '업로드 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '업로드';
+    }
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await logOut();
+    window.location.href = 'login.html';
+  });
+</script>
+</body>
+</html>
