@@ -193,6 +193,7 @@
             <a href="#about">About</a>
             <a href="#projects">Projects</a>
             <a href="#contact">Contact</a>
+            <a href="admin.html" id="adminNavLink" style="display:none;">Admin</a>
             <a href="login.html" id="authNavLink">Login</a>
         </nav>
     </header>
@@ -518,11 +519,18 @@
                     await logOut();
                     window.location.reload();
                 };
+
+                // 관리자로 로그인한 경우에만 Admin 링크 표시
+                const adminLink = document.getElementById('adminNavLink');
+                adminLink.style.display = (role === 'admin') ? 'inline-block' : 'none';
             },
             () => {
                 const link = document.getElementById('authNavLink');
                 link.textContent = 'Login';
                 link.href = 'login.html';
+
+                const adminLink = document.getElementById('adminNavLink');
+                adminLink.style.display = 'none';
             }
         );
     </script>
