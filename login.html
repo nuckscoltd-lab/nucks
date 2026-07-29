@@ -104,6 +104,53 @@
     text-decoration:none;
     border-bottom:1px solid var(--ink);
   }
+  .forgot-link{
+    display:block;
+    margin-top:14px;
+    font-size:12.5px;
+    color:var(--muted);
+    text-decoration:none;
+    border-bottom:1px solid transparent;
+    cursor:pointer;
+    width:fit-content;
+  }
+  .forgot-link:hover{ border-bottom-color:var(--muted); }
+  .reset-panel{
+    display:none;
+    margin-top:24px;
+    padding-top:24px;
+    border-top:1px solid var(--line);
+  }
+  .reset-panel.open{ display:block; }
+  .reset-panel .desc{
+    font-size:12.5px;
+    color:var(--muted);
+    margin-bottom:16px;
+    line-height:1.6;
+  }
+  .reset-row{
+    display:flex;
+    gap:10px;
+    align-items:flex-end;
+  }
+  .reset-row input{ flex:1; }
+  .reset-btn{
+    padding:10px 16px;
+    background:var(--ink);
+    color:var(--paper);
+    border:none;
+    font-size:12px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .reset-btn:disabled{ opacity:.5; cursor:default; }
+  .reset-msg{
+    min-height:16px;
+    font-size:12.5px;
+    margin-top:10px;
+  }
 </style>
 </head>
 <body>
@@ -124,6 +171,17 @@
     <div class="msg" id="msg"></div>
     <button type="submit" class="submit" id="submitBtn">로그인</button>
   </form>
+
+  <a class="forgot-link" id="forgotLink">비밀번호를 잊으셨나요?</a>
+
+  <div class="reset-panel" id="resetPanel">
+    <div class="desc">가입하신 이메일을 입력하시면, 비밀번호 재설정 링크를 보내드려요.</div>
+    <div class="reset-row">
+      <input type="email" id="resetEmail" placeholder="이메일 입력">
+      <button class="reset-btn" id="resetBtn">전송</button>
+    </div>
+    <div class="reset-msg" id="resetMsg"></div>
+  </div>
 
   <div class="foot">
     <span>계정이 없으신가요?</span>
@@ -166,6 +224,48 @@
       btn.disabled = false;
       btn.textContent = '로그인';
       msg.textContent = '이메일 또는 비밀번호가 올바르지 않습니다.';
+    }
+  });
+
+  // 비밀번호 찾기 토글
+  const forgotLink = document.getElementById('forgotLink');
+  const resetPanel = document.getElementById('resetPanel');
+  const resetBtn = document.getElementById('resetBtn');
+  const resetEmailInput = document.getElementById('resetEmail');
+  const resetMsg = document.getElementById('resetMsg');
+
+  forgotLink.addEventListener('click', () => {
+    resetPanel.classList.toggle('open');
+    if (resetPanel.classList.contains('open')) {
+      resetEmailInput.value = document.getElementById('email').value.trim();
+      resetEmailInput.focus();
+    }
+  });
+
+  resetBtn.addEventListener('click', async () => {
+    const email = resetEmailInput.value.trim();
+    resetMsg.textContent = '';
+
+    if (!email) {
+      resetMsg.style.color = '#a4453c';
+      resetMsg.textContent = '이메일을 입력해 주세요.';
+      return;
+    }
+
+    resetBtn.disabled = true;
+    resetBtn.textContent = '전송 중...';
+
+    try {
+      await sendResetEmail(email);
+      resetMsg.style.color = '#3f6b52';
+      resetMsg.textContent = '재설정 메일을 보냈어요. 받은편지함(스팸함도)을 확인해 주세요.';
+    } catch (err) {
+      resetMsg.style.color = '#a4453c';
+      // 보안상 "가입되지 않은 이메일" 여부는 굳이 구분해 알려주지 않음
+      resetMsg.textContent = '전송에 실패했어요. 이메일 주소를 다시 확인해 주세요.';
+    } finally {
+      resetBtn.disabled = false;
+      resetBtn.textContent = '전송';
     }
   });
 </script>

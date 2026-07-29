@@ -29,6 +29,12 @@ async function logOut() {
   await auth.signOut();
 }
 
+// 비밀번호 재설정 이메일 발송
+// Firebase가 자동으로 재설정 링크가 담긴 이메일을 해당 주소로 보내줌
+async function sendResetEmail(email) {
+  await auth.sendPasswordResetEmail(email);
+}
+
 // 현재 로그인한 사용자의 role 조회 ('guest' | 'worker' | 'admin')
 async function getCurrentUserRole() {
   const user = auth.currentUser;
