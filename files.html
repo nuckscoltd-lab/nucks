@@ -95,6 +95,19 @@
     cursor:pointer; text-decoration:underline;
   }
   .empty{ font-size:13px; color:var(--muted); padding:24px 0; }
+
+  /* 회계현황 탭에서만 보이는 대시보드 미리보기 */
+  .preview-area{ display:none; margin-bottom:32px; }
+  .preview-area.show{ display:block; }
+  .preview-frame-wrap{
+    border:1px solid var(--line); border-radius:6px; overflow:hidden; background:#fff;
+  }
+  .preview-frame-wrap iframe{ width:100%; height:70vh; border:none; display:block; }
+  .preview-meta{ font-size:12.5px; color:var(--muted); margin-bottom:10px; }
+  .preview-empty{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:36px; text-align:center; color:var(--muted); font-size:13.5px; line-height:1.7;
+  }
 </style>
 </head>
 <body>
@@ -130,6 +143,9 @@
   </div>
 
   <div class="tabs" id="tabs"></div>
+
+  <!-- 회계현황 탭 선택 시에만 나타나는 대시보드 미리보기 -->
+  <div class="preview-area" id="previewArea"></div>
 
   <table>
     <thead>
@@ -193,6 +209,7 @@
 
     renderCategoryTabs();
     renderTable();
+    renderPreview();
     populateCategoryDatalist();
   }
 
@@ -208,9 +225,52 @@
         activeCategory = cat;
         renderCategoryTabs();
         renderTable();
+        renderPreview();
       });
       tabsEl.appendChild(btn);
     });
+  }
+
+  // "회계현황" 탭이 활성화된 경우에만, 그 카테고리의 최신 파일을 미리보기로 보여줌
+  function renderPreview() {
+    const previewArea = document.getElementById('previewArea');
+
+    if (activeCategory !== ACCOUNTING_CATEGORY) {
+      previewArea.classList.remove('show');
+      previewArea.innerHTML = '';
+      return;
+    }
+
+    previewArea.classList.add('show');
+    const filesInCategory = allFiles.filter(f => f.category === ACCOUNTING_CATEGORY);
+
+    if (filesInCategory.length === 0) {
+      previewArea.innerHTML = `
+        <div class="preview-empty">
+          아직 등록된 회계현황 파일이 없습니다.<br>
+          위 업로드 패널에서 카테고리를 "${ACCOUNTING_CATEGORY}"로 지정해 대시보드(HTML) 또는 엑셀 파일을 업로드해 주세요.
+        </div>
+      `;
+      return;
+    }
+
+    const latest = filesInCategory[0]; // 이미 최신순 정렬되어 있음
+    const dateStr = latest.uploadedAt?.toDate ? latest.uploadedAt.toDate().toLocaleString('ko-KR') : '-';
+    const isHtml = /\.html?$/i.test(latest.name);
+
+    if (isHtml) {
+      previewArea.innerHTML = `
+        <div class="preview-meta">최근 업데이트: ${dateStr} · ${latest.uploaderEmail || ''}</div>
+        <div class="preview-frame-wrap"><iframe src="${latest.url}"></iframe></div>
+      `;
+    } else {
+      previewArea.innerHTML = `
+        <div class="preview-empty">
+          최신 파일(${latest.name})은 브라우저 미리보기가 불가한 형식입니다.<br>
+          아래 목록에서 다운로드해 확인해 주세요.
+        </div>
+      `;
+    }
   }
 
   function populateCategoryDatalist() {
