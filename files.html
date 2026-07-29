@@ -169,9 +169,28 @@
     loadFiles();
   });
 
+  const ACCOUNTING_CATEGORY = '회계현황';
+
   async function loadFiles() {
-    const snapshot = await db.collection('files').orderBy('uploadedAt', 'desc').get();
-    allFiles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // "회계현황" 카테고리는 규칙상 admin만 읽기 가능해서, 전체를 한 번에 조회하면
+    // 규칙과 충돌해 요청 자체가 거부됨. 그래서 조건을 나눠 따로 조회한 뒤 합침.
+    let docs = [];
+
+    if (isAdmin) {
+      const [accSnap, otherSnap] = await Promise.all([
+        db.collection('files').where('category', '==', ACCOUNTING_CATEGORY).get(),
+        db.collection('files').where('category', '!=', ACCOUNTING_CATEGORY).get()
+      ]);
+      docs = [...accSnap.docs, ...otherSnap.docs];
+    } else {
+      const snap = await db.collection('files').where('category', '!=', ACCOUNTING_CATEGORY).get();
+      docs = snap.docs;
+    }
+
+    allFiles = docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // 두 조회 결과를 합쳤으니 클라이언트에서 최신순 정렬
+    allFiles.sort((a, b) => (b.uploadedAt?.toMillis?.() || 0) - (a.uploadedAt?.toMillis?.() || 0));
+
     renderCategoryTabs();
     renderTable();
     populateCategoryDatalist();
