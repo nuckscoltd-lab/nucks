@@ -193,7 +193,7 @@
             <a href="#about">About</a>
             <a href="#projects">Projects</a>
             <a href="#contact">Contact</a>
-            <a href="login.html" id="authNavLink">로그인</a>
+            <a href="login.html" id="authNavLink">Login</a>
         </nav>
     </header>
 
@@ -511,7 +511,7 @@
         watchAuthState(
             (user, role) => {
                 const link = document.getElementById('authNavLink');
-                link.textContent = '로그아웃';
+                link.textContent = 'Logout';
                 link.href = '#';
                 link.onclick = async (e) => {
                     e.preventDefault();
@@ -521,7 +521,7 @@
             },
             () => {
                 const link = document.getElementById('authNavLink');
-                link.textContent = '로그인';
+                link.textContent = 'Login';
                 link.href = 'login.html';
             }
         );
