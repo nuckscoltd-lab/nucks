@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>관리자 | NUCKS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
+
+  :root{
+    --ink:#141414;
+    --paper:#f7f6f3;
+    --line:#d8d5cd;
+    --muted:#8a8578;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:var(--paper);
+    font-family:'Pretendard', -apple-system, sans-serif;
+    color:var(--ink);
+  }
+  header{
+    padding:28px 48px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .eyebrow{
+    font-size:11px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:6px;
+  }
+  h1{
+    font-family:'Cormorant Garamond', serif;
+    font-weight:500; font-size:32px; margin:0; letter-spacing:.01em;
+  }
+  .logout{
+    font-size:13px; color:var(--muted); text-decoration:none;
+    border-bottom:1px solid var(--muted); cursor:pointer;
+  }
+  main{ max-width:880px; margin:0 auto; padding:48px; }
+  .section-label{
+    font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:16px;
+  }
+  table{
+    width:100%;
+    border-collapse:collapse;
+    margin-bottom:56px;
+  }
+  th{
+    text-align:left; font-size:12px; color:var(--muted);
+    font-weight:500; padding:10px 12px; border-bottom:1px solid var(--line);
+  }
+  td{
+    padding:14px 12px; font-size:14px; border-bottom:1px solid var(--line);
+    vertical-align:middle;
+  }
+  .role-badge{
+    display:inline-block; font-size:11px; padding:3px 10px;
+    border-radius:20px; letter-spacing:.02em;
+  }
+  .role-guest{ background:#ece9e2; color:#7a766c; }
+  .role-worker{ background:#dfe9e2; color:#3f6b52; }
+  .role-admin{ background:#141414; color:#f7f6f3; }
+  select{
+    font-family:inherit; font-size:13px; padding:6px 10px;
+    border:1px solid var(--line); background:#fff; color:var(--ink);
+    border-radius:4px;
+  }
+  .apply-btn{
+    margin-left:8px; padding:6px 14px; background:var(--ink); color:var(--paper);
+    border:none; font-size:12px; letter-spacing:.05em; cursor:pointer; border-radius:4px;
+  }
+  .apply-btn:hover{ opacity:.85; }
+  .apply-btn:disabled{ opacity:.4; cursor:default; }
+  .empty{ font-size:13px; color:var(--muted); padding:20px 0; }
+  .status-msg{ font-size:13px; margin-top:-40px; margin-bottom:40px; min-height:18px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">NUCKS · Secret Mode</div>
+    <h1>회원 관리</h1>
+  </div>
+  <a href="#" class="logout" id="logoutBtn">로그아웃</a>
+</header>
+
+<main>
+  <div class="section-label">전체 회원</div>
+  <div class="status-msg" id="statusMsg"></div>
+  <table>
+    <thead>
+      <tr>
+        <th>이름</th>
+        <th>이메일</th>
+        <th>현재 권한</th>
+        <th>변경</th>
+      </tr>
+    </thead>
+    <tbody id="userTableBody"></tbody>
+  </table>
+  <div class="empty" id="emptyMsg" style="display:none;">등록된 회원이 없습니다.</div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-functions-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+  // 관리자만 접근 가능
+  requireRole(['admin']);
+
+  const functions = firebase.functions();
+  const tableBody = document.getElementById('userTableBody');
+  const emptyMsg = document.getElementById('emptyMsg');
+  const statusMsg = document.getElementById('statusMsg');
+
+  const roleLabel = { guest: '게스트', worker: '근로자', admin: '관리자' };
+
+  async function loadUsers() {
+    const snapshot = await db.collection('users').get();
+    tableBody.innerHTML = '';
+
+    if (snapshot.empty) {
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      const uid = doc.id;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${data.displayName || '(이름 없음)'}</td>
+        <td>${data.email || ''}</td>
+        <td><span class="role-badge role-${data.role}">${roleLabel[data.role] || data.role}</span></td>
+        <td>
+          <select data-uid="${uid}">
+            <option value="guest" ${data.role === 'guest' ? 'selected' : ''}>게스트</option>
+            <option value="worker" ${data.role === 'worker' ? 'selected' : ''}>근로자</option>
+            <option value="admin" ${data.role === 'admin' ? 'selected' : ''}>관리자</option>
+          </select>
+          <button class="apply-btn" data-uid="${uid}">적용</button>
+        </td>
+      `;
+      tableBody.appendChild(tr);
+    });
+
+    // 적용 버튼 이벤트 연결
+    document.querySelectorAll('.apply-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const uid = btn.dataset.uid;
+        const select = document.querySelector(`select[data-uid="${uid}"]`);
+        const newRole = select.value;
+
+        btn.disabled = true;
+        btn.textContent = '처리 중...';
+        statusMsg.textContent = '';
+
+        try {
+          const setUserRole = functions.httpsCallable('setUserRole');
+          await setUserRole({ targetUid: uid, newRole });
+          statusMsg.textContent = '권한이 변경되었습니다.';
+          statusMsg.style.color = '#3f6b52';
+          await loadUsers();
+        } catch (err) {
+          statusMsg.textContent = '변경 실패: ' + (err.message || '알 수 없는 오류');
+          statusMsg.style.color = '#a4453c';
+          btn.disabled = false;
+          btn.textContent = '적용';
+        }
+      });
+    });
+  }
+
+  auth.onAuthStateChanged((user) => {
+    if (user) loadUsers();
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await logOut();
+    window.location.href = 'login.html';
+  });
+</script>
+</body>
+</html>
