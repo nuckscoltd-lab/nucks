@@ -155,7 +155,7 @@
 
   <table id="logTable" style="display:none;">
     <thead>
-      <tr><th>사원명</th><th>날짜</th><th>사용량</th><th>구분</th><th>승인상태</th><th>비고</th><th>관리</th></tr>
+      <tr><th>사원명</th><th>날짜</th><th>사용량</th><th>구분</th><th>잔여연차</th><th>승인상태</th><th>비고</th><th>관리</th></tr>
     </thead>
     <tbody id="tableBody"></tbody>
   </table>
@@ -279,6 +279,16 @@
     bar.innerHTML = chips;
   }
 
+  // 특정 사원명 기준으로 잔여연차 계산 (총연차 - 승인완료·병가제외 사용량)
+  function calcRemainingForName(name) {
+    const hireDate = (currentRole === 'admin') ? hireDateByName[name] : currentHireDate;
+    const total = calcTotalLeave(hireDate);
+    const used = allRows
+      .filter(r => r['사원명'] === name && r['승인상태'] === '승인완료' && r['연차구분'] !== '병가')
+      .reduce((sum, r) => sum + (Number(r['사용량']) || 0), 0);
+    return total - used;
+  }
+
   function renderTable() {
     const table = document.getElementById('logTable');
     const emptyMsg = document.getElementById('emptyMsg');
@@ -303,12 +313,14 @@
     tbody.innerHTML = '';
     rows.forEach(row => {
       const canManage = (row.uid === currentUser.uid) || (currentRole === 'admin');
+      const remaining = calcRemainingForName(row['사원명']);
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${row['사원명'] || ''}</td>
         <td>${row['날짜'] || ''}</td>
         <td>${row['사용량'] ?? ''}</td>
         <td><span class="tag">${row['연차구분'] || ''}</span></td>
+        <td>${remaining}일</td>
         <td>
           ${currentRole === 'admin'
             ? `<select class="status-select" data-id="${row.id}">${STATUS_OPTIONS.map(s => `<option ${s === row['승인상태'] ? 'selected' : ''}>${s}</option>`).join('')}</select>`

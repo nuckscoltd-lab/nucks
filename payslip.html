@@ -76,6 +76,14 @@
     padding:7px 10px; border:1px solid var(--line); border-radius:4px;
     font-family:inherit; font-size:13px; background:#fff;
   }
+  .summary-bar{
+    display:flex; gap:20px; margin-bottom:20px; flex-wrap:wrap;
+  }
+  .summary-chip{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:14px 20px; font-size:13px; color:var(--muted);
+  }
+  .summary-chip b{ color:var(--ink); font-size:16px; display:block; margin-top:4px; }
   table{ width:100%; border-collapse:collapse; }
   th{
     text-align:left; font-size:11.5px; color:var(--muted); font-weight:500;
@@ -164,7 +172,10 @@
 
   <div class="toolbar">
     <select id="listEmployeeFilter"><option value="전체">전체 사원</option></select>
+    <select id="listMonthFilter"><option value="전체">전체 기간</option></select>
   </div>
+
+  <div class="summary-bar" id="paySummaryBar"></div>
 
   <table id="listTable" style="display:none;">
     <thead>
@@ -196,6 +207,8 @@
     if (!user) return;
     currentUser = user;
     currentRole = await getCurrentUserRole();
+
+    document.getElementById('listMonthFilter').addEventListener('change', renderList);
 
     if (currentRole === 'admin') {
       document.getElementById('adminOnlyPanel').style.display = 'block';
@@ -305,6 +318,13 @@
       if (names.includes(current)) filterSelect.value = current;
     }
 
+    // 지급일(YYYY-MM-DD)에서 연-월(YYYY-MM)만 뽑아 월 필터 옵션 구성
+    const monthFilterSelect = document.getElementById('listMonthFilter');
+    const months = [...new Set(allSlips.map(s => (s['지급일'] || '').slice(0, 7)).filter(Boolean))].sort().reverse();
+    const currentMonth = monthFilterSelect.value;
+    monthFilterSelect.innerHTML = '<option value="전체">전체 기간</option>' + months.map(m => `<option value="${m}">${m}</option>`).join('');
+    if (months.includes(currentMonth)) monthFilterSelect.value = currentMonth;
+
     renderList();
   }
 
@@ -312,9 +332,28 @@
     const table = document.getElementById('listTable');
     const emptyMsg = document.getElementById('emptyMsg');
     const tbody = document.getElementById('listBody');
+    const summaryBar = document.getElementById('paySummaryBar');
     const filterVal = currentRole === 'admin' ? document.getElementById('listEmployeeFilter').value : '전체';
+    const monthVal = document.getElementById('listMonthFilter').value;
 
-    const rows = filterVal === '전체' ? allSlips : allSlips.filter(s => s['사원명'] === filterVal);
+    let rows = filterVal === '전체' ? allSlips : allSlips.filter(s => s['사원명'] === filterVal);
+    if (monthVal !== '전체') {
+      rows = rows.filter(s => (s['지급일'] || '').slice(0, 7) === monthVal);
+    }
+
+    // 필터링된 범위의 합계 자동 집계
+    const payTotalSum = rows.reduce((sum, s) => sum + (s['지급액계'] || 0), 0);
+    const dedTotalSum = rows.reduce((sum, s) => sum + (s['공제액계'] || 0), 0);
+    const netTotalSum = rows.reduce((sum, s) => sum + (s['차인지급액'] || 0), 0);
+    const monthLabel = monthVal === '전체' ? '전체 기간' : monthVal;
+    const empLabel = filterVal === '전체' ? '전체 사원' : filterVal;
+
+    summaryBar.innerHTML = `
+      <div class="summary-chip">${monthLabel} · ${empLabel} 지급액계<b>${payTotalSum.toLocaleString()}</b></div>
+      <div class="summary-chip">공제액계<b>${dedTotalSum.toLocaleString()}</b></div>
+      <div class="summary-chip">차인지급액<b>${netTotalSum.toLocaleString()}</b></div>
+      <div class="summary-chip">건수<b>${rows.length}건</b></div>
+    `;
 
     if (rows.length === 0) {
       table.style.display = 'none';
