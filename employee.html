@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>사원정보 | NUCKS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
+
+  :root{
+    --ink:#141414;
+    --paper:#f7f6f3;
+    --line:#d8d5cd;
+    --muted:#8a8578;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background:var(--paper);
+    font-family:'Pretendard', -apple-system, sans-serif; color:var(--ink);
+  }
+  header{
+    padding:28px 48px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .eyebrow{
+    font-size:11px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:6px;
+  }
+  h1{
+    font-family:'Cormorant Garamond', serif; font-weight:500;
+    font-size:32px; margin:0; letter-spacing:.01em;
+  }
+  .header-right{ display:flex; align-items:center; gap:24px; }
+  .header-right a{
+    font-size:13px; color:var(--muted); text-decoration:none;
+    border-bottom:1px solid var(--muted); cursor:pointer;
+  }
+  main{ max-width:1200px; margin:0 auto; padding:40px 48px; }
+
+  /* 관리자용 표 */
+  .table-wrap{ overflow-x:auto; }
+  table{ width:100%; border-collapse:collapse; min-width:960px; }
+  th{
+    text-align:left; font-size:11.5px; color:var(--muted); font-weight:500;
+    padding:9px 10px; border-bottom:1px solid var(--line); white-space:nowrap;
+  }
+  td{
+    padding:10px; font-size:13px; border-bottom:1px solid var(--line);
+    white-space:nowrap; vertical-align:middle;
+  }
+  td input{
+    width:100%; padding:6px 7px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:12.5px; min-width:70px;
+  }
+  .tag{
+    display:inline-block; font-size:11px; padding:2px 8px; border-radius:12px;
+    background:#ece9e2; color:#7a766c; margin:2px 3px 2px 0;
+  }
+  .btn{
+    font-size:12px; background:none; border:none; cursor:pointer;
+    text-decoration:underline; color:var(--muted); margin-right:8px;
+  }
+  .btn.save{ color:#3f6b52; }
+  .btn.file-link{ color:var(--ink); }
+  .file-upload-inline{ display:flex; gap:6px; align-items:center; }
+  .file-upload-inline input[type=file]{ font-size:11px; max-width:120px; }
+
+  /* 근로자 본인 조회 카드 */
+  .info-card{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:36px; max-width:560px;
+  }
+  .info-row{
+    display:flex; justify-content:space-between; padding:12px 0;
+    border-bottom:1px solid var(--line); font-size:14px;
+  }
+  .info-row:last-child{ border-bottom:none; }
+  .info-label{ color:var(--muted); }
+  .info-value{ font-weight:500; }
+
+  .empty{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:36px; text-align:center; color:var(--muted); font-size:13.5px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">NUCKS</div>
+    <h1>사원정보</h1>
+  </div>
+  <div class="header-right">
+    <a href="index.html">Home</a>
+    <a href="#" id="logoutBtn">Logout</a>
+  </div>
+</header>
+
+<main id="mainArea">
+  <div class="empty">불러오는 중...</div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+  requireRole(['worker', 'admin']);
+
+  const storage = firebase.storage();
+  const FIELDS = ['department', 'positionTags', 'employeeNumber', 'phone', 'hireDate', 'totalLeave', 'remainingLeave', 'usedLeave'];
+  const FIELD_LABELS = {
+    department: '부서', positionTags: '직급/상태', employeeNumber: '사번', phone: '연락처',
+    hireDate: '입사일', totalLeave: '총연차', remainingLeave: '잔여연차', usedLeave: '사용연차'
+  };
+
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) return;
+    const role = await getCurrentUserRole();
+    if (role === 'admin') {
+      renderAdminView();
+    } else {
+      renderWorkerView(user.uid);
+    }
+  });
+
+  function calcYears(hireDate) {
+    if (!hireDate) return '-';
+    const start = new Date(hireDate);
+    if (isNaN(start.getTime())) return '-';
+    const diffYears = (Date.now() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    return diffYears < 1 ? `${Math.floor(diffYears * 12)}개월` : `${diffYears.toFixed(1)}년`;
+  }
+
+  // ---------- 근로자: 본인 정보만 조회 ----------
+  async function renderWorkerView(uid) {
+    const doc = await db.collection('users').doc(uid).get();
+    const data = doc.data() || {};
+    const main = document.getElementById('mainArea');
+
+    const tags = (data.positionTags || []).map(t => `<span class="tag">${t}</span>`).join('');
+    const contract = data.contractFile
+      ? `<a href="${data.contractFile.url}" target="_blank" rel="noopener">${data.contractFile.name}</a>`
+      : '등록된 파일 없음';
+
+    main.innerHTML = `
+      <div class="info-card">
+        <div class="info-row"><span class="info-label">사원명</span><span class="info-value">${data.displayName || '-'}</span></div>
+        <div class="info-row"><span class="info-label">부서</span><span class="info-value">${data.department || '-'}</span></div>
+        <div class="info-row"><span class="info-label">직급/상태</span><span class="info-value">${tags || '-'}</span></div>
+        <div class="info-row"><span class="info-label">사번</span><span class="info-value">${data.employeeNumber || '-'}</span></div>
+        <div class="info-row"><span class="info-label">연락처</span><span class="info-value">${data.phone || '-'}</span></div>
+        <div class="info-row"><span class="info-label">이메일</span><span class="info-value">${data.email || '-'}</span></div>
+        <div class="info-row"><span class="info-label">입사일</span><span class="info-value">${data.hireDate || '-'}</span></div>
+        <div class="info-row"><span class="info-label">근속연수</span><span class="info-value">${calcYears(data.hireDate)}</span></div>
+        <div class="info-row"><span class="info-label">총연차</span><span class="info-value">${data.totalLeave ?? '-'}</span></div>
+        <div class="info-row"><span class="info-label">잔여연차</span><span class="info-value">${data.remainingLeave ?? '-'}</span></div>
+        <div class="info-row"><span class="info-label">사용연차</span><span class="info-value">${data.usedLeave ?? '-'}</span></div>
+        <div class="info-row"><span class="info-label">근로계약서</span><span class="info-value">${contract}</span></div>
+      </div>
+    `;
+  }
+
+  // ---------- 관리자: 전체 사원 목록 + 수정 ----------
+  let allEmployees = [];
+
+  async function renderAdminView() {
+    const snapshot = await db.collection('users').get();
+    allEmployees = snapshot.docs.map(d => ({ uid: d.id, ...d.data() }));
+    drawAdminTable();
+  }
+
+  function drawAdminTable() {
+    const main = document.getElementById('mainArea');
+    main.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>사원명</th><th>이메일</th><th>부서</th><th>직급/상태</th><th>사번</th>
+              <th>연락처</th><th>입사일</th><th>근속연수</th><th>총연차</th><th>잔여연차</th><th>사용연차</th>
+              <th>근로계약서</th><th>관리</th>
+            </tr>
+          </thead>
+          <tbody id="empTableBody"></tbody>
+        </table>
+      </div>
+    `;
+    const tbody = document.getElementById('empTableBody');
+    tbody.innerHTML = '';
+
+    allEmployees.forEach(emp => {
+      const tr = document.createElement('tr');
+      tr.dataset.uid = emp.uid;
+      tr.innerHTML = renderRowView(emp);
+      tbody.appendChild(tr);
+    });
+
+    bindRowButtons();
+  }
+
+  function renderRowView(emp) {
+    const tags = (emp.positionTags || []).map(t => `<span class="tag">${t}</span>`).join('');
+    const contract = emp.contractFile
+      ? `<a class="btn file-link" href="${emp.contractFile.url}" target="_blank" rel="noopener">${emp.contractFile.name}</a>`
+      : '<span style="color:var(--muted); font-size:12px;">없음</span>';
+
+    return `
+      <td>${emp.displayName || '(이름없음)'}</td>
+      <td>${emp.email || ''}</td>
+      <td class="c-department">${emp.department || '-'}</td>
+      <td class="c-positionTags">${tags || '-'}</td>
+      <td class="c-employeeNumber">${emp.employeeNumber || '-'}</td>
+      <td class="c-phone">${emp.phone || '-'}</td>
+      <td class="c-hireDate">${emp.hireDate || '-'}</td>
+      <td>${calcYears(emp.hireDate)}</td>
+      <td class="c-totalLeave">${emp.totalLeave ?? '-'}</td>
+      <td class="c-remainingLeave">${emp.remainingLeave ?? '-'}</td>
+      <td class="c-usedLeave">${emp.usedLeave ?? '-'}</td>
+      <td class="c-contract">${contract}</td>
+      <td>
+        <button class="btn edit-btn" data-uid="${emp.uid}">수정</button>
+      </td>
+    `;
+  }
+
+  function bindRowButtons() {
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+      btn.addEventListener('click', () => startEdit(btn.dataset.uid));
+    });
+  }
+
+  function startEdit(uid) {
+    const emp = allEmployees.find(e => e.uid === uid);
+    const tr = document.querySelector(`tr[data-uid="${uid}"]`);
+
+    tr.querySelector('.c-department').innerHTML = `<input type="text" class="f-department" value="${emp.department || ''}">`;
+    tr.querySelector('.c-positionTags').innerHTML = `<input type="text" class="f-positionTags" value="${(emp.positionTags || []).join(', ')}" placeholder="쉼표로 구분">`;
+    tr.querySelector('.c-employeeNumber').innerHTML = `<input type="text" class="f-employeeNumber" value="${emp.employeeNumber || ''}">`;
+    tr.querySelector('.c-phone').innerHTML = `<input type="text" class="f-phone" value="${emp.phone || ''}">`;
+    tr.querySelector('.c-hireDate').innerHTML = `<input type="date" class="f-hireDate" value="${emp.hireDate || ''}">`;
+    tr.querySelector('.c-totalLeave').innerHTML = `<input type="number" class="f-totalLeave" value="${emp.totalLeave ?? ''}">`;
+    tr.querySelector('.c-remainingLeave').innerHTML = `<input type="number" class="f-remainingLeave" value="${emp.remainingLeave ?? ''}">`;
+    tr.querySelector('.c-usedLeave').innerHTML = `<input type="number" class="f-usedLeave" value="${emp.usedLeave ?? ''}">`;
+    tr.querySelector('.c-contract').innerHTML = `
+      <div class="file-upload-inline">
+        <input type="file" class="f-contract">
+        <span class="contract-status" style="font-size:11px; color:var(--muted);"></span>
+      </div>
+    `;
+
+    const lastTd = tr.children[tr.children.length - 1];
+    lastTd.innerHTML = `
+      <button class="btn save save-btn" data-uid="${uid}">저장</button>
+      <button class="btn cancel-btn" data-uid="${uid}">취소</button>
+    `;
+
+    lastTd.querySelector('.save-btn').addEventListener('click', () => saveEdit(uid));
+    lastTd.querySelector('.cancel-btn').addEventListener('click', drawAdminTable);
+  }
+
+  async function saveEdit(uid) {
+    const tr = document.querySelector(`tr[data-uid="${uid}"]`);
+    const emp = allEmployees.find(e => e.uid === uid);
+
+    const department = tr.querySelector('.f-department').value.trim();
+    const positionTags = tr.querySelector('.f-positionTags').value.split(',').map(s => s.trim()).filter(Boolean);
+    const employeeNumber = tr.querySelector('.f-employeeNumber').value.trim();
+    const phone = tr.querySelector('.f-phone').value.trim();
+    const hireDate = tr.querySelector('.f-hireDate').value;
+    const totalLeave = Number(tr.querySelector('.f-totalLeave').value) || 0;
+    const remainingLeave = Number(tr.querySelector('.f-remainingLeave').value) || 0;
+    const usedLeave = Number(tr.querySelector('.f-usedLeave').value) || 0;
+    const fileInput = tr.querySelector('.f-contract');
+    const statusEl = tr.querySelector('.contract-status');
+
+    const updateData = { department, positionTags, employeeNumber, phone, hireDate, totalLeave, remainingLeave, usedLeave };
+
+    try {
+      // 근로계약서 파일이 새로 선택된 경우 업로드
+      if (fileInput.files[0]) {
+        statusEl.textContent = '업로드 중...';
+        const file = fileInput.files[0];
+        const path = `hr/${uid}/contract_${Date.now()}_${file.name}`;
+        const ref = storage.ref(path);
+        await ref.put(file);
+        const url = await ref.getDownloadURL();
+        updateData.contractFile = { name: file.name, url };
+      }
+
+      await db.collection('users').doc(uid).update(updateData);
+      await renderAdminView();
+    } catch (err) {
+      alert('저장 실패: ' + err.message);
+    }
+  }
+
+  document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await logOut();
+    window.location.href = 'login.html';
+  });
+</script>
+</body>
+</html>

@@ -37,39 +37,72 @@
   }
   main{ max-width:1100px; margin:0 auto; padding:40px 48px; }
 
-  .toolbar{
-    display:flex; justify-content:space-between; align-items:center;
-    margin-bottom:24px; gap:16px; flex-wrap:wrap;
+  /* 작성 폼 */
+  .write-panel{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:24px; margin-bottom:40px;
   }
-  .toolbar select{
-    padding:8px 12px; border:1px solid var(--line); border-radius:4px;
-    font-family:inherit; font-size:13.5px; background:#fff; color:var(--ink);
+  .panel-title{
+    font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:18px;
   }
-  .refresh-btn{
-    padding:8px 16px; background:var(--ink); color:var(--paper);
+  .form-grid{
+    display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; margin-bottom:16px;
+  }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field label{ font-size:11.5px; color:var(--muted); }
+  .field input, .field textarea{
+    padding:8px 9px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13.5px; background:#fff;
+  }
+  .field textarea{ resize:vertical; min-height:60px; }
+  .task-checks{
+    display:flex; flex-wrap:wrap; gap:12px; margin-bottom:16px;
+  }
+  .task-checks label{
+    font-size:13px; display:flex; align-items:center; gap:5px; cursor:pointer;
+  }
+  .submit-btn{
+    padding:10px 22px; background:var(--ink); color:var(--paper);
     border:none; font-size:12.5px; letter-spacing:.05em; text-transform:uppercase;
     cursor:pointer; border-radius:4px;
   }
-  .status-msg{ font-size:13px; color:var(--muted); margin-bottom:16px; }
+  .submit-status{ font-size:13px; margin-top:10px; min-height:18px; }
 
+  /* 목록 */
+  .toolbar{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:18px; gap:12px; flex-wrap:wrap;
+  }
+  .toolbar select{
+    padding:7px 10px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13px; background:#fff;
+  }
   .table-wrap{ overflow-x:auto; }
-  table{ width:100%; border-collapse:collapse; min-width:720px; }
+  table{ width:100%; border-collapse:collapse; min-width:800px; }
   th{
-    text-align:left; font-size:12px; color:var(--muted); font-weight:500;
-    padding:10px 12px; border-bottom:1px solid var(--line); white-space:nowrap;
+    text-align:left; font-size:11.5px; color:var(--muted); font-weight:500;
+    padding:9px 10px; border-bottom:1px solid var(--line); white-space:nowrap;
   }
   td{
-    padding:12px; font-size:13.5px; border-bottom:1px solid var(--line);
-    white-space:nowrap;
+    padding:11px 10px; font-size:13px; border-bottom:1px solid var(--line);
+    vertical-align:top;
   }
-  td.detail-cell{ white-space:normal; max-width:280px; }
+  td.nowrap{ white-space:nowrap; }
+  td.detail-cell{ max-width:240px; white-space:normal; }
   .task-tag{
-    display:inline-block; font-size:11px; padding:2px 8px; border-radius:12px;
-    background:#ece9e2; color:#7a766c; margin:2px 3px 2px 0;
+    display:inline-block; font-size:10.5px; padding:2px 7px; border-radius:12px;
+    background:#ece9e2; color:#7a766c; margin:1px 2px 1px 0;
   }
+  .row-btn{
+    font-size:12px; background:none; border:none; cursor:pointer;
+    text-decoration:underline; color:var(--muted); margin-right:8px;
+  }
+  .row-btn.danger{ color:#a4453c; }
+  .attach-link{ color:var(--ink); text-decoration:none; border-bottom:1px solid var(--ink); font-size:12.5px; }
   .empty{
     background:#fff; border:1px solid var(--line); border-radius:6px;
-    padding:36px; text-align:center; color:var(--muted); font-size:13.5px;
+    padding:32px; text-align:center; color:var(--muted); font-size:13.5px;
   }
 </style>
 </head>
@@ -87,43 +120,101 @@
 </header>
 
 <main>
+  <!-- 작성 폼 (근로자/관리자 본인 명의로 작성) -->
+  <div class="write-panel">
+    <div class="panel-title">근무일지 작성</div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="f-date">날짜</label>
+        <input type="date" id="f-date">
+      </div>
+      <div class="field">
+        <label for="f-checkin">출근시간</label>
+        <input type="time" id="f-checkin">
+      </div>
+      <div class="field">
+        <label for="f-checkout">퇴근시간</label>
+        <input type="time" id="f-checkout">
+      </div>
+      <div class="field">
+        <label for="f-project">프로젝트</label>
+        <input type="text" id="f-project" placeholder="예: 힐스테이트장위">
+      </div>
+    </div>
+
+    <div class="task-checks" id="taskChecks"></div>
+
+    <div class="field" style="margin-bottom:16px;">
+      <label for="f-detail">상세내용</label>
+      <textarea id="f-detail" placeholder="오늘 진행한 업무 내용을 적어주세요"></textarea>
+    </div>
+
+    <div class="field" style="margin-bottom:16px; max-width:320px;">
+      <label for="f-file">파일첨부 (선택)</label>
+      <input type="file" id="f-file">
+    </div>
+
+    <button class="submit-btn" id="submitBtn">등록</button>
+    <div class="submit-status" id="submitStatus"></div>
+  </div>
+
+  <!-- 목록 -->
   <div class="toolbar">
     <select id="employeeFilter" style="display:none;">
       <option value="전체">전체 사원</option>
     </select>
-    <button class="refresh-btn" id="refreshBtn">새로고침</button>
+    <button class="row-btn" id="refreshBtn" style="text-decoration:none; font-size:12.5px;">새로고침</button>
   </div>
-
-  <div class="status-msg" id="statusMsg">불러오는 중...</div>
 
   <div class="table-wrap">
     <table id="logTable" style="display:none;">
-      <thead><tr id="tableHead"></tr></thead>
+      <thead>
+        <tr>
+          <th>날짜</th><th>사원명</th><th>출근</th><th>퇴근</th><th>프로젝트</th>
+          <th>업무유형</th><th>상세내용</th><th>첨부</th><th>관리</th>
+        </tr>
+      </thead>
       <tbody id="tableBody"></tbody>
     </table>
   </div>
-  <div class="empty" id="emptyMsg" style="display:none;">표시할 근무일지가 없습니다.</div>
+  <div class="empty" id="emptyMsg">불러오는 중...</div>
 </main>
 
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="auth.js"></script>
 <script>
-  // 근로자, 관리자 모두 접근 가능 (실제 필터링은 서버에서 role별로 강제 처리됨)
   requireRole(['worker', 'admin']);
 
-  const functions = firebase.functions();
+  const storage = firebase.storage();
+  const TASK_TYPES = ['도면작성', '스케치업', '마감스펙', '제안서', '회의', '경영관리', '공무', '기타업무'];
+
+  let currentUser = null;
+  let currentRole = null;
+  let currentDisplayName = '';
   let allRows = [];
-  let isAdmin = false;
+
+  // 업무유형 체크박스 렌더
+  document.getElementById('taskChecks').innerHTML = TASK_TYPES.map(t =>
+    `<label><input type="checkbox" class="task-check" value="${t}"> ${t}</label>`
+  ).join('');
 
   auth.onAuthStateChanged(async (user) => {
     if (!user) return;
-    const role = await getCurrentUserRole();
-    isAdmin = (role === 'admin');
-    document.getElementById('employeeFilter').style.display = isAdmin ? 'inline-block' : 'none';
+    currentUser = user;
+    currentRole = await getCurrentUserRole();
+
+    const userDoc = await db.collection('users').doc(user.uid).get();
+    currentDisplayName = userDoc.data()?.displayName || user.email;
+
+    document.getElementById('employeeFilter').style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
+
+    // 오늘 날짜 기본값
+    document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
+
     loadLogs();
   });
 
@@ -131,27 +222,29 @@
   document.getElementById('employeeFilter').addEventListener('change', renderTable);
 
   async function loadLogs() {
-    const statusMsg = document.getElementById('statusMsg');
-    const table = document.getElementById('logTable');
     const emptyMsg = document.getElementById('emptyMsg');
-
-    statusMsg.textContent = '불러오는 중...';
-    statusMsg.style.color = 'var(--muted)';
+    const table = document.getElementById('logTable');
+    emptyMsg.textContent = '불러오는 중...';
+    emptyMsg.style.display = 'block';
     table.style.display = 'none';
-    emptyMsg.style.display = 'none';
 
     try {
-      const getWorkLogs = functions.httpsCallable('getWorkLogs');
-      const result = await getWorkLogs();
-      allRows = result.data.rows || [];
+      let query;
+      if (currentRole === 'admin') {
+        query = db.collection('workLogs').orderBy('날짜', 'desc');
+      } else {
+        query = db.collection('workLogs').where('uid', '==', currentUser.uid);
+      }
+      const snapshot = await query.get();
+      allRows = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-      statusMsg.textContent = `총 ${allRows.length}건 (최근 업데이트: ${new Date().toLocaleTimeString('ko-KR')})`;
+      // 근로자 본인 목록은 별도 정렬(최신순) - where 절 사용 시 orderBy 인덱스 이슈 회피를 위해 클라이언트에서 정렬
+      allRows.sort((a, b) => (b['날짜'] || '').localeCompare(a['날짜'] || ''));
 
-      if (isAdmin) populateEmployeeFilter();
+      if (currentRole === 'admin') populateEmployeeFilter();
       renderTable();
     } catch (err) {
-      statusMsg.style.color = '#a4453c';
-      statusMsg.textContent = '불러오기 실패: ' + err.message;
+      emptyMsg.textContent = '불러오기 실패: ' + err.message;
     }
   }
 
@@ -164,62 +257,131 @@
     if (names.includes(current)) select.value = current;
   }
 
-  // 값 형식을 사람이 보기 좋은 문자열로 변환
-  function formatValue(val) {
-    if (val === null || val === undefined) return '';
-    if (typeof val === 'boolean') return val ? '✓' : '';
-    if (Array.isArray(val)) return val.join(', ');
-    if (typeof val === 'object' && 'start' in val) {
-      if (!val.start) return '';
-      const d = new Date(val.start);
-      if (isNaN(d.getTime())) return val.start;
-      return val.start.includes('T')
-        ? d.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-        : val.start;
-    }
-    return String(val);
-  }
-
   function renderTable() {
     const table = document.getElementById('logTable');
     const emptyMsg = document.getElementById('emptyMsg');
-    const thead = document.getElementById('tableHead');
     const tbody = document.getElementById('tableBody');
 
     const filterVal = document.getElementById('employeeFilter').value;
-    const rows = (isAdmin && filterVal !== '전체')
+    const rows = (currentRole === 'admin' && filterVal !== '전체')
       ? allRows.filter(r => r['사원명'] === filterVal)
       : allRows;
 
     if (rows.length === 0) {
       table.style.display = 'none';
+      emptyMsg.textContent = '등록된 근무일지가 없습니다.';
       emptyMsg.style.display = 'block';
       return;
     }
     emptyMsg.style.display = 'none';
     table.style.display = 'table';
 
-    // 체크박스(boolean) 형태의 속성은 "업무유형" 하나의 컬럼으로 합쳐서 표시
-    const sampleKeys = Object.keys(rows[0]).filter(k => k !== 'id');
-    const checkboxKeys = sampleKeys.filter(k => typeof rows[0][k] === 'boolean');
-    const normalKeys = sampleKeys.filter(k => !checkboxKeys.includes(k));
-
-    thead.innerHTML = normalKeys.map(k => `<th>${k}</th>`).join('') +
-      (checkboxKeys.length ? '<th>업무유형</th>' : '');
-
     tbody.innerHTML = '';
     rows.forEach(row => {
+      const canManage = (row.uid === currentUser.uid) || (currentRole === 'admin');
+      const taskTags = (row.tasks ? Object.keys(row.tasks).filter(k => row.tasks[k]) : [])
+        .map(t => `<span class="task-tag">${t}</span>`).join('');
+      const attach = row.attachment
+        ? `<a class="attach-link" href="${row.attachment.url}" target="_blank" rel="noopener">${row.attachment.name}</a>`
+        : '';
+
       const tr = document.createElement('tr');
-      const normalCells = normalKeys.map(k => {
-        const cls = (k === '상세내용' || k.includes('내용')) ? ' class="detail-cell"' : '';
-        return `<td${cls}>${formatValue(row[k])}</td>`;
-      }).join('');
-      const taskTags = checkboxKeys.filter(k => row[k]).map(k => `<span class="task-tag">${k}</span>`).join('');
-      const taskCell = checkboxKeys.length ? `<td>${taskTags}</td>` : '';
-      tr.innerHTML = normalCells + taskCell;
+      tr.innerHTML = `
+        <td class="nowrap">${row['날짜'] || ''}</td>
+        <td class="nowrap">${row['사원명'] || ''}</td>
+        <td class="nowrap">${row['출근시간'] || ''}</td>
+        <td class="nowrap">${row['퇴근시간'] || ''}</td>
+        <td class="nowrap">${row['프로젝트'] || ''}</td>
+        <td>${taskTags}</td>
+        <td class="detail-cell">${row['상세내용'] || ''}</td>
+        <td class="nowrap">${attach}</td>
+        <td class="nowrap">
+          ${canManage ? `<button class="row-btn danger" data-id="${row.id}">삭제</button>` : ''}
+        </td>
+      `;
       tbody.appendChild(tr);
     });
+
+    document.querySelectorAll('.row-btn.danger').forEach(btn => {
+      btn.addEventListener('click', () => deleteLog(btn.dataset.id));
+    });
   }
+
+  async function deleteLog(docId) {
+    if (!confirm('이 근무일지를 삭제하시겠습니까?')) return;
+    try {
+      await db.collection('workLogs').doc(docId).delete();
+      await loadLogs();
+    } catch (err) {
+      alert('삭제 실패: ' + err.message);
+    }
+  }
+
+  document.getElementById('submitBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('submitStatus');
+    const btn = document.getElementById('submitBtn');
+
+    const date = document.getElementById('f-date').value;
+    const checkin = document.getElementById('f-checkin').value;
+    const checkout = document.getElementById('f-checkout').value;
+    const project = document.getElementById('f-project').value.trim();
+    const detail = document.getElementById('f-detail').value.trim();
+    const fileInput = document.getElementById('f-file');
+
+    if (!date) {
+      statusEl.style.color = '#a4453c';
+      statusEl.textContent = '날짜를 입력해 주세요.';
+      return;
+    }
+
+    const tasks = {};
+    document.querySelectorAll('.task-check').forEach(cb => { tasks[cb.value] = cb.checked; });
+
+    btn.disabled = true;
+    btn.textContent = '등록 중...';
+    statusEl.style.color = 'var(--muted)';
+    statusEl.textContent = '등록 중입니다...';
+
+    try {
+      const docData = {
+        uid: currentUser.uid,
+        '사원명': currentDisplayName,
+        '날짜': date,
+        '출근시간': checkin,
+        '퇴근시간': checkout,
+        '프로젝트': project,
+        tasks: tasks,
+        '상세내용': detail,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      if (fileInput.files[0]) {
+        const file = fileInput.files[0];
+        const path = `worklogs/${currentUser.uid}/${Date.now()}_${file.name}`;
+        const ref = storage.ref(path);
+        await ref.put(file);
+        const url = await ref.getDownloadURL();
+        docData.attachment = { name: file.name, url };
+      }
+
+      await db.collection('workLogs').add(docData);
+
+      statusEl.style.color = '#3f6b52';
+      statusEl.textContent = '등록되었습니다.';
+      document.getElementById('f-project').value = '';
+      document.getElementById('f-detail').value = '';
+      document.getElementById('f-file').value = '';
+      document.querySelectorAll('.task-check').forEach(cb => { cb.checked = false; });
+
+      await loadLogs();
+    } catch (err) {
+      statusEl.style.color = '#a4453c';
+      statusEl.textContent = '등록 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '등록';
+    }
+  });
 
   document.getElementById('logoutBtn').addEventListener('click', async (e) => {
     e.preventDefault();
