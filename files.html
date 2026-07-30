@@ -94,6 +94,15 @@
     margin-left:12px; font-size:12px; color:#a4453c; background:none; border:none;
     cursor:pointer; text-decoration:underline;
   }
+  .edit-btn{
+    margin-left:12px; font-size:12px; color:var(--muted); background:none; border:none;
+    cursor:pointer; text-decoration:underline;
+  }
+  .edit-btn.save{ color:#3f6b52; }
+  .edit-name-input, .edit-category-input{
+    width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13.5px;
+  }
   .empty{ font-size:13px; color:var(--muted); padding:24px 0; }
 
   /* 회계현황 탭에서만 보이는 대시보드 미리보기 */
@@ -295,15 +304,21 @@
 
     filtered.forEach(f => {
       const dateStr = f.uploadedAt?.toDate ? f.uploadedAt.toDate().toLocaleDateString('ko-KR') : '-';
+      const previewUrl = buildPreviewUrl(f.name, f.url);
       const tr = document.createElement('tr');
+      tr.dataset.id = f.id;
       tr.innerHTML = `
-        <td>${f.name}</td>
-        <td><span class="cat-badge">${f.category}</span></td>
+        <td class="cell-name">${f.name}</td>
+        <td class="cell-category"><span class="cat-badge">${f.category}</span></td>
         <td>${f.uploaderEmail || ''}</td>
         <td>${dateStr}</td>
         <td>
-          <a class="dl-link" href="${f.url}" target="_blank" rel="noopener">다운로드</a>
-          ${isAdmin ? `<button class="del-btn" data-id="${f.id}" data-path="${f.storagePath}">삭제</button>` : ''}
+          ${previewUrl ? `<a class="dl-link" href="${previewUrl}" target="_blank" rel="noopener">미리보기</a>` : ''}
+          <a class="dl-link" href="${f.url}" target="_blank" rel="noopener" download>다운로드</a>
+          ${isAdmin ? `
+            <button class="edit-btn" data-id="${f.id}">수정</button>
+            <button class="del-btn" data-id="${f.id}" data-path="${f.storagePath}">삭제</button>
+          ` : ''}
         </td>
       `;
       tbody.appendChild(tr);
@@ -313,6 +328,65 @@
       document.querySelectorAll('.del-btn').forEach(btn => {
         btn.addEventListener('click', () => deleteFile(btn.dataset.id, btn.dataset.path));
       });
+      document.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => startEditRow(btn.dataset.id));
+      });
+    }
+  }
+
+  // 파일 형식에 따라 미리보기 링크를 다르게 생성
+  // - 이미지/PDF/HTML: 브라우저가 직접 열어서 보여줄 수 있어 원본 URL 그대로 사용
+  // - 워드/엑셀/파워포인트: 구글 문서 뷰어를 통해 미리보기
+  // - 그 외 형식: 미리보기 미지원 (다운로드만)
+  function buildPreviewUrl(fileName, fileUrl) {
+    const ext = fileName.split('.').pop().toLowerCase();
+    const directTypes = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'pdf', 'html', 'htm'];
+    const officeTypes = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
+
+    if (directTypes.includes(ext)) return fileUrl;
+    if (officeTypes.includes(ext)) {
+      return `https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`;
+    }
+    return null; // 미리보기 미지원
+  }
+
+  function startEditRow(docId) {
+    const file = allFiles.find(f => f.id === docId);
+    if (!file) return;
+    const tr = document.querySelector(`tr[data-id="${docId}"]`);
+    if (!tr) return;
+
+    const nameCell = tr.querySelector('.cell-name');
+    const categoryCell = tr.querySelector('.cell-category');
+
+    nameCell.innerHTML = `<input type="text" class="edit-name-input" value="${file.name}">`;
+    categoryCell.innerHTML = `<input type="text" class="edit-category-input" value="${file.category}" list="categoryList">`;
+
+    const actionCell = tr.children[4];
+    actionCell.innerHTML = `
+      <button class="edit-btn save" data-id="${docId}">저장</button>
+      <button class="edit-btn cancel" data-id="${docId}">취소</button>
+    `;
+
+    actionCell.querySelector('.save').addEventListener('click', () => saveEditRow(docId));
+    actionCell.querySelector('.cancel').addEventListener('click', () => { renderTable(); renderPreview(); });
+  }
+
+  async function saveEditRow(docId) {
+    const tr = document.querySelector(`tr[data-id="${docId}"]`);
+    const newName = tr.querySelector('.edit-name-input').value.trim();
+    const newCategory = tr.querySelector('.edit-category-input').value.trim();
+
+    if (!newName || !newCategory) {
+      alert('파일명과 카테고리를 모두 입력해 주세요.');
+      return;
+    }
+
+    try {
+      await db.collection('files').doc(docId).update({ name: newName, category: newCategory });
+      await loadFiles();
+    } catch (err) {
+      alert('수정 실패: ' + err.message);
     }
   }
 
