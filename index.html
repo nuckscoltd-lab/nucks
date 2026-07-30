@@ -195,8 +195,10 @@
             <a href="#contact">Contact</a>
             <a href="employee.html" id="employeeNavLink" style="display:none;">Employee</a>
             <a href="worklog.html" id="worklogNavLink" style="display:none;">Worklog</a>
+            <a href="leave.html" id="leaveNavLink" style="display:none;">Leave</a>
             <a href="files.html" id="filesNavLink" style="display:none;">Files</a>
             <a href="admin.html" id="adminNavLink" style="display:none;">Admin</a>
+            <a href="payslip.html" id="payslipNavLink" style="display:none;">Payslip</a>
             <a href="login.html" id="authNavLink">Login</a>
         </nav>
     </header>
@@ -523,12 +525,15 @@
                     window.location.reload();
                 };
 
-                // 관리자로 로그인한 경우에만 Admin 링크 표시
+                // 관리자로 로그인한 경우에만 Admin, Payslip 링크 표시
                 const adminLink = document.getElementById('adminNavLink');
                 adminLink.style.display = (role === 'admin') ? 'inline-block' : 'none';
 
+                const payslipLink = document.getElementById('payslipNavLink');
+                payslipLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
 
-                // 근로자 또는 관리자인 경우 Employee, Files, Worklog 링크 표시
+
+                // 근로자 또는 관리자인 경우 Employee, Files, Worklog, Leave 링크 표시
                 const employeeLink = document.getElementById('employeeNavLink');
                 employeeLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
 
@@ -537,6 +542,9 @@
 
                 const worklogLink = document.getElementById('worklogNavLink');
                 worklogLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
+
+                const leaveLink = document.getElementById('leaveNavLink');
+                leaveLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
             },
             () => {
                 const link = document.getElementById('authNavLink');
@@ -545,6 +553,9 @@
 
                 const adminLink = document.getElementById('adminNavLink');
                 adminLink.style.display = 'none';
+
+                const payslipLink = document.getElementById('payslipNavLink');
+                payslipLink.style.display = 'none';
 
 
                 const employeeLink = document.getElementById('employeeNavLink');
@@ -555,6 +566,9 @@
 
                 const worklogLink = document.getElementById('worklogNavLink');
                 worklogLink.style.display = 'none';
+
+                const leaveLink = document.getElementById('leaveNavLink');
+                leaveLink.style.display = 'none';
             }
         );
     </script>
