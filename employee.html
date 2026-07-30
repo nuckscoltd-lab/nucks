@@ -108,23 +108,14 @@
 <script src="firebase-config.js"></script>
 <script src="auth.js"></script>
 <script>
-  requireRole(['worker', 'admin']);
+  // 사원정보는 관리자만 접근 가능 (근로자 조회 불가)
+  requireRole(['admin']);
 
   const storage = firebase.storage();
-  const FIELDS = ['department', 'positionTags', 'employeeNumber', 'phone', 'hireDate', 'totalLeave', 'remainingLeave', 'usedLeave'];
-  const FIELD_LABELS = {
-    department: '부서', positionTags: '직급/상태', employeeNumber: '사번', phone: '연락처',
-    hireDate: '입사일', totalLeave: '총연차', remainingLeave: '잔여연차', usedLeave: '사용연차'
-  };
 
   auth.onAuthStateChanged(async (user) => {
     if (!user) return;
-    const role = await getCurrentUserRole();
-    if (role === 'admin') {
-      renderAdminView();
-    } else {
-      renderWorkerView(user.uid);
-    }
+    renderAdminView();
   });
 
   function calcYears(hireDate) {
@@ -154,47 +145,11 @@
     return Math.min(15 + extra, 25);
   }
 
-  // "승인완료" 상태인 연차 사용 항목만 합산
+  // "승인완료" 상태이면서 "병가"가 아닌 항목만 합산 (병가는 연차 소진에 포함하지 않음)
   function sumApprovedLeave(leaveDocs, uid) {
     return leaveDocs
-      .filter(l => l.uid === uid && l['승인상태'] === '승인완료')
+      .filter(l => l.uid === uid && l['승인상태'] === '승인완료' && l['연차구분'] !== '병가')
       .reduce((sum, l) => sum + (Number(l['사용량']) || 0), 0);
-  }
-
-  // ---------- 근로자: 본인 정보만 조회 ----------
-  async function renderWorkerView(uid) {
-    const doc = await db.collection('users').doc(uid).get();
-    const data = doc.data() || {};
-    const main = document.getElementById('mainArea');
-
-    // 본인의 승인완료된 연차 사용 내역을 가져와 사용연차/잔여연차 자동 계산
-    const leaveSnapshot = await db.collection('leaves').where('uid', '==', uid).get();
-    const leaveDocs = leaveSnapshot.docs.map(d => d.data());
-    const totalLeave = calcTotalLeave(data.hireDate);
-    const usedLeave = sumApprovedLeave(leaveDocs, uid);
-    const remainingLeave = totalLeave - usedLeave;
-
-    const tags = (data.positionTags || []).map(t => `<span class="tag">${t}</span>`).join('');
-    const contract = data.contractFile
-      ? `<a href="${data.contractFile.url}" target="_blank" rel="noopener">${data.contractFile.name}</a>`
-      : '등록된 파일 없음';
-
-    main.innerHTML = `
-      <div class="info-card">
-        <div class="info-row"><span class="info-label">사원명</span><span class="info-value">${data.displayName || '-'}</span></div>
-        <div class="info-row"><span class="info-label">부서</span><span class="info-value">${data.department || '-'}</span></div>
-        <div class="info-row"><span class="info-label">직급/상태</span><span class="info-value">${tags || '-'}</span></div>
-        <div class="info-row"><span class="info-label">사번</span><span class="info-value">${data.employeeNumber || '-'}</span></div>
-        <div class="info-row"><span class="info-label">연락처</span><span class="info-value">${data.phone || '-'}</span></div>
-        <div class="info-row"><span class="info-label">이메일</span><span class="info-value">${data.email || '-'}</span></div>
-        <div class="info-row"><span class="info-label">입사일</span><span class="info-value">${data.hireDate || '-'}</span></div>
-        <div class="info-row"><span class="info-label">근속연수</span><span class="info-value">${calcYears(data.hireDate)}</span></div>
-        <div class="info-row"><span class="info-label">총연차 (자동계산)</span><span class="info-value">${totalLeave}일</span></div>
-        <div class="info-row"><span class="info-label">사용연차 (승인완료 기준)</span><span class="info-value">${usedLeave}일</span></div>
-        <div class="info-row"><span class="info-label">잔여연차</span><span class="info-value">${remainingLeave}일</span></div>
-        <div class="info-row"><span class="info-label">근로계약서</span><span class="info-value">${contract}</span></div>
-      </div>
-    `;
   }
 
   // ---------- 관리자: 전체 사원 목록 + 수정 ----------
