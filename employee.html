@@ -135,11 +135,44 @@
     return diffYears < 1 ? `${Math.floor(diffYears * 12)}개월` : `${diffYears.toFixed(1)}년`;
   }
 
+  // 근로기준법 기준 총연차 자동 계산
+  // - 입사 1년 미만: 개근 월 1일씩 (최대 11일)
+  // - 입사 1년 이상: 15일 + 매 2년마다 1일 추가, 최대 25일
+  function calcTotalLeave(hireDate) {
+    if (!hireDate) return 0;
+    const start = new Date(hireDate);
+    if (isNaN(start.getTime())) return 0;
+
+    const now = new Date();
+    const totalMonths = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+    const years = totalMonths / 12;
+
+    if (years < 1) {
+      return Math.min(Math.max(totalMonths, 0), 11);
+    }
+    const extra = Math.floor((Math.floor(years) - 1) / 2);
+    return Math.min(15 + extra, 25);
+  }
+
+  // "승인완료" 상태인 연차 사용 항목만 합산
+  function sumApprovedLeave(leaveDocs, uid) {
+    return leaveDocs
+      .filter(l => l.uid === uid && l['승인상태'] === '승인완료')
+      .reduce((sum, l) => sum + (Number(l['사용량']) || 0), 0);
+  }
+
   // ---------- 근로자: 본인 정보만 조회 ----------
   async function renderWorkerView(uid) {
     const doc = await db.collection('users').doc(uid).get();
     const data = doc.data() || {};
     const main = document.getElementById('mainArea');
+
+    // 본인의 승인완료된 연차 사용 내역을 가져와 사용연차/잔여연차 자동 계산
+    const leaveSnapshot = await db.collection('leaves').where('uid', '==', uid).get();
+    const leaveDocs = leaveSnapshot.docs.map(d => d.data());
+    const totalLeave = calcTotalLeave(data.hireDate);
+    const usedLeave = sumApprovedLeave(leaveDocs, uid);
+    const remainingLeave = totalLeave - usedLeave;
 
     const tags = (data.positionTags || []).map(t => `<span class="tag">${t}</span>`).join('');
     const contract = data.contractFile
@@ -156,9 +189,9 @@
         <div class="info-row"><span class="info-label">이메일</span><span class="info-value">${data.email || '-'}</span></div>
         <div class="info-row"><span class="info-label">입사일</span><span class="info-value">${data.hireDate || '-'}</span></div>
         <div class="info-row"><span class="info-label">근속연수</span><span class="info-value">${calcYears(data.hireDate)}</span></div>
-        <div class="info-row"><span class="info-label">총연차</span><span class="info-value">${data.totalLeave ?? '-'}</span></div>
-        <div class="info-row"><span class="info-label">잔여연차</span><span class="info-value">${data.remainingLeave ?? '-'}</span></div>
-        <div class="info-row"><span class="info-label">사용연차</span><span class="info-value">${data.usedLeave ?? '-'}</span></div>
+        <div class="info-row"><span class="info-label">총연차 (자동계산)</span><span class="info-value">${totalLeave}일</span></div>
+        <div class="info-row"><span class="info-label">사용연차 (승인완료 기준)</span><span class="info-value">${usedLeave}일</span></div>
+        <div class="info-row"><span class="info-label">잔여연차</span><span class="info-value">${remainingLeave}일</span></div>
         <div class="info-row"><span class="info-label">근로계약서</span><span class="info-value">${contract}</span></div>
       </div>
     `;
@@ -166,10 +199,15 @@
 
   // ---------- 관리자: 전체 사원 목록 + 수정 ----------
   let allEmployees = [];
+  let allLeaveDocs = [];
 
   async function renderAdminView() {
-    const snapshot = await db.collection('users').get();
-    allEmployees = snapshot.docs.map(d => ({ uid: d.id, ...d.data() }));
+    const [userSnap, leaveSnap] = await Promise.all([
+      db.collection('users').get(),
+      db.collection('leaves').get()
+    ]);
+    allEmployees = userSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
+    allLeaveDocs = leaveSnap.docs.map(d => d.data());
     drawAdminTable();
   }
 
@@ -208,6 +246,10 @@
       ? `<a class="btn file-link" href="${emp.contractFile.url}" target="_blank" rel="noopener">${emp.contractFile.name}</a>`
       : '<span style="color:var(--muted); font-size:12px;">없음</span>';
 
+    const totalLeave = calcTotalLeave(emp.hireDate);
+    const usedLeave = sumApprovedLeave(allLeaveDocs, emp.uid);
+    const remainingLeave = totalLeave - usedLeave;
+
     return `
       <td>${emp.displayName || '(이름없음)'}</td>
       <td>${emp.email || ''}</td>
@@ -217,9 +259,9 @@
       <td class="c-phone">${emp.phone || '-'}</td>
       <td class="c-hireDate">${emp.hireDate || '-'}</td>
       <td>${calcYears(emp.hireDate)}</td>
-      <td class="c-totalLeave">${emp.totalLeave ?? '-'}</td>
-      <td class="c-remainingLeave">${emp.remainingLeave ?? '-'}</td>
-      <td class="c-usedLeave">${emp.usedLeave ?? '-'}</td>
+      <td title="근로기준법 기준 자동계산">${totalLeave}일</td>
+      <td>${remainingLeave}일</td>
+      <td title="승인완료 항목만 합산">${usedLeave}일</td>
       <td class="c-contract">${contract}</td>
       <td>
         <button class="btn edit-btn" data-uid="${emp.uid}">수정</button>
@@ -242,9 +284,6 @@
     tr.querySelector('.c-employeeNumber').innerHTML = `<input type="text" class="f-employeeNumber" value="${emp.employeeNumber || ''}">`;
     tr.querySelector('.c-phone').innerHTML = `<input type="text" class="f-phone" value="${emp.phone || ''}">`;
     tr.querySelector('.c-hireDate').innerHTML = `<input type="date" class="f-hireDate" value="${emp.hireDate || ''}">`;
-    tr.querySelector('.c-totalLeave').innerHTML = `<input type="number" class="f-totalLeave" value="${emp.totalLeave ?? ''}">`;
-    tr.querySelector('.c-remainingLeave').innerHTML = `<input type="number" class="f-remainingLeave" value="${emp.remainingLeave ?? ''}">`;
-    tr.querySelector('.c-usedLeave').innerHTML = `<input type="number" class="f-usedLeave" value="${emp.usedLeave ?? ''}">`;
     tr.querySelector('.c-contract').innerHTML = `
       <div class="file-upload-inline">
         <input type="file" class="f-contract">
@@ -264,20 +303,17 @@
 
   async function saveEdit(uid) {
     const tr = document.querySelector(`tr[data-uid="${uid}"]`);
-    const emp = allEmployees.find(e => e.uid === uid);
 
     const department = tr.querySelector('.f-department').value.trim();
     const positionTags = tr.querySelector('.f-positionTags').value.split(',').map(s => s.trim()).filter(Boolean);
     const employeeNumber = tr.querySelector('.f-employeeNumber').value.trim();
     const phone = tr.querySelector('.f-phone').value.trim();
     const hireDate = tr.querySelector('.f-hireDate').value;
-    const totalLeave = Number(tr.querySelector('.f-totalLeave').value) || 0;
-    const remainingLeave = Number(tr.querySelector('.f-remainingLeave').value) || 0;
-    const usedLeave = Number(tr.querySelector('.f-usedLeave').value) || 0;
     const fileInput = tr.querySelector('.f-contract');
     const statusEl = tr.querySelector('.contract-status');
 
-    const updateData = { department, positionTags, employeeNumber, phone, hireDate, totalLeave, remainingLeave, usedLeave };
+    // 총연차/잔여연차/사용연차는 이제 자동계산이라 여기서 저장하지 않음
+    const updateData = { department, positionTags, employeeNumber, phone, hireDate };
 
     try {
       // 근로계약서 파일이 새로 선택된 경우 업로드
