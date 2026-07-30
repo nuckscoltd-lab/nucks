@@ -169,6 +169,19 @@
 </header>
 
 <main>
+  <!-- 노션 CSV 가져오기 (관리자 전용) -->
+  <div class="write-panel" id="importPanel" style="display:none;">
+    <div class="panel-title">노션 CSV 가져오기 (관리자)</div>
+    <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
+      대상: 이연경, 손영화, 윤성원 · 기간: 2025-11-01 이후만 자동 필터링됩니다.
+    </div>
+    <input type="file" id="importFile" accept=".csv">
+    <button class="submit-btn" id="importParseBtn" style="margin-left:8px;">파일 분석</button>
+    <div id="importPreview" style="margin-top:12px; font-size:13px;"></div>
+    <button class="submit-btn" id="importRunBtn" style="display:none; margin-top:12px;">가져오기 실행</button>
+    <div id="importResult" style="margin-top:10px; font-size:13px;"></div>
+  </div>
+
   <!-- 작성 폼 (근로자/관리자 본인 명의로 작성) -->
   <div class="write-panel">
     <div class="panel-title">근무일지 작성</div>
@@ -248,12 +261,15 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-functions-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="firebase-config.js"></script>
 <script src="auth.js"></script>
 <script>
   requireRole(['worker', 'admin']);
 
   const storage = firebase.storage();
+  const functions = firebase.functions();
   const TASK_TYPES = ['도면작성', '스케치업', '마감스펙', '제안서', '회의', '경영관리', '공무', '기타업무'];
 
   // 기본 프로젝트 목록 - 여기 값만 추가/수정하면 자동완성 목록이 바뀝니다
@@ -336,6 +352,7 @@
     currentDisplayName = userDoc.data()?.displayName || user.email;
 
     document.getElementById('employeeFilter').style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
+    document.getElementById('importPanel').style.display = (currentRole === 'admin') ? 'block' : 'none';
 
     // 오늘 날짜 기본값
     document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
@@ -621,6 +638,118 @@
     } finally {
       btn.disabled = false;
       btn.textContent = '등록';
+    }
+  });
+
+  // ---------- 노션 CSV 가져오기 (관리자 전용) ----------
+  const IMPORT_ALLOWED_NAMES = ['이연경', '손영화', '윤성원'];
+  const IMPORT_MIN_DATE = '2025-11-01';
+  const TASK_COLUMN_MAP = {
+    '도면작성': '도면작성',
+    '스케치업': '스케치업',
+    '마감 스팩': '마감스펙',
+    '제안서': '제안서',
+    '회의': '회의',
+    '경영관리': '경영관리',
+    '공무': '공무',
+    '기타업무': '기타업무'
+  };
+
+  let parsedImportRows = [];
+
+  function parseDateFlexible(value) {
+    if (!value) return null;
+    const v = String(value).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+    if (/^\d{4}\/\d{2}\/\d{2}/.test(v)) return v.slice(0, 10).replace(/\//g, '-');
+    const d = new Date(v);
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    return null;
+  }
+
+  function parseCheckboxValue(value) {
+    if (value === true) return true;
+    const v = String(value || '').trim().toLowerCase();
+    return ['yes', 'true', 'checked', 'v', 'o', '1', '✓', '참'].includes(v);
+  }
+
+  document.getElementById('importParseBtn')?.addEventListener('click', () => {
+    const fileInput = document.getElementById('importFile');
+    const previewEl = document.getElementById('importPreview');
+    const file = fileInput.files[0];
+
+    if (!file) {
+      previewEl.textContent = '파일을 선택해 주세요.';
+      return;
+    }
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const rows = results.data;
+        const mapped = [];
+
+        rows.forEach((row) => {
+          const name = (row['사원명'] || '').trim();
+          if (!IMPORT_ALLOWED_NAMES.includes(name)) return;
+
+          const dateStr = parseDateFlexible(row['날짜']);
+          if (!dateStr || dateStr < IMPORT_MIN_DATE) return;
+
+          const tasks = {};
+          Object.entries(TASK_COLUMN_MAP).forEach(([csvKey, ourKey]) => {
+            tasks[ourKey] = parseCheckboxValue(row[csvKey]);
+          });
+
+          mapped.push({
+            '사원명': name,
+            '날짜': dateStr,
+            '출근시간': (row['출근시간'] || '').trim(),
+            '퇴근시간': (row['퇴근시간'] || '').trim(),
+            '프로젝트': (row['프로젝트'] || '').trim(),
+            '상세내용': (row['상세내용'] || '').trim(),
+            tasks
+          });
+        });
+
+        parsedImportRows = mapped;
+        previewEl.textContent = `조건에 맞는 ${mapped.length}건을 가져올 준비가 되었습니다. (전체 ${rows.length}행 중)`;
+        document.getElementById('importRunBtn').style.display = mapped.length ? 'inline-block' : 'none';
+      },
+      error: (err) => {
+        previewEl.textContent = '파일 분석 실패: ' + err.message;
+      }
+    });
+  });
+
+  document.getElementById('importRunBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('importRunBtn');
+    const resultEl = document.getElementById('importResult');
+
+    btn.disabled = true;
+    btn.textContent = '가져오는 중...';
+    resultEl.textContent = '';
+
+    try {
+      const importWorkLogs = functions.httpsCallable('importWorkLogs');
+      const res = await importWorkLogs({ rows: parsedImportRows });
+      const { imported, skipped } = res.data;
+
+      let msg = `${imported}건 가져오기 완료.`;
+      if (skipped.length) {
+        msg += ` (건너뜀 ${skipped.length}건: 계정 없음 등)`;
+      }
+      resultEl.style.color = '#3f6b52';
+      resultEl.textContent = msg;
+
+      await loadLogs();
+    } catch (err) {
+      resultEl.style.color = '#a4453c';
+      resultEl.textContent = '가져오기 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '가져오기 실행';
     }
   });
 
