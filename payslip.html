@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>급여명세서 | NUCKS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
+
+  :root{
+    --ink:#141414;
+    --paper:#f7f6f3;
+    --line:#d8d5cd;
+    --muted:#8a8578;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background:var(--paper);
+    font-family:'Pretendard', -apple-system, sans-serif; color:var(--ink);
+  }
+  header{
+    padding:28px 48px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .eyebrow{
+    font-size:11px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:6px;
+  }
+  h1{
+    font-family:'Cormorant Garamond', serif; font-weight:500;
+    font-size:32px; margin:0; letter-spacing:.01em;
+  }
+  .header-right{ display:flex; align-items:center; gap:24px; }
+  .header-right a{
+    font-size:13px; color:var(--muted); text-decoration:none;
+    border-bottom:1px solid var(--muted); cursor:pointer;
+  }
+  main{ max-width:960px; margin:0 auto; padding:40px 48px; }
+
+  .write-panel{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:28px; margin-bottom:36px;
+  }
+  .panel-title{
+    font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:18px;
+  }
+  .section-label{
+    font-size:12.5px; font-weight:600; margin:20px 0 12px; color:var(--ink);
+  }
+  .section-label:first-of-type{ margin-top:0; }
+  .grid{
+    display:grid; grid-template-columns:repeat(4, 1fr); gap:12px;
+  }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field label{ font-size:11px; color:var(--muted); }
+  .field input, .field select{
+    padding:8px 9px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13px; background:#fff;
+  }
+  .sum-box{
+    display:flex; gap:20px; margin-top:20px; padding:16px; background:var(--paper);
+    border-radius:4px; flex-wrap:wrap;
+  }
+  .sum-item{ font-size:13px; color:var(--muted); }
+  .sum-item b{ display:block; font-size:16px; color:var(--ink); margin-top:2px; }
+  .submit-btn{
+    margin-top:20px; padding:10px 24px; background:var(--ink); color:var(--paper);
+    border:none; font-size:12.5px; letter-spacing:.05em; text-transform:uppercase;
+    cursor:pointer; border-radius:4px;
+  }
+  .submit-status{ font-size:13px; margin-top:10px; min-height:18px; }
+
+  .toolbar{ display:flex; gap:12px; margin-bottom:16px; align-items:center; }
+  .toolbar select{
+    padding:7px 10px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13px; background:#fff;
+  }
+  table{ width:100%; border-collapse:collapse; }
+  th{
+    text-align:left; font-size:11.5px; color:var(--muted); font-weight:500;
+    padding:9px 10px; border-bottom:1px solid var(--line);
+  }
+  td{ padding:11px 10px; font-size:13.5px; border-bottom:1px solid var(--line); }
+  .row-btn{
+    font-size:12px; background:none; border:none; cursor:pointer;
+    text-decoration:underline; color:#a4453c;
+  }
+  .empty{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:32px; text-align:center; color:var(--muted); font-size:13.5px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">NUCKS · Secret Mode</div>
+    <h1>급여명세서</h1>
+  </div>
+  <div class="header-right">
+    <a href="index.html">Home</a>
+    <a href="#" id="logoutBtn">Logout</a>
+  </div>
+</header>
+
+<main>
+  <div class="write-panel" id="adminOnlyPanel">
+    <div class="panel-title">급여명세서 작성</div>
+
+    <div class="grid">
+      <div class="field">
+        <label for="f-employee">사원 선택</label>
+        <select id="f-employee"></select>
+      </div>
+      <div class="field">
+        <label for="f-payDate">지급일</label>
+        <input type="date" id="f-payDate">
+      </div>
+      <div class="field">
+        <label for="f-department">부서명</label>
+        <input type="text" id="f-department">
+      </div>
+      <div class="field">
+        <label for="f-position">직급</label>
+        <input type="text" id="f-position">
+      </div>
+    </div>
+
+    <div class="section-label">지급 항목</div>
+    <div class="grid">
+      <div class="field"><label>기본급</label><input type="number" class="pay-input" id="p-기본급" value="0"></div>
+      <div class="field"><label>식대</label><input type="number" class="pay-input" id="p-식대" value="0"></div>
+      <div class="field"><label>자기계발비</label><input type="number" class="pay-input" id="p-자기계발비" value="0"></div>
+      <div class="field"><label>차량유지비</label><input type="number" class="pay-input" id="p-차량유지비" value="0"></div>
+      <div class="field"><label>기타</label><input type="number" class="pay-input" id="p-기타" value="0"></div>
+    </div>
+
+    <div class="section-label">공제 항목</div>
+    <div class="grid">
+      <div class="field"><label>국민연금</label><input type="number" class="ded-input" id="d-국민연금" value="0"></div>
+      <div class="field"><label>건강보험</label><input type="number" class="ded-input" id="d-건강보험" value="0"></div>
+      <div class="field"><label>장기요양보험료</label><input type="number" class="ded-input" id="d-장기요양보험료" value="0"></div>
+      <div class="field"><label>고용보험료</label><input type="number" class="ded-input" id="d-고용보험료" value="0"></div>
+      <div class="field"><label>소득세</label><input type="number" class="ded-input" id="d-소득세" value="0"></div>
+      <div class="field"><label>지방소득세</label><input type="number" class="ded-input" id="d-지방소득세" value="0"></div>
+      <div class="field"><label>기타공제액</label><input type="number" class="ded-input" id="d-기타공제액" value="0"></div>
+      <div class="field"><label>국민연금지원</label><input type="number" class="ded-input" id="d-국민연금지원" value="0"></div>
+      <div class="field"><label>고용보험지원</label><input type="number" class="ded-input" id="d-고용보험지원" value="0"></div>
+      <div class="field"><label>연말정산소득세</label><input type="number" class="ded-input" id="d-연말정산소득세" value="0"></div>
+      <div class="field"><label>연말정산지방소득세</label><input type="number" class="ded-input" id="d-연말정산지방소득세" value="0"></div>
+    </div>
+
+    <div class="sum-box">
+      <div class="sum-item">지급액계<b id="sumPay">0</b></div>
+      <div class="sum-item">공제액계<b id="sumDed">0</b></div>
+      <div class="sum-item">차인지급액<b id="sumNet">0</b></div>
+    </div>
+
+    <button class="submit-btn" id="submitBtn">저장</button>
+    <div class="submit-status" id="submitStatus"></div>
+  </div>
+
+  <div class="toolbar">
+    <select id="listEmployeeFilter"><option value="전체">전체 사원</option></select>
+  </div>
+
+  <table id="listTable" style="display:none;">
+    <thead>
+      <tr><th>지급일</th><th>사원명</th><th>부서명</th><th>지급액계</th><th>공제액계</th><th>차인지급액</th><th>관리</th></tr>
+    </thead>
+    <tbody id="listBody"></tbody>
+  </table>
+  <div class="empty" id="emptyMsg">불러오는 중...</div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+  // 근로자: 본인 것만 조회 / 관리자: 전체 조회 + 작성
+  requireRole(['worker', 'admin']);
+
+  const PAY_KEYS = ['기본급', '식대', '자기계발비', '차량유지비', '기타'];
+  const DED_KEYS = ['국민연금', '건강보험', '장기요양보험료', '고용보험료', '소득세', '지방소득세', '기타공제액', '국민연금지원', '고용보험지원', '연말정산소득세', '연말정산지방소득세'];
+
+  let employees = [];
+  let allSlips = [];
+  let currentUser = null;
+  let currentRole = null;
+
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) return;
+    currentUser = user;
+    currentRole = await getCurrentUserRole();
+
+    if (currentRole === 'admin') {
+      document.getElementById('adminOnlyPanel').style.display = 'block';
+      await init();
+    } else {
+      document.getElementById('adminOnlyPanel').style.display = 'none';
+      document.getElementById('listEmployeeFilter').style.display = 'none';
+      await loadSlips();
+    }
+  });
+
+  async function init() {
+    const snapshot = await db.collection('users').get();
+    employees = snapshot.docs.map(d => ({ uid: d.id, ...d.data() })).filter(e => e.role !== 'guest');
+
+    const empSelect = document.getElementById('f-employee');
+    empSelect.innerHTML = employees.map(e => `<option value="${e.uid}">${e.displayName || e.email}</option>`).join('');
+    empSelect.addEventListener('change', prefillEmployeeInfo);
+    prefillEmployeeInfo();
+
+    document.getElementById('f-payDate').value = new Date().toISOString().slice(0, 10);
+
+    [...PAY_KEYS, ...DED_KEYS].forEach(key => {
+      const el = document.getElementById((PAY_KEYS.includes(key) ? 'p-' : 'd-') + key);
+      el.addEventListener('input', updateSums);
+    });
+    updateSums();
+
+    document.getElementById('listEmployeeFilter').addEventListener('change', renderList);
+
+    loadSlips();
+  }
+
+  function prefillEmployeeInfo() {
+    const uid = document.getElementById('f-employee').value;
+    const emp = employees.find(e => e.uid === uid);
+    document.getElementById('f-department').value = emp?.department || '';
+    document.getElementById('f-position').value = (emp?.positionTags || []).join(', ');
+  }
+
+  function updateSums() {
+    const payTotal = PAY_KEYS.reduce((sum, k) => sum + (Number(document.getElementById('p-' + k).value) || 0), 0);
+    const dedTotal = DED_KEYS.reduce((sum, k) => sum + (Number(document.getElementById('d-' + k).value) || 0), 0);
+    document.getElementById('sumPay').textContent = payTotal.toLocaleString();
+    document.getElementById('sumDed').textContent = dedTotal.toLocaleString();
+    document.getElementById('sumNet').textContent = (payTotal - dedTotal).toLocaleString();
+    return { payTotal, dedTotal };
+  }
+
+  document.getElementById('submitBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('submitStatus');
+    const btn = document.getElementById('submitBtn');
+    const uid = document.getElementById('f-employee').value;
+    const emp = employees.find(e => e.uid === uid);
+
+    const pay = {};
+    PAY_KEYS.forEach(k => { pay[k] = Number(document.getElementById('p-' + k).value) || 0; });
+    const deductions = {};
+    DED_KEYS.forEach(k => { deductions[k] = Number(document.getElementById('d-' + k).value) || 0; });
+
+    const { payTotal, dedTotal } = updateSums();
+
+    btn.disabled = true;
+    btn.textContent = '저장 중...';
+
+    try {
+      await db.collection('payslips').add({
+        uid,
+        '사원명': emp?.displayName || emp?.email || '',
+        '지급일': document.getElementById('f-payDate').value,
+        '부서명': document.getElementById('f-department').value.trim(),
+        '직급': document.getElementById('f-position').value.trim(),
+        pay,
+        deductions,
+        '지급액계': payTotal,
+        '공제액계': dedTotal,
+        '차인지급액': payTotal - dedTotal,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+      statusEl.style.color = '#3f6b52';
+      statusEl.textContent = '저장되었습니다.';
+      await loadSlips();
+    } catch (err) {
+      statusEl.style.color = '#a4453c';
+      statusEl.textContent = '저장 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '저장';
+    }
+  });
+
+  async function loadSlips() {
+    const query = (currentRole === 'admin')
+      ? db.collection('payslips')
+      : db.collection('payslips').where('uid', '==', currentUser.uid);
+
+    const snapshot = await query.get();
+    allSlips = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    allSlips.sort((a, b) => (b['지급일'] || '').localeCompare(a['지급일'] || ''));
+
+    if (currentRole === 'admin') {
+      const filterSelect = document.getElementById('listEmployeeFilter');
+      const names = [...new Set(allSlips.map(s => s['사원명']).filter(Boolean))].sort();
+      const current = filterSelect.value;
+      filterSelect.innerHTML = '<option value="전체">전체 사원</option>' + names.map(n => `<option value="${n}">${n}</option>`).join('');
+      if (names.includes(current)) filterSelect.value = current;
+    }
+
+    renderList();
+  }
+
+  function renderList() {
+    const table = document.getElementById('listTable');
+    const emptyMsg = document.getElementById('emptyMsg');
+    const tbody = document.getElementById('listBody');
+    const filterVal = currentRole === 'admin' ? document.getElementById('listEmployeeFilter').value : '전체';
+
+    const rows = filterVal === '전체' ? allSlips : allSlips.filter(s => s['사원명'] === filterVal);
+
+    if (rows.length === 0) {
+      table.style.display = 'none';
+      emptyMsg.textContent = '등록된 급여명세서가 없습니다.';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+    table.style.display = 'table';
+
+    tbody.innerHTML = rows.map(s => `
+      <tr>
+        <td>${s['지급일'] || ''}</td>
+        <td>${s['사원명'] || ''}</td>
+        <td>${s['부서명'] || ''}</td>
+        <td>${(s['지급액계'] || 0).toLocaleString()}</td>
+        <td>${(s['공제액계'] || 0).toLocaleString()}</td>
+        <td>${(s['차인지급액'] || 0).toLocaleString()}</td>
+        <td>${currentRole === 'admin' ? `<button class="row-btn" data-id="${s.id}">삭제</button>` : ''}</td>
+      </tr>
+    `).join('');
+
+    if (currentRole === 'admin') {
+      document.querySelectorAll('.row-btn').forEach(btn => {
+        btn.addEventListener('click', () => deleteSlip(btn.dataset.id));
+      });
+    }
+  }
+
+  async function deleteSlip(docId) {
+    if (!confirm('이 급여명세서를 삭제하시겠습니까?')) return;
+    try {
+      await db.collection('payslips').doc(docId).delete();
+      await loadSlips();
+    } catch (err) {
+      alert('삭제 실패: ' + err.message);
+    }
+  }
+
+  document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await logOut();
+    window.location.href = 'login.html';
+  });
+</script>
+</body>
+</html>
