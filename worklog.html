@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>근무일지 | NUCKS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
+
+  :root{
+    --ink:#141414;
+    --paper:#f7f6f3;
+    --line:#d8d5cd;
+    --muted:#8a8578;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background:var(--paper);
+    font-family:'Pretendard', -apple-system, sans-serif; color:var(--ink);
+  }
+  header{
+    padding:28px 48px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .eyebrow{
+    font-size:11px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:6px;
+  }
+  h1{
+    font-family:'Cormorant Garamond', serif; font-weight:500;
+    font-size:32px; margin:0; letter-spacing:.01em;
+  }
+  .header-right{ display:flex; align-items:center; gap:24px; }
+  .header-right a{
+    font-size:13px; color:var(--muted); text-decoration:none;
+    border-bottom:1px solid var(--muted); cursor:pointer;
+  }
+  main{ max-width:1100px; margin:0 auto; padding:40px 48px; }
+
+  .toolbar{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:24px; gap:16px; flex-wrap:wrap;
+  }
+  .toolbar select{
+    padding:8px 12px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13.5px; background:#fff; color:var(--ink);
+  }
+  .refresh-btn{
+    padding:8px 16px; background:var(--ink); color:var(--paper);
+    border:none; font-size:12.5px; letter-spacing:.05em; text-transform:uppercase;
+    cursor:pointer; border-radius:4px;
+  }
+  .status-msg{ font-size:13px; color:var(--muted); margin-bottom:16px; }
+
+  .table-wrap{ overflow-x:auto; }
+  table{ width:100%; border-collapse:collapse; min-width:720px; }
+  th{
+    text-align:left; font-size:12px; color:var(--muted); font-weight:500;
+    padding:10px 12px; border-bottom:1px solid var(--line); white-space:nowrap;
+  }
+  td{
+    padding:12px; font-size:13.5px; border-bottom:1px solid var(--line);
+    white-space:nowrap;
+  }
+  td.detail-cell{ white-space:normal; max-width:280px; }
+  .task-tag{
+    display:inline-block; font-size:11px; padding:2px 8px; border-radius:12px;
+    background:#ece9e2; color:#7a766c; margin:2px 3px 2px 0;
+  }
+  .empty{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:36px; text-align:center; color:var(--muted); font-size:13.5px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">NUCKS</div>
+    <h1>근무일지</h1>
+  </div>
+  <div class="header-right">
+    <a href="index.html">Home</a>
+    <a href="#" id="logoutBtn">Logout</a>
+  </div>
+</header>
+
+<main>
+  <div class="toolbar">
+    <select id="employeeFilter" style="display:none;">
+      <option value="전체">전체 사원</option>
+    </select>
+    <button class="refresh-btn" id="refreshBtn">새로고침</button>
+  </div>
+
+  <div class="status-msg" id="statusMsg">불러오는 중...</div>
+
+  <div class="table-wrap">
+    <table id="logTable" style="display:none;">
+      <thead><tr id="tableHead"></tr></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+  <div class="empty" id="emptyMsg" style="display:none;">표시할 근무일지가 없습니다.</div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-functions-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+  // 근로자, 관리자 모두 접근 가능 (실제 필터링은 서버에서 role별로 강제 처리됨)
+  requireRole(['worker', 'admin']);
+
+  const functions = firebase.functions();
+  let allRows = [];
+  let isAdmin = false;
+
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) return;
+    const role = await getCurrentUserRole();
+    isAdmin = (role === 'admin');
+    document.getElementById('employeeFilter').style.display = isAdmin ? 'inline-block' : 'none';
+    loadLogs();
+  });
+
+  document.getElementById('refreshBtn').addEventListener('click', loadLogs);
+  document.getElementById('employeeFilter').addEventListener('change', renderTable);
+
+  async function loadLogs() {
+    const statusMsg = document.getElementById('statusMsg');
+    const table = document.getElementById('logTable');
+    const emptyMsg = document.getElementById('emptyMsg');
+
+    statusMsg.textContent = '불러오는 중...';
+    statusMsg.style.color = 'var(--muted)';
+    table.style.display = 'none';
+    emptyMsg.style.display = 'none';
+
+    try {
+      const getWorkLogs = functions.httpsCallable('getWorkLogs');
+      const result = await getWorkLogs();
+      allRows = result.data.rows || [];
+
+      statusMsg.textContent = `총 ${allRows.length}건 (최근 업데이트: ${new Date().toLocaleTimeString('ko-KR')})`;
+
+      if (isAdmin) populateEmployeeFilter();
+      renderTable();
+    } catch (err) {
+      statusMsg.style.color = '#a4453c';
+      statusMsg.textContent = '불러오기 실패: ' + err.message;
+    }
+  }
+
+  function populateEmployeeFilter() {
+    const select = document.getElementById('employeeFilter');
+    const current = select.value;
+    const names = [...new Set(allRows.map(r => r['사원명']).filter(Boolean))].sort();
+    select.innerHTML = '<option value="전체">전체 사원</option>' +
+      names.map(n => `<option value="${n}">${n}</option>`).join('');
+    if (names.includes(current)) select.value = current;
+  }
+
+  // 값 형식을 사람이 보기 좋은 문자열로 변환
+  function formatValue(val) {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'boolean') return val ? '✓' : '';
+    if (Array.isArray(val)) return val.join(', ');
+    if (typeof val === 'object' && 'start' in val) {
+      if (!val.start) return '';
+      const d = new Date(val.start);
+      if (isNaN(d.getTime())) return val.start;
+      return val.start.includes('T')
+        ? d.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+        : val.start;
+    }
+    return String(val);
+  }
+
+  function renderTable() {
+    const table = document.getElementById('logTable');
+    const emptyMsg = document.getElementById('emptyMsg');
+    const thead = document.getElementById('tableHead');
+    const tbody = document.getElementById('tableBody');
+
+    const filterVal = document.getElementById('employeeFilter').value;
+    const rows = (isAdmin && filterVal !== '전체')
+      ? allRows.filter(r => r['사원명'] === filterVal)
+      : allRows;
+
+    if (rows.length === 0) {
+      table.style.display = 'none';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+    table.style.display = 'table';
+
+    // 체크박스(boolean) 형태의 속성은 "업무유형" 하나의 컬럼으로 합쳐서 표시
+    const sampleKeys = Object.keys(rows[0]).filter(k => k !== 'id');
+    const checkboxKeys = sampleKeys.filter(k => typeof rows[0][k] === 'boolean');
+    const normalKeys = sampleKeys.filter(k => !checkboxKeys.includes(k));
+
+    thead.innerHTML = normalKeys.map(k => `<th>${k}</th>`).join('') +
+      (checkboxKeys.length ? '<th>업무유형</th>' : '');
+
+    tbody.innerHTML = '';
+    rows.forEach(row => {
+      const tr = document.createElement('tr');
+      const normalCells = normalKeys.map(k => {
+        const cls = (k === '상세내용' || k.includes('내용')) ? ' class="detail-cell"' : '';
+        return `<td${cls}>${formatValue(row[k])}</td>`;
+      }).join('');
+      const taskTags = checkboxKeys.filter(k => row[k]).map(k => `<span class="task-tag">${k}</span>`).join('');
+      const taskCell = checkboxKeys.length ? `<td>${taskTags}</td>` : '';
+      tr.innerHTML = normalCells + taskCell;
+      tbody.appendChild(tr);
+    });
+  }
+
+  document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await logOut();
+    window.location.href = 'login.html';
+  });
+</script>
+</body>
+</html>
