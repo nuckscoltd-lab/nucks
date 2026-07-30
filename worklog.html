@@ -396,12 +396,14 @@
         cellHtml += `<div class="cal-item cal-item-leave" title="${label}">🏖 ${label}</div>`;
       });
 
-      // 근무일지 항목 표시
+      // 근무일지 항목 표시 (프로젝트가 비어있으면 상세내용을 짧게 대신 보여줌)
       items.forEach(r => {
+        const fallback = (r['상세내용'] || '').slice(0, 12) || '근무일지';
+        const summary = r['프로젝트'] || fallback;
         const label = (currentRole === 'admin')
-          ? `${r['사원명'] || ''} · ${r['프로젝트'] || '근무일지'}`
-          : (r['프로젝트'] || '근무일지');
-        cellHtml += `<div class="cal-item" title="${label}">${label}</div>`;
+          ? `${r['사원명'] || ''} · ${summary}`
+          : summary;
+        cellHtml += `<div class="cal-item" title="${r['상세내용'] || summary}">${label}</div>`;
       });
 
       const cellClass = holidayName ? 'cal-cell cal-cell-holiday' : 'cal-cell';
