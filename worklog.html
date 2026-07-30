@@ -187,7 +187,8 @@
       </div>
       <div class="field">
         <label for="f-project">프로젝트</label>
-        <input type="text" id="f-project" placeholder="예: 힐스테이트장위">
+        <input type="text" id="f-project" list="projectList" placeholder="선택 또는 직접 입력">
+        <datalist id="projectList"></datalist>
       </div>
     </div>
 
@@ -254,6 +255,40 @@
 
   const storage = firebase.storage();
   const TASK_TYPES = ['도면작성', '스케치업', '마감스펙', '제안서', '회의', '경영관리', '공무', '기타업무'];
+
+  // 기본 프로젝트 목록 - 여기 값만 추가/수정하면 자동완성 목록이 바뀝니다
+  const DEFAULT_PROJECTS = [
+    '현대산업개발 안양 아이파크 단위세대(신한재개발)',
+    '밥장인 고속터미널점',
+    'HS 화성 갤러리',
+    'HS 화성 만촌 파크드림',
+    'HS 화성 광명아파트 재건축',
+    'HS 화성 대명동 민간임대 단위세대/MH',
+    'HS 화성 청원맨션 소규모재건축사업 단위세대/MH',
+    '대치 비취타운 가로주택정비사업',
+    '현대건설 장위 15구역 대안설계',
+    '현대산업개발 천안부성 단위세대 설계',
+    '현대산업개발 천안부성 견본주택 설계',
+    '현대산업개발 광주화정 아이파크 트랜드업',
+    '롯데건설 개포우성 4차 재건축 정비사업 대안설계',
+    '서울월계초등학교 강당구축공사',
+    '잠실레이크팰리스',
+    '고우건축 용산 산호아파트 재개발 수주설계',
+    '현대산업개발 안양신한 재개발정비사업 견본주택 인테리어 설계용역',
+    '현대산업개발 안양신한 재개발정비사업 단위세대 인테리어 설계용역',
+    '방이동 역세권 장기전세주택 신축공사',
+    '의정부 천주교 납골당',
+    '북창동 숙박시설',
+    'OA 관리업무',
+    '디자인연구부업무',
+    '지명원 업데이트'
+  ];
+
+  function updateProjectDatalist() {
+    const usedProjects = allRows.map(r => r['프로젝트']).filter(Boolean);
+    const merged = [...new Set([...DEFAULT_PROJECTS, ...usedProjects])].sort();
+    document.getElementById('projectList').innerHTML = merged.map(p => `<option value="${p}">`).join('');
+  }
 
   let currentUser = null;
   let currentRole = null;
@@ -443,6 +478,7 @@
       allRows.sort((a, b) => (b['날짜'] || '').localeCompare(a['날짜'] || ''));
 
       if (currentRole === 'admin') populateEmployeeFilter();
+      updateProjectDatalist();
       renderTable();
       renderCalendar();
     } catch (err) {
