@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>연차관리 | NUCKS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
+
+  :root{
+    --ink:#141414;
+    --paper:#f7f6f3;
+    --line:#d8d5cd;
+    --muted:#8a8578;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background:var(--paper);
+    font-family:'Pretendard', -apple-system, sans-serif; color:var(--ink);
+  }
+  header{
+    padding:28px 48px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .eyebrow{
+    font-size:11px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:6px;
+  }
+  h1{
+    font-family:'Cormorant Garamond', serif; font-weight:500;
+    font-size:32px; margin:0; letter-spacing:.01em;
+  }
+  .header-right{ display:flex; align-items:center; gap:24px; }
+  .header-right a{
+    font-size:13px; color:var(--muted); text-decoration:none;
+    border-bottom:1px solid var(--muted); cursor:pointer;
+  }
+  main{ max-width:1000px; margin:0 auto; padding:40px 48px; }
+
+  .write-panel{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:24px; margin-bottom:32px;
+  }
+  .panel-title{
+    font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:18px;
+  }
+  .form-row{ display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px; }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field label{ font-size:11.5px; color:var(--muted); }
+  .field input, .field select{
+    padding:8px 9px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13.5px; background:#fff; min-width:130px;
+  }
+  .submit-btn{
+    padding:9px 20px; background:var(--ink); color:var(--paper);
+    border:none; font-size:12.5px; letter-spacing:.05em; text-transform:uppercase;
+    cursor:pointer; border-radius:4px; height:37px;
+  }
+  .submit-status{ font-size:13px; margin-top:6px; min-height:18px; }
+
+  .summary-bar{
+    display:flex; gap:24px; margin-bottom:20px; flex-wrap:wrap;
+  }
+  .summary-chip{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:14px 20px; font-size:13px; color:var(--muted);
+  }
+  .summary-chip b{ color:var(--ink); font-size:16px; display:block; margin-top:4px; }
+
+  .toolbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+  .toolbar select{
+    padding:7px 10px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13px; background:#fff;
+  }
+
+  table{ width:100%; border-collapse:collapse; }
+  th{
+    text-align:left; font-size:11.5px; color:var(--muted); font-weight:500;
+    padding:9px 10px; border-bottom:1px solid var(--line);
+  }
+  td{ padding:11px 10px; font-size:13.5px; border-bottom:1px solid var(--line); }
+  .tag{
+    display:inline-block; font-size:11px; padding:2px 9px; border-radius:12px;
+    background:#ece9e2; color:#7a766c;
+  }
+  .status-select{
+    padding:5px 8px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:12px; background:#fff;
+  }
+  .row-btn{
+    font-size:12px; background:none; border:none; cursor:pointer;
+    text-decoration:underline; color:var(--muted); margin-right:8px;
+  }
+  .row-btn.danger{ color:#a4453c; }
+  .empty{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:32px; text-align:center; color:var(--muted); font-size:13.5px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">NUCKS</div>
+    <h1>연차관리</h1>
+  </div>
+  <div class="header-right">
+    <a href="index.html">Home</a>
+    <a href="#" id="logoutBtn">Logout</a>
+  </div>
+</header>
+
+<main>
+  <div class="write-panel">
+    <div class="panel-title">연차 사용 등록</div>
+    <div class="form-row">
+      <div class="field">
+        <label for="f-date">날짜</label>
+        <input type="date" id="f-date">
+      </div>
+      <div class="field">
+        <label for="f-amount">사용량 (일)</label>
+        <input type="number" id="f-amount" step="0.5" value="1" style="min-width:80px;">
+      </div>
+      <div class="field">
+        <label for="f-type">연차구분</label>
+        <select id="f-type">
+          <option>연차</option>
+          <option>오전반차</option>
+          <option>오후반차</option>
+          <option>병가</option>
+          <option>휴가</option>
+          <option>경조사</option>
+          <option>기타</option>
+        </select>
+      </div>
+      <div class="field" style="flex:1; min-width:180px;">
+        <label for="f-note">비고 (선택)</label>
+        <input type="text" id="f-note" placeholder="사유 등">
+      </div>
+      <button class="submit-btn" id="submitBtn">등록</button>
+    </div>
+    <div class="submit-status" id="submitStatus"></div>
+  </div>
+
+  <div class="summary-bar" id="summaryBar"></div>
+
+  <div class="toolbar">
+    <select id="employeeFilter" style="display:none;">
+      <option value="전체">전체 사원</option>
+    </select>
+  </div>
+
+  <table id="logTable" style="display:none;">
+    <thead>
+      <tr><th>사원명</th><th>날짜</th><th>사용량</th><th>구분</th><th>승인상태</th><th>비고</th><th>관리</th></tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+  <div class="empty" id="emptyMsg">불러오는 중...</div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+  requireRole(['worker', 'admin']);
+
+  const STATUS_OPTIONS = ['계획없음', '승인요청', '승인완료'];
+  let currentUser = null;
+  let currentRole = null;
+  let currentDisplayName = '';
+  let allRows = [];
+
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) return;
+    currentUser = user;
+    currentRole = await getCurrentUserRole();
+
+    const userDoc = await db.collection('users').doc(user.uid).get();
+    currentDisplayName = userDoc.data()?.displayName || user.email;
+
+    document.getElementById('employeeFilter').style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
+    document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
+
+    loadLeaves();
+  });
+
+  document.getElementById('employeeFilter').addEventListener('change', renderTable);
+
+  async function loadLeaves() {
+    const emptyMsg = document.getElementById('emptyMsg');
+    emptyMsg.textContent = '불러오는 중...';
+    emptyMsg.style.display = 'block';
+    document.getElementById('logTable').style.display = 'none';
+
+    try {
+      const query = (currentRole === 'admin')
+        ? db.collection('leaves')
+        : db.collection('leaves').where('uid', '==', currentUser.uid);
+
+      const snapshot = await query.get();
+      allRows = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      allRows.sort((a, b) => (b['날짜'] || '').localeCompare(a['날짜'] || ''));
+
+      if (currentRole === 'admin') populateEmployeeFilter();
+      renderSummary();
+      renderTable();
+    } catch (err) {
+      emptyMsg.textContent = '불러오기 실패: ' + err.message;
+    }
+  }
+
+  function populateEmployeeFilter() {
+    const select = document.getElementById('employeeFilter');
+    const current = select.value;
+    const names = [...new Set(allRows.map(r => r['사원명']).filter(Boolean))].sort();
+    select.innerHTML = '<option value="전체">전체 사원</option>' +
+      names.map(n => `<option value="${n}">${n}</option>`).join('');
+    if (names.includes(current)) select.value = current;
+  }
+
+  function renderSummary() {
+    const bar = document.getElementById('summaryBar');
+    const filterVal = document.getElementById('employeeFilter').value;
+    const rows = (currentRole === 'admin' && filterVal !== '전체')
+      ? allRows.filter(r => r['사원명'] === filterVal)
+      : allRows;
+
+    const total = rows.reduce((sum, r) => sum + (Number(r['사용량']) || 0), 0);
+    const label = (currentRole === 'admin' && filterVal !== '전체') ? `${filterVal}의 사용 합계` : '전체 사용 합계';
+
+    bar.innerHTML = `<div class="summary-chip">${label}<b>${total}일</b></div>`;
+  }
+
+  function renderTable() {
+    const table = document.getElementById('logTable');
+    const emptyMsg = document.getElementById('emptyMsg');
+    const tbody = document.getElementById('tableBody');
+
+    const filterVal = document.getElementById('employeeFilter').value;
+    const rows = (currentRole === 'admin' && filterVal !== '전체')
+      ? allRows.filter(r => r['사원명'] === filterVal)
+      : allRows;
+
+    renderSummary();
+
+    if (rows.length === 0) {
+      table.style.display = 'none';
+      emptyMsg.textContent = '등록된 연차 사용 내역이 없습니다.';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+    table.style.display = 'table';
+
+    tbody.innerHTML = '';
+    rows.forEach(row => {
+      const canManage = (row.uid === currentUser.uid) || (currentRole === 'admin');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${row['사원명'] || ''}</td>
+        <td>${row['날짜'] || ''}</td>
+        <td>${row['사용량'] ?? ''}</td>
+        <td><span class="tag">${row['연차구분'] || ''}</span></td>
+        <td>
+          ${currentRole === 'admin'
+            ? `<select class="status-select" data-id="${row.id}">${STATUS_OPTIONS.map(s => `<option ${s === row['승인상태'] ? 'selected' : ''}>${s}</option>`).join('')}</select>`
+            : (row['승인상태'] || '계획없음')}
+        </td>
+        <td>${row['비고'] || ''}</td>
+        <td>${canManage ? `<button class="row-btn danger" data-id="${row.id}">삭제</button>` : ''}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.querySelectorAll('.row-btn.danger').forEach(btn => {
+      btn.addEventListener('click', () => deleteLeave(btn.dataset.id));
+    });
+    document.querySelectorAll('.status-select').forEach(sel => {
+      sel.addEventListener('change', () => updateStatus(sel.dataset.id, sel.value));
+    });
+  }
+
+  async function updateStatus(docId, newStatus) {
+    try {
+      await db.collection('leaves').doc(docId).update({ '승인상태': newStatus });
+      await loadLeaves();
+    } catch (err) {
+      alert('상태 변경 실패: ' + err.message);
+    }
+  }
+
+  async function deleteLeave(docId) {
+    if (!confirm('이 연차 내역을 삭제하시겠습니까?')) return;
+    try {
+      await db.collection('leaves').doc(docId).delete();
+      await loadLeaves();
+    } catch (err) {
+      alert('삭제 실패: ' + err.message);
+    }
+  }
+
+  document.getElementById('submitBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('submitStatus');
+    const btn = document.getElementById('submitBtn');
+
+    const date = document.getElementById('f-date').value;
+    const amount = Number(document.getElementById('f-amount').value);
+    const type = document.getElementById('f-type').value;
+    const note = document.getElementById('f-note').value.trim();
+
+    if (!date || !amount) {
+      statusEl.style.color = '#a4453c';
+      statusEl.textContent = '날짜와 사용량을 입력해 주세요.';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = '등록 중...';
+
+    try {
+      await db.collection('leaves').add({
+        uid: currentUser.uid,
+        '사원명': currentDisplayName,
+        '날짜': date,
+        '사용량': amount,
+        '연차구분': type,
+        '승인상태': '계획없음',
+        '비고': note,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+      statusEl.style.color = '#3f6b52';
+      statusEl.textContent = '등록되었습니다.';
+      document.getElementById('f-note').value = '';
+      await loadLeaves();
+    } catch (err) {
+      statusEl.style.color = '#a4453c';
+      statusEl.textContent = '등록 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '등록';
+    }
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await logOut();
+    window.location.href = 'login.html';
+  });
+</script>
+</body>
+</html>
