@@ -104,6 +104,55 @@
     background:#fff; border:1px solid var(--line); border-radius:6px;
     padding:32px; text-align:center; color:var(--muted); font-size:13.5px;
   }
+
+  /* 목록/달력 전환 버튼 */
+  .view-toggle-btn{
+    padding:6px 14px; border:1px solid var(--line); border-radius:20px;
+    background:#fff; font-size:12.5px; color:var(--muted); cursor:pointer;
+  }
+  .view-toggle-btn.active{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+
+  /* 달력보기 */
+  .cal-nav{
+    display:flex; align-items:center; justify-content:center; gap:20px;
+    margin-bottom:16px;
+  }
+  .cal-nav-btn{
+    border:none; background:none; cursor:pointer; font-size:14px; color:var(--muted);
+  }
+  .cal-month-label{ font-size:16px; font-weight:600; min-width:120px; text-align:center; }
+  .cal-grid{
+    display:grid; grid-template-columns:repeat(7, 1fr);
+    border-top:1px solid var(--line); border-left:1px solid var(--line);
+  }
+  .cal-dow{
+    padding:8px; font-size:11.5px; color:var(--muted); text-align:center;
+    border-right:1px solid var(--line); border-bottom:1px solid var(--line);
+    background:#fff;
+  }
+  .cal-cell{
+    min-height:110px; border-right:1px solid var(--line); border-bottom:1px solid var(--line);
+    padding:6px; background:#fff; vertical-align:top;
+  }
+  .cal-cell.other-month{ background:#f2f0eb; }
+  .cal-date{ font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .cal-date.today{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:20px; height:20px; border-radius:50%; background:var(--ink); color:var(--paper);
+  }
+  .cal-item{
+    font-size:11px; padding:2px 6px; margin-bottom:3px; border-radius:3px;
+    background:#ece9e2; color:#3a3733; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    cursor:default;
+  }
+  .cal-item-leave{
+    background:#e8e2f2; color:#5b4b8a;
+  }
+  .cal-item-holiday{
+    background:#fbe4e2; color:#a4453c; font-weight:600;
+  }
+  .cal-cell-holiday{ background:#fdf6f5; }
+  .cal-cell-holiday.other-month{ background:#f2f0eb; }
 </style>
 </head>
 <body>
@@ -160,13 +209,27 @@
 
   <!-- 목록 -->
   <div class="toolbar">
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button class="view-toggle-btn active" id="viewListBtn">목록보기</button>
+      <button class="view-toggle-btn" id="viewCalendarBtn">달력보기</button>
+    </div>
     <select id="employeeFilter" style="display:none;">
       <option value="전체">전체 사원</option>
     </select>
     <button class="row-btn" id="refreshBtn" style="text-decoration:none; font-size:12.5px;">새로고침</button>
   </div>
 
-  <div class="table-wrap">
+  <!-- 달력보기 -->
+  <div id="calendarView" style="display:none;">
+    <div class="cal-nav">
+      <button class="cal-nav-btn" id="calPrevBtn">◀</button>
+      <div class="cal-month-label" id="calMonthLabel"></div>
+      <button class="cal-nav-btn" id="calNextBtn">▶</button>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+  </div>
+
+  <div class="table-wrap" id="listView">
     <table id="logTable" style="display:none;">
       <thead>
         <tr>
@@ -196,6 +259,33 @@
   let currentRole = null;
   let currentDisplayName = '';
   let allRows = [];
+  let allLeaveRows = [];
+
+  // 2026년 대한민국 공휴일 (우주항공청 발표 월력요항 기준)
+  // 다른 연도가 필요하거나 날짜가 변경되면 이 목록만 수정하면 됩니다.
+  const HOLIDAYS = {
+    '2026-01-01': '신정',
+    '2026-02-16': '설날 연휴',
+    '2026-02-17': '설날',
+    '2026-02-18': '설날 연휴',
+    '2026-03-01': '삼일절',
+    '2026-03-02': '대체공휴일',
+    '2026-05-01': '근로자의 날',
+    '2026-05-05': '어린이날',
+    '2026-05-24': '부처님오신날',
+    '2026-05-25': '대체공휴일',
+    '2026-06-03': '지방선거일',
+    '2026-06-06': '현충일',
+    '2026-08-15': '광복절',
+    '2026-08-17': '대체공휴일',
+    '2026-09-24': '추석 연휴',
+    '2026-09-25': '추석',
+    '2026-09-26': '추석 연휴',
+    '2026-10-03': '개천절',
+    '2026-10-05': '대체공휴일',
+    '2026-10-09': '한글날',
+    '2026-12-25': '크리스마스'
+  };
 
   // 업무유형 체크박스 렌더
   document.getElementById('taskChecks').innerHTML = TASK_TYPES.map(t =>
@@ -219,7 +309,113 @@
   });
 
   document.getElementById('refreshBtn').addEventListener('click', loadLogs);
-  document.getElementById('employeeFilter').addEventListener('change', renderTable);
+  document.getElementById('employeeFilter').addEventListener('change', () => { renderTable(); renderCalendar(); });
+
+  // 목록/달력 전환
+  let viewMode = 'list';
+  let calMonth = new Date(); // 달력에 표시 중인 월 (1일 기준으로 다룸)
+  calMonth.setDate(1);
+
+  document.getElementById('viewListBtn').addEventListener('click', () => switchView('list'));
+  document.getElementById('viewCalendarBtn').addEventListener('click', () => switchView('calendar'));
+  document.getElementById('calPrevBtn').addEventListener('click', () => { calMonth.setMonth(calMonth.getMonth() - 1); renderCalendar(); });
+  document.getElementById('calNextBtn').addEventListener('click', () => { calMonth.setMonth(calMonth.getMonth() + 1); renderCalendar(); });
+
+  function switchView(mode) {
+    viewMode = mode;
+    document.getElementById('viewListBtn').classList.toggle('active', mode === 'list');
+    document.getElementById('viewCalendarBtn').classList.toggle('active', mode === 'calendar');
+    document.getElementById('listView').style.display = (mode === 'list') ? 'block' : 'none';
+    document.getElementById('emptyMsg').style.display = (mode === 'list') ? '' : 'none';
+    document.getElementById('calendarView').style.display = (mode === 'calendar') ? 'block' : 'none';
+    if (mode === 'calendar') renderCalendar();
+  }
+
+  function renderCalendar() {
+    const year = calMonth.getFullYear();
+    const month = calMonth.getMonth();
+    document.getElementById('calMonthLabel').textContent = `${year}년 ${month + 1}월`;
+
+    const filterVal = document.getElementById('employeeFilter').value;
+    const rows = (currentRole === 'admin' && filterVal !== '전체')
+      ? allRows.filter(r => r['사원명'] === filterVal)
+      : allRows;
+    const leaveRows = (currentRole === 'admin' && filterVal !== '전체')
+      ? allLeaveRows.filter(r => r['사원명'] === filterVal)
+      : allLeaveRows;
+
+    // 날짜별로 그룹핑 (근무일지 / 연차 따로)
+    const byDate = {};
+    rows.forEach(r => {
+      const d = r['날짜'];
+      if (!d) return;
+      if (!byDate[d]) byDate[d] = [];
+      byDate[d].push(r);
+    });
+
+    const leaveByDate = {};
+    leaveRows.forEach(r => {
+      const d = r['날짜'];
+      if (!d) return;
+      if (!leaveByDate[d]) leaveByDate[d] = [];
+      leaveByDate[d].push(r);
+    });
+
+    const firstOfMonth = new Date(year, month, 1);
+    const startDow = firstOfMonth.getDay(); // 0=일요일
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    const grid = document.getElementById('calGrid');
+    let html = ['일', '월', '화', '수', '목', '금', '토'].map(d => `<div class="cal-dow">${d}</div>`).join('');
+
+    // 이전 달 채우기
+    for (let i = 0; i < startDow; i++) {
+      html += `<div class="cal-cell other-month"></div>`;
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const items = byDate[dateStr] || [];
+      const leaveItems = leaveByDate[dateStr] || [];
+      const holidayName = HOLIDAYS[dateStr];
+      const isToday = dateStr === todayStr;
+
+      let cellHtml = '';
+
+      // 공휴일 표시 (가장 위에)
+      if (holidayName) {
+        cellHtml += `<div class="cal-item cal-item-holiday" title="${holidayName}">🎌 ${holidayName}</div>`;
+      }
+
+      // 연차 항목 표시
+      leaveItems.forEach(r => {
+        const label = (currentRole === 'admin')
+          ? `${r['사원명'] || ''} · ${r['연차구분'] || '연차'}`
+          : `${r['연차구분'] || '연차'}`;
+        cellHtml += `<div class="cal-item cal-item-leave" title="${label}">🏖 ${label}</div>`;
+      });
+
+      // 근무일지 항목 표시
+      items.forEach(r => {
+        const label = (currentRole === 'admin')
+          ? `${r['사원명'] || ''} · ${r['프로젝트'] || '근무일지'}`
+          : (r['프로젝트'] || '근무일지');
+        cellHtml += `<div class="cal-item" title="${label}">${label}</div>`;
+      });
+
+      const cellClass = holidayName ? 'cal-cell cal-cell-holiday' : 'cal-cell';
+
+      html += `
+        <div class="${cellClass}">
+          <div class="cal-date ${isToday ? 'today' : ''}">${day}</div>
+          ${cellHtml}
+        </div>
+      `;
+    }
+
+    grid.innerHTML = html;
+  }
 
   async function loadLogs() {
     const emptyMsg = document.getElementById('emptyMsg');
@@ -229,20 +425,24 @@
     table.style.display = 'none';
 
     try {
-      let query;
+      let query, leaveQuery;
       if (currentRole === 'admin') {
         query = db.collection('workLogs').orderBy('날짜', 'desc');
+        leaveQuery = db.collection('leaves');
       } else {
         query = db.collection('workLogs').where('uid', '==', currentUser.uid);
+        leaveQuery = db.collection('leaves').where('uid', '==', currentUser.uid);
       }
-      const snapshot = await query.get();
+      const [snapshot, leaveSnapshot] = await Promise.all([query.get(), leaveQuery.get()]);
       allRows = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      allLeaveRows = leaveSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
       // 근로자 본인 목록은 별도 정렬(최신순) - where 절 사용 시 orderBy 인덱스 이슈 회피를 위해 클라이언트에서 정렬
       allRows.sort((a, b) => (b['날짜'] || '').localeCompare(a['날짜'] || ''));
 
       if (currentRole === 'admin') populateEmployeeFilter();
       renderTable();
+      renderCalendar();
     } catch (err) {
       emptyMsg.textContent = '불러오기 실패: ' + err.message;
     }
@@ -251,7 +451,10 @@
   function populateEmployeeFilter() {
     const select = document.getElementById('employeeFilter');
     const current = select.value;
-    const names = [...new Set(allRows.map(r => r['사원명']).filter(Boolean))].sort();
+    const names = [...new Set([
+      ...allRows.map(r => r['사원명']),
+      ...allLeaveRows.map(r => r['사원명'])
+    ].filter(Boolean))].sort();
     select.innerHTML = '<option value="전체">전체 사원</option>' +
       names.map(n => `<option value="${n}">${n}</option>`).join('');
     if (names.includes(current)) select.value = current;
