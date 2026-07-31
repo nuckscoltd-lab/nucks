@@ -1,0 +1,25 @@
+{
+  "name": "NUCKS",
+  "short_name": "NUCKS",
+  "description": "NUCKS 사내 통합 업무 시스템",
+  "start_url": "index.html",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#f7f6f3",
+  "theme_color": "#141414",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
