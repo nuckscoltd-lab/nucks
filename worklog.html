@@ -290,6 +290,24 @@
     </table>
   </div>
   <div class="empty" id="emptyMsg">불러오는 중...</div>
+
+  <!-- 프로젝트별 인건비 집계 (관리자 전용) -->
+  <div id="costPanel" style="display:none; margin-top:48px;">
+    <div class="panel-title" style="margin-bottom:6px;">프로젝트별 인건비 집계 (관리자 전용)</div>
+    <div style="font-size:12px; color:var(--muted); margin-bottom:16px; line-height:1.6;">
+      투입시간 × (해당 월 기본급 ÷ 209시간 기준 통상시급)으로 계산한 참고용 추정치입니다.
+      해당 월 급여명세서가 없는 경우, 등록된 급여명세서 중 가장 최근(이전) 달 기본급을 대신 사용합니다.
+    </div>
+    <div class="table-wrap">
+      <table id="costTable" style="display:none;">
+        <thead>
+          <tr><th>프로젝트</th><th>총 투입시간</th><th>참여 인원</th><th>추정 인건비</th><th>평균 시급</th></tr>
+        </thead>
+        <tbody id="costTableBody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="costEmptyMsg" style="display:none;">집계할 데이터가 없습니다.</div>
+  </div>
 </main>
 
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
@@ -450,6 +468,7 @@
 
     document.getElementById('employeeFilter').style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
     document.getElementById('importPanel').style.display = (currentRole === 'admin') ? 'block' : 'none';
+    document.getElementById('costPanel').style.display = (currentRole === 'admin') ? 'block' : 'none';
 
     // 오늘 날짜 기본값
     document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
@@ -599,6 +618,7 @@
       updateProjectDatalist();
       renderTable();
       renderCalendar();
+      if (currentRole === 'admin') await loadCostAnalysis();
     } catch (err) {
       emptyMsg.textContent = '불러오기 실패: ' + err.message;
     }
@@ -971,6 +991,97 @@
       btn.textContent = '예전 데이터 변환 실행';
     }
   });
+
+  // ---------- 프로젝트별 인건비 집계 (관리자 전용) ----------
+  const STANDARD_MONTHLY_HOURS = 209; // 월 소정근로시간 기준 (통상시급 계산용)
+
+  async function loadCostAnalysis() {
+    try {
+      const payslipSnap = await db.collection('payslips').get();
+      const allPayslips = payslipSnap.docs.map(d => d.data());
+
+      // uid별, 연-월별 기본급 매핑
+      const wageMap = {};
+      allPayslips.forEach(p => {
+        const ym = (p['지급일'] || '').slice(0, 7);
+        if (!ym || !p.uid) return;
+        if (!wageMap[p.uid]) wageMap[p.uid] = {};
+        wageMap[p.uid][ym] = (p.pay && p.pay['기본급']) || 0;
+      });
+
+      const projectCost = {}; // { 프로젝트명: { hours, cost, people:Set } }
+      let skippedNoWage = 0;
+
+      allRows.forEach(row => {
+        const ym = (row['날짜'] || '').slice(0, 7);
+        const uidWages = wageMap[row.uid] || {};
+        let baseSalary = uidWages[ym];
+
+        if (baseSalary === undefined) {
+          // 해당 월 급여명세서가 없으면, 그 이전 달 중 가장 최근 것을 사용
+          const priorMonths = Object.keys(uidWages).filter(m => m <= ym).sort().reverse();
+          baseSalary = priorMonths.length ? uidWages[priorMonths[0]] : undefined;
+        }
+
+        if (baseSalary === undefined) { skippedNoWage++; return; }
+
+        const hourlyWage = baseSalary / STANDARD_MONTHLY_HOURS;
+
+        (row.projects || []).forEach(p => {
+          const name = p['프로젝트'] || '(프로젝트 미입력)';
+          const hours = Number(p['투입시간']) || 0;
+          if (!projectCost[name]) projectCost[name] = { hours: 0, cost: 0, people: new Set() };
+          projectCost[name].hours += hours;
+          projectCost[name].cost += hours * hourlyWage;
+          if (row['사원명']) projectCost[name].people.add(row['사원명']);
+        });
+      });
+
+      renderCostTable(projectCost, skippedNoWage);
+    } catch (err) {
+      console.error('인건비 집계 실패:', err);
+    }
+  }
+
+  function renderCostTable(projectCost, skippedNoWage) {
+    const table = document.getElementById('costTable');
+    const tbody = document.getElementById('costTableBody');
+    const emptyMsg = document.getElementById('costEmptyMsg');
+
+    const entries = Object.entries(projectCost).sort((a, b) => b[1].cost - a[1].cost);
+
+    if (entries.length === 0) {
+      table.style.display = 'none';
+      emptyMsg.style.display = 'block';
+      emptyMsg.textContent = '집계할 데이터가 없습니다. (급여명세서와 근무일지가 모두 등록되어야 계산됩니다)';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+    table.style.display = 'table';
+
+    tbody.innerHTML = entries.map(([name, data]) => {
+      const avgHourly = data.hours > 0 ? data.cost / data.hours : 0;
+      return `
+      <tr>
+        <td>${name}</td>
+        <td>${data.hours.toFixed(1)}시간</td>
+        <td>${data.people.size}명 (${[...data.people].join(', ')})</td>
+        <td>${Math.round(data.cost).toLocaleString()}원</td>
+        <td>${Math.round(avgHourly).toLocaleString()}원/시간</td>
+      </tr>
+    `;
+    }).join('');
+
+    if (skippedNoWage > 0) {
+      tbody.innerHTML += `
+        <tr>
+          <td colspan="5" style="color:var(--muted); font-size:12px;">
+            ※ 급여명세서가 없어 집계에서 제외된 근무일지 ${skippedNoWage}건 있음
+          </td>
+        </tr>
+      `;
+    }
+  }
 
   document.getElementById('logoutBtn').addEventListener('click', async (e) => {
     e.preventDefault();
