@@ -147,6 +147,10 @@ if ('serviceWorker' in navigator) {
 <main>
   <div class="write-panel">
     <div class="panel-title">연차 사용 등록</div>
+    <div id="editBanner" style="display:none; background:#fbe4e2; color:#a4453c; font-size:12.5px; padding:10px 14px; border-radius:4px; margin-bottom:14px;">
+      <span id="editBannerText"></span>
+      <button id="cancelEditBtn" style="margin-left:10px; background:none; border:none; color:#a4453c; text-decoration:underline; cursor:pointer; font-size:12.5px;">수정 취소</button>
+    </div>
     <div class="form-row">
       <div class="field">
         <label for="f-date">날짜</label>
@@ -359,7 +363,12 @@ if ('serviceWorker' in navigator) {
             : (row['승인상태'] || '계획없음')}
         </td>
         <td data-label="비고">${row['비고'] || ''}</td>
-        <td data-label="관리">${canManage ? `<button class="row-btn danger" data-id="${row.id}">삭제</button>` : ''}</td>
+        <td data-label="관리">
+          ${canManage ? `
+            <button class="row-btn" data-id="${row.id}">수정</button>
+            <button class="row-btn danger" data-id="${row.id}">삭제</button>
+          ` : ''}
+        </td>
       `;
       tbody.appendChild(tr);
     });
@@ -367,10 +376,44 @@ if ('serviceWorker' in navigator) {
     document.querySelectorAll('.row-btn.danger').forEach(btn => {
       btn.addEventListener('click', () => deleteLeave(btn.dataset.id));
     });
+    document.querySelectorAll('.row-btn:not(.danger)').forEach(btn => {
+      btn.addEventListener('click', () => loadLeaveIntoForm(btn.dataset.id));
+    });
     document.querySelectorAll('.status-select').forEach(sel => {
       sel.addEventListener('change', () => updateStatus(sel.dataset.id, sel.value));
     });
   }
+
+  let editingLeaveId = null;
+
+  function loadLeaveIntoForm(docId) {
+    const row = allRows.find(r => r.id === docId);
+    if (!row) return;
+
+    editingLeaveId = docId;
+    document.getElementById('f-date').value = row['날짜'] || '';
+    document.getElementById('f-amount').value = row['사용량'] ?? 1;
+    document.getElementById('f-type').value = row['연차구분'] || '연차';
+    document.getElementById('f-note').value = row['비고'] || '';
+
+    const banner = document.getElementById('editBanner');
+    document.getElementById('editBannerText').textContent =
+      `"${row['날짜']} · ${row['사원명']} · ${row['연차구분']}" 내역을 수정 중입니다. 저장하면 이 항목이 업데이트됩니다.`;
+    banner.style.display = 'block';
+
+    document.getElementById('submitBtn').textContent = '수정 저장';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  document.getElementById('cancelEditBtn').addEventListener('click', () => {
+    editingLeaveId = null;
+    document.getElementById('editBanner').style.display = 'none';
+    document.getElementById('submitBtn').textContent = '등록';
+    document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('f-amount').value = 1;
+    document.getElementById('f-type').value = '연차';
+    document.getElementById('f-note').value = '';
+  });
 
   async function updateStatus(docId, newStatus) {
     try {
@@ -406,31 +449,49 @@ if ('serviceWorker' in navigator) {
       return;
     }
 
+    const isEditing = !!editingLeaveId;
     btn.disabled = true;
-    btn.textContent = '등록 중...';
+    btn.textContent = isEditing ? '수정 저장 중...' : '등록 중...';
 
     try {
-      await db.collection('leaves').add({
-        uid: currentUser.uid,
-        '사원명': currentDisplayName,
-        '날짜': date,
-        '사용량': amount,
-        '연차구분': type,
-        '승인상태': '계획없음',
-        '비고': note,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+      if (isEditing) {
+        const original = allRows.find(r => r.id === editingLeaveId);
+        await db.collection('leaves').doc(editingLeaveId).update({
+          uid: original?.uid || currentUser.uid,
+          '사원명': original?.['사원명'] || currentDisplayName,
+          '날짜': date,
+          '사용량': amount,
+          '연차구분': type,
+          '비고': note
+          // 승인상태는 여기서 건드리지 않음 (관리자가 별도로 관리)
+        });
+        statusEl.style.color = '#3f6b52';
+        statusEl.textContent = '수정되었습니다.';
+      } else {
+        await db.collection('leaves').add({
+          uid: currentUser.uid,
+          '사원명': currentDisplayName,
+          '날짜': date,
+          '사용량': amount,
+          '연차구분': type,
+          '승인상태': '계획없음',
+          '비고': note,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        statusEl.style.color = '#3f6b52';
+        statusEl.textContent = '등록되었습니다.';
+      }
 
-      statusEl.style.color = '#3f6b52';
-      statusEl.textContent = '등록되었습니다.';
+      editingLeaveId = null;
+      document.getElementById('editBanner').style.display = 'none';
       document.getElementById('f-note').value = '';
       await loadLeaves();
     } catch (err) {
       statusEl.style.color = '#a4453c';
-      statusEl.textContent = '등록 실패: ' + err.message;
+      statusEl.textContent = (isEditing ? '수정' : '등록') + ' 실패: ' + err.message;
     } finally {
       btn.disabled = false;
-      btn.textContent = '등록';
+      btn.textContent = editingLeaveId ? '수정 저장' : '등록';
     }
   });
 
