@@ -62,6 +62,28 @@
   .task-checks label{
     font-size:13px; display:flex; align-items:center; gap:5px; cursor:pointer;
   }
+  .project-rows-label{
+    font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--muted); margin:18px 0 10px;
+  }
+  .project-row{
+    background:var(--paper); border:1px solid var(--line); border-radius:6px;
+    padding:14px 16px; margin-bottom:10px;
+  }
+  .project-row-top{
+    display:flex; gap:12px; align-items:flex-end; margin-bottom:10px; flex-wrap:wrap;
+  }
+  .project-row-top .field{ flex:1; min-width:160px; }
+  .project-row-top .hours-field{ max-width:120px; min-width:100px; }
+  .remove-project-btn{
+    background:none; border:none; color:#a4453c; font-size:12px;
+    cursor:pointer; text-decoration:underline; height:37px;
+  }
+  .add-project-btn{
+    padding:8px 16px; background:#fff; border:1px dashed var(--line); border-radius:4px;
+    font-size:12.5px; color:var(--muted); cursor:pointer;
+  }
+  .add-project-btn:hover{ border-color:var(--ink); color:var(--ink); }
   .submit-btn{
     padding:10px 22px; background:var(--ink); color:var(--paper);
     border:none; font-size:12.5px; letter-spacing:.05em; text-transform:uppercase;
@@ -180,6 +202,16 @@
     <div id="importPreview" style="margin-top:12px; font-size:13px;"></div>
     <button class="submit-btn" id="importRunBtn" style="display:none; margin-top:12px;">가져오기 실행</button>
     <div id="importResult" style="margin-top:10px; font-size:13px;"></div>
+
+    <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
+
+    <div class="panel-title">예전 구조 데이터 변환 (1회성)</div>
+    <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
+      단일 프로젝트 구조로 저장된 예전 근무일지를, 지금의 "프로젝트별 내역" 구조로 변환합니다.
+      이미 변환된 항목은 건드리지 않아서 여러 번 눌러도 안전해요.
+    </div>
+    <button class="submit-btn" id="migrateBtn">예전 데이터 변환 실행</button>
+    <div id="migrateResult" style="margin-top:10px; font-size:13px;"></div>
   </div>
 
   <!-- 작성 폼 (근로자/관리자 본인 명의로 작성) -->
@@ -199,15 +231,16 @@
         <input type="time" id="f-checkout">
       </div>
       <div class="field">
-        <label for="f-project">프로젝트</label>
-        <input type="text" id="f-project" list="projectList" placeholder="선택 또는 직접 입력">
-        <datalist id="projectList"></datalist>
+        <label>총 근무시간</label>
+        <input type="text" id="f-totalHours" value="0시간" readonly style="background:#f2f0eb; color:var(--muted);">
       </div>
     </div>
 
-    <div class="task-checks" id="taskChecks"></div>
+    <div class="project-rows-label">프로젝트별 업무 내역</div>
+    <div id="projectRows"></div>
+    <button class="add-project-btn" id="addProjectBtn" type="button">+ 프로젝트 추가</button>
 
-    <div class="field" style="margin-bottom:16px;">
+    <div class="field" style="margin:20px 0 16px;">
       <label for="f-detail">상세내용</label>
       <textarea id="f-detail" placeholder="오늘 진행한 업무 내용을 적어주세요"></textarea>
     </div>
@@ -220,6 +253,8 @@
     <button class="submit-btn" id="submitBtn">등록</button>
     <div class="submit-status" id="submitStatus"></div>
   </div>
+
+  <datalist id="projectList"></datalist>
 
   <!-- 목록 -->
   <div class="toolbar">
@@ -247,8 +282,8 @@
     <table id="logTable" style="display:none;">
       <thead>
         <tr>
-          <th>날짜</th><th>사원명</th><th>출근</th><th>퇴근</th><th>프로젝트</th>
-          <th>업무유형</th><th>상세내용</th><th>첨부</th><th>관리</th>
+          <th>날짜</th><th>사원명</th><th>출근</th><th>퇴근</th><th>총근무</th><th>프로젝트별 내역</th>
+          <th>상세내용</th><th>첨부</th><th>관리</th>
         </tr>
       </thead>
       <tbody id="tableBody"></tbody>
@@ -301,7 +336,7 @@
   ];
 
   function updateProjectDatalist() {
-    const usedProjects = allRows.map(r => r['프로젝트']).filter(Boolean);
+    const usedProjects = allRows.flatMap(r => (r.projects || []).map(p => p['프로젝트'])).filter(Boolean);
     const merged = [...new Set([...DEFAULT_PROJECTS, ...usedProjects])].sort();
     document.getElementById('projectList').innerHTML = merged.map(p => `<option value="${p}">`).join('');
   }
@@ -338,10 +373,72 @@
     '2026-12-25': '크리스마스'
   };
 
-  // 업무유형 체크박스 렌더
-  document.getElementById('taskChecks').innerHTML = TASK_TYPES.map(t =>
-    `<label><input type="checkbox" class="task-check" value="${t}"> ${t}</label>`
-  ).join('');
+  // 프로젝트별 업무 내역 반복 행 관리
+  let projectRowCount = 0;
+
+  function createProjectRow() {
+    projectRowCount++;
+    const rowId = projectRowCount;
+    const row = document.createElement('div');
+    row.className = 'project-row';
+    row.dataset.rowId = rowId;
+    row.innerHTML = `
+      <div class="project-row-top">
+        <div class="field">
+          <label>프로젝트</label>
+          <input type="text" class="row-project" list="projectList" placeholder="선택 또는 직접 입력">
+        </div>
+        <div class="field hours-field">
+          <label>투입시간</label>
+          <input type="number" class="row-hours" step="0.5" min="0" value="0">
+        </div>
+        <button type="button" class="remove-project-btn" data-row-id="${rowId}">삭제</button>
+      </div>
+      <div class="task-checks">
+        ${TASK_TYPES.map(t => `<label><input type="checkbox" class="row-task-check" value="${t}"> ${t}</label>`).join('')}
+      </div>
+    `;
+    document.getElementById('projectRows').appendChild(row);
+
+    row.querySelector('.remove-project-btn').addEventListener('click', () => {
+      if (document.querySelectorAll('.project-row').length <= 1) {
+        alert('최소 1개의 프로젝트 행은 있어야 합니다.');
+        return;
+      }
+      row.remove();
+    });
+  }
+
+  function resetProjectRows() {
+    document.getElementById('projectRows').innerHTML = '';
+    projectRowCount = 0;
+    createProjectRow();
+  }
+
+  document.getElementById('addProjectBtn').addEventListener('click', createProjectRow);
+  resetProjectRows();
+
+  // 출근~퇴근 기준 총 근무시간 자동계산
+  function calcHoursDiff(checkin, checkout) {
+    if (!checkin || !checkout) return 0;
+    const [h1, m1] = checkin.split(':').map(Number);
+    const [h2, m2] = checkout.split(':').map(Number);
+    let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+    if (diff < 0) diff += 24 * 60;
+    return Math.round((diff / 60) * 100) / 100;
+  }
+
+  function updateTotalHoursDisplay() {
+    const total = calcHoursDiff(
+      document.getElementById('f-checkin').value,
+      document.getElementById('f-checkout').value
+    );
+    document.getElementById('f-totalHours').value = `${total}시간`;
+    return total;
+  }
+
+  document.getElementById('f-checkin').addEventListener('change', updateTotalHoursDisplay);
+  document.getElementById('f-checkout').addEventListener('change', updateTotalHoursDisplay);
 
   auth.onAuthStateChanged(async (user) => {
     if (!user) return;
@@ -448,14 +545,18 @@
         cellHtml += `<div class="cal-item cal-item-leave" title="${label}">🏖 ${label}</div>`;
       });
 
-      // 근무일지 항목 표시 (프로젝트가 비어있으면 상세내용을 짧게 대신 보여줌)
+      // 근무일지 항목 표시 (하루에 여러 프로젝트가 있으면 각각 한 줄씩)
       items.forEach(r => {
-        const fallback = (r['상세내용'] || '').slice(0, 12) || '근무일지';
-        const summary = r['프로젝트'] || fallback;
-        const label = (currentRole === 'admin')
-          ? `${r['사원명'] || ''} · ${summary}`
-          : summary;
-        cellHtml += `<div class="cal-item" title="${r['상세내용'] || summary}">${label}</div>`;
+        const projectList = (r.projects && r.projects.length) ? r.projects : [{ '프로젝트': '', '투입시간': 0 }];
+        projectList.forEach(p => {
+          const fallback = (r['상세내용'] || '').slice(0, 12) || '근무일지';
+          const summary = p['프로젝트'] || fallback;
+          const hoursTag = p['투입시간'] ? ` (${p['투입시간']}h)` : '';
+          const label = (currentRole === 'admin')
+            ? `${r['사원명'] || ''} · ${summary}${hoursTag}`
+            : `${summary}${hoursTag}`;
+          cellHtml += `<div class="cal-item" title="${r['상세내용'] || summary}">${label}</div>`;
+        });
       });
 
       const cellClass = holidayName ? 'cal-cell cal-cell-holiday' : 'cal-cell';
@@ -537,11 +638,21 @@
     tbody.innerHTML = '';
     rows.forEach(row => {
       const canManage = (row.uid === currentUser.uid) || (currentRole === 'admin');
-      const taskTags = (row.tasks ? Object.keys(row.tasks).filter(k => row.tasks[k]) : [])
-        .map(t => `<span class="task-tag">${t}</span>`).join('');
       const attach = row.attachment
         ? `<a class="attach-link" href="${row.attachment.url}" target="_blank" rel="noopener">${row.attachment.name}</a>`
         : '';
+
+      const projectList = row.projects || [];
+      const projectHtml = projectList.map(p => {
+        const taskTags = Object.keys(p.tasks || {}).filter(k => p.tasks[k])
+          .map(t => `<span class="task-tag">${t}</span>`).join('');
+        return `
+          <div style="margin-bottom:8px;">
+            <b>${p['프로젝트'] || '(프로젝트 미입력)'}</b> · ${p['투입시간'] || 0}시간<br>
+            ${taskTags}
+          </div>
+        `;
+      }).join('');
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
@@ -549,8 +660,8 @@
         <td class="nowrap">${row['사원명'] || ''}</td>
         <td class="nowrap">${row['출근시간'] || ''}</td>
         <td class="nowrap">${row['퇴근시간'] || ''}</td>
-        <td class="nowrap">${row['프로젝트'] || ''}</td>
-        <td>${taskTags}</td>
+        <td class="nowrap">${row['총근무시간'] ?? ''}시간</td>
+        <td style="min-width:220px;">${projectHtml}</td>
         <td class="detail-cell">${row['상세내용'] || ''}</td>
         <td class="nowrap">${attach}</td>
         <td class="nowrap">
@@ -582,7 +693,6 @@
     const date = document.getElementById('f-date').value;
     const checkin = document.getElementById('f-checkin').value;
     const checkout = document.getElementById('f-checkout').value;
-    const project = document.getElementById('f-project').value.trim();
     const detail = document.getElementById('f-detail').value.trim();
     const fileInput = document.getElementById('f-file');
 
@@ -592,8 +702,46 @@
       return;
     }
 
-    const tasks = {};
-    document.querySelectorAll('.task-check').forEach(cb => { tasks[cb.value] = cb.checked; });
+    const totalHours = updateTotalHoursDisplay();
+
+    // 각 프로젝트 행 데이터 수집
+    const projectRowEls = document.querySelectorAll('.project-row');
+    const projects = [];
+    let hasEmptyProjectName = false;
+
+    projectRowEls.forEach(row => {
+      const name = row.querySelector('.row-project').value.trim();
+      const hours = Number(row.querySelector('.row-hours').value) || 0;
+      const tasks = {};
+      row.querySelectorAll('.row-task-check').forEach(cb => { tasks[cb.value] = cb.checked; });
+
+      if (!name && hours === 0 && !Object.values(tasks).some(Boolean)) return; // 완전히 빈 행은 무시
+      if (!name) hasEmptyProjectName = true;
+
+      projects.push({ '프로젝트': name, '투입시간': hours, tasks });
+    });
+
+    if (projects.length === 0) {
+      alert('최소 1개 이상의 프로젝트 정보를 입력해 주세요.');
+      return;
+    }
+    if (hasEmptyProjectName) {
+      alert('프로젝트명이 비어있는 행이 있습니다. 프로젝트를 선택하거나 입력해 주세요.');
+      return;
+    }
+
+    // 프로젝트별 투입시간 합계가 총 근무시간과 일치하는지 검증
+    const sumHours = projects.reduce((sum, p) => sum + p['투입시간'], 0);
+    const diff = Math.round((sumHours - totalHours) * 100) / 100;
+
+    if (Math.abs(diff) > 0.01) {
+      alert(
+        `총 근무시간(${totalHours}시간)과 프로젝트별 투입시간 합계(${sumHours}시간)가 일치하지 않습니다.\n` +
+        `차이: ${diff > 0 ? '+' : ''}${diff}시간\n\n` +
+        `프로젝트별 투입시간을 다시 확인해 주세요.`
+      );
+      return;
+    }
 
     btn.disabled = true;
     btn.textContent = '등록 중...';
@@ -607,8 +755,8 @@
         '날짜': date,
         '출근시간': checkin,
         '퇴근시간': checkout,
-        '프로젝트': project,
-        tasks: tasks,
+        '총근무시간': totalHours,
+        projects: projects,
         '상세내용': detail,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       };
@@ -626,10 +774,9 @@
 
       statusEl.style.color = '#3f6b52';
       statusEl.textContent = '등록되었습니다.';
-      document.getElementById('f-project').value = '';
       document.getElementById('f-detail').value = '';
       document.getElementById('f-file').value = '';
-      document.querySelectorAll('.task-check').forEach(cb => { cb.checked = false; });
+      resetProjectRows();
 
       await loadLogs();
     } catch (err) {
@@ -698,19 +845,28 @@
           const dateStr = parseDateFlexible(row['날짜']);
           if (!dateStr || dateStr < IMPORT_MIN_DATE) return;
 
+          const checkin = (row['출근시간'] || '').trim();
+          const checkout = (row['퇴근시간'] || '').trim();
+          const totalHours = calcHoursDiff(checkin, checkout);
+
           const tasks = {};
           Object.entries(TASK_COLUMN_MAP).forEach(([csvKey, ourKey]) => {
             tasks[ourKey] = parseCheckboxValue(row[csvKey]);
           });
 
+          // 노션 CSV는 하루에 프로젝트 1개 구조라, 전체 근무시간을 그 프로젝트에 그대로 배정
           mapped.push({
             '사원명': name,
             '날짜': dateStr,
-            '출근시간': (row['출근시간'] || '').trim(),
-            '퇴근시간': (row['퇴근시간'] || '').trim(),
-            '프로젝트': (row['프로젝트'] || '').trim(),
+            '출근시간': checkin,
+            '퇴근시간': checkout,
+            '총근무시간': totalHours,
             '상세내용': (row['상세내용'] || '').trim(),
-            tasks
+            projects: [{
+              '프로젝트': (row['프로젝트'] || '').trim(),
+              '투입시간': totalHours,
+              tasks
+            }]
           });
         });
 
@@ -751,6 +907,68 @@
     } finally {
       btn.disabled = false;
       btn.textContent = '가져오기 실행';
+    }
+  });
+
+  // ---------- 예전 구조(단일 프로젝트) 데이터를 새 구조(projects 배열)로 변환 ----------
+  document.getElementById('migrateBtn')?.addEventListener('click', async () => {
+    if (!confirm('예전 구조의 근무일지 데이터를 새 구조로 변환합니다. 계속할까요?')) return;
+
+    const btn = document.getElementById('migrateBtn');
+    const resultEl = document.getElementById('migrateResult');
+    btn.disabled = true;
+    btn.textContent = '변환 중...';
+    resultEl.textContent = '';
+
+    try {
+      const snapshot = await db.collection('workLogs').get();
+
+      // projects 배열이 없는(=예전 구조인) 문서만 골라냄
+      const oldDocs = snapshot.docs.filter(d => {
+        const data = d.data();
+        return !data.projects;
+      });
+
+      if (oldDocs.length === 0) {
+        resultEl.style.color = 'var(--muted)';
+        resultEl.textContent = '변환할 예전 데이터가 없습니다. 이미 모두 새 구조입니다.';
+        return;
+      }
+
+      const chunks = [];
+      for (let i = 0; i < oldDocs.length; i += 400) chunks.push(oldDocs.slice(i, i + 400));
+
+      let count = 0;
+      for (const chunk of chunks) {
+        const batch = db.batch();
+        chunk.forEach(doc => {
+          const data = doc.data();
+          const totalHours = data['총근무시간'] ?? calcHoursDiff(data['출근시간'], data['퇴근시간']);
+          const projects = [{
+            '프로젝트': data['프로젝트'] || '',
+            '투입시간': totalHours,
+            tasks: data.tasks || {}
+          }];
+          batch.update(doc.ref, {
+            '총근무시간': totalHours,
+            projects: projects,
+            '프로젝트': firebase.firestore.FieldValue.delete(),
+            tasks: firebase.firestore.FieldValue.delete()
+          });
+          count++;
+        });
+        await batch.commit();
+      }
+
+      resultEl.style.color = '#3f6b52';
+      resultEl.textContent = `${count}건 변환 완료했습니다.`;
+      await loadLogs();
+    } catch (err) {
+      resultEl.style.color = '#a4453c';
+      resultEl.textContent = '변환 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '예전 데이터 변환 실행';
     }
   });
 
