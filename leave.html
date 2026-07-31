@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#141414">
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+</script>
 <title>연차관리 | NUCKS</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
@@ -96,6 +103,31 @@
   .empty{
     background:#fff; border:1px solid var(--line); border-radius:6px;
     padding:32px; text-align:center; color:var(--muted); font-size:13.5px;
+  }
+  @media (max-width: 640px) {
+    header{ padding:20px !important; flex-wrap:wrap; gap:10px; }
+    .header-right{ flex-wrap:wrap; gap:12px !important; }
+    main{ padding:24px 16px !important; }
+    h1{ font-size:24px !important; }
+    input, select, textarea{ font-size:16px !important; }
+    .form-row{ flex-direction:column; align-items:stretch !important; }
+    .form-row .field{ min-width:0 !important; width:100%; }
+    .summary-bar{ flex-direction:column; gap:10px !important; }
+
+    table{ min-width:0 !important; }
+    thead{ display:none; }
+    table, tbody, tr, td{ display:block; width:100%; }
+    tr{
+      border:1px solid var(--line); border-radius:6px;
+      margin-bottom:12px; padding:10px 14px; background:#fff;
+    }
+    td{
+      border:none !important; padding:6px 0 !important; white-space:normal !important;
+    }
+    td[data-label]::before{
+      content:attr(data-label);
+      display:block; font-size:11px; color:var(--muted); margin-bottom:2px;
+    }
   }
 </style>
 </head>
@@ -316,18 +348,18 @@
       const remaining = calcRemainingForName(row['사원명']);
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${row['사원명'] || ''}</td>
-        <td>${row['날짜'] || ''}</td>
-        <td>${row['사용량'] ?? ''}</td>
-        <td><span class="tag">${row['연차구분'] || ''}</span></td>
-        <td>${remaining}일</td>
-        <td>
+        <td data-label="사원명">${row['사원명'] || ''}</td>
+        <td data-label="날짜">${row['날짜'] || ''}</td>
+        <td data-label="사용량">${row['사용량'] ?? ''}</td>
+        <td data-label="구분"><span class="tag">${row['연차구분'] || ''}</span></td>
+        <td data-label="잔여연차">${remaining}일</td>
+        <td data-label="승인상태">
           ${currentRole === 'admin'
             ? `<select class="status-select" data-id="${row.id}">${STATUS_OPTIONS.map(s => `<option ${s === row['승인상태'] ? 'selected' : ''}>${s}</option>`).join('')}</select>`
             : (row['승인상태'] || '계획없음')}
         </td>
-        <td>${row['비고'] || ''}</td>
-        <td>${canManage ? `<button class="row-btn danger" data-id="${row.id}">삭제</button>` : ''}</td>
+        <td data-label="비고">${row['비고'] || ''}</td>
+        <td data-label="관리">${canManage ? `<button class="row-btn danger" data-id="${row.id}">삭제</button>` : ''}</td>
       `;
       tbody.appendChild(tr);
     });

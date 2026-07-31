@@ -108,13 +108,29 @@ if ('serviceWorker' in navigator) {
   @media (max-width: 640px) {
     header{ padding:20px !important; flex-wrap:wrap; gap:10px; }
     .header-right{ flex-wrap:wrap; gap:12px !important; }
-    main{ padding:24px 20px !important; }
+    main{ padding:24px 16px !important; }
     h1{ font-size:24px !important; }
     input, select, textarea{ font-size:16px !important; }
-    .grid{ grid-template-columns:repeat(2, 1fr) !important; }
+    .grid{ grid-template-columns:1fr !important; }
     .sum-box{ flex-direction:column; gap:12px !important; }
     .summary-bar{ flex-direction:column; gap:10px !important; }
     .toolbar{ flex-direction:column; align-items:stretch !important; gap:10px !important; }
+
+    /* 넓은 표는 가로 스크롤 대신 카드형으로 세로 전환 */
+    table{ min-width:0 !important; }
+    thead{ display:none; }
+    table, tbody, tr, td{ display:block; width:100%; }
+    tr{
+      border:1px solid var(--line); border-radius:6px;
+      margin-bottom:12px; padding:10px 14px; background:#fff;
+    }
+    td{
+      border:none !important; padding:6px 0 !important; white-space:normal !important;
+    }
+    td[data-label]::before{
+      content:attr(data-label);
+      display:block; font-size:11px; color:var(--muted); margin-bottom:2px;
+    }
   }
 </style>
 </head>
@@ -402,13 +418,13 @@ if ('serviceWorker' in navigator) {
 
     tbody.innerHTML = rows.map(s => `
       <tr>
-        <td>${s['지급일'] || ''}</td>
-        <td>${s['사원명'] || ''}</td>
-        <td>${s['부서명'] || ''}</td>
-        <td>${(s['지급액계'] || 0).toLocaleString()}</td>
-        <td>${(s['공제액계'] || 0).toLocaleString()}</td>
-        <td>${(s['차인지급액'] || 0).toLocaleString()}</td>
-        <td>${currentRole === 'admin' ? `<button class="row-btn" data-id="${s.id}">삭제</button>` : ''}</td>
+        <td data-label="지급일">${s['지급일'] || ''}</td>
+        <td data-label="사원명">${s['사원명'] || ''}</td>
+        <td data-label="부서명">${s['부서명'] || ''}</td>
+        <td data-label="지급액계">${(s['지급액계'] || 0).toLocaleString()}</td>
+        <td data-label="공제액계">${(s['공제액계'] || 0).toLocaleString()}</td>
+        <td data-label="차인지급액">${(s['차인지급액'] || 0).toLocaleString()}</td>
+        <td data-label="관리">${currentRole === 'admin' ? `<button class="row-btn" data-id="${s.id}">삭제</button>` : ''}</td>
       </tr>
     `).join('');
 
