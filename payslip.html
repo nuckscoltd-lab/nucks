@@ -153,11 +153,11 @@ if ('serviceWorker' in navigator) {
 <main>
   <!-- 급여대장 CSV 가져오기 (관리자 전용) -->
   <div class="write-panel" id="importPanel" style="display:none;">
-    <div class="panel-title">급여대장 CSV 가져오기</div>
+    <div class="panel-title">급여대장 CSV/엑셀 가져오기</div>
     <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
       대상: 이연경, 손영화, 윤성원, 윤상원, 김의석 · 기간: 2025-11-01 이후만 자동 필터링됩니다.
     </div>
-    <input type="file" id="importFile" accept=".csv">
+    <input type="file" id="importFile" accept=".csv,.xlsx,.xls">
     <button class="submit-btn" id="importParseBtn" style="margin-left:8px;">파일 분석</button>
     <div id="importPreview" style="margin-top:12px; font-size:13px;"></div>
     <button class="submit-btn" id="importRunBtn" style="display:none; margin-top:12px;">가져오기 실행</button>
@@ -241,6 +241,7 @@ if ('serviceWorker' in navigator) {
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-functions-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="firebase-config.js"></script>
 <script src="auth.js"></script>
 <script>
@@ -457,12 +458,31 @@ if ('serviceWorker' in navigator) {
 
   let parsedPayslipRows = [];
 
+  // 엑셀 날짜 일련번호(예: 45681) -> 실제 날짜로 변환
+  function excelSerialToDate(serial) {
+    const utcDays = Math.floor(serial - 25569);
+    return new Date(utcDays * 86400 * 1000);
+  }
+
   function parseDateFlexible(value) {
-    if (!value) return null;
-    const v = String(value).trim();
-    if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
-    if (/^\d{4}\/\d{2}\/\d{2}/.test(v)) return v.slice(0, 10).replace(/\//g, '-');
-    const d = new Date(v);
+    if (value === null || value === undefined || value === '') return null;
+
+    if (value instanceof Date) {
+      if (isNaN(value.getTime())) return null;
+      return value.toISOString().slice(0, 10);
+    }
+
+    if (typeof value === 'number') {
+      const d = excelSerialToDate(value);
+      if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+      return null;
+    }
+
+    const cleaned = String(value).replace(/\s*\(GMT[^)]*\)\s*$/i, '').trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(cleaned)) return cleaned.slice(0, 10);
+    if (/^\d{4}\/\d{2}\/\d{2}/.test(cleaned)) return cleaned.slice(0, 10).replace(/\//g, '-');
+
+    const d = new Date(cleaned);
     if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
     return null;
   }
@@ -473,7 +493,39 @@ if ('serviceWorker' in navigator) {
     return isNaN(n) ? 0 : n;
   }
 
-  document.getElementById('importParseBtn')?.addEventListener('click', () => {
+  // CSV 또는 엑셀(xlsx/xls) 파일을 읽어서 행 배열(JSON)로 반환
+  function readFileAsRows(file) {
+    return new Promise((resolve, reject) => {
+      const isExcel = /\.xlsx?$/i.test(file.name);
+
+      if (isExcel) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+            const sheetName = workbook.SheetNames[0];
+            const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+            resolve(rows);
+          } catch (err) {
+            reject(err);
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+      } else {
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          transformHeader: (h) => h.replace(/^\uFEFF/, '').trim(),
+          complete: (results) => resolve(results.data),
+          error: reject
+        });
+      }
+    });
+  }
+
+  document.getElementById('importParseBtn')?.addEventListener('click', async () => {
     const fileInput = document.getElementById('importFile');
     const previewEl = document.getElementById('importPreview');
     const file = fileInput.files[0];
@@ -483,50 +535,46 @@ if ('serviceWorker' in navigator) {
       return;
     }
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: (h) => h.replace(/^\uFEFF/, '').trim(),
-      complete: (results) => {
-        const rows = results.data;
-        const mapped = [];
+    previewEl.textContent = '분석 중...';
 
-        rows.forEach((row) => {
-          const name = (row['사원명'] || '').trim();
-          if (!IMPORT_ALLOWED_NAMES.includes(name)) return;
+    try {
+      const rows = await readFileAsRows(file);
+      const mapped = [];
 
-          const payDate = parseDateFlexible(row['지급일']);
-          if (!payDate || payDate < IMPORT_MIN_DATE) return;
+      rows.forEach((row) => {
+        const name = String(row['사원명'] || '').trim();
+        if (!IMPORT_ALLOWED_NAMES.includes(name)) return;
 
-          const pay = {};
-          PAY_KEYS.forEach(k => { pay[k] = toNumber(row[k]); });
+        const payDate = parseDateFlexible(row['지급일']);
+        if (!payDate || payDate < IMPORT_MIN_DATE) return;
 
-          const deductions = {};
-          Object.entries(DED_COLUMN_MAP).forEach(([csvKey, ourKey]) => {
-            deductions[ourKey] = toNumber(row[csvKey]);
-          });
+        const pay = {};
+        PAY_KEYS.forEach(k => { pay[k] = toNumber(row[k]); });
 
-          mapped.push({
-            '사원명': name,
-            '지급일': payDate,
-            '부서명': (row['부서'] || '').trim(),
-            '직급': (row['직급'] || '').trim(),
-            pay,
-            deductions,
-            '지급액계': toNumber(row['지급액계']),
-            '공제액계': toNumber(row['공제액계']),
-            '차인지급액': toNumber(row['차인지급액'])
-          });
+        const deductions = {};
+        Object.entries(DED_COLUMN_MAP).forEach(([csvKey, ourKey]) => {
+          deductions[ourKey] = toNumber(row[csvKey]);
         });
 
-        parsedPayslipRows = mapped;
-        previewEl.textContent = `조건에 맞는 ${mapped.length}건을 가져올 준비가 되었습니다. (전체 ${rows.length}행 중)`;
-        document.getElementById('importRunBtn').style.display = mapped.length ? 'inline-block' : 'none';
-      },
-      error: (err) => {
-        previewEl.textContent = '파일 분석 실패: ' + err.message;
-      }
-    });
+        mapped.push({
+          '사원명': name,
+          '지급일': payDate,
+          '부서명': String(row['부서'] || '').trim(),
+          '직급': String(row['직급'] || '').trim(),
+          pay,
+          deductions,
+          '지급액계': toNumber(row['지급액계']),
+          '공제액계': toNumber(row['공제액계']),
+          '차인지급액': toNumber(row['차인지급액'])
+        });
+      });
+
+      parsedPayslipRows = mapped;
+      previewEl.textContent = `조건에 맞는 ${mapped.length}건을 가져올 준비가 되었습니다. (전체 ${rows.length}행 중)`;
+      document.getElementById('importRunBtn').style.display = mapped.length ? 'inline-block' : 'none';
+    } catch (err) {
+      previewEl.textContent = '파일 분석 실패: ' + err.message;
+    }
   });
 
   document.getElementById('importRunBtn')?.addEventListener('click', async () => {

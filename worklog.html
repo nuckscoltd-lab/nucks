@@ -236,11 +236,11 @@ if ('serviceWorker' in navigator) {
 <main>
   <!-- 노션 CSV 가져오기 (관리자 전용) -->
   <div class="write-panel" id="importPanel" style="display:none;">
-    <div class="panel-title">노션 CSV 가져오기 (관리자)</div>
+    <div class="panel-title">노션 CSV/엑셀 가져오기 (관리자)</div>
     <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
       대상: 이연경, 손영화, 윤성원 · 기간: 2025-11-01 이후만 자동 필터링됩니다.
     </div>
-    <input type="file" id="importFile" accept=".csv">
+    <input type="file" id="importFile" accept=".csv,.xlsx,.xls">
     <button class="submit-btn" id="importParseBtn" style="margin-left:8px;">파일 분석</button>
     <div id="importPreview" style="margin-top:12px; font-size:13px;"></div>
     <button class="submit-btn" id="importRunBtn" style="display:none; margin-top:12px;">가져오기 실행</button>
@@ -359,6 +359,7 @@ if ('serviceWorker' in navigator) {
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-functions-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="firebase-config.js"></script>
 <script src="auth.js"></script>
 <script>
@@ -867,14 +868,49 @@ if ('serviceWorker' in navigator) {
 
   let parsedImportRows = [];
 
+  // 엑셀 날짜 일련번호(예: 45681) -> 실제 날짜로 변환
+  function excelSerialToDate(serial) {
+    const utcDays = Math.floor(serial - 25569);
+    return new Date(utcDays * 86400 * 1000);
+  }
+
+  // 날짜 값이 문자열/숫자(엑셀 일련번호)/Date객체 등 다양한 형태로 들어와도 YYYY-MM-DD로 통일
   function parseDateFlexible(value) {
-    if (!value) return null;
-    const v = String(value).trim();
-    if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
-    if (/^\d{4}\/\d{2}\/\d{2}/.test(v)) return v.slice(0, 10).replace(/\//g, '-');
-    const d = new Date(v);
+    if (value === null || value === undefined || value === '') return null;
+
+    if (value instanceof Date) {
+      if (isNaN(value.getTime())) return null;
+      return value.toISOString().slice(0, 10);
+    }
+
+    if (typeof value === 'number') {
+      const d = excelSerialToDate(value);
+      if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+      return null;
+    }
+
+    // "2026/04/08   (GMT+9)" 처럼 뒤에 시간대 표기가 붙어있는 경우 제거
+    const cleaned = String(value).replace(/\s*\(GMT[^)]*\)\s*$/i, '').trim();
+
+    if (/^\d{4}-\d{2}-\d{2}/.test(cleaned)) return cleaned.slice(0, 10);
+    if (/^\d{4}\/\d{2}\/\d{2}/.test(cleaned)) return cleaned.slice(0, 10).replace(/\//g, '-');
+
+    const d = new Date(cleaned);
     if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
     return null;
+  }
+
+  // 출근/퇴근시간 값에서 HH:MM만 뽑아냄 ("2025/06/11 10:00 (GMT+9)" 같은 값도 처리)
+  function extractTimeHHMM(value) {
+    if (!value) return '';
+    if (value instanceof Date) {
+      const h = String(value.getHours()).padStart(2, '0');
+      const m = String(value.getMinutes()).padStart(2, '0');
+      return `${h}:${m}`;
+    }
+    const match = String(value).match(/(\d{1,2}):(\d{2})/);
+    if (match) return `${match[1].padStart(2, '0')}:${match[2]}`;
+    return '';
   }
 
   function parseCheckboxValue(value) {
@@ -883,7 +919,39 @@ if ('serviceWorker' in navigator) {
     return ['yes', 'true', 'checked', 'v', 'o', '1', '✓', '참'].includes(v);
   }
 
-  document.getElementById('importParseBtn')?.addEventListener('click', () => {
+  // CSV 또는 엑셀(xlsx/xls) 파일을 읽어서 행 배열(JSON)로 반환
+  function readFileAsRows(file) {
+    return new Promise((resolve, reject) => {
+      const isExcel = /\.xlsx?$/i.test(file.name);
+
+      if (isExcel) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+            const sheetName = workbook.SheetNames[0];
+            const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+            resolve(rows);
+          } catch (err) {
+            reject(err);
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+      } else {
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          transformHeader: (h) => h.replace(/^\uFEFF/, '').trim(),
+          complete: (results) => resolve(results.data),
+          error: reject
+        });
+      }
+    });
+  }
+
+  document.getElementById('importParseBtn')?.addEventListener('click', async () => {
     const fileInput = document.getElementById('importFile');
     const previewEl = document.getElementById('importPreview');
     const file = fileInput.files[0];
@@ -893,54 +961,50 @@ if ('serviceWorker' in navigator) {
       return;
     }
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: (h) => h.replace(/^\uFEFF/, '').trim(),
-      complete: (results) => {
-        const rows = results.data;
-        const mapped = [];
+    previewEl.textContent = '분석 중...';
 
-        rows.forEach((row) => {
-          const name = (row['사원명'] || '').trim();
-          if (!IMPORT_ALLOWED_NAMES.includes(name)) return;
+    try {
+      const rows = await readFileAsRows(file);
+      const mapped = [];
 
-          const dateStr = parseDateFlexible(row['날짜']);
-          if (!dateStr || dateStr < IMPORT_MIN_DATE) return;
+      rows.forEach((row) => {
+        const name = String(row['사원명'] || '').trim();
+        if (!IMPORT_ALLOWED_NAMES.includes(name)) return;
 
-          const checkin = (row['출근시간'] || '').trim();
-          const checkout = (row['퇴근시간'] || '').trim();
-          const totalHours = calcHoursDiff(checkin, checkout);
+        const dateStr = parseDateFlexible(row['날짜']);
+        if (!dateStr || dateStr < IMPORT_MIN_DATE) return;
 
-          const tasks = {};
-          Object.entries(TASK_COLUMN_MAP).forEach(([csvKey, ourKey]) => {
-            tasks[ourKey] = parseCheckboxValue(row[csvKey]);
-          });
+        const checkin = extractTimeHHMM(row['출근시간']);
+        const checkout = extractTimeHHMM(row['퇴근시간']);
+        const totalHours = calcHoursDiff(checkin, checkout);
 
-          // 노션 CSV는 하루에 프로젝트 1개 구조라, 전체 근무시간을 그 프로젝트에 그대로 배정
-          mapped.push({
-            '사원명': name,
-            '날짜': dateStr,
-            '출근시간': checkin,
-            '퇴근시간': checkout,
-            '총근무시간': totalHours,
-            '상세내용': (row['상세내용'] || '').trim(),
-            projects: [{
-              '프로젝트': (row['프로젝트'] || '').trim(),
-              '투입시간': totalHours,
-              tasks
-            }]
-          });
+        const tasks = {};
+        Object.entries(TASK_COLUMN_MAP).forEach(([csvKey, ourKey]) => {
+          tasks[ourKey] = parseCheckboxValue(row[csvKey]);
         });
 
-        parsedImportRows = mapped;
-        previewEl.textContent = `조건에 맞는 ${mapped.length}건을 가져올 준비가 되었습니다. (전체 ${rows.length}행 중)`;
-        document.getElementById('importRunBtn').style.display = mapped.length ? 'inline-block' : 'none';
-      },
-      error: (err) => {
-        previewEl.textContent = '파일 분석 실패: ' + err.message;
-      }
-    });
+        // 노션 데이터는 하루에 프로젝트 1개 구조라, 전체 근무시간을 그 프로젝트에 그대로 배정
+        mapped.push({
+          '사원명': name,
+          '날짜': dateStr,
+          '출근시간': checkin,
+          '퇴근시간': checkout,
+          '총근무시간': totalHours,
+          '상세내용': String(row['상세내용'] || '').trim(),
+          projects: [{
+            '프로젝트': String(row['프로젝트'] || '').trim(),
+            '투입시간': totalHours,
+            tasks
+          }]
+        });
+      });
+
+      parsedImportRows = mapped;
+      previewEl.textContent = `조건에 맞는 ${mapped.length}건을 가져올 준비가 되었습니다. (전체 ${rows.length}행 중)`;
+      document.getElementById('importRunBtn').style.display = mapped.length ? 'inline-block' : 'none';
+    } catch (err) {
+      previewEl.textContent = '파일 분석 실패: ' + err.message;
+    }
   });
 
   document.getElementById('importRunBtn')?.addEventListener('click', async () => {
