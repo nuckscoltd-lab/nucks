@@ -686,6 +686,7 @@
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
+      transformHeader: (h) => h.replace(/^\uFEFF/, '').trim(),
       complete: (results) => {
         const rows = results.data;
         const mapped = [];
