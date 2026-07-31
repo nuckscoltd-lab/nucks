@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#141414">
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+</script>
 <title>업무 파일 | NUCKS</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
@@ -116,6 +123,32 @@
   .preview-empty{
     background:#fff; border:1px solid var(--line); border-radius:6px;
     padding:36px; text-align:center; color:var(--muted); font-size:13.5px; line-height:1.7;
+  }
+  @media (max-width: 640px) {
+    header{ padding:20px !important; flex-wrap:wrap; gap:10px; }
+    .header-right{ flex-wrap:wrap; gap:12px !important; }
+    main{ padding:24px 16px !important; }
+    h1{ font-size:24px !important; }
+    input, select, textarea{ font-size:16px !important; }
+    .upload-row{ flex-direction:column; align-items:stretch !important; }
+    .field{ min-width:0 !important; }
+    .tabs{ gap:6px !important; }
+
+    /* 넓은 표는 가로 스크롤 대신 카드형으로 세로 전환 */
+    table{ min-width:0 !important; }
+    thead{ display:none; }
+    table, tbody, tr, td{ display:block; width:100%; }
+    tr{
+      border:1px solid var(--line); border-radius:6px;
+      margin-bottom:12px; padding:10px 14px; background:#fff;
+    }
+    td{
+      border:none !important; padding:6px 0 !important; white-space:normal !important;
+    }
+    td[data-label]::before{
+      content:attr(data-label);
+      display:block; font-size:11px; color:var(--muted); margin-bottom:2px;
+    }
   }
 </style>
 </head>
@@ -308,11 +341,11 @@
       const tr = document.createElement('tr');
       tr.dataset.id = f.id;
       tr.innerHTML = `
-        <td class="cell-name">${f.name}</td>
-        <td class="cell-category"><span class="cat-badge">${f.category}</span></td>
-        <td>${f.uploaderEmail || ''}</td>
-        <td>${dateStr}</td>
-        <td>
+        <td class="cell-name" data-label="파일명">${f.name}</td>
+        <td class="cell-category" data-label="카테고리"><span class="cat-badge">${f.category}</span></td>
+        <td data-label="업로더">${f.uploaderEmail || ''}</td>
+        <td data-label="날짜">${dateStr}</td>
+        <td data-label="다운로드">
           ${previewUrl ? `<a class="dl-link" href="${previewUrl}" target="_blank" rel="noopener">미리보기</a>` : ''}
           <a class="dl-link" href="${f.url}" target="_blank" rel="noopener" download>다운로드</a>
           ${isAdmin ? `

@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#141414">
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+</script>
 <title>근무일지 | NUCKS</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
@@ -175,6 +182,39 @@
   }
   .cal-cell-holiday{ background:#fdf6f5; }
   .cal-cell-holiday.other-month{ background:#f2f0eb; }
+  @media (max-width: 640px) {
+    header{ padding:20px !important; flex-wrap:wrap; gap:10px; }
+    .header-right{ flex-wrap:wrap; gap:12px !important; }
+    main{ padding:24px 16px !important; }
+    h1{ font-size:24px !important; }
+    input, select, textarea{ font-size:16px !important; }
+    .form-grid{ grid-template-columns:1fr !important; }
+    .project-row-top{ flex-direction:column; align-items:stretch !important; }
+    .project-row-top .field{ min-width:0 !important; }
+    .task-checks{ gap:8px !important; }
+    .toolbar{ flex-direction:column; align-items:stretch !important; gap:10px !important; }
+    .cal-nav{ gap:10px !important; }
+    .cal-cell{ min-height:70px !important; padding:3px !important; }
+    .cal-item{ font-size:9.5px !important; }
+    .cal-dow{ font-size:10px !important; padding:5px !important; }
+
+    /* 넓은 표는 가로 스크롤 대신 카드형으로 세로 전환 */
+    table{ min-width:0 !important; }
+    thead{ display:none; }
+    table, tbody, tr, td{ display:block; width:100%; }
+    tr{
+      border:1px solid var(--line); border-radius:6px;
+      margin-bottom:12px; padding:10px 14px; background:#fff;
+    }
+    td{
+      border:none !important; padding:6px 0 !important; white-space:normal !important;
+      max-width:none !important;
+    }
+    td[data-label]::before{
+      content:attr(data-label);
+      display:block; font-size:11px; color:var(--muted); margin-bottom:2px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -676,15 +716,15 @@
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td class="nowrap">${row['날짜'] || ''}</td>
-        <td class="nowrap">${row['사원명'] || ''}</td>
-        <td class="nowrap">${row['출근시간'] || ''}</td>
-        <td class="nowrap">${row['퇴근시간'] || ''}</td>
-        <td class="nowrap">${row['총근무시간'] ?? ''}시간</td>
-        <td style="min-width:220px;">${projectHtml}</td>
-        <td class="detail-cell">${row['상세내용'] || ''}</td>
-        <td class="nowrap">${attach}</td>
-        <td class="nowrap">
+        <td class="nowrap" data-label="날짜">${row['날짜'] || ''}</td>
+        <td class="nowrap" data-label="사원명">${row['사원명'] || ''}</td>
+        <td class="nowrap" data-label="출근">${row['출근시간'] || ''}</td>
+        <td class="nowrap" data-label="퇴근">${row['퇴근시간'] || ''}</td>
+        <td class="nowrap" data-label="총근무">${row['총근무시간'] ?? ''}시간</td>
+        <td style="min-width:220px;" data-label="프로젝트별 내역">${projectHtml}</td>
+        <td class="detail-cell" data-label="상세내용">${row['상세내용'] || ''}</td>
+        <td class="nowrap" data-label="첨부">${attach}</td>
+        <td class="nowrap" data-label="관리">
           ${canManage ? `<button class="row-btn danger" data-id="${row.id}">삭제</button>` : ''}
         </td>
       `;
@@ -1063,11 +1103,11 @@
       const avgHourly = data.hours > 0 ? data.cost / data.hours : 0;
       return `
       <tr>
-        <td>${name}</td>
-        <td>${data.hours.toFixed(1)}시간</td>
-        <td>${data.people.size}명 (${[...data.people].join(', ')})</td>
-        <td>${Math.round(data.cost).toLocaleString()}원</td>
-        <td>${Math.round(avgHourly).toLocaleString()}원/시간</td>
+        <td data-label="프로젝트">${name}</td>
+        <td data-label="총 투입시간">${data.hours.toFixed(1)}시간</td>
+        <td data-label="참여 인원">${data.people.size}명 (${[...data.people].join(', ')})</td>
+        <td data-label="추정 인건비">${Math.round(data.cost).toLocaleString()}원</td>
+        <td data-label="평균 시급">${Math.round(avgHourly).toLocaleString()}원/시간</td>
       </tr>
     `;
     }).join('');

@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#141414">
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+</script>
 <title>관리자 | NUCKS</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
@@ -87,6 +94,28 @@
   .apply-btn:disabled{ opacity:.4; cursor:default; }
   .empty{ font-size:13px; color:var(--muted); padding:20px 0; }
   .status-msg{ font-size:13px; margin-top:-40px; margin-bottom:40px; min-height:18px; }
+  @media (max-width: 640px) {
+    header{ padding:20px !important; flex-wrap:wrap; gap:10px; }
+    .header-right{ flex-wrap:wrap; gap:12px !important; }
+    main{ padding:24px 16px !important; }
+    h1{ font-size:24px !important; }
+    input, select, textarea{ font-size:16px !important; }
+
+    table{ min-width:0 !important; }
+    thead{ display:none; }
+    table, tbody, tr, td{ display:block; width:100%; }
+    tr{
+      border:1px solid var(--line); border-radius:6px;
+      margin-bottom:12px; padding:10px 14px; background:#fff;
+    }
+    td{
+      border:none !important; padding:6px 0 !important; white-space:normal !important;
+    }
+    td[data-label]::before{
+      content:attr(data-label);
+      display:block; font-size:11px; color:var(--muted); margin-bottom:2px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -152,10 +181,10 @@
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${data.displayName || '(이름 없음)'}</td>
-        <td>${data.email || ''}</td>
-        <td><span class="role-badge role-${data.role}">${roleLabel[data.role] || data.role}</span></td>
-        <td>
+        <td data-label="이름">${data.displayName || '(이름 없음)'}</td>
+        <td data-label="이메일">${data.email || ''}</td>
+        <td data-label="현재 권한"><span class="role-badge role-${data.role}">${roleLabel[data.role] || data.role}</span></td>
+        <td data-label="변경">
           <select data-uid="${uid}">
             <option value="guest" ${data.role === 'guest' ? 'selected' : ''}>게스트</option>
             <option value="worker" ${data.role === 'worker' ? 'selected' : ''}>근로자</option>
