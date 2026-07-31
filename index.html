@@ -186,6 +186,14 @@
 </head>
 <body>
 
+    <div id="notifPopup" style="display:none; position:fixed; top:24px; right:24px; z-index:9999; max-width:340px; background:#fff; border:1px solid #d8d5cd; border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.12); padding:20px; font-family:'Pretendard', -apple-system, sans-serif;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div style="font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#8a8578;">알림</div>
+            <button id="notifCloseBtn" style="background:none; border:none; cursor:pointer; font-size:14px; color:#8a8578;">✕</button>
+        </div>
+        <div id="notifBody" style="font-size:13.5px; line-height:1.7; color:#141414;"></div>
+    </div>
+
     <header>
         <a href="about.html" class="logo"><img src="nuckslogo1.png" alt="Logo" style="height: 25px;"></a>
         <div class="mobile-menu-icon" onclick="toggleMenu()">☰</div>
@@ -197,6 +205,7 @@
             <a href="leave.html" id="leaveNavLink" style="display:none;">Leave</a>
             <a href="payslip.html" id="payslipNavLink" style="display:none;">Payslip</a>
             <a href="worklog.html" id="worklogNavLink" style="display:none;">Worklog</a>
+            <a href="board.html" id="boardNavLink" style="display:none; position:relative;">Board<span id="boardBadge" style="display:none; position:absolute; top:-4px; right:-10px; width:8px; height:8px; border-radius:50%; background:#a4453c;"></span></a>
             <a href="files.html" id="filesNavLink" style="display:none;">Files</a>
             <a href="admin.html" id="adminNavLink" style="display:none;">Admin</a>
             <a href="login.html" id="authNavLink">Login</a>
@@ -545,6 +554,13 @@
 
                 const leaveLink = document.getElementById('leaveNavLink');
                 leaveLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
+
+                const boardLink = document.getElementById('boardNavLink');
+                boardLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
+
+                if (role === 'worker' || role === 'admin') {
+                    checkNotifications(user, role);
+                }
             },
             () => {
                 const link = document.getElementById('authNavLink');
@@ -569,8 +585,74 @@
 
                 const leaveLink = document.getElementById('leaveNavLink');
                 leaveLink.style.display = 'none';
+
+                const boardLink = document.getElementById('boardNavLink');
+                boardLink.style.display = 'none';
             }
         );
+
+        // ---------- 알림: 게시판 새 글 + 다가오는 연차(일주일 이내) ----------
+        async function checkNotifications(user, role) {
+            const notifItems = [];
+
+            try {
+                // 1. 게시판 새 글 여부 확인 (본인이 마지막으로 게시판을 확인한 시각 이후 글이 있는지)
+                const userDoc = await db.collection('users').doc(user.uid).get();
+                const lastSeenBoard = userDoc.data()?.lastSeenBoard;
+
+                const latestPostSnap = await db.collection('posts').orderBy('createdAt', 'desc').limit(1).get();
+                if (!latestPostSnap.empty) {
+                    const latestPost = latestPostSnap.docs[0].data();
+                    const isNew = !lastSeenBoard || (latestPost.createdAt && latestPost.createdAt.toMillis() > lastSeenBoard.toMillis());
+                    if (isNew) {
+                        document.getElementById('boardBadge').style.display = 'block';
+                        notifItems.push(`📋 게시판에 새 글이 있습니다: "${latestPost.title}"`);
+                    }
+                }
+
+                // 2. 관리자: 앞으로 7일 이내 예정된 연차 확인
+                if (role === 'admin') {
+                    const today = new Date();
+                    const todayStr = today.toISOString().slice(0, 10);
+                    const weekLater = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+                    const weekLaterStr = weekLater.toISOString().slice(0, 10);
+
+                    const leavesSnap = await db.collection('leaves').get();
+                    const upcoming = leavesSnap.docs
+                        .map(d => d.data())
+                        .filter(l => l['날짜'] >= todayStr && l['날짜'] <= weekLaterStr);
+
+                    if (upcoming.length > 0) {
+                        upcoming.sort((a, b) => (a['날짜'] || '').localeCompare(b['날짜'] || ''));
+                        notifItems.push('🏖 일주일 내 예정된 연차:');
+                        upcoming.forEach(l => {
+                            notifItems.push(`　· ${l['사원명'] || ''} - ${l['날짜']} (${l['연차구분'] || '연차'})`);
+                        });
+                    }
+                }
+
+                if (notifItems.length > 0) {
+                    showNotifPopup(notifItems);
+                }
+            } catch (err) {
+                console.error('알림 확인 실패:', err);
+            }
+        }
+
+        function showNotifPopup(items) {
+            // 세션당 한 번만 팝업 (새로고침마다 계속 뜨지 않도록)
+            if (sessionStorage.getItem('notifShown')) return;
+            sessionStorage.setItem('notifShown', '1');
+
+            const popup = document.getElementById('notifPopup');
+            const body = document.getElementById('notifBody');
+            body.innerHTML = items.map(i => `<div style="margin-bottom:6px;">${i}</div>`).join('');
+            popup.style.display = 'block';
+        }
+
+        document.getElementById('notifCloseBtn').addEventListener('click', () => {
+            document.getElementById('notifPopup').style.display = 'none';
+        });
     </script>
 
 </body></html>

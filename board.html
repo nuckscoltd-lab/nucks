@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>게시판 | NUCKS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
+
+  :root{
+    --ink:#141414;
+    --paper:#f7f6f3;
+    --line:#d8d5cd;
+    --muted:#8a8578;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background:var(--paper);
+    font-family:'Pretendard', -apple-system, sans-serif; color:var(--ink);
+  }
+  header{
+    padding:28px 48px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .eyebrow{
+    font-size:11px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:6px;
+  }
+  h1{
+    font-family:'Cormorant Garamond', serif; font-weight:500;
+    font-size:32px; margin:0; letter-spacing:.01em;
+  }
+  .header-right{ display:flex; align-items:center; gap:24px; }
+  .header-right a{
+    font-size:13px; color:var(--muted); text-decoration:none;
+    border-bottom:1px solid var(--muted); cursor:pointer;
+  }
+  main{ max-width:900px; margin:0 auto; padding:40px 48px; }
+
+  .tabs{ display:flex; gap:8px; margin-bottom:24px; flex-wrap:wrap; }
+  .tab{
+    padding:7px 16px; border-radius:20px; border:1px solid var(--line);
+    background:#fff; font-size:13px; color:var(--muted); cursor:pointer;
+  }
+  .tab.active{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  .tab.safety.active{ background:#a4453c; border-color:#a4453c; }
+
+  .new-post-btn{
+    padding:9px 18px; background:var(--ink); color:var(--paper);
+    border:none; font-size:12.5px; letter-spacing:.05em; text-transform:uppercase;
+    cursor:pointer; border-radius:4px; margin-bottom:24px;
+  }
+
+  .post-card{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:18px 20px; margin-bottom:12px; cursor:pointer;
+  }
+  .post-card:hover{ border-color:var(--ink); }
+  .post-card-top{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .cat-badge{
+    display:inline-block; font-size:11px; padding:3px 10px; border-radius:20px;
+    background:#ece9e2; color:#7a766c;
+  }
+  .cat-badge.safety{ background:#fbe4e2; color:#a4453c; }
+  .post-title{ font-size:15px; font-weight:600; margin:4px 0; }
+  .post-meta{ font-size:12px; color:var(--muted); }
+  .post-preview{ font-size:13px; color:var(--muted); margin-top:6px; }
+
+  .empty{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:36px; text-align:center; color:var(--muted); font-size:13.5px;
+  }
+
+  .write-panel{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:24px; margin-bottom:24px; display:none;
+  }
+  .write-panel.show{ display:block; }
+  .field{ display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+  .field label{ font-size:11.5px; color:var(--muted); }
+  .field input, .field select, .field textarea{
+    padding:9px 10px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:14px; background:#fff;
+  }
+  .field textarea{ min-height:140px; resize:vertical; }
+  .submit-btn{
+    padding:10px 22px; background:var(--ink); color:var(--paper);
+    border:none; font-size:12.5px; letter-spacing:.05em; text-transform:uppercase;
+    cursor:pointer; border-radius:4px;
+  }
+  .cancel-btn{
+    padding:10px 18px; background:none; color:var(--muted);
+    border:none; font-size:12.5px; cursor:pointer;
+  }
+  .submit-status{ font-size:13px; margin-top:10px; min-height:18px; }
+
+  .detail-view{ display:none; }
+  .detail-view.show{ display:block; }
+  .back-link{
+    font-size:13px; color:var(--muted); text-decoration:none; cursor:pointer;
+    display:inline-block; margin-bottom:20px;
+  }
+  .detail-card{
+    background:#fff; border:1px solid var(--line); border-radius:6px; padding:28px;
+  }
+  .detail-title{ font-size:20px; font-weight:600; margin:10px 0; }
+  .detail-body{ font-size:14.5px; line-height:1.8; white-space:pre-wrap; margin:20px 0; }
+  .detail-attach{ font-size:13px; margin-bottom:16px; }
+  .detail-attach a{ color:var(--ink); border-bottom:1px solid var(--ink); text-decoration:none; }
+  .detail-actions{ margin-top:16px; }
+  .detail-actions button{
+    font-size:12px; background:none; border:none; cursor:pointer;
+    text-decoration:underline; color:#a4453c; margin-right:10px;
+  }
+
+  .comments-section{ margin-top:32px; border-top:1px solid var(--line); padding-top:20px; }
+  .comments-title{ font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; margin-bottom:14px; }
+  .comment{ padding:12px 0; border-bottom:1px solid var(--line); font-size:13.5px; }
+  .comment-meta{ font-size:11.5px; color:var(--muted); margin-bottom:4px; }
+  .comment-del{ font-size:11px; color:#a4453c; background:none; border:none; cursor:pointer; text-decoration:underline; margin-left:8px; }
+  .comment-form{ display:flex; gap:8px; margin-top:16px; }
+  .comment-form input{
+    flex:1; padding:9px 10px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13.5px;
+  }
+  .comment-form button{
+    padding:9px 16px; background:var(--ink); color:var(--paper); border:none;
+    border-radius:4px; font-size:12.5px; cursor:pointer;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">NUCKS</div>
+    <h1>게시판</h1>
+  </div>
+  <div class="header-right">
+    <a href="index.html">Home</a>
+    <a href="#" id="logoutBtn">Logout</a>
+  </div>
+</header>
+
+<main>
+  <div id="listView">
+    <div class="tabs" id="tabs"></div>
+    <button class="new-post-btn" id="newPostBtn">+ 새 글 작성</button>
+
+    <div class="write-panel" id="writePanel">
+      <div class="field">
+        <label for="f-category">카테고리</label>
+        <select id="f-category">
+          <option value="일반공지">일반공지</option>
+          <option value="안전위험성요인">안전위험성요인</option>
+          <option value="기타">기타</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="f-title">제목</label>
+        <input type="text" id="f-title">
+      </div>
+      <div class="field">
+        <label for="f-body">내용</label>
+        <textarea id="f-body"></textarea>
+      </div>
+      <div class="field" style="max-width:320px;">
+        <label for="f-file">파일첨부 (선택)</label>
+        <input type="file" id="f-file">
+      </div>
+      <button class="submit-btn" id="submitPostBtn">등록</button>
+      <button class="cancel-btn" id="cancelPostBtn">취소</button>
+      <div class="submit-status" id="submitStatus"></div>
+    </div>
+
+    <div id="postList"></div>
+    <div class="empty" id="emptyMsg" style="display:none;">등록된 게시글이 없습니다.</div>
+  </div>
+
+  <div id="detailView" class="detail-view">
+    <a class="back-link" id="backLink">← 목록으로</a>
+    <div class="detail-card">
+      <span class="cat-badge" id="detailCat"></span>
+      <div class="detail-title" id="detailTitle"></div>
+      <div class="post-meta" id="detailMeta"></div>
+      <div class="detail-attach" id="detailAttach"></div>
+      <div class="detail-body" id="detailBody"></div>
+      <div class="detail-actions" id="detailActions"></div>
+
+      <div class="comments-section">
+        <div class="comments-title">댓글</div>
+        <div id="commentsList"></div>
+        <div class="comment-form">
+          <input type="text" id="commentInput" placeholder="댓글을 입력하세요">
+          <button id="commentSubmitBtn">등록</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+  requireRole(['worker', 'admin']);
+
+  const storage = firebase.storage();
+  const CATEGORIES = ['전체', '일반공지', '안전위험성요인', '기타'];
+
+  let currentUser = null;
+  let currentRole = null;
+  let currentDisplayName = '';
+  let allPosts = [];
+  let activeCategory = '전체';
+  let currentPostId = null;
+
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) return;
+    currentUser = user;
+    currentRole = await getCurrentUserRole();
+
+    const userDoc = await db.collection('users').doc(user.uid).get();
+    currentDisplayName = userDoc.data()?.displayName || user.email;
+
+    try {
+      await db.collection('users').doc(user.uid).update({
+        lastSeenBoard: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } catch (e) { /* 무시 */ }
+
+    renderTabs();
+    loadPosts();
+  });
+
+  function renderTabs() {
+    const tabsEl = document.getElementById('tabs');
+    tabsEl.innerHTML = '';
+    CATEGORIES.forEach(cat => {
+      const btn = document.createElement('div');
+      btn.className = 'tab' + (cat === activeCategory ? ' active' : '') + (cat === '안전위험성요인' ? ' safety' : '');
+      btn.textContent = cat;
+      btn.addEventListener('click', () => {
+        activeCategory = cat;
+        renderTabs();
+        renderPostList();
+      });
+      tabsEl.appendChild(btn);
+    });
+  }
+
+  async function loadPosts() {
+    const snapshot = await db.collection('posts').orderBy('createdAt', 'desc').get();
+    allPosts = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderPostList();
+  }
+
+  function renderPostList() {
+    const listEl = document.getElementById('postList');
+    const emptyMsg = document.getElementById('emptyMsg');
+    const posts = activeCategory === '전체' ? allPosts : allPosts.filter(p => p.category === activeCategory);
+
+    if (posts.length === 0) {
+      listEl.innerHTML = '';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+
+    listEl.innerHTML = posts.map(p => {
+      const dateStr = p.createdAt?.toDate ? p.createdAt.toDate().toLocaleString('ko-KR') : '';
+      const catClass = p.category === '안전위험성요인' ? 'cat-badge safety' : 'cat-badge';
+      const preview = (p.body || '').slice(0, 60);
+      return `
+        <div class="post-card" data-id="${p.id}">
+          <div class="post-card-top">
+            <span class="${catClass}">${p.category}</span>
+            <span class="post-meta">${p.authorName || ''} · ${dateStr}</span>
+          </div>
+          <div class="post-title">${p.title}</div>
+          <div class="post-preview">${preview}${(p.body||'').length > 60 ? '…' : ''}</div>
+        </div>
+      `;
+    }).join('');
+
+    document.querySelectorAll('.post-card').forEach(card => {
+      card.addEventListener('click', () => openDetail(card.dataset.id));
+    });
+  }
+
+  document.getElementById('newPostBtn').addEventListener('click', () => {
+    document.getElementById('writePanel').classList.toggle('show');
+  });
+  document.getElementById('cancelPostBtn').addEventListener('click', () => {
+    document.getElementById('writePanel').classList.remove('show');
+  });
+
+  document.getElementById('submitPostBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('submitStatus');
+    const btn = document.getElementById('submitPostBtn');
+
+    const category = document.getElementById('f-category').value;
+    const title = document.getElementById('f-title').value.trim();
+    const body = document.getElementById('f-body').value.trim();
+    const fileInput = document.getElementById('f-file');
+
+    if (!title || !body) {
+      statusEl.style.color = '#a4453c';
+      statusEl.textContent = '제목과 내용을 입력해 주세요.';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = '등록 중...';
+    statusEl.style.color = 'var(--muted)';
+    statusEl.textContent = '등록 중입니다...';
+
+    try {
+      const docData = {
+        uid: currentUser.uid,
+        authorName: currentDisplayName,
+        category,
+        title,
+        body,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      if (fileInput.files[0]) {
+        const file = fileInput.files[0];
+        const path = `board/${currentUser.uid}/${Date.now()}_${file.name}`;
+        const ref = storage.ref(path);
+        await ref.put(file);
+        const url = await ref.getDownloadURL();
+        docData.attachment = { name: file.name, url };
+      }
+
+      await db.collection('posts').add(docData);
+
+      statusEl.style.color = '#3f6b52';
+      statusEl.textContent = '등록되었습니다.';
+      document.getElementById('f-title').value = '';
+      document.getElementById('f-body').value = '';
+      document.getElementById('f-file').value = '';
+      document.getElementById('writePanel').classList.remove('show');
+
+      await loadPosts();
+    } catch (err) {
+      statusEl.style.color = '#a4453c';
+      statusEl.textContent = '등록 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '등록';
+    }
+  });
+
+  async function openDetail(postId) {
+    currentPostId = postId;
+    const post = allPosts.find(p => p.id === postId);
+    if (!post) return;
+
+    document.getElementById('listView').style.display = 'none';
+    document.getElementById('detailView').classList.add('show');
+
+    const catClass = post.category === '안전위험성요인' ? 'cat-badge safety' : 'cat-badge';
+    document.getElementById('detailCat').className = catClass;
+    document.getElementById('detailCat').textContent = post.category;
+    document.getElementById('detailTitle').textContent = post.title;
+    const dateStr = post.createdAt?.toDate ? post.createdAt.toDate().toLocaleString('ko-KR') : '';
+    document.getElementById('detailMeta').textContent = `${post.authorName || ''} · ${dateStr}`;
+    document.getElementById('detailBody').textContent = post.body;
+
+    const attachEl = document.getElementById('detailAttach');
+    attachEl.innerHTML = post.attachment
+      ? `<a href="${post.attachment.url}" target="_blank" rel="noopener">📎 ${post.attachment.name}</a>`
+      : '';
+
+    const canManage = (post.uid === currentUser.uid) || (currentRole === 'admin');
+    document.getElementById('detailActions').innerHTML = canManage
+      ? `<button id="deletePostBtn">이 글 삭제</button>`
+      : '';
+    if (canManage) {
+      document.getElementById('deletePostBtn').addEventListener('click', () => deletePost(postId));
+    }
+
+    await loadComments(postId);
+  }
+
+  document.getElementById('backLink').addEventListener('click', () => {
+    document.getElementById('detailView').classList.remove('show');
+    document.getElementById('listView').style.display = 'block';
+    currentPostId = null;
+  });
+
+  async function deletePost(postId) {
+    if (!confirm('이 게시글을 삭제하시겠습니까? 댓글도 함께 삭제됩니다.')) return;
+    try {
+      const commentsSnap = await db.collection('posts').doc(postId).collection('comments').get();
+      const batch = db.batch();
+      commentsSnap.docs.forEach(d => batch.delete(d.ref));
+      batch.delete(db.collection('posts').doc(postId));
+      await batch.commit();
+
+      document.getElementById('detailView').classList.remove('show');
+      document.getElementById('listView').style.display = 'block';
+      await loadPosts();
+    } catch (err) {
+      alert('삭제 실패: ' + err.message);
+    }
+  }
+
+  async function loadComments(postId) {
+    const snapshot = await db.collection('posts').doc(postId).collection('comments').orderBy('createdAt', 'asc').get();
+    const comments = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    const listEl = document.getElementById('commentsList');
+
+    if (comments.length === 0) {
+      listEl.innerHTML = '<div style="color:var(--muted); font-size:13px;">아직 댓글이 없습니다.</div>';
+      return;
+    }
+
+    listEl.innerHTML = comments.map(c => {
+      const dateStr = c.createdAt?.toDate ? c.createdAt.toDate().toLocaleString('ko-KR') : '';
+      const canDelete = (c.uid === currentUser.uid) || (currentRole === 'admin');
+      return `
+        <div class="comment" data-id="${c.id}">
+          <div class="comment-meta">${c.authorName || ''} · ${dateStr}
+            ${canDelete ? `<button class="comment-del" data-id="${c.id}">삭제</button>` : ''}
+          </div>
+          <div>${c.text}</div>
+        </div>
+      `;
+    }).join('');
+
+    document.querySelectorAll('.comment-del').forEach(btn => {
+      btn.addEventListener('click', () => deleteComment(btn.dataset.id));
+    });
+  }
+
+  document.getElementById('commentSubmitBtn').addEventListener('click', async () => {
+    const input = document.getElementById('commentInput');
+    const text = input.value.trim();
+    if (!text || !currentPostId) return;
+
+    try {
+      await db.collection('posts').doc(currentPostId).collection('comments').add({
+        uid: currentUser.uid,
+        authorName: currentDisplayName,
+        text,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      input.value = '';
+      await loadComments(currentPostId);
+    } catch (err) {
+      alert('댓글 등록 실패: ' + err.message);
+    }
+  });
+
+  async function deleteComment(commentId) {
+    if (!confirm('이 댓글을 삭제하시겠습니까?')) return;
+    try {
+      await db.collection('posts').doc(currentPostId).collection('comments').doc(commentId).delete();
+      await loadComments(currentPostId);
+    } catch (err) {
+      alert('삭제 실패: ' + err.message);
+    }
+  }
+
+  document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await logOut();
+    window.location.href = 'login.html';
+  });
+</script>
+</body>
+</html>
