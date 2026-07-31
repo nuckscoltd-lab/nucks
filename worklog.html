@@ -185,11 +185,14 @@ if ('serviceWorker' in navigator) {
   @media (max-width: 640px) {
     header{ padding:20px !important; flex-wrap:wrap; gap:10px; }
     .header-right{ flex-wrap:wrap; gap:12px !important; }
-    main{ padding:24px 16px !important; }
+    main{ padding:20px 14px !important; }
     h1{ font-size:24px !important; }
-    input, select, textarea{ font-size:16px !important; }
-    .form-grid{ grid-template-columns:1fr !important; }
-    .project-row-top{ flex-direction:column; align-items:stretch !important; }
+    .write-panel{ padding:18px 16px !important; }
+    input, select, textarea{ font-size:16px !important; width:100% !important; box-sizing:border-box; }
+    .field input, .field select{ padding:10px 12px !important; }
+    .form-grid{ grid-template-columns:1fr !important; gap:14px !important; }
+    .project-row{ padding:14px !important; }
+    .project-row-top{ flex-direction:column; align-items:stretch !important; gap:12px !important; }
     .project-row-top .field{ min-width:0 !important; }
     .task-checks{ gap:8px !important; }
     .toolbar{ flex-direction:column; align-items:stretch !important; gap:10px !important; }
