@@ -166,6 +166,10 @@ if ('serviceWorker' in navigator) {
 
   <div class="write-panel" id="adminOnlyPanel">
     <div class="panel-title">급여명세서 작성</div>
+    <div id="selectionBanner" style="display:none; background:#fbe4e2; color:#a4453c; font-size:12.5px; padding:10px 14px; border-radius:4px; margin-bottom:16px;">
+      <span id="selectionBannerText"></span>
+      <button id="clearSelectionBtn" style="margin-left:10px; background:none; border:none; color:#a4453c; text-decoration:underline; cursor:pointer; font-size:12.5px;">선택 해제</button>
+    </div>
 
     <div class="grid">
       <div class="field">
@@ -229,7 +233,7 @@ if ('serviceWorker' in navigator) {
 
   <table id="listTable" style="display:none;">
     <thead>
-      <tr><th>지급일</th><th>사원명</th><th>부서명</th><th>지급액계</th><th>공제액계</th><th>차인지급액</th><th>관리</th></tr>
+      <tr><th>선택</th><th>지급일</th><th>사원명</th><th>부서명</th><th>지급액계</th><th>공제액계</th><th>차인지급액</th><th>관리</th></tr>
     </thead>
     <tbody id="listBody"></tbody>
   </table>
@@ -255,6 +259,8 @@ if ('serviceWorker' in navigator) {
 
   let employees = [];
   let allSlips = [];
+  let selectedSlipIds = new Set();
+  let editingSlipId = null; // 1건만 선택됐을 때, 그 문서 id (수정 모드)
   let currentUser = null;
   let currentRole = null;
 
@@ -314,6 +320,77 @@ if ('serviceWorker' in navigator) {
     return { payTotal, dedTotal };
   }
 
+  // 목록에서 선택한 항목(단일/다중)의 세부 금액을 상단 입력 필드에 표시
+  // 다중 선택이면 각 항목별로 합산해서 보여줌 (조회 전용)
+  // 단일 선택이면 실제 "수정 모드"로 전환 - 저장하면 그 항목이 업데이트됨
+  function updateDetailPreview() {
+    const banner = document.getElementById('selectionBanner');
+    const bannerText = document.getElementById('selectionBannerText');
+    const submitBtn = document.getElementById('submitBtn');
+    const selected = allSlips.filter(s => selectedSlipIds.has(s.id));
+
+    if (selected.length === 0) {
+      banner.style.display = 'none';
+      editingSlipId = null;
+      submitBtn.disabled = false;
+      submitBtn.textContent = '저장';
+      return;
+    }
+
+    banner.style.display = 'block';
+
+    if (selected.length === 1) {
+      editingSlipId = selected[0].id;
+      submitBtn.disabled = false;
+      submitBtn.textContent = '수정 저장';
+      bannerText.textContent = `1건 선택됨 (${selected[0]['사원명']} · ${selected[0]['지급일']}) - 값을 고친 뒤 "수정 저장"을 누르면 이 항목이 업데이트됩니다.`;
+    } else {
+      editingSlipId = null;
+      submitBtn.disabled = true;
+      submitBtn.textContent = '저장 불가 (다중 선택 중)';
+      bannerText.textContent = `${selected.length}건 선택됨 - 아래는 선택한 항목들의 합계(조회 전용)입니다. 수정하려면 1건만 선택해 주세요.`;
+    }
+
+    PAY_KEYS.forEach(k => {
+      const sum = selected.reduce((s, item) => s + ((item.pay && item.pay[k]) || 0), 0);
+      document.getElementById('p-' + k).value = sum;
+    });
+    DED_KEYS.forEach(k => {
+      const sum = selected.reduce((s, item) => s + ((item.deductions && item.deductions[k]) || 0), 0);
+      document.getElementById('d-' + k).value = sum;
+    });
+
+    if (selected.length === 1) {
+      document.getElementById('f-department').value = selected[0]['부서명'] || '';
+      document.getElementById('f-position').value = selected[0]['직급'] || '';
+      document.getElementById('f-payDate').value = selected[0]['지급일'] || '';
+      const emp = employees.find(e => e.displayName === selected[0]['사원명']);
+      if (emp) document.getElementById('f-employee').value = emp.uid;
+    } else {
+      document.getElementById('f-department').value = '(여러 건)';
+      document.getElementById('f-position').value = '(여러 건)';
+    }
+
+    updateSums();
+  }
+
+  document.getElementById('clearSelectionBtn').addEventListener('click', () => {
+    selectedSlipIds.clear();
+    editingSlipId = null;
+    document.querySelectorAll('.row-select').forEach(cb => { cb.checked = false; });
+    document.getElementById('selectionBanner').style.display = 'none';
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = false;
+    submitBtn.textContent = '저장';
+    // 입력 필드 초기화
+    PAY_KEYS.forEach(k => { document.getElementById('p-' + k).value = 0; });
+    DED_KEYS.forEach(k => { document.getElementById('d-' + k).value = 0; });
+    document.getElementById('f-department').value = '';
+    document.getElementById('f-position').value = '';
+    prefillEmployeeInfo();
+    updateSums();
+  });
+
   document.getElementById('submitBtn').addEventListener('click', async () => {
     const statusEl = document.getElementById('submitStatus');
     const btn = document.getElementById('submitBtn');
@@ -327,30 +404,44 @@ if ('serviceWorker' in navigator) {
 
     const { payTotal, dedTotal } = updateSums();
 
+    const isEditing = !!editingSlipId;
     btn.disabled = true;
-    btn.textContent = '저장 중...';
+    btn.textContent = isEditing ? '수정 저장 중...' : '저장 중...';
+
+    const docData = {
+      uid,
+      '사원명': emp?.displayName || emp?.email || '',
+      '지급일': document.getElementById('f-payDate').value,
+      '부서명': document.getElementById('f-department').value.trim(),
+      '직급': document.getElementById('f-position').value.trim(),
+      pay,
+      deductions,
+      '지급액계': payTotal,
+      '공제액계': dedTotal,
+      '차인지급액': payTotal - dedTotal
+    };
 
     try {
-      await db.collection('payslips').add({
-        uid,
-        '사원명': emp?.displayName || emp?.email || '',
-        '지급일': document.getElementById('f-payDate').value,
-        '부서명': document.getElementById('f-department').value.trim(),
-        '직급': document.getElementById('f-position').value.trim(),
-        pay,
-        deductions,
-        '지급액계': payTotal,
-        '공제액계': dedTotal,
-        '차인지급액': payTotal - dedTotal,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+      if (isEditing) {
+        await db.collection('payslips').doc(editingSlipId).update(docData);
+        statusEl.style.color = '#3f6b52';
+        statusEl.textContent = '수정되었습니다.';
+      } else {
+        docData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+        await db.collection('payslips').add(docData);
+        statusEl.style.color = '#3f6b52';
+        statusEl.textContent = '저장되었습니다.';
+      }
 
-      statusEl.style.color = '#3f6b52';
-      statusEl.textContent = '저장되었습니다.';
+      // 선택/수정 모드 초기화
+      selectedSlipIds.clear();
+      editingSlipId = null;
+      document.getElementById('selectionBanner').style.display = 'none';
+
       await loadSlips();
     } catch (err) {
       statusEl.style.color = '#a4453c';
-      statusEl.textContent = '저장 실패: ' + err.message;
+      statusEl.textContent = (isEditing ? '수정' : '저장') + ' 실패: ' + err.message;
     } finally {
       btn.disabled = false;
       btn.textContent = '저장';
@@ -421,7 +512,8 @@ if ('serviceWorker' in navigator) {
     table.style.display = 'table';
 
     tbody.innerHTML = rows.map(s => `
-      <tr>
+      <tr data-id="${s.id}">
+        <td data-label="선택"><input type="checkbox" class="row-select" data-id="${s.id}" ${selectedSlipIds.has(s.id) ? 'checked' : ''}></td>
         <td data-label="지급일">${s['지급일'] || ''}</td>
         <td data-label="사원명">${s['사원명'] || ''}</td>
         <td data-label="부서명">${s['부서명'] || ''}</td>
@@ -434,8 +526,33 @@ if ('serviceWorker' in navigator) {
 
     if (currentRole === 'admin') {
       document.querySelectorAll('.row-btn').forEach(btn => {
-        btn.addEventListener('click', () => deleteSlip(btn.dataset.id));
+        btn.addEventListener('click', (e) => { e.stopPropagation(); deleteSlip(btn.dataset.id); });
       });
+
+      // 체크박스 직접 클릭
+      document.querySelectorAll('.row-select').forEach(cb => {
+        cb.addEventListener('click', (e) => e.stopPropagation());
+        cb.addEventListener('change', () => {
+          if (cb.checked) selectedSlipIds.add(cb.dataset.id);
+          else selectedSlipIds.delete(cb.dataset.id);
+          updateDetailPreview();
+        });
+      });
+
+      // 행(체크박스/삭제 버튼 제외) 클릭 시에도 선택 토글
+      document.querySelectorAll('#listBody tr').forEach(tr => {
+        tr.style.cursor = 'pointer';
+        tr.addEventListener('click', () => {
+          const id = tr.dataset.id;
+          const cb = tr.querySelector('.row-select');
+          cb.checked = !cb.checked;
+          if (cb.checked) selectedSlipIds.add(id);
+          else selectedSlipIds.delete(id);
+          updateDetailPreview();
+        });
+      });
+
+      updateDetailPreview();
     }
   }
 
@@ -443,6 +560,7 @@ if ('serviceWorker' in navigator) {
     if (!confirm('이 급여명세서를 삭제하시겠습니까?')) return;
     try {
       await db.collection('payslips').doc(docId).delete();
+      selectedSlipIds.delete(docId);
       await loadSlips();
     } catch (err) {
       alert('삭제 실패: ' + err.message);
