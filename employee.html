@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#141414">
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+</script>
 <title>사원정보 | NUCKS</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
@@ -56,6 +63,13 @@
     display:inline-block; font-size:11px; padding:2px 8px; border-radius:12px;
     background:#ece9e2; color:#7a766c; margin:2px 3px 2px 0;
   }
+  .avatar-img{
+    width:36px; height:36px; border-radius:50%; object-fit:cover; display:block;
+  }
+  .avatar-fallback{
+    width:36px; height:36px; border-radius:50%; background:#ece9e2; color:#7a766c;
+    display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600;
+  }
   .btn{
     font-size:12px; background:none; border:none; cursor:pointer;
     text-decoration:underline; color:var(--muted); margin-right:8px;
@@ -81,6 +95,30 @@
   .empty{
     background:#fff; border:1px solid var(--line); border-radius:6px;
     padding:36px; text-align:center; color:var(--muted); font-size:13.5px;
+  }
+  @media (max-width: 640px) {
+    header{ padding:20px !important; flex-wrap:wrap; gap:10px; }
+    header-right, .header-right{ flex-wrap:wrap; gap:12px !important; }
+    main{ padding:24px 16px !important; }
+    h1{ font-size:24px !important; }
+    input, select, textarea{ font-size:16px !important; }
+
+    /* 넓은 표는 가로 스크롤 대신 카드형으로 세로 전환 */
+    table{ min-width:0 !important; }
+    thead{ display:none; }
+    table, tbody, tr, td{ display:block; width:100%; }
+    tr{
+      border:1px solid var(--line); border-radius:6px;
+      margin-bottom:12px; padding:10px 14px; background:#fff;
+    }
+    td{
+      border:none !important; padding:6px 0 !important; white-space:normal !important;
+    }
+    td[data-label]::before{
+      content:attr(data-label);
+      display:block; font-size:11px; color:var(--muted); margin-bottom:2px;
+    }
+    td input, td select{ width:100% !important; }
   }
 </style>
 </head>
@@ -173,7 +211,7 @@
         <table>
           <thead>
             <tr>
-              <th>사원명</th><th>이메일</th><th>부서</th><th>직급/상태</th><th>사번</th>
+              <th>사진</th><th>사원명</th><th>이메일</th><th>부서</th><th>직급/상태</th><th>사번</th>
               <th>연락처</th><th>입사일</th><th>근속연수</th><th>총연차</th><th>잔여연차</th><th>사용연차</th>
               <th>근로계약서</th><th>관리</th>
             </tr>
@@ -205,20 +243,25 @@
     const usedLeave = sumApprovedLeave(allLeaveDocs, emp.uid);
     const remainingLeave = totalLeave - usedLeave;
 
+    const photo = emp.photoURL
+      ? `<img src="${emp.photoURL}" class="avatar-img">`
+      : `<span class="avatar-fallback">${(emp.displayName || '?').charAt(0)}</span>`;
+
     return `
-      <td>${emp.displayName || '(이름없음)'}</td>
-      <td>${emp.email || ''}</td>
-      <td class="c-department">${emp.department || '-'}</td>
-      <td class="c-positionTags">${tags || '-'}</td>
-      <td class="c-employeeNumber">${emp.employeeNumber || '-'}</td>
-      <td class="c-phone">${emp.phone || '-'}</td>
-      <td class="c-hireDate">${emp.hireDate || '-'}</td>
-      <td>${calcYears(emp.hireDate)}</td>
-      <td title="근로기준법 기준 자동계산">${totalLeave}일</td>
-      <td>${remainingLeave}일</td>
-      <td title="승인완료 항목만 합산">${usedLeave}일</td>
-      <td class="c-contract">${contract}</td>
-      <td>
+      <td class="c-photo" data-label="사진">${photo}</td>
+      <td data-label="사원명">${emp.displayName || '(이름없음)'}</td>
+      <td data-label="이메일">${emp.email || ''}</td>
+      <td class="c-department" data-label="부서">${emp.department || '-'}</td>
+      <td class="c-positionTags" data-label="직급/상태">${tags || '-'}</td>
+      <td class="c-employeeNumber" data-label="사번">${emp.employeeNumber || '-'}</td>
+      <td class="c-phone" data-label="연락처">${emp.phone || '-'}</td>
+      <td class="c-hireDate" data-label="입사일">${emp.hireDate || '-'}</td>
+      <td data-label="근속연수">${calcYears(emp.hireDate)}</td>
+      <td data-label="총연차" title="근로기준법 기준 자동계산">${totalLeave}일</td>
+      <td data-label="잔여연차">${remainingLeave}일</td>
+      <td data-label="사용연차" title="승인완료 항목만 합산">${usedLeave}일</td>
+      <td class="c-contract" data-label="근로계약서">${contract}</td>
+      <td data-label="관리">
         <button class="btn edit-btn" data-uid="${emp.uid}">수정</button>
       </td>
     `;
@@ -234,6 +277,12 @@
     const emp = allEmployees.find(e => e.uid === uid);
     const tr = document.querySelector(`tr[data-uid="${uid}"]`);
 
+    tr.querySelector('.c-photo').innerHTML = `
+      <div class="file-upload-inline">
+        <input type="file" class="f-photo" accept="image/*">
+        <span class="photo-status" style="font-size:11px; color:var(--muted);"></span>
+      </div>
+    `;
     tr.querySelector('.c-department').innerHTML = `<input type="text" class="f-department" value="${emp.department || ''}">`;
     tr.querySelector('.c-positionTags').innerHTML = `<input type="text" class="f-positionTags" value="${(emp.positionTags || []).join(', ')}" placeholder="쉼표로 구분">`;
     tr.querySelector('.c-employeeNumber').innerHTML = `<input type="text" class="f-employeeNumber" value="${emp.employeeNumber || ''}">`;
@@ -266,11 +315,23 @@
     const hireDate = tr.querySelector('.f-hireDate').value;
     const fileInput = tr.querySelector('.f-contract');
     const statusEl = tr.querySelector('.contract-status');
+    const photoInput = tr.querySelector('.f-photo');
+    const photoStatusEl = tr.querySelector('.photo-status');
 
     // 총연차/잔여연차/사용연차는 이제 자동계산이라 여기서 저장하지 않음
     const updateData = { department, positionTags, employeeNumber, phone, hireDate };
 
     try {
+      // 증명사진이 새로 선택된 경우 업로드
+      if (photoInput.files[0]) {
+        photoStatusEl.textContent = '업로드 중...';
+        const file = photoInput.files[0];
+        const path = `hr/${uid}/photo_${Date.now()}_${file.name}`;
+        const ref = storage.ref(path);
+        await ref.put(file);
+        updateData.photoURL = await ref.getDownloadURL();
+      }
+
       // 근로계약서 파일이 새로 선택된 경우 업로드
       if (fileInput.files[0]) {
         statusEl.textContent = '업로드 중...';
