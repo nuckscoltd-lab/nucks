@@ -183,10 +183,10 @@ if ('serviceWorker' in navigator) {
     return Math.min(15 + extra, 25);
   }
 
-  // "승인완료" 상태이면서 "병가"가 아닌 항목만 합산 (병가는 연차 소진에 포함하지 않음)
+  // "승인완료" 상태이면서 "병가/휴가"가 아닌 항목만 합산 (병가, 휴가는 연차 소진에 포함하지 않음)
   function sumApprovedLeave(leaveDocs, uid) {
     return leaveDocs
-      .filter(l => l.uid === uid && l['승인상태'] === '승인완료' && l['연차구분'] !== '병가')
+      .filter(l => l.uid === uid && l['승인상태'] === '승인완료' && !['병가', '휴가'].includes(l['연차구분']))
       .reduce((sum, l) => sum + (Number(l['사용량']) || 0), 0);
   }
 

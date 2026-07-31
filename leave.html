@@ -295,9 +295,9 @@ if ('serviceWorker' in navigator) {
       ? allRows.filter(r => r['사원명'] === filterVal)
       : allRows;
 
-    // 병가는 연차 사용량에 포함하지 않음
+    // 병가, 휴가는 연차 사용량에 포함하지 않음
     const used = rows
-      .filter(r => r['연차구분'] !== '병가')
+      .filter(r => !['병가', '휴가'].includes(r['연차구분']))
       .reduce((sum, r) => sum + (Number(r['사용량']) || 0), 0);
     const label = (currentRole === 'admin' && filterVal !== '전체') ? `${filterVal}의 사용 합계` : '전체 사용 합계';
 
@@ -320,7 +320,7 @@ if ('serviceWorker' in navigator) {
     const hireDate = (currentRole === 'admin') ? hireDateByName[name] : currentHireDate;
     const total = calcTotalLeave(hireDate);
     const used = allRows
-      .filter(r => r['사원명'] === name && r['승인상태'] === '승인완료' && r['연차구분'] !== '병가')
+      .filter(r => r['사원명'] === name && r['승인상태'] === '승인완료' && !['병가', '휴가'].includes(r['연차구분']))
       .reduce((sum, r) => sum + (Number(r['사용량']) || 0), 0);
     return total - used;
   }
