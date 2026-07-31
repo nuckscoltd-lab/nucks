@@ -260,6 +260,10 @@ if ('serviceWorker' in navigator) {
   <!-- 작성 폼 (근로자/관리자 본인 명의로 작성) -->
   <div class="write-panel">
     <div class="panel-title">근무일지 작성</div>
+    <div id="editBanner" style="display:none; background:#fbe4e2; color:#a4453c; font-size:12.5px; padding:10px 14px; border-radius:4px; margin-bottom:16px;">
+      <span id="editBannerText"></span>
+      <button id="cancelEditBtn" style="margin-left:10px; background:none; border:none; color:#a4453c; text-decoration:underline; cursor:pointer; font-size:12.5px;">수정 취소</button>
+    </div>
     <div class="form-grid">
       <div class="field">
         <label for="f-date">날짜</label>
@@ -438,26 +442,28 @@ if ('serviceWorker' in navigator) {
   // 프로젝트별 업무 내역 반복 행 관리
   let projectRowCount = 0;
 
-  function createProjectRow() {
+  function createProjectRow(prefill) {
     projectRowCount++;
     const rowId = projectRowCount;
     const row = document.createElement('div');
     row.className = 'project-row';
     row.dataset.rowId = rowId;
+    const p = prefill || {};
+    const pTasks = p.tasks || {};
     row.innerHTML = `
       <div class="project-row-top">
         <div class="field">
           <label>프로젝트</label>
-          <input type="text" class="row-project" list="projectList" placeholder="선택 또는 직접 입력">
+          <input type="text" class="row-project" list="projectList" placeholder="선택 또는 직접 입력" value="${p['프로젝트'] || ''}">
         </div>
         <div class="field hours-field">
           <label>투입시간</label>
-          <input type="number" class="row-hours" step="0.5" min="0" value="0">
+          <input type="number" class="row-hours" step="0.5" min="0" value="${p['투입시간'] ?? 0}">
         </div>
         <button type="button" class="remove-project-btn" data-row-id="${rowId}">삭제</button>
       </div>
       <div class="task-checks">
-        ${TASK_TYPES.map(t => `<label><input type="checkbox" class="row-task-check" value="${t}"> ${t}</label>`).join('')}
+        ${TASK_TYPES.map(t => `<label><input type="checkbox" class="row-task-check" value="${t}" ${pTasks[t] ? 'checked' : ''}> ${t}</label>`).join('')}
       </div>
     `;
     document.getElementById('projectRows').appendChild(row);
@@ -477,7 +483,7 @@ if ('serviceWorker' in navigator) {
     createProjectRow();
   }
 
-  document.getElementById('addProjectBtn').addEventListener('click', createProjectRow);
+  document.getElementById('addProjectBtn').addEventListener('click', () => createProjectRow());
   resetProjectRows();
 
   // 출근~퇴근 기준 총 근무시간 자동계산
@@ -729,7 +735,10 @@ if ('serviceWorker' in navigator) {
         <td class="detail-cell" data-label="상세내용">${row['상세내용'] || ''}</td>
         <td class="nowrap" data-label="첨부">${attach}</td>
         <td class="nowrap" data-label="관리">
-          ${canManage ? `<button class="row-btn danger" data-id="${row.id}">삭제</button>` : ''}
+          ${canManage ? `
+            <button class="row-btn" data-id="${row.id}">수정</button>
+            <button class="row-btn danger" data-id="${row.id}">삭제</button>
+          ` : ''}
         </td>
       `;
       tbody.appendChild(tr);
@@ -738,7 +747,51 @@ if ('serviceWorker' in navigator) {
     document.querySelectorAll('.row-btn.danger').forEach(btn => {
       btn.addEventListener('click', () => deleteLog(btn.dataset.id));
     });
+    document.querySelectorAll('.row-btn:not(.danger)').forEach(btn => {
+      btn.addEventListener('click', () => loadLogIntoForm(btn.dataset.id));
+    });
   }
+
+  let editingLogId = null;
+
+  function loadLogIntoForm(docId) {
+    const row = allRows.find(r => r.id === docId);
+    if (!row) return;
+
+    editingLogId = docId;
+
+    document.getElementById('f-date').value = row['날짜'] || '';
+    document.getElementById('f-checkin').value = row['출근시간'] || '';
+    document.getElementById('f-checkout').value = row['퇴근시간'] || '';
+    updateTotalHoursDisplay();
+    document.getElementById('f-detail').value = row['상세내용'] || '';
+
+    document.getElementById('projectRows').innerHTML = '';
+    projectRowCount = 0;
+    const projects = row.projects && row.projects.length ? row.projects : [{}];
+    projects.forEach(p => createProjectRow(p));
+
+    const banner = document.getElementById('editBanner');
+    document.getElementById('editBannerText').textContent =
+      `"${row['날짜']} · ${row['사원명']}" 근무일지를 수정 중입니다. 저장하면 이 항목이 업데이트됩니다.`;
+    banner.style.display = 'block';
+
+    document.getElementById('submitBtn').textContent = '수정 저장';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  document.getElementById('cancelEditBtn').addEventListener('click', () => {
+    editingLogId = null;
+    document.getElementById('editBanner').style.display = 'none';
+    document.getElementById('submitBtn').textContent = '등록';
+    document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('f-checkin').value = '';
+    document.getElementById('f-checkout').value = '';
+    updateTotalHoursDisplay();
+    document.getElementById('f-detail').value = '';
+    document.getElementById('f-file').value = '';
+    resetProjectRows();
+  });
 
   async function deleteLog(docId) {
     if (!confirm('이 근무일지를 삭제하시겠습니까?')) return;
@@ -807,37 +860,63 @@ if ('serviceWorker' in navigator) {
       return;
     }
 
+    const isEditing = !!editingLogId;
     btn.disabled = true;
-    btn.textContent = '등록 중...';
+    btn.textContent = isEditing ? '수정 저장 중...' : '등록 중...';
     statusEl.style.color = 'var(--muted)';
-    statusEl.textContent = '등록 중입니다...';
+    statusEl.textContent = isEditing ? '수정 저장 중입니다...' : '등록 중입니다...';
 
     try {
-      const docData = {
-        uid: currentUser.uid,
-        '사원명': currentDisplayName,
-        '날짜': date,
-        '출근시간': checkin,
-        '퇴근시간': checkout,
-        '총근무시간': totalHours,
-        projects: projects,
-        '상세내용': detail,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      };
+      let docData;
+
+      if (isEditing) {
+        // 수정 시에는 원래 작성자(uid/사원명) 정보는 그대로 유지 (관리자가 남의 글을 고쳐도 작성자가 바뀌지 않도록)
+        const original = allRows.find(r => r.id === editingLogId);
+        docData = {
+          uid: original?.uid || currentUser.uid,
+          '사원명': original?.['사원명'] || currentDisplayName,
+          '날짜': date,
+          '출근시간': checkin,
+          '퇴근시간': checkout,
+          '총근무시간': totalHours,
+          projects: projects,
+          '상세내용': detail
+        };
+      } else {
+        docData = {
+          uid: currentUser.uid,
+          '사원명': currentDisplayName,
+          '날짜': date,
+          '출근시간': checkin,
+          '퇴근시간': checkout,
+          '총근무시간': totalHours,
+          projects: projects,
+          '상세내용': detail,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+      }
 
       if (fileInput.files[0]) {
         const file = fileInput.files[0];
-        const path = `worklogs/${currentUser.uid}/${Date.now()}_${file.name}`;
+        const path = `worklogs/${docData.uid}/${Date.now()}_${file.name}`;
         const ref = storage.ref(path);
         await ref.put(file);
         const url = await ref.getDownloadURL();
         docData.attachment = { name: file.name, url };
       }
 
-      await db.collection('workLogs').add(docData);
+      if (isEditing) {
+        await db.collection('workLogs').doc(editingLogId).update(docData);
+        statusEl.style.color = '#3f6b52';
+        statusEl.textContent = '수정되었습니다.';
+      } else {
+        await db.collection('workLogs').add(docData);
+        statusEl.style.color = '#3f6b52';
+        statusEl.textContent = '등록되었습니다.';
+      }
 
-      statusEl.style.color = '#3f6b52';
-      statusEl.textContent = '등록되었습니다.';
+      editingLogId = null;
+      document.getElementById('editBanner').style.display = 'none';
       document.getElementById('f-detail').value = '';
       document.getElementById('f-file').value = '';
       resetProjectRows();
@@ -845,10 +924,10 @@ if ('serviceWorker' in navigator) {
       await loadLogs();
     } catch (err) {
       statusEl.style.color = '#a4453c';
-      statusEl.textContent = '등록 실패: ' + err.message;
+      statusEl.textContent = (isEditing ? '수정' : '등록') + ' 실패: ' + err.message;
     } finally {
       btn.disabled = false;
-      btn.textContent = '등록';
+      btn.textContent = editingLogId ? '수정 저장' : '등록';
     }
   });
 
