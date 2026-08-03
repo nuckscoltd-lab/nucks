@@ -255,7 +255,7 @@ if ('serviceWorker' in navigator) {
             <div class="grid">
                  <div class="project-item" data-category="대안설계" onclick="openModal(this)" data-images="[&quot;00. 대치 비취타운 투시도.jpg&quot;,&quot;02. 대치 PARTY RM ALT02_FIN.jpg&quot;,&quot;03. 대치 SKY LOUNGE_FIN.jpg&quot;,&quot;05. 대치 94-1.jpg&quot;,&quot;06. 대치 129A.jpg&quot;,&quot;07. 대치 139A.jpg&quot;]"
                     <img src="00. 대치 비취타운 투시도.jpg" alt="대치동 비취타운">
-                    <div class="project-info"><h3>대치동 비취타운 <p>대치동 | 2026년</p></h3></div>
+                    <div class="project-info"><h3>HWASUNG <p>대치동 비취타운 | 2026년</p></h3></div>
                 </div>
 
                 <div class="project-item" data-category="mh" onclick="openModal(this)" data-images="[&quot;수정본01 260112_외부-4.webp&quot;,&quot;수정본02 입구.webp&quot;,&quot;수정본03 공용홀_1026-DSC00988.webp&quot;,&quot;수정본04 공용홀2028-DSC00990.webp&quot;,&quot;수정본05-DSC00128.webp&quot;,&quot;수정본06 260205_14-1_ALT2.webp&quot;,&quot;수정본07 상담공간155-DSC00930.webp&quot;,&quot;수정본08 -2층홀DSC00004.webp&quot;,&quot;수정본09 062-DSC00032.webp&quot;]">
