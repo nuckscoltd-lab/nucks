@@ -113,11 +113,13 @@ if ('serviceWorker' in navigator) {
   /* 인쇄 전용 영역 - 화면에서는 숨겨두고 인쇄할 때만 노출 */
   #printArea{ display:none; }
   @media print {
-    body *{ visibility:hidden; }
-    #printArea, #printArea *{ visibility:visible; }
+    /* 인쇄 영역을 제외한 나머지는 레이아웃에서 완전히 제거 (visibility만 끄면
+       숨겨진 콘텐츠의 높이가 그대로 남아 빈 페이지가 한 장 더 찍히는 문제가 있음) */
+    body > *:not(#printArea){ display:none !important; }
     #printArea{
-      display:block !important; position:absolute; top:0; left:0; width:100%; padding:36px;
+      display:block !important; width:100%; padding:36px; margin:0;
     }
+    @page{ margin:12mm; }
   }
   .print-slip{ font-family:'Pretendard', -apple-system, sans-serif; color:#141414; }
   .print-slip .p-header{ text-align:center; margin-bottom:26px; }
