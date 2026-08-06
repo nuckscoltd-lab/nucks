@@ -152,6 +152,7 @@ if ('serviceWorker' in navigator) {
   }
   .print-slip{ font-family:'Pretendard', -apple-system, sans-serif; color:#141414; }
   .print-slip .p-header{ text-align:center; margin-bottom:20px; }
+  .print-slip .p-docnum{ text-align:right; font-size:11px; color:#888; margin-bottom:4px; }
   .print-slip .p-company{ font-size:11.5px; color:#666; margin-bottom:8px; }
   .print-slip .p-title{ font-size:22px; font-weight:700; letter-spacing:.25em; }
   .print-slip .p-info-table{ width:100%; border-collapse:collapse; margin-bottom:16px; page-break-inside:avoid; }
@@ -274,9 +275,10 @@ if ('serviceWorker' in navigator) {
   </div>
 
   <div class="section-title">증명서 발급 이력</div>
+  <div class="tabs" id="certTabs"></div>
   <table>
     <thead>
-      <tr><th>발급일</th><th>문서종류</th><th>사원명</th><th>용도/사유</th><th>관리</th></tr>
+      <tr><th>문서번호</th><th>발급일</th><th>문서종류</th><th>사원명</th><th>용도/사유</th><th>관리</th></tr>
     </thead>
     <tbody id="certTableBody"></tbody>
   </table>
@@ -585,6 +587,18 @@ if ('serviceWorker' in navigator) {
   const COMPANY_STAMP_URL = 'company-stamp.png'; // 서버 루트에 이 파일명으로 업로드해주세요
   const CEO_TITLE = '대표 윤상원';
 
+  // 문서종류별 일련번호 발급에 쓰이는 축약 코드
+  const CERT_TYPE_CODE = {
+    '재직증명서': '재직',
+    '경력증명서': '경력',
+    '퇴직증명서': '퇴직',
+    '해촉증명서': '해촉',
+    '사직서': '사직'
+  };
+  const CERT_TYPES_LIST = ['재직증명서', '경력증명서', '퇴직증명서', '해촉증명서', '사직서'];
+
+  let allCertDocs = [];
+  let activeCertType = '전체';
   let certEmployees = [];
 
   // 문서 종류별로 입력받을 항목 정의 (key: 저장/사용될 필드명)
@@ -808,6 +822,7 @@ if ('serviceWorker' in navigator) {
     renderAndPrint(`
       <div class="print-slip">
         <div class="p-header">
+          ${doc.docNumber ? `<div class="p-docnum">문서번호: ${doc.docNumber}</div>` : ''}
           <div class="p-company">${COMPANY_NAME} · ${COMPANY_ADDRESS} · ${COMPANY_TEL}</div>
           <div class="p-title">${titleSpaced}</div>
         </div>
@@ -872,19 +887,22 @@ if ('serviceWorker' in navigator) {
     btn.textContent = '처리 중...';
     statusEl.textContent = '';
 
-    const docData = {
-      type,
-      uid,
-      employeeName: emp?.displayName || emp?.email || '',
-      department: emp?.department || '',
-      position: (emp?.positionTags || []).join(', ') || '',
-      fields: values,
-      issueDate: new Date().toISOString().slice(0, 10),
-      createdByEmail: auth.currentUser.email,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    };
-
     try {
+      const docNumber = await getNextDocNumber(type);
+
+      const docData = {
+        type,
+        docNumber,
+        uid,
+        employeeName: emp?.displayName || emp?.email || '',
+        department: emp?.department || '',
+        position: (emp?.positionTags || []).join(', ') || '',
+        fields: values,
+        issueDate: new Date().toISOString().slice(0, 10),
+        createdByEmail: auth.currentUser.email,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
       const ref = await db.collection('issuedDocuments').add(docData);
       printCertificate({ id: ref.id, ...docData });
       statusEl.style.color = '#3f6b52';
@@ -899,19 +917,62 @@ if ('serviceWorker' in navigator) {
     }
   });
 
-  async function loadCertHistory() {
-    const tbody = document.getElementById('certTableBody');
-    const emptyMsg = document.getElementById('certEmptyMsg');
+  // 문서종류별로 "코드-연도-4자리 일련번호" 형태의 문서번호를 트랜잭션으로 발급
+  // (docCounters/{문서종류} 문서의 seq 필드를 원자적으로 1씩 증가시켜 중복 없이 채번)
+  async function getNextDocNumber(type) {
+    const year = new Date().getFullYear();
+    const counterRef = db.collection('docCounters').doc(type);
 
+    const seq = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(counterRef);
+      const current = snap.exists ? (snap.data().seq || 0) : 0;
+      const next = current + 1;
+      tx.set(counterRef, { seq: next }, { merge: true });
+      return next;
+    });
+
+    const code = CERT_TYPE_CODE[type] || type;
+    return `${code}-${year}-${String(seq).padStart(4, '0')}`;
+  }
+
+  async function loadCertHistory() {
     const query = (currentCertRole === 'admin')
       ? db.collection('issuedDocuments').orderBy('createdAt', 'desc')
       : db.collection('issuedDocuments').where('uid', '==', currentCertUser.uid);
 
     const snap = await query.get();
-    let docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    allCertDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (currentCertRole !== 'admin') {
-      docs.sort((a, b) => (b.issueDate || '').localeCompare(a.issueDate || ''));
+      allCertDocs.sort((a, b) => (b.issueDate || '').localeCompare(a.issueDate || ''));
     }
+
+    renderCertTabs();
+    renderCertHistoryTable();
+  }
+
+  function renderCertTabs() {
+    const tabsEl = document.getElementById('certTabs');
+    const types = ['전체', ...CERT_TYPES_LIST];
+    tabsEl.innerHTML = '';
+    types.forEach(t => {
+      const btn = document.createElement('div');
+      btn.className = 'tab' + (t === activeCertType ? ' active' : '');
+      btn.textContent = t;
+      btn.addEventListener('click', () => {
+        activeCertType = t;
+        renderCertTabs();
+        renderCertHistoryTable();
+      });
+      tabsEl.appendChild(btn);
+    });
+  }
+
+  function renderCertHistoryTable() {
+    const tbody = document.getElementById('certTableBody');
+    const emptyMsg = document.getElementById('certEmptyMsg');
+    const docs = activeCertType === '전체'
+      ? allCertDocs
+      : allCertDocs.filter(d => d.type === activeCertType);
 
     if (docs.length === 0) {
       tbody.innerHTML = '';
@@ -922,6 +983,7 @@ if ('serviceWorker' in navigator) {
 
     tbody.innerHTML = docs.map(d => `
       <tr>
+        <td data-label="문서번호">${d.docNumber || '-'}</td>
         <td data-label="발급일">${d.issueDate || ''}</td>
         <td data-label="문서종류"><span class="cat-badge">${d.type}</span></td>
         <td data-label="사원명">${d.employeeName || ''}</td>
