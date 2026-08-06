@@ -354,8 +354,34 @@ if ('serviceWorker' in navigator) {
   function printSlip(docId) {
     const s = allSlips.find(x => x.id === docId);
     if (!s) return;
-    document.getElementById('printArea').innerHTML = buildPrintHtml(s);
-    window.print();
+    renderAndPrint(buildPrintHtml(s), 'printArea');
+  }
+
+  // 인쇄 영역에 직인 이미지가 있으면, 이미지 로딩이 끝난 뒤에 인쇄를 실행한다.
+  // (innerHTML 세팅 직후 바로 print()를 부르면 이미지가 아직 안 그려진 채로 인쇄되는 경우가 있음)
+  function renderAndPrint(html, areaId) {
+    const area = document.getElementById(areaId);
+    area.innerHTML = html;
+
+    const img = area.querySelector('img.p-stamp');
+    let printed = false;
+    const doPrint = () => {
+      if (printed) return;
+      printed = true;
+      window.print();
+    };
+
+    if (img) {
+      if (img.complete && img.naturalWidth > 0) {
+        doPrint();
+      } else {
+        img.addEventListener('load', doPrint);
+        img.addEventListener('error', doPrint);
+        setTimeout(doPrint, 1500); // 안전장치: 로딩이 오래 걸려도 결국은 인쇄되게
+      }
+    } else {
+      doPrint();
+    }
   }
 
   window.addEventListener('afterprint', () => {

@@ -749,7 +749,7 @@ if ('serviceWorker' in navigator) {
       </div>
     `;
 
-    document.getElementById('certPrintArea').innerHTML = `
+    renderAndPrint(`
       <div class="print-slip">
         <div class="p-header">
           <div class="p-company">${COMPANY_NAME} · ${COMPANY_ADDRESS} · ${COMPANY_TEL}</div>
@@ -758,8 +758,34 @@ if ('serviceWorker' in navigator) {
         ${certBodyText(doc)}
         ${signArea}
       </div>
-    `;
-    window.print();
+    `, 'certPrintArea');
+  }
+
+  // 인쇄 영역에 직인 이미지가 있으면, 이미지 로딩이 끝난 뒤에 인쇄를 실행한다.
+  // (innerHTML 세팅 직후 바로 print()를 부르면 이미지가 아직 안 그려진 채로 인쇄되는 경우가 있음)
+  function renderAndPrint(html, areaId) {
+    const area = document.getElementById(areaId);
+    area.innerHTML = html;
+
+    const img = area.querySelector('img.p-stamp');
+    let printed = false;
+    const doPrint = () => {
+      if (printed) return;
+      printed = true;
+      window.print();
+    };
+
+    if (img) {
+      if (img.complete && img.naturalWidth > 0) {
+        doPrint();
+      } else {
+        img.addEventListener('load', doPrint);
+        img.addEventListener('error', doPrint);
+        setTimeout(doPrint, 1500); // 안전장치: 로딩이 오래 걸려도 결국은 인쇄되게
+      }
+    } else {
+      doPrint();
+    }
   }
 
   window.addEventListener('afterprint', () => {
