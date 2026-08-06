@@ -115,6 +115,10 @@
   }
   .project-row .actions button:hover{ border-color:var(--ink); color:var(--ink); }
   .project-row .actions button.danger{ color:#a4453c; border-color:#f0c9c4; }
+  .project-row .edit-input{
+    display:block; width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13px; margin-bottom:6px; background:#fff;
+  }
 
   .empty-msg{ font-size:13px; color:var(--muted); padding:20px; text-align:center; }
 </style>
@@ -760,18 +764,21 @@
           ${thumb ? `<img src="${safeImgSrc(thumb.url)}" style="object-position:${thumb.focalX ?? 50}% ${thumb.focalY ?? 50}%;">
           <div class="marker" style="left:${thumb.focalX ?? 50}%; top:${thumb.focalY ?? 50}%;"></div>` : ''}
         </div>
-        <div class="info">
+        <div class="info" data-info="${doc.id}">
           <div class="t">${d.title || '(제목 없음)'}</div>
           <div class="s">${d.subtitle || ''}</div>
           <div class="m">${(d.images || []).length}장 · ${categoryLabel(d.category)}</div>
         </div>
         <div class="actions">
+          <button data-edit="${doc.id}">수정</button>
           <button data-up="${doc.id}" ${idx === 0 ? 'disabled' : ''}>▲</button>
           <button data-down="${doc.id}" ${idx === docs.length - 1 ? 'disabled' : ''}>▼</button>
           <button class="danger" data-delete="${doc.id}">삭제</button>
         </div>
       `;
       listEl.appendChild(row);
+
+      row.querySelector('[data-edit]').addEventListener('click', () => startEditProject(row, doc.id, d));
 
       if (thumb) {
         const thumbEl = row.querySelector('.thumb');
@@ -817,6 +824,43 @@
     });
     listEl.querySelectorAll('[data-down]').forEach(btn => {
       btn.addEventListener('click', () => swapOrder(btn.dataset.down, 1, docs));
+    });
+  }
+
+  function startEditProject(row, docId, d) {
+    const infoEl = row.querySelector('[data-info]');
+    const actionsEl = row.querySelector('.actions');
+    const esc = (s) => String(s || '').replace(/"/g, '&quot;');
+
+    infoEl.innerHTML = `
+      <input type="text" class="edit-input" data-field="title" value="${esc(d.title)}" placeholder="제목 (예: HWASUNG)">
+      <input type="text" class="edit-input" data-field="subtitle" value="${esc(d.subtitle)}" placeholder="부제 (예: 대치동 비취타운 | 2026년)">
+      <select class="edit-input" data-field="category" style="margin-bottom:0;">
+        <option value="unit" ${d.category === 'unit' ? 'selected' : ''}>Unit / 주거</option>
+        <option value="menual" ${d.category === 'menual' ? 'selected' : ''}>Menual / 상업</option>
+        <option value="mh" ${d.category === 'mh' ? 'selected' : ''}>M.H / 공용홀</option>
+        <option value="대안설계" ${d.category === '대안설계' ? 'selected' : ''}>View / 대안설계</option>
+      </select>
+    `;
+
+    actionsEl.innerHTML = `
+      <button data-save="${docId}">저장</button>
+      <button data-cancel="${docId}">취소</button>
+    `;
+
+    actionsEl.querySelector('[data-save]').addEventListener('click', async () => {
+      const title = infoEl.querySelector('[data-field="title"]').value.trim();
+      const subtitle = infoEl.querySelector('[data-field="subtitle"]').value.trim();
+      const category = infoEl.querySelector('[data-field="category"]').value;
+
+      if (!title) { alert('제목을 입력해주세요.'); return; }
+
+      await db.collection('galleryProjects').doc(docId).update({ title, subtitle, category });
+      loadProjectList();
+    });
+
+    actionsEl.querySelector('[data-cancel]').addEventListener('click', () => {
+      loadProjectList();
     });
   }
 
