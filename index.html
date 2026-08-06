@@ -199,12 +199,12 @@ if ('serviceWorker' in navigator) {
 </head>
 <body>
 
-    <div id="notifPopup" style="display: block; position: fixed; top: 24px; right: 24px; z-index: 9999; max-width: 340px; background: rgb(255, 255, 255); border: 1px solid rgb(216, 213, 205); border-radius: 8px; box-shadow: rgba(0, 0, 0, 0.12) 0px 8px 28px; padding: 20px; font-family: Pretendard, -apple-system, sans-serif;">
+    <div id="notifPopup" style="display: none; position: fixed; top: 24px; right: 24px; z-index: 9999; max-width: 340px; background: rgb(255, 255, 255); border: 1px solid rgb(216, 213, 205); border-radius: 8px; box-shadow: rgba(0, 0, 0, 0.12) 0px 8px 28px; padding: 20px; font-family: Pretendard, -apple-system, sans-serif;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <div style="font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#8a8578;">알림</div>
             <button id="notifCloseBtn" style="background:none; border:none; cursor:pointer; font-size:14px; color:#8a8578;">✕</button>
         </div>
-        <div id="notifBody" style="font-size:13.5px; line-height:1.7; color:#141414;"><div style="margin-bottom:6px;">🏖 일주일 내 예정된 연차:</div><div style="margin-bottom:6px;">　· 이연경 - 2026-08-10 (휴가)</div><div style="margin-bottom:6px;">　· 이연경 - 2026-08-11 (휴가)</div></div>
+        <div id="notifBody" style="font-size:13.5px; line-height:1.7; color:#141414;"></div>
     </div>
 
     <header>
@@ -401,6 +401,15 @@ if ('serviceWorker' in navigator) {
             }[ch]));
         }
 
+        // 기존(마이그레이션) 프로젝트는 url이 인코딩 안 된 상대경로 파일명이라 encodeURI가 필요하지만,
+        // 새로 업로드한 파일은 Firebase Storage의 다운로드 URL(이미 인코딩됨 + 토큰 포함)이라
+        // 여기에 encodeURI를 또 적용하면 %가 %25로 이중 인코딩되어 이미지가 깨진다.
+        // 그래서 절대 URL(http로 시작)인 경우에는 그대로 쓰고, 상대경로 파일명일 때만 인코딩한다.
+        function safeImgSrc(url) {
+            if (!url) return '';
+            return /^https?:\/\//i.test(url) ? url : encodeURI(url);
+        }
+
         async function loadGalleryProjects() {
             const grid = document.getElementById('galleryGrid');
             try {
@@ -430,7 +439,7 @@ if ('serviceWorker' in navigator) {
                     item.setAttribute('data-images', JSON.stringify(imageUrls));
                     item.onclick = function () { openModal(item); };
                     item.innerHTML = `
-                        <img src="${encodeURI(thumb.url)}" alt="${escapeHtml(d.title || '')}" style="object-position:${focalX}% ${focalY}%;">
+                        <img src="${safeImgSrc(thumb.url)}" alt="${escapeHtml(d.title || '')}" style="object-position:${focalX}% ${focalY}%;">
                         <div class="project-info"><h3>${escapeHtml(d.title || '')} ${subtitleLines}</h3></div>
                     `;
                     grid.appendChild(item);

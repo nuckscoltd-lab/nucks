@@ -757,7 +757,7 @@
       row.className = 'project-row';
       row.innerHTML = `
         <div class="thumb" data-id="${doc.id}">
-          ${thumb ? `<img src="${encodeURI(thumb.url)}" style="object-position:${thumb.focalX ?? 50}% ${thumb.focalY ?? 50}%;">
+          ${thumb ? `<img src="${safeImgSrc(thumb.url)}" style="object-position:${thumb.focalX ?? 50}% ${thumb.focalY ?? 50}%;">
           <div class="marker" style="left:${thumb.focalX ?? 50}%; top:${thumb.focalY ?? 50}%;"></div>` : ''}
         </div>
         <div class="info">
@@ -839,6 +839,15 @@
 
   function categoryLabel(cat) {
     return { unit: 'Unit/주거', menual: 'Menual/상업', mh: 'M.H/공용홀', '대안설계': 'View/대안설계' }[cat] || cat || '-';
+  }
+
+  // 기존(마이그레이션) 프로젝트는 url이 인코딩 안 된 상대경로 파일명이라 encodeURI가 필요하지만,
+  // 새로 업로드한 파일은 Firebase Storage의 다운로드 URL(이미 인코딩됨 + 토큰 포함)이라
+  // 여기에 encodeURI를 또 적용하면 %가 %25로 이중 인코딩되어 이미지가 깨진다.
+  // 그래서 절대 URL(http로 시작)인 경우에는 그대로 쓰고, 상대경로 파일명일 때만 인코딩한다.
+  function safeImgSrc(url) {
+    if (!url) return '';
+    return /^https?:\/\//i.test(url) ? url : encodeURI(url);
   }
 
   checkMigrationNeeded();
