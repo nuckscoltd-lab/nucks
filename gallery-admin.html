@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>갤러리 관리 | NUCKS</title>
+<style>
+  :root{
+    --ink:#141414;
+    --paper:#f7f6f3;
+    --line:#d8d5cd;
+    --muted:#8a8578;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background:var(--paper);
+    font-family:'Pretendard', -apple-system, sans-serif; color:var(--ink);
+  }
+  header{
+    padding:24px 32px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;
+    background:#fff; position:sticky; top:0; z-index:10;
+  }
+  header h1{ font-size:20px; margin:0 0 4px; }
+  header p{ font-size:12.5px; color:var(--muted); margin:0; }
+  header a{ font-size:13px; color:var(--muted); text-decoration:none; border-bottom:1px solid var(--muted); }
+
+  main{ max-width:1100px; margin:0 auto; padding:28px 32px 100px; }
+
+  .panel{
+    background:#fff; border:1px solid var(--line); border-radius:8px;
+    padding:22px 24px; margin-bottom:28px;
+  }
+  .panel-title{ font-size:15px; font-weight:600; margin-bottom:6px; }
+  .panel-desc{ font-size:12.5px; color:var(--muted); line-height:1.7; margin-bottom:16px; }
+
+  .field{ display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+  .field label{ font-size:12px; color:var(--muted); }
+  .field input, .field select, .field textarea{
+    padding:9px 10px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13.5px; background:#fff;
+  }
+  .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:640px){ .field-row{ grid-template-columns:1fr; } }
+
+  .file-drop{
+    border:1px dashed var(--line); border-radius:6px; padding:20px; text-align:center;
+    font-size:13px; color:var(--muted); cursor:pointer; margin-bottom:14px;
+  }
+  .file-drop:hover{ border-color:var(--ink); color:var(--ink); }
+
+  .preview-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:12px; margin-bottom:16px;
+  }
+  .preview-item{
+    position:relative; border:1px solid var(--line); border-radius:6px; overflow:hidden; background:#f2f0eb;
+  }
+  .preview-thumb{
+    position:relative; width:100%; aspect-ratio:1/1; overflow:hidden;
+  }
+  .preview-thumb.is-cover{ cursor:crosshair; }
+  .preview-thumb img{ width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; user-select:none; }
+  .preview-marker{
+    position:absolute; width:16px; height:16px; margin:-8px 0 0 -8px;
+    border:2px solid #fff; border-radius:50%; box-shadow:0 0 0 1.5px rgba(0,0,0,.6);
+    pointer-events:none;
+  }
+  .cover-badge{
+    position:absolute; top:6px; left:6px; background:var(--ink); color:#fff; font-size:10px;
+    padding:2px 7px; border-radius:10px;
+  }
+  .preview-actions{ padding:6px 8px; display:flex; justify-content:space-between; align-items:center; }
+  .mini-btn{
+    font-size:10.5px; background:none; border:none; color:var(--muted); cursor:pointer; text-decoration:underline;
+  }
+
+  .submit-btn{
+    padding:10px 22px; background:var(--ink); color:var(--paper);
+    border:none; font-size:12.5px; letter-spacing:.05em; text-transform:uppercase;
+    cursor:pointer; border-radius:4px;
+  }
+  .submit-btn:disabled{ opacity:.5; cursor:default; }
+  .submit-btn.danger{ background:#a4453c; }
+  .status-line{ font-size:13px; margin-top:10px; min-height:18px; }
+  .status-line.ok{ color:#3f6b52; }
+  .status-line.err{ color:#a4453c; }
+
+  .progress-bar{
+    height:4px; background:#ece9e2; border-radius:2px; overflow:hidden; margin-top:10px; display:none;
+  }
+  .progress-bar-fill{ height:100%; background:var(--ink); width:0%; transition:width .2s; }
+
+  /* 등록된 프로젝트 목록 */
+  .project-list{ display:flex; flex-direction:column; gap:10px; }
+  .project-row{
+    display:flex; gap:14px; align-items:center; border:1px solid var(--line); border-radius:6px; padding:10px 12px;
+    background:#fff;
+  }
+  .project-row .thumb{
+    position:relative; width:64px; height:64px; border-radius:4px; overflow:hidden; flex:none; background:#eee; cursor:crosshair;
+  }
+  .project-row .thumb img{ width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; }
+  .project-row .thumb .marker{
+    position:absolute; width:12px; height:12px; margin:-6px 0 0 -6px; border:1.5px solid #fff;
+    border-radius:50%; box-shadow:0 0 0 1px rgba(0,0,0,.6); pointer-events:none;
+  }
+  .project-row .info{ flex:1; min-width:0; }
+  .project-row .info .t{ font-size:13.5px; font-weight:500; }
+  .project-row .info .s{ font-size:12px; color:var(--muted); }
+  .project-row .info .m{ font-size:11px; color:var(--muted); margin-top:2px; }
+  .project-row .actions{ display:flex; gap:8px; align-items:center; flex:none; }
+  .project-row .actions button{
+    font-size:11.5px; background:none; border:1px solid var(--line); border-radius:4px;
+    padding:5px 9px; cursor:pointer; color:var(--muted);
+  }
+  .project-row .actions button:hover{ border-color:var(--ink); color:var(--ink); }
+  .project-row .actions button.danger{ color:#a4453c; border-color:#f0c9c4; }
+
+  .empty-msg{ font-size:13px; color:var(--muted); padding:20px; text-align:center; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>갤러리 관리</h1>
+    <p>새 프로젝트 사진을 여기서 업로드하면 홈페이지 갤러리에 자동으로 추가됩니다.</p>
+  </div>
+  <a href="index.html">← 홈으로</a>
+</header>
+
+<main>
+
+  <!-- 1회성 마이그레이션 패널 -->
+  <div class="panel" id="migratePanel">
+    <div class="panel-title">기존 프로젝트 가져오기 (최초 1회)</div>
+    <div class="panel-desc">
+      index.html에 하드코딩되어 있던 기존 28개 프로젝트를 이 관리 시스템(Firestore)으로 옮깁니다.
+      이미 가져왔다면 이 패널은 자동으로 숨겨집니다. 실행해도 기존 사진 파일은 그대로 서버에 있는 걸 그대로 참조하니
+      다시 업로드할 필요는 없습니다.
+    </div>
+    <button class="submit-btn" id="migrateBtn">기존 28개 프로젝트 가져오기 실행</button>
+    <div class="status-line" id="migrateStatus"></div>
+  </div>
+
+  <!-- 새 프로젝트 업로드 -->
+  <div class="panel">
+    <div class="panel-title">새 프로젝트 업로드</div>
+    <div class="panel-desc">사진을 선택하면 업로드 즉시 갤러리에 추가됩니다. 대표 썸네일 사진은 클릭해서 잘림 위치(초점)를 지정할 수 있어요.</div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="f-title">제목 (예: HWASUNG)</label>
+        <input type="text" id="f-title" placeholder="예: HWASUNG">
+      </div>
+      <div class="field">
+        <label for="f-category">카테고리</label>
+        <select id="f-category">
+          <option value="unit">Unit / 주거</option>
+          <option value="menual">Menual / 상업</option>
+          <option value="mh">M.H / 공용홀</option>
+          <option value="대안설계">View / 대안설계</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label for="f-subtitle">부제 (예: 대치동 비취타운 | 2026년)</label>
+      <input type="text" id="f-subtitle" placeholder="예: 대치동 비취타운 | 2026년">
+    </div>
+
+    <div class="field">
+      <label>사진 (여러 장 선택 가능, 첫 번째로 지정된 사진이 목록 썸네일로 쓰입니다)</label>
+    </div>
+    <div class="file-drop" id="fileDrop">파일 선택 또는 여기로 드래그</div>
+    <input type="file" id="fileInput" accept="image/*" multiple style="display:none;">
+
+    <div class="preview-grid" id="previewGrid"></div>
+
+    <button class="submit-btn" id="uploadBtn" disabled>업로드 및 등록</button>
+    <div class="progress-bar" id="progressBar"><div class="progress-bar-fill" id="progressFill"></div></div>
+    <div class="status-line" id="uploadStatus"></div>
+  </div>
+
+  <!-- 등록된 프로젝트 목록 -->
+  <div class="panel">
+    <div class="panel-title">등록된 프로젝트</div>
+    <div class="panel-desc">썸네일을 클릭하면 잘림 위치를 바로 조정할 수 있고, 자동 저장됩니다. 순서 화살표로 갤러리 노출 순서를 바꿀 수 있어요.</div>
+    <div class="project-list" id="projectList"></div>
+  </div>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+  requireRole(['admin']);
+
+  const storage = firebase.storage();
+
+  // ---------------- 기존 28개 프로젝트 (마이그레이션용 시드 데이터) ----------------
+  const SEED_PROJECTS = [
+  {
+    "category": "대안설계",
+    "title": "HWASUNG",
+    "subtitle": "대치동 비취타운 | 2026년",
+    "images": [
+      "00. 대치 비취타운 투시도.webp",
+      "02. 대치 PARTY RM ALT02_FIN.webp",
+      "03. 대치 SKY LOUNGE_FIN.webp",
+      "05. 대치 94-1.webp",
+      "06. 대치 129A.webp",
+      "07. 대치 139A.webp"
+    ]
+  },
+  {
+    "category": "mh",
+    "title": "아이파크",
+    "subtitle": "천안부성 | 견본주택 | 2026년",
+    "images": [
+      "수정본01 260112_외부-4.webp",
+      "수정본02 입구.webp",
+      "수정본03 공용홀_1026-DSC00988.webp",
+      "수정본04 공용홀2028-DSC00990.webp",
+      "수정본05-DSC00128.webp",
+      "수정본06 260205_14-1_ALT2.webp",
+      "수정본07 상담공간155-DSC00930.webp",
+      "수정본08 -2층홀DSC00004.webp",
+      "수정본09 062-DSC00032.webp"
+    ]
+  },
+  {
+    "category": "unit",
+    "title": "아이파크",
+    "subtitle": "천안부성 | 2026년",
+    "images": [
+      "수정본01 84DSC02077.webp",
+      "수정본01-2DSC02080.webp",
+      "수정본02 102DSC01627.webp",
+      "수정본03 116DSC02797.webp",
+      "수정본04 116DSC03119.webp",
+      "수정본05 120DSC00845.webp",
+      "수정본06 120DSC00917.webp"
+    ]
+  },
+  {
+    "category": "unit",
+    "title": "HWASUNG",
+    "subtitle": "만촌 파크드림 에디움 | 2025년 / 범어역 파크드림 | 2026년",
+    "images": [
+      "수정본ALT-03 MINIMAL 거실(보정-밝은색).webp",
+      "수정본08_주방 OPT2(우측-닫힘)(보정).webp",
+      "수정본Enscape_2025-04-15-11-08-39.webp"
+    ]
+  },
+  {
+    "category": "대안설계",
+    "title": "힐스테이트",
+    "subtitle": "장위 시그니처  | 2025년",
+    "images": [
+      "수정본01 013-랜드마크 투시_0627_고가.webp",
+      "수정본02 140.webp",
+      "수정본03 스카이폰드_0620.webp"
+    ]
+  },
+  {
+    "category": "unit",
+    "title": "'k' 공동주택 유엔빌리지",
+    "subtitle": "한남동 | 2025년",
+    "images": [
+      "sk4-1.jpg",
+      "sk4.jpg",
+      "sk3-2.jpg",
+      "sk3.jpg",
+      "sk-2-2.jpg",
+      "sk2.jpg"
+    ]
+  },
+  {
+    "category": "unit",
+    "title": "아이파크",
+    "subtitle": "익산 부송4지구 | 2024년",
+    "images": [
+      "수정본DSC01194.webp",
+      "수정본DSC00480.webp",
+      "수정본DSC00477.webp",
+      "수정본DSC01454.webp"
+    ]
+  },
+  {
+    "category": "mh",
+    "title": "서초르니드",
+    "subtitle": "견본주택 | 2024년",
+    "images": [
+      "수정본0E7A5370 copy.webp",
+      "수정본0E7A5243 copy.webp",
+      "수정본0E7A5379 copy.webp",
+      "수정본0E7A5505 copy.webp",
+      "수정본0E7A5560 copy.webp",
+      "수정본0E7A5569 copy.webp",
+      "수정본0E7A5579 copy.webp",
+      "수정본0E7A5525_Panorama copy.webp",
+      "수정본0E7A5522_Panorama 1 copy.webp",
+      "수정본0E7A5226 copy.webp"
+    ]
+  },
+  {
+    "category": "menual",
+    "title": "밥장인",
+    "subtitle": "부산중앙점 | 2024년",
+    "images": [
+      "수정본0E7A9057.webp",
+      "수정본0E7A9093_Panorama.webp",
+      "수정본0E7A9123_Panorama.webp",
+      "수정본0E7A9189.webp",
+      "수정본0E7A9301.webp"
+    ]
+  },
+  {
+    "category": "menual",
+    "title": "밥장인",
+    "subtitle": "경성부경대점 | 2024년",
+    "images": [
+      "수정본★IMG_6785(보정).webp",
+      "수정본★IMG_6761(보정).webp",
+      "수정본★IMG_6766(보정).webp"
+    ]
+  },
+  {
+    "category": "menual",
+    "title": "밥장인",
+    "subtitle": "홍대점 | 2024년",
+    "images": [
+      "수정본_DSC4657.webp",
+      "수정본_DSC4654.webp",
+      "수정본_DSC4650.webp"
+    ]
+  },
+  {
+    "category": "unit",
+    "title": "대상 웰라움",
+    "subtitle": "홍천 | 2024년",
+    "images": [
+      "수정본DSC01376.webp",
+      "수정본DSC01378.webp",
+      "수정본DSC00225.webp",
+      "수정본DSC01629.webp",
+      "수정본04-DSC00159.webp",
+      "수정본03-DSC00284.webp",
+      "수정본DSC01049.webp"
+    ]
+  },
+  {
+    "category": "mh",
+    "title": "아이파크",
+    "subtitle": "익산 부송4지구 | 견본주택  | 2024년",
+    "images": [
+      "수정본DSC01615.webp",
+      "수정본DSC01695.webp",
+      "수정본DSC01734.webp",
+      "수정본DSC01738.webp"
+    ]
+  },
+  {
+    "category": "unit",
+    "title": "아이파크",
+    "subtitle": "호현 센트럴 | 2024년",
+    "images": [
+      "수정본01DSC01026.webp",
+      "수정본02DSC01029-DSC00042.webp",
+      "수정본03DSC00008 (수정).webp",
+      "수정본04DSC00943.webp"
+    ]
+  },
+  {
+    "category": "unit",
+    "title": "아이파크",
+    "subtitle": "호현 센트럴 | 2024년",
+    "images": [
+      "수정본01 DSC00364 (수정).webp",
+      "수정본02 DSC00367 (수정).webp",
+      "수정본03 DSC00413 (수정).webp",
+      "수정본04 DSC00572 (수정).webp"
+    ]
+  },
+  {
+    "category": "대안설계",
+    "title": "롯데캐슬",
+    "subtitle": "전농 | 2024년",
+    "images": [
+      "수정본01 A9R1oiohbj_1nk58n0_mwg copy.webp",
+      "수정본02 A9R1palx3w_1nk58nb_mwg copy.webp",
+      "수정본03 A9Rd46y0d_1nk58nd_mwg copy.webp"
+    ]
+  },
+  {
+    "category": "대안설계",
+    "title": "롯데르엘",
+    "subtitle": "용산 | 2024년",
+    "images": [
+      "수정본01 A9R1ikpew_vi1rhp_jb8.webp",
+      "수정본02 Asset 1(1).webp",
+      "수정본03 A9Rc7fhli_1nk58os_mwg copy.webp"
+    ]
+  },
+  {
+    "category": "unit",
+    "title": "힐스테이트",
+    "subtitle": "속초 금호  | 2023년",
+    "images": [
+      "수정본01DSC01563.webp",
+      "수정본02DSC01564.webp",
+      "수정본03DSC01811.webp",
+      "수정본04DSC01616.webp"
+    ]
+  },
+  {
+    "category": "unit",
+    "title": "힐스테이트",
+    "subtitle": "속초 금호 | 2023년",
+    "images": [
+      "수정본01DSC00301.webp",
+      "수정본02DSC01038.webp",
+      "수정본03DSC01043.webp",
+      "수정본04DSC01047.webp"
+    ]
+  },
+  {
+    "category": "unit",
+    "title": "단독주택",
+    "subtitle": "세종 6-4 블럭형 | 2022년",
+    "images": [
+      "수정본01거실 ALT.2-1.webp",
+      "수정본02주방 입면.webp",
+      "수정본03.webp",
+      "수정본04패밀리 라운지.webp",
+      "수정본05계단 입면.webp",
+      "수정본06 입구측 입면.webp",
+      "수정본07수정.webp"
+    ]
+  },
+  {
+    "category": "unit",
+    "title": "극동스타클래스",
+    "subtitle": "진주 백년문화공원 | 2022년",
+    "images": [
+      "수정본6.webp",
+      "수정본DSC01447.webp",
+      "수정본DSC01527.webp",
+      "수정본2.webp",
+      "수정본3.webp",
+      "수정본DSC01543-DSC00036.webp",
+      "수정본DSC00930.webp"
+    ]
+  },
+  {
+    "category": "mh",
+    "title": "아이파크",
+    "subtitle": "경산2차 | 견본주택 | 2022년",
+    "images": [
+      "수정본01 DSC00806.webp",
+      "수정본02 DSC00827.webp",
+      "수정본03 DSC00733(수정).webp"
+    ]
+  },
+  {
+    "category": "unit",
+    "title": "아페르",
+    "subtitle": "한강 | 2021년",
+    "images": [
+      "수정본273거실_alt.webp",
+      "수정본거실_alt.webp",
+      "수정본224마스터.webp",
+      "수정본욕실.webp"
+    ]
+  },
+  {
+    "category": "unit",
+    "title": "힐스테이트",
+    "subtitle": "장안 센트럴 | 2021년",
+    "images": [
+      "수정본01DSC00789.webp",
+      "수정본02DSC00797.webp",
+      "수정본03DSC01002.webp"
+    ]
+  },
+  {
+    "category": "unit",
+    "title": "힐스테이트",
+    "subtitle": "장안 센트럴 | 2021년",
+    "images": [
+      "수정본01DSC00131.webp",
+      "수정본02DSC00214.webp",
+      "수정본03DSC00459.webp"
+    ]
+  },
+  {
+    "category": "대안설계",
+    "title": "디에이치 르 헤븐",
+    "subtitle": "잠원동 | 2021년",
+    "images": [
+      "수정본01 Asset 1.webp",
+      "수정본02 Asset 1.webp",
+      "수정본03 Asset 1.webp",
+      "수정본04 Asset 1.webp",
+      "수정본05 Asset 1.webp",
+      "수정본06 Asset 2.webp",
+      "수정본07 Asset 3.webp"
+    ]
+  },
+  {
+    "category": "대안설계",
+    "title": "롯데캐슬 클라시엘",
+    "subtitle": "성수동 | 2021년",
+    "images": [
+      "수정본01 Asset 1-1.webp",
+      "수정본02 Asset 1-1.webp",
+      "수정본03 Asset 1-1.webp"
+    ]
+  },
+  {
+    "category": "unit",
+    "title": "라포르테",
+    "subtitle": "세종 | 2020년",
+    "images": [
+      "수정본01.webp",
+      "수정본02.webp",
+      "수정본03.webp",
+      "수정본04.webp",
+      "수정본05.webp"
+    ]
+  }
+];
+
+  // ---------------- 마이그레이션 ----------------
+  async function checkMigrationNeeded() {
+    const snap = await db.collection('galleryProjects').limit(1).get();
+    if (!snap.empty) {
+      document.getElementById('migratePanel').style.display = 'none';
+    }
+  }
+
+  document.getElementById('migrateBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('migrateBtn');
+    const statusEl = document.getElementById('migrateStatus');
+    btn.disabled = true;
+    statusEl.className = 'status-line';
+    statusEl.textContent = '가져오는 중...';
+
+    try {
+      // 이전에 gallery-focal.html로 저장해둔 초점 좌표가 있으면 함께 반영
+      let focalMap = {};
+      try {
+        const focalSnap = await db.collection('galleryFocal').get();
+        focalSnap.forEach(d => { focalMap[d.id] = d.data(); });
+      } catch (e) { /* 무시: 없어도 진행 */ }
+
+      const batch = db.batch();
+      SEED_PROJECTS.forEach((p, idx) => {
+        const images = p.images.map((filename, i) => {
+          const focal = (i === 0 && focalMap[filename]) ? focalMap[filename] : null;
+          return {
+            url: filename, // 기존 정적 파일은 상대경로 그대로 사용 (재업로드 불필요)
+            path: '',       // Storage에 없는(기존) 파일이므로 삭제 시 Storage 삭제는 스킵
+            focalX: focal ? focal.x : 50,
+            focalY: focal ? focal.y : 50
+          };
+        });
+        const ref = db.collection('galleryProjects').doc();
+        batch.set(ref, {
+          title: p.title,
+          subtitle: p.subtitle,
+          category: p.category,
+          images: images,
+          order: idx,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      });
+      await batch.commit();
+
+      statusEl.className = 'status-line ok';
+      statusEl.textContent = `${SEED_PROJECTS.length}개 프로젝트를 가져왔습니다.`;
+      document.getElementById('migratePanel').style.display = 'none';
+      loadProjectList();
+    } catch (err) {
+      console.error(err);
+      statusEl.className = 'status-line err';
+      statusEl.textContent = '가져오기 실패: ' + err.message;
+      btn.disabled = false;
+    }
+  });
+
+  // ---------------- 새 프로젝트 업로드 ----------------
+  let selectedFiles = []; // [{file, previewUrl, focalX, focalY}]
+
+  const fileDrop = document.getElementById('fileDrop');
+  const fileInput = document.getElementById('fileInput');
+  fileDrop.addEventListener('click', () => fileInput.click());
+  fileDrop.addEventListener('dragover', (e) => { e.preventDefault(); fileDrop.style.borderColor = '#141414'; });
+  fileDrop.addEventListener('dragleave', () => { fileDrop.style.borderColor = ''; });
+  fileDrop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    fileDrop.style.borderColor = '';
+    handleFiles(e.dataTransfer.files);
+  });
+  fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+  function handleFiles(fileList) {
+    Array.from(fileList).forEach(file => {
+      if (!file.type.startsWith('image/')) return;
+      selectedFiles.push({
+        file,
+        previewUrl: URL.createObjectURL(file),
+        focalX: 50,
+        focalY: 50
+      });
+    });
+    renderPreview();
+  }
+
+  function renderPreview() {
+    const grid = document.getElementById('previewGrid');
+    grid.innerHTML = '';
+
+    selectedFiles.forEach((item, idx) => {
+      const isCover = idx === 0;
+      const div = document.createElement('div');
+      div.className = 'preview-item';
+      div.innerHTML = `
+        <div class="preview-thumb ${isCover ? 'is-cover' : ''}">
+          <img src="${item.previewUrl}">
+          ${isCover ? `<div class="preview-marker" style="left:${item.focalX}%; top:${item.focalY}%;"></div>` : ''}
+          ${isCover ? `<div class="cover-badge">대표</div>` : ''}
+        </div>
+        <div class="preview-actions">
+          ${idx !== 0 ? `<button class="mini-btn" data-make-cover="${idx}">대표로 지정</button>` : `<span style="font-size:10px; color:var(--muted);">클릭해서 초점 지정</span>`}
+          <button class="mini-btn" data-remove="${idx}">삭제</button>
+        </div>
+      `;
+      grid.appendChild(div);
+
+      if (isCover) {
+        const thumbEl = div.querySelector('.preview-thumb');
+        thumbEl.addEventListener('click', (e) => {
+          const rect = thumbEl.getBoundingClientRect();
+          const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+          const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+          selectedFiles[idx].focalX = x;
+          selectedFiles[idx].focalY = y;
+          renderPreview();
+        });
+      }
+    });
+
+    grid.querySelectorAll('[data-make-cover]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.makeCover);
+        const [item] = selectedFiles.splice(idx, 1);
+        selectedFiles.unshift(item);
+        renderPreview();
+      });
+    });
+    grid.querySelectorAll('[data-remove]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.remove);
+        selectedFiles.splice(idx, 1);
+        renderPreview();
+      });
+    });
+
+    document.getElementById('uploadBtn').disabled = selectedFiles.length === 0;
+  }
+
+  document.getElementById('uploadBtn').addEventListener('click', async () => {
+    const title = document.getElementById('f-title').value.trim();
+    const subtitle = document.getElementById('f-subtitle').value.trim();
+    const category = document.getElementById('f-category').value;
+    const statusEl = document.getElementById('uploadStatus');
+    const btn = document.getElementById('uploadBtn');
+    const progressBar = document.getElementById('progressBar');
+    const progressFill = document.getElementById('progressFill');
+
+    if (!title) { statusEl.className = 'status-line err'; statusEl.textContent = '제목을 입력해주세요.'; return; }
+    if (selectedFiles.length === 0) { statusEl.className = 'status-line err'; statusEl.textContent = '사진을 선택해주세요.'; return; }
+
+    btn.disabled = true;
+    progressBar.style.display = 'block';
+    statusEl.className = 'status-line';
+    statusEl.textContent = '업로드 중... (0/' + selectedFiles.length + ')';
+
+    try {
+      const projectId = db.collection('galleryProjects').doc().id;
+      const images = [];
+
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const item = selectedFiles[i];
+        const path = `gallery/${projectId}/${i}_${item.file.name}`;
+        const ref = storage.ref(path);
+        await ref.put(item.file);
+        const url = await ref.getDownloadURL();
+        images.push({ url, path, focalX: item.focalX, focalY: item.focalY });
+
+        progressFill.style.width = `${Math.round(((i + 1) / selectedFiles.length) * 100)}%`;
+        statusEl.textContent = `업로드 중... (${i + 1}/${selectedFiles.length})`;
+      }
+
+      await db.collection('galleryProjects').doc(projectId).set({
+        title, subtitle, category, images,
+        order: Date.now(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+      statusEl.className = 'status-line ok';
+      statusEl.textContent = '등록 완료! 홈페이지 갤러리에 바로 반영됩니다.';
+      progressBar.style.display = 'none';
+
+      // 폼 초기화
+      document.getElementById('f-title').value = '';
+      document.getElementById('f-subtitle').value = '';
+      selectedFiles = [];
+      renderPreview();
+      loadProjectList();
+    } catch (err) {
+      console.error(err);
+      statusEl.className = 'status-line err';
+      statusEl.textContent = '업로드 실패: ' + err.message;
+    } finally {
+      btn.disabled = selectedFiles.length === 0;
+    }
+  });
+
+  // ---------------- 등록된 프로젝트 목록 (수정/삭제/순서) ----------------
+  async function loadProjectList() {
+    const listEl = document.getElementById('projectList');
+    listEl.innerHTML = '<div class="empty-msg">불러오는 중...</div>';
+
+    const snap = await db.collection('galleryProjects').orderBy('order', 'asc').get();
+    if (snap.empty) {
+      listEl.innerHTML = '<div class="empty-msg">등록된 프로젝트가 없습니다.</div>';
+      return;
+    }
+
+    const docs = snap.docs;
+    listEl.innerHTML = '';
+
+    docs.forEach((doc, idx) => {
+      const d = doc.data();
+      const thumb = (d.images && d.images[0]) || null;
+
+      const row = document.createElement('div');
+      row.className = 'project-row';
+      row.innerHTML = `
+        <div class="thumb" data-id="${doc.id}">
+          ${thumb ? `<img src="${encodeURI(thumb.url)}" style="object-position:${thumb.focalX ?? 50}% ${thumb.focalY ?? 50}%;">
+          <div class="marker" style="left:${thumb.focalX ?? 50}%; top:${thumb.focalY ?? 50}%;"></div>` : ''}
+        </div>
+        <div class="info">
+          <div class="t">${d.title || '(제목 없음)'}</div>
+          <div class="s">${d.subtitle || ''}</div>
+          <div class="m">${(d.images || []).length}장 · ${categoryLabel(d.category)}</div>
+        </div>
+        <div class="actions">
+          <button data-up="${doc.id}" ${idx === 0 ? 'disabled' : ''}>▲</button>
+          <button data-down="${doc.id}" ${idx === docs.length - 1 ? 'disabled' : ''}>▼</button>
+          <button class="danger" data-delete="${doc.id}">삭제</button>
+        </div>
+      `;
+      listEl.appendChild(row);
+
+      if (thumb) {
+        const thumbEl = row.querySelector('.thumb');
+        thumbEl.addEventListener('click', async (e) => {
+          const rect = thumbEl.getBoundingClientRect();
+          const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+          const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+
+          const newImages = [...d.images];
+          newImages[0] = { ...newImages[0], focalX: x, focalY: y };
+          await db.collection('galleryProjects').doc(doc.id).update({ images: newImages });
+          d.images = newImages;
+
+          thumbEl.querySelector('img').style.objectPosition = `${x}% ${y}%`;
+          thumbEl.querySelector('.marker').style.left = x + '%';
+          thumbEl.querySelector('.marker').style.top = y + '%';
+        });
+      }
+    });
+
+    listEl.querySelectorAll('[data-delete]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('이 프로젝트를 삭제할까요? 되돌릴 수 없습니다.')) return;
+        const id = btn.dataset.delete;
+        const docSnap = await db.collection('galleryProjects').doc(id).get();
+        const d = docSnap.data();
+
+        // Storage에 업로드된 파일(기존 정적 파일은 path가 비어있어 스킵됨)만 삭제
+        if (d && d.images) {
+          for (const img of d.images) {
+            if (img.path) {
+              try { await storage.ref(img.path).delete(); } catch (e) { console.warn('스토리지 삭제 실패', e); }
+            }
+          }
+        }
+        await db.collection('galleryProjects').doc(id).delete();
+        loadProjectList();
+      });
+    });
+
+    listEl.querySelectorAll('[data-up]').forEach(btn => {
+      btn.addEventListener('click', () => swapOrder(btn.dataset.up, -1, docs));
+    });
+    listEl.querySelectorAll('[data-down]').forEach(btn => {
+      btn.addEventListener('click', () => swapOrder(btn.dataset.down, 1, docs));
+    });
+  }
+
+  async function swapOrder(id, direction, docs) {
+    const idx = docs.findIndex(d => d.id === id);
+    const targetIdx = idx + direction;
+    if (targetIdx < 0 || targetIdx >= docs.length) return;
+
+    const a = docs[idx];
+    const b = docs[targetIdx];
+    const aOrder = a.data().order;
+    const bOrder = b.data().order;
+
+    const batch = db.batch();
+    batch.update(db.collection('galleryProjects').doc(a.id), { order: bOrder });
+    batch.update(db.collection('galleryProjects').doc(b.id), { order: aOrder });
+    await batch.commit();
+    loadProjectList();
+  }
+
+  function categoryLabel(cat) {
+    return { unit: 'Unit/주거', menual: 'Menual/상업', mh: 'M.H/공용홀', '대안설계': 'View/대안설계' }[cat] || cat || '-';
+  }
+
+  checkMigrationNeeded();
+  loadProjectList();
+</script>
+</body>
+</html>

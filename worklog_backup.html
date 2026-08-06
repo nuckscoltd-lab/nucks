@@ -182,22 +182,6 @@ if ('serviceWorker' in navigator) {
   }
   .cal-cell-holiday{ background:#fdf6f5; }
   .cal-cell-holiday.other-month{ background:#f2f0eb; }
-  /* 태블릿/폴더블 대응 (Z Fold 펼침 화면 등, 641~1024px) */
-  @media (min-width: 641px) and (max-width: 1024px) {
-    main{ padding:32px 24px !important; max-width:100% !important; }
-    header{ padding:22px 24px !important; }
-    .form-grid{ grid-template-columns:repeat(2, 1fr) !important; }
-    .project-row-top{ flex-wrap:wrap !important; }
-    .project-row-top .field{ min-width:45% !important; flex:1 1 45% !important; }
-    .project-row-top .hours-field{ max-width:none !important; flex:1 1 45% !important; }
-    .task-checks{ gap:10px !important; }
-    .toolbar{ flex-wrap:wrap !important; gap:10px !important; }
-    .header-right{ gap:16px !important; flex-wrap:wrap !important; }
-    table{ min-width:0 !important; width:100% !important; }
-    th, td{ padding:8px 6px !important; font-size:12.5px !important; }
-    td.detail-cell{ max-width:160px !important; }
-  }
-
   @media (max-width: 640px) {
     header{ padding:20px !important; flex-wrap:wrap; gap:10px; }
     .header-right{ flex-wrap:wrap; gap:12px !important; }
