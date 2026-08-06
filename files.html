@@ -124,6 +124,38 @@ if ('serviceWorker' in navigator) {
     background:#fff; border:1px solid var(--line); border-radius:6px;
     padding:36px; text-align:center; color:var(--muted); font-size:13.5px; line-height:1.7;
   }
+
+  /* 증명서 발급 섹션 */
+  .section-title{
+    font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--muted); margin:56px 0 16px;
+  }
+  .section-title:first-of-type{ margin-top:56px; }
+  #certFieldsArea .upload-row{ margin-top:6px; }
+
+  /* 인쇄 전용 영역 - 화면에서는 숨겨두고 인쇄할 때만 노출 */
+  #certPrintArea{ display:none; }
+  @media print {
+    body *{ visibility:hidden; }
+    #certPrintArea, #certPrintArea *{ visibility:visible; }
+    #certPrintArea{
+      display:block !important; position:absolute; top:0; left:0; width:100%; padding:36px;
+    }
+  }
+  .print-slip{ font-family:'Pretendard', -apple-system, sans-serif; color:#141414; }
+  .print-slip .p-header{ text-align:center; margin-bottom:28px; }
+  .print-slip .p-company{ font-size:12.5px; color:#666; margin-bottom:10px; }
+  .print-slip .p-title{ font-size:26px; font-weight:700; letter-spacing:.25em; }
+  .print-slip .p-info-table{ width:100%; border-collapse:collapse; margin-bottom:24px; }
+  .print-slip .p-info-table th, .print-slip .p-info-table td{
+    border:1px solid #333; padding:10px 12px; font-size:13.5px;
+  }
+  .print-slip .p-info-table th{ background:#f2f0eb; width:110px; text-align:center; }
+  .print-slip .cert-body{ font-size:14.5px; line-height:2; margin:30px 0; text-align:center; }
+  .print-slip .cert-purpose{ font-size:13px; color:#444; margin-bottom:44px; text-align:center; }
+  .print-slip .cert-sign{ text-align:right; font-size:13.5px; line-height:2; }
+  .print-slip .stamp-row{ display:flex; justify-content:flex-end; align-items:center; gap:4px; margin-top:6px; }
+  .print-slip .p-stamp{ width:62px; height:62px; margin-left:-8px; opacity:.92; }
   @media (max-width: 640px) {
     header{ padding:20px !important; flex-wrap:wrap; gap:10px; }
     .header-right{ flex-wrap:wrap; gap:12px !important; }
@@ -204,7 +236,46 @@ if ('serviceWorker' in navigator) {
     <tbody id="fileTableBody"></tbody>
   </table>
   <div class="empty" id="emptyMsg" style="display:none;">등록된 파일이 없습니다.</div>
+
+  <!-- 증명서 발급 -->
+  <div class="section-title">증명서 발급</div>
+  <div class="upload-panel show" id="certWritePanel">
+    <div class="panel-title">문서 작성</div>
+    <div class="upload-row">
+      <div class="field">
+        <label for="cert-type">문서 종류</label>
+        <select id="cert-type">
+          <option value="재직증명서">재직증명서</option>
+          <option value="경력증명서">경력증명서</option>
+          <option value="퇴직증명서">퇴직증명서</option>
+          <option value="해촉증명서">해촉증명서</option>
+          <option value="사직서">사직서</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="cert-employee">사원 선택</label>
+        <select id="cert-employee"></select>
+      </div>
+    </div>
+
+    <div id="certFieldsArea"></div>
+
+    <button class="upload-btn" id="certGenerateBtn" style="margin-top:16px;">발급 및 인쇄</button>
+    <div class="upload-status" id="certStatus"></div>
+  </div>
+
+  <div class="section-title">증명서 발급 이력</div>
+  <table>
+    <thead>
+      <tr><th>발급일</th><th>문서종류</th><th>사원명</th><th>용도/사유</th><th>관리</th></tr>
+    </thead>
+    <tbody id="certTableBody"></tbody>
+  </table>
+  <div class="empty" id="certEmptyMsg" style="display:none;">발급된 증명서가 없습니다.</div>
 </main>
+
+<!-- 인쇄 전용 영역 -->
+<div id="certPrintArea"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
@@ -220,13 +291,19 @@ if ('serviceWorker' in navigator) {
   let allFiles = [];
   let activeCategory = '전체';
   let isAdmin = false;
+  let currentCertRole = null;
+  let currentCertUser = null;
 
   auth.onAuthStateChanged(async (user) => {
     if (!user) return;
     const role = await getCurrentUserRole();
     isAdmin = (role === 'admin');
+    currentCertRole = role;
+    currentCertUser = user;
     document.getElementById('uploadPanel').classList.toggle('show', isAdmin);
     loadFiles();
+    await initCertSection();
+    await loadCertHistory();
   });
 
   const ACCOUNTING_CATEGORY = '회계현황';
@@ -491,6 +568,303 @@ if ('serviceWorker' in navigator) {
       btn.textContent = '업로드';
     }
   });
+
+  // ---------- 증명서 발급 (재직/경력/퇴직/해촉증명서, 사직서) ----------
+  const COMPANY_NAME = 'NUCKS Co.,Ltd';
+  const COMPANY_ADDRESS = '05033 서울특별시 광진구 광나루로46길 26, Nucks Building 2F';
+  const COMPANY_TEL = '02-6463-1773';
+  const COMPANY_STAMP_URL = 'company-stamp.png'; // 서버 루트에 이 파일명으로 업로드해주세요
+  const CEO_TITLE = '대표이사';
+
+  let certEmployees = [];
+
+  // 문서 종류별로 입력받을 항목 정의 (key: 저장/사용될 필드명)
+  const CERT_FIELD_DEFS = {
+    '재직증명서': [
+      { key: 'hireDate', label: '입사일', type: 'date' },
+      { key: 'purpose', label: '용도', type: 'text', placeholder: '예: 은행 제출용' }
+    ],
+    '경력증명서': [
+      { key: 'hireDate', label: '입사일', type: 'date' },
+      { key: 'resignDate', label: '퇴사일 (재직중이면 비워두세요)', type: 'date', optional: true },
+      { key: 'duty', label: '담당업무', type: 'text', placeholder: '예: 인테리어 설계 및 현장관리' },
+      { key: 'purpose', label: '용도', type: 'text', placeholder: '예: 이직처 제출용' }
+    ],
+    '퇴직증명서': [
+      { key: 'hireDate', label: '입사일', type: 'date' },
+      { key: 'resignDate', label: '퇴직일', type: 'date' },
+      { key: 'resignReason', label: '퇴직사유', type: 'select', options: ['자발적 퇴직', '계약기간 만료', '권고사직', '정년퇴직', '기타'] },
+      { key: 'purpose', label: '용도', type: 'text' }
+    ],
+    '해촉증명서': [
+      { key: 'commissionStart', label: '위촉일', type: 'date' },
+      { key: 'commissionEnd', label: '해촉일', type: 'date' },
+      { key: 'commissionRole', label: '위촉 직책/역할', type: 'text', placeholder: '예: 외부 자문위원' },
+      { key: 'duty', label: '담당업무', type: 'text' },
+      { key: 'purpose', label: '용도', type: 'text' }
+    ],
+    '사직서': [
+      { key: 'resignDate', label: '사직(희망)일자', type: 'date' },
+      { key: 'resignReason', label: '사직 사유', type: 'text', placeholder: '예: 일신상의 사유' }
+    ]
+  };
+
+  async function initCertSection() {
+    const snap = await db.collection('users').get();
+    certEmployees = snap.docs.map(d => ({ uid: d.id, ...d.data() })).filter(e => e.role !== 'guest');
+
+    const typeSelect = document.getElementById('cert-type');
+    const empSelect = document.getElementById('cert-employee');
+
+    if (currentCertRole === 'admin') {
+      empSelect.innerHTML = certEmployees.map(e => `<option value="${e.uid}">${e.displayName || e.email}</option>`).join('');
+      empSelect.disabled = false;
+      typeSelect.disabled = false;
+      typeSelect.innerHTML = `
+        <option value="재직증명서">재직증명서</option>
+        <option value="경력증명서">경력증명서</option>
+        <option value="퇴직증명서">퇴직증명서</option>
+        <option value="해촉증명서">해촉증명서</option>
+        <option value="사직서">사직서</option>
+      `;
+    } else {
+      // 근로자는 본인 명의로 사직서만 작성 가능 (재직/경력증명서 등은 관리자가 발급)
+      const me = certEmployees.find(e => e.uid === currentCertUser.uid);
+      empSelect.innerHTML = `<option value="${currentCertUser.uid}">${me?.displayName || currentCertUser.email}</option>`;
+      empSelect.disabled = true;
+      typeSelect.innerHTML = `<option value="사직서">사직서</option>`;
+      typeSelect.disabled = true;
+    }
+
+    typeSelect.removeEventListener('change', renderCertFields);
+    typeSelect.addEventListener('change', renderCertFields);
+    empSelect.removeEventListener('change', renderCertFields);
+    empSelect.addEventListener('change', renderCertFields);
+    renderCertFields();
+  }
+
+  function renderCertFields() {
+    const type = document.getElementById('cert-type').value;
+    const defs = CERT_FIELD_DEFS[type] || [];
+    const area = document.getElementById('certFieldsArea');
+
+    area.innerHTML = '<div class="upload-row">' + defs.map(f => {
+      const id = 'cf-' + f.key;
+      if (f.type === 'select') {
+        return `<div class="field"><label for="${id}">${f.label}</label>
+          <select id="${id}">${f.options.map(o => `<option value="${o}">${o}</option>`).join('')}</select></div>`;
+      }
+      return `<div class="field"><label for="${id}">${f.label}</label>
+        <input type="${f.type}" id="${id}" placeholder="${f.placeholder || ''}"></div>`;
+    }).join('') + '</div>';
+
+    // 선택된 사원의 입사일 등 정보가 있으면 자동으로 채워줌
+    const uid = document.getElementById('cert-employee').value;
+    const emp = certEmployees.find(e => e.uid === uid);
+    const hireInput = document.getElementById('cf-hireDate');
+    if (hireInput && emp?.hireDate) hireInput.value = emp.hireDate;
+  }
+
+  function formatDateKR(str) {
+    if (!str) return '';
+    const [y, m, d] = String(str).split('-');
+    if (!y || !m || !d) return str;
+    return `${y}년 ${Number(m)}월 ${Number(d)}일`;
+  }
+
+  function certBodyText(doc) {
+    const f = doc.fields || {};
+    const name = doc.employeeName;
+    switch (doc.type) {
+      case '재직증명서':
+        return `
+          <table class="p-info-table">
+            <tr><th>성명</th><td>${name}</td><th>부서</th><td>${doc.department || ''}</td></tr>
+            <tr><th>직급</th><td>${doc.position || ''}</td><th>입사일</th><td>${formatDateKR(f.hireDate)}</td></tr>
+          </table>
+          <p class="cert-body">위 사람은 현재 본 회사에 재직하고 있음을 증명합니다.</p>
+          <p class="cert-purpose">용도: ${f.purpose || ''}</p>
+        `;
+      case '경력증명서':
+        return `
+          <table class="p-info-table">
+            <tr><th>성명</th><td>${name}</td><th>부서</th><td>${doc.department || ''}</td></tr>
+            <tr><th>직급</th><td>${doc.position || ''}</td><th>담당업무</th><td>${f.duty || ''}</td></tr>
+            <tr><th>재직기간</th><td colspan="3">${formatDateKR(f.hireDate)} ~ ${f.resignDate ? formatDateKR(f.resignDate) : '현재'}</td></tr>
+          </table>
+          <p class="cert-body">위 사람은 위와 같이 본 회사에 재직(근무)하였음을 증명합니다.</p>
+          <p class="cert-purpose">용도: ${f.purpose || ''}</p>
+        `;
+      case '퇴직증명서':
+        return `
+          <table class="p-info-table">
+            <tr><th>성명</th><td>${name}</td><th>부서</th><td>${doc.department || ''}</td></tr>
+            <tr><th>직급</th><td>${doc.position || ''}</td><th>퇴직사유</th><td>${f.resignReason || ''}</td></tr>
+            <tr><th>입사일</th><td>${formatDateKR(f.hireDate)}</td><th>퇴직일</th><td>${formatDateKR(f.resignDate)}</td></tr>
+          </table>
+          <p class="cert-body">위 사람은 본 회사에 입사하여 근무하다가 위와 같은 사유로 퇴직하였음을 증명합니다.</p>
+          <p class="cert-purpose">용도: ${f.purpose || ''}</p>
+        `;
+      case '해촉증명서':
+        return `
+          <table class="p-info-table">
+            <tr><th>성명</th><td>${name}</td><th>위촉 직책</th><td>${f.commissionRole || ''}</td></tr>
+            <tr><th>담당업무</th><td colspan="3">${f.duty || ''}</td></tr>
+            <tr><th>위촉기간</th><td colspan="3">${formatDateKR(f.commissionStart)} ~ ${formatDateKR(f.commissionEnd)}</td></tr>
+          </table>
+          <p class="cert-body">위 사람은 본 회사의 ${f.commissionRole || '위촉직'}(으)로 위촉되어 활동하였으며,<br>${formatDateKR(f.commissionEnd)}부로 해촉되었음을 증명합니다.</p>
+          <p class="cert-purpose">용도: ${f.purpose || ''}</p>
+        `;
+      case '사직서':
+        return `
+          <table class="p-info-table">
+            <tr><th>소속</th><td>${doc.department || ''}</td><th>직위</th><td>${doc.position || ''}</td></tr>
+            <tr><th>성명</th><td>${name}</td><th>사직(희망)일자</th><td>${formatDateKR(f.resignDate)}</td></tr>
+          </table>
+          <p class="cert-body">본인은 아래와 같은 사유로 인하여 사직하고자 하오니 허락하여 주시기 바랍니다.</p>
+          <p class="cert-purpose">사유: ${f.resignReason || ''}</p>
+        `;
+      default:
+        return '';
+    }
+  }
+
+  function printCertificate(doc) {
+    const today = formatDateKR(doc.issueDate);
+    const isResignation = doc.type === '사직서';
+    const titleSpaced = doc.type.split('').join(' ');
+
+    const signArea = isResignation ? `
+      <div class="cert-sign">
+        <div>제출일자: ${today}</div>
+        <div style="margin-top:24px;">신청인: ${doc.employeeName} &nbsp;&nbsp;(서명)</div>
+      </div>
+    ` : `
+      <div class="cert-sign">
+        <div>발행일: ${today}</div>
+        <div class="stamp-row">
+          <span>${COMPANY_NAME} ${CEO_TITLE}</span>
+          <img class="p-stamp" src="${COMPANY_STAMP_URL}">
+        </div>
+      </div>
+    `;
+
+    document.getElementById('certPrintArea').innerHTML = `
+      <div class="print-slip">
+        <div class="p-header">
+          <div class="p-company">${COMPANY_NAME} · ${COMPANY_ADDRESS} · ${COMPANY_TEL}</div>
+          <div class="p-title">${titleSpaced}</div>
+        </div>
+        ${certBodyText(doc)}
+        ${signArea}
+      </div>
+    `;
+    window.print();
+  }
+
+  window.addEventListener('afterprint', () => {
+    const area = document.getElementById('certPrintArea');
+    if (area) area.innerHTML = '';
+  });
+
+  document.getElementById('certGenerateBtn').addEventListener('click', async () => {
+    const type = document.getElementById('cert-type').value;
+    const uid = document.getElementById('cert-employee').value;
+    const emp = certEmployees.find(e => e.uid === uid);
+    const defs = CERT_FIELD_DEFS[type] || [];
+    const statusEl = document.getElementById('certStatus');
+    const btn = document.getElementById('certGenerateBtn');
+
+    const values = {};
+    for (const f of defs) {
+      const el = document.getElementById('cf-' + f.key);
+      values[f.key] = el ? el.value.trim() : '';
+      if (!values[f.key] && !f.optional) {
+        statusEl.style.color = '#a4453c';
+        statusEl.textContent = `"${f.label}" 항목을 입력해 주세요.`;
+        return;
+      }
+    }
+
+    btn.disabled = true;
+    btn.textContent = '처리 중...';
+    statusEl.textContent = '';
+
+    const docData = {
+      type,
+      uid,
+      employeeName: emp?.displayName || emp?.email || '',
+      department: emp?.department || '',
+      position: (emp?.positionTags || []).join(', ') || '',
+      fields: values,
+      issueDate: new Date().toISOString().slice(0, 10),
+      createdByEmail: auth.currentUser.email,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    try {
+      const ref = await db.collection('issuedDocuments').add(docData);
+      printCertificate({ id: ref.id, ...docData });
+      statusEl.style.color = '#3f6b52';
+      statusEl.textContent = '발급 완료. 인쇄 창이 열립니다.';
+      await loadCertHistory();
+    } catch (err) {
+      statusEl.style.color = '#a4453c';
+      statusEl.textContent = '발급 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '발급 및 인쇄';
+    }
+  });
+
+  async function loadCertHistory() {
+    const tbody = document.getElementById('certTableBody');
+    const emptyMsg = document.getElementById('certEmptyMsg');
+
+    const query = (currentCertRole === 'admin')
+      ? db.collection('issuedDocuments').orderBy('createdAt', 'desc')
+      : db.collection('issuedDocuments').where('uid', '==', currentCertUser.uid);
+
+    const snap = await query.get();
+    let docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (currentCertRole !== 'admin') {
+      docs.sort((a, b) => (b.issueDate || '').localeCompare(a.issueDate || ''));
+    }
+
+    if (docs.length === 0) {
+      tbody.innerHTML = '';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+
+    tbody.innerHTML = docs.map(d => `
+      <tr>
+        <td data-label="발급일">${d.issueDate || ''}</td>
+        <td data-label="문서종류"><span class="cat-badge">${d.type}</span></td>
+        <td data-label="사원명">${d.employeeName || ''}</td>
+        <td data-label="용도/사유">${(d.fields && (d.fields.purpose || d.fields.resignReason)) || ''}</td>
+        <td data-label="관리">
+          <button class="dl-link" style="background:none; border:none; cursor:pointer; padding:0;" data-reprint="${d.id}">인쇄</button>
+          ${currentCertRole === 'admin' ? `<button class="del-btn" data-certdel="${d.id}">삭제</button>` : ''}
+        </td>
+      </tr>
+    `).join('');
+
+    tbody.querySelectorAll('[data-reprint]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const d = docs.find(x => x.id === btn.dataset.reprint);
+        if (d) printCertificate(d);
+      });
+    });
+    tbody.querySelectorAll('[data-certdel]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('이 발급 이력을 삭제할까요?')) return;
+        await db.collection('issuedDocuments').doc(btn.dataset.certdel).delete();
+        await loadCertHistory();
+      });
+    });
+  }
 
   document.getElementById('logoutBtn').addEventListener('click', async (e) => {
     e.preventDefault();
