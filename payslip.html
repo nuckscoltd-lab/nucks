@@ -125,6 +125,7 @@ if ('serviceWorker' in navigator) {
   }
   .print-slip{ font-family:'Pretendard', -apple-system, sans-serif; color:#141414; }
   .print-slip .p-header{ text-align:center; margin-bottom:14px; }
+  .print-slip .p-docnum{ text-align:right; font-size:10.5px; color:#888; margin-bottom:4px; }
   .print-slip .p-company{ font-size:11.5px; color:#666; margin-bottom:6px; }
   .print-slip .p-title{ font-size:20px; font-weight:700; letter-spacing:.2em; }
   .print-slip .p-info-table{ width:100%; border-collapse:collapse; margin-bottom:12px; }
@@ -276,7 +277,7 @@ if ('serviceWorker' in navigator) {
 
   <table id="listTable" style="display:none;">
     <thead>
-      <tr><th>선택</th><th>지급일</th><th>사원명</th><th>부서명</th><th>지급액계</th><th>공제액계</th><th>차인지급액</th><th>관리</th></tr>
+      <tr><th>문서번호</th><th>선택</th><th>지급일</th><th>사원명</th><th>부서명</th><th>지급액계</th><th>공제액계</th><th>차인지급액</th><th>관리</th></tr>
     </thead>
     <tbody id="listBody"></tbody>
   </table>
@@ -314,6 +315,23 @@ if ('serviceWorker' in navigator) {
     document.getElementById('adminOnlyPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  // 급여명세서 문서번호를 "급여-연도-4자리"로 트랜잭션 채번 (files.html 증명서와 동일한 방식)
+  // docCounters/급여명세서 문서의 seq 필드를 원자적으로 1씩 증가시켜 중복 없이 채번한다.
+  async function getNextDocNumber(type) {
+    const year = new Date().getFullYear();
+    const counterRef = db.collection('docCounters').doc(type);
+
+    const seq = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(counterRef);
+      const current = snap.exists ? (snap.data().seq || 0) : 0;
+      const next = current + 1;
+      tx.set(counterRef, { seq: next }, { merge: true });
+      return next;
+    });
+
+    return `급여-${year}-${String(seq).padStart(4, '0')}`;
+  }
+
   function formatDateKR(str) {
     if (!str) return '';
     const [y, m, d] = String(str).split('-');
@@ -329,6 +347,7 @@ if ('serviceWorker' in navigator) {
     return `
       <div class="print-slip">
         <div class="p-header">
+          ${s.docNumber ? `<div class="p-docnum">문서번호: ${s.docNumber}</div>` : ''}
           <div class="p-company">${COMPANY_NAME} · ${COMPANY_ADDRESS} · ${COMPANY_TEL}</div>
           <div class="p-title">급 여 명 세 서</div>
         </div>
@@ -564,6 +583,7 @@ if ('serviceWorker' in navigator) {
         statusEl.style.color = '#3f6b52';
         statusEl.textContent = '수정되었습니다.';
       } else {
+        docData.docNumber = await getNextDocNumber('급여명세서');
         docData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
         await db.collection('payslips').add(docData);
         statusEl.style.color = '#3f6b52';
@@ -650,6 +670,7 @@ if ('serviceWorker' in navigator) {
 
     tbody.innerHTML = rows.map(s => `
       <tr data-id="${s.id}">
+        <td data-label="문서번호">${s.docNumber || '-'}</td>
         <td data-label="선택"><input type="checkbox" class="row-select" data-id="${s.id}" ${selectedSlipIds.has(s.id) ? 'checked' : ''}></td>
         <td data-label="지급일">${s['지급일'] || ''}</td>
         <td data-label="사원명">${s['사원명'] || ''}</td>
