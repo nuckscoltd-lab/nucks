@@ -121,6 +121,14 @@
   }
 
   .empty-msg{ font-size:13px; color:var(--muted); padding:20px; text-align:center; }
+
+  @media (max-width:640px){
+    .project-row{ flex-wrap:wrap; gap:10px 14px; }
+    .project-row .info{ flex:1 1 calc(100% - 78px); min-width:0; }
+    .project-row .actions{
+      flex:1 1 100%; justify-content:flex-start; flex-wrap:wrap; gap:8px; margin-top:2px;
+    }
+  }
 </style>
 </head>
 <body>

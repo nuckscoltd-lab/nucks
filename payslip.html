@@ -59,9 +59,10 @@ if ('serviceWorker' in navigator) {
   .grid{
     display:grid; grid-template-columns:repeat(4, 1fr); gap:12px;
   }
-  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field{ display:flex; flex-direction:column; gap:6px; min-width:0; }
   .field label{ font-size:11px; color:var(--muted); }
   .field input, .field select{
+    width:100%; box-sizing:border-box;
     padding:8px 9px; border:1px solid var(--line); border-radius:4px;
     font-family:inherit; font-size:13px; background:#fff;
   }
@@ -80,6 +81,7 @@ if ('serviceWorker' in navigator) {
 
   .toolbar{ display:flex; gap:12px; margin-bottom:16px; align-items:center; }
   .toolbar select{
+    min-width:0; box-sizing:border-box;
     padding:7px 10px; border:1px solid var(--line); border-radius:4px;
     font-family:inherit; font-size:13px; background:#fff;
   }

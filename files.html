@@ -132,6 +132,12 @@ if ('serviceWorker' in navigator) {
   }
   .section-title:first-of-type{ margin-top:56px; }
   #certFieldsArea .upload-row{ margin-top:6px; }
+  #certWritePanel .field{ width:210px; }
+  #certWritePanel .field input,
+  #certWritePanel .field select{
+    width:100%; box-sizing:border-box; padding:9px 10px; border:1px solid var(--line);
+    border-radius:4px; font-family:inherit; font-size:13.5px; background:#fff;
+  }
 
   /* 인쇄 전용 영역 - 화면에서는 숨겨두고 인쇄할 때만 노출 */
   #certPrintArea{ display:none; }
@@ -168,6 +174,7 @@ if ('serviceWorker' in navigator) {
     .field input, .field select{ padding:10px 12px !important; }
     .upload-row{ flex-direction:column; align-items:stretch !important; }
     .field{ min-width:0 !important; }
+    #certWritePanel .field{ width:100% !important; }
     .tabs{ gap:6px !important; }
 
     /* 넓은 표는 가로 스크롤 대신 카드형으로 세로 전환 */
