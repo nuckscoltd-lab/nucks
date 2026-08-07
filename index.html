@@ -534,12 +534,14 @@ if ('serviceWorker' in navigator) {
             }
         );
 
-        // ---------- 알림: 게시판 새 글 + 다가오는 연차(일주일 이내) ----------
+        // ---------- 알림: 게시판 새 글 + 다가오는 연차(일주일 이내) + 다가오는 중요업무일정(일주일 이내) ----------
         async function checkNotifications(user, role) {
-            const notifItems = [];
+            // 섹션별로 묶어서 수집 (섹션 사이는 구분선으로 표시)
+            const sections = [];
 
             try {
                 // 1. 게시판 새 글 여부 확인 (본인이 마지막으로 게시판을 확인한 시각 이후 글이 있는지)
+                const boardLines = [];
                 const userDoc = await db.collection('users').doc(user.uid).get();
                 const lastSeenBoard = userDoc.data()?.lastSeenBoard;
 
@@ -549,47 +551,71 @@ if ('serviceWorker' in navigator) {
                     const isNew = !lastSeenBoard || (latestPost.createdAt && latestPost.createdAt.toMillis() > lastSeenBoard.toMillis());
                     if (isNew) {
                         document.getElementById('boardBadge').style.display = 'block';
-                        notifItems.push(`📋 게시판에 새 글이 있습니다: "${latestPost.title}"`);
+                        boardLines.push(`📋 게시판에 새 글이 있습니다: "${latestPost.title}"`);
                     }
                 }
+                if (boardLines.length > 0) sections.push(boardLines);
 
-                // 2. 관리자: 앞으로 7일 이내 예정된 연차 확인
-                if (role === 'admin') {
+                // 근로자/관리자: 앞으로 7일 이내 예정된 연차 / 중요업무일정 확인 (게스트는 제외)
+                if (role === 'worker' || role === 'admin') {
                     const today = new Date();
                     const todayStr = today.toISOString().slice(0, 10);
                     const weekLater = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
                     const weekLaterStr = weekLater.toISOString().slice(0, 10);
 
+                    // 2. 앞으로 7일 이내 예정된 연차
+                    const leaveLines = [];
                     const leavesSnap = await db.collection('leaves').get();
-                    const upcoming = leavesSnap.docs
+                    const upcomingLeaves = leavesSnap.docs
                         .map(d => d.data())
                         .filter(l => l['날짜'] >= todayStr && l['날짜'] <= weekLaterStr);
 
-                    if (upcoming.length > 0) {
-                        upcoming.sort((a, b) => (a['날짜'] || '').localeCompare(b['날짜'] || ''));
-                        notifItems.push('🏖 일주일 내 예정된 연차:');
-                        upcoming.forEach(l => {
-                            notifItems.push(`　· ${l['사원명'] || ''} - ${l['날짜']} (${l['연차구분'] || '연차'})`);
+                    if (upcomingLeaves.length > 0) {
+                        upcomingLeaves.sort((a, b) => (a['날짜'] || '').localeCompare(b['날짜'] || ''));
+                        leaveLines.push('🏖 일주일 내 예정된 연차:');
+                        upcomingLeaves.forEach(l => {
+                            leaveLines.push(`　· ${l['사원명'] || ''} - ${l['날짜']} (${l['연차구분'] || '연차'})`);
                         });
                     }
+                    if (leaveLines.length > 0) sections.push(leaveLines);
+
+                    // 3. 앞으로 7일 이내 예정된 중요업무일정 (근무일지에서 등록)
+                    const scheduleLines = [];
+                    const worklogsSnap = await db.collection('workLogs').get();
+                    const upcomingSchedules = worklogsSnap.docs
+                        .map(d => d.data())
+                        .filter(w => w['중요업무일정'] && w['중요업무일정']['날짜'] >= todayStr && w['중요업무일정']['날짜'] <= weekLaterStr);
+
+                    if (upcomingSchedules.length > 0) {
+                        upcomingSchedules.sort((a, b) => (a['중요업무일정']['날짜'] || '').localeCompare(b['중요업무일정']['날짜'] || ''));
+                        scheduleLines.push('📌 일주일 내 예정된 중요업무일정:');
+                        upcomingSchedules.forEach(w => {
+                            const content = w['중요업무일정']['내용'] || '';
+                            scheduleLines.push(`　· ${w['사원명'] || ''} - ${w['중요업무일정']['날짜']} (${content})`);
+                        });
+                    }
+                    if (scheduleLines.length > 0) sections.push(scheduleLines);
                 }
 
-                if (notifItems.length > 0) {
-                    showNotifPopup(notifItems);
+                if (sections.length > 0) {
+                    showNotifPopup(sections);
                 }
             } catch (err) {
                 console.error('알림 확인 실패:', err);
             }
         }
 
-        function showNotifPopup(items) {
+        function showNotifPopup(sections) {
             // 세션당 한 번만 팝업 (새로고침마다 계속 뜨지 않도록)
             if (sessionStorage.getItem('notifShown')) return;
             sessionStorage.setItem('notifShown', '1');
 
             const popup = document.getElementById('notifPopup');
             const body = document.getElementById('notifBody');
-            body.innerHTML = items.map(i => `<div style="margin-bottom:6px;">${i}</div>`).join('');
+            const divider = '<hr style="border:none; border-top:1px solid #d8d5cd; margin:10px 0;">';
+            body.innerHTML = sections
+                .map(lines => lines.map(i => `<div style="margin-bottom:6px;">${i}</div>`).join(''))
+                .join(divider);
             popup.style.display = 'block';
         }
 

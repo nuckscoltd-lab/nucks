@@ -177,6 +177,9 @@ if ('serviceWorker' in navigator) {
   .cal-item-leave{
     background:#e8e2f2; color:#5b4b8a;
   }
+  .cal-item-schedule{
+    background:#fdeacb; color:#8a5a12;
+  }
   .cal-item-holiday{
     background:#fbe4e2; color:#a4453c; font-weight:600;
   }
@@ -325,6 +328,17 @@ if ('serviceWorker' in navigator) {
       <textarea id="f-detail" placeholder="오늘 진행한 업무 내용을 적어주세요"></textarea>
     </div>
 
+    <div class="field" style="margin-bottom:16px;">
+      <label for="f-schedule">중요업무일정 (선택)</label>
+      <div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:8px; flex-wrap:wrap;">
+        <div class="field" style="max-width:180px;">
+          <label for="f-scheduleDate" style="font-size:11px;">일정 날짜</label>
+          <input type="date" id="f-scheduleDate">
+        </div>
+      </div>
+      <textarea id="f-schedule" placeholder="일주일 내 팀원들이 꼭 확인해야 할 중요 업무일정을 적어주세요 (예: 8/12 마감스펙 제출)"></textarea>
+    </div>
+
     <div class="field" style="margin-bottom:16px; max-width:320px;">
       <label for="f-file">파일첨부 (선택)</label>
       <input type="file" id="f-file">
@@ -363,7 +377,7 @@ if ('serviceWorker' in navigator) {
       <thead>
         <tr>
           <th>날짜</th><th>사원명</th><th>출근</th><th>퇴근</th><th>총근무</th><th>프로젝트별 내역</th>
-          <th>상세내용</th><th>첨부</th><th>관리</th>
+          <th>상세내용</th><th>중요업무일정</th><th>첨부</th><th>관리</th>
         </tr>
       </thead>
       <tbody id="tableBody"></tbody>
@@ -698,6 +712,7 @@ if ('serviceWorker' in navigator) {
 
     // 오늘 날짜 기본값
     document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('f-scheduleDate').value = new Date().toISOString().slice(0, 10);
 
     loadLogs();
   });
@@ -755,6 +770,15 @@ if ('serviceWorker' in navigator) {
       leaveByDate[d].push(r);
     });
 
+    // 중요업무일정별로 그룹핑
+    const scheduleByDate = {};
+    rows.forEach(r => {
+      const s = r['중요업무일정'];
+      if (!s || !s['날짜']) return;
+      if (!scheduleByDate[s['날짜']]) scheduleByDate[s['날짜']] = [];
+      scheduleByDate[s['날짜']].push(r);
+    });
+
     const firstOfMonth = new Date(year, month, 1);
     const startDow = firstOfMonth.getDay(); // 0=일요일
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -772,6 +796,7 @@ if ('serviceWorker' in navigator) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const items = byDate[dateStr] || [];
       const leaveItems = leaveByDate[dateStr] || [];
+      const scheduleItems = scheduleByDate[dateStr] || [];
       const holidayName = HOLIDAYS[dateStr];
       const isToday = dateStr === todayStr;
 
@@ -788,6 +813,15 @@ if ('serviceWorker' in navigator) {
           ? `${r['사원명'] || ''} · ${r['연차구분'] || '연차'}`
           : `${r['연차구분'] || '연차'}`;
         cellHtml += `<div class="cal-item cal-item-leave" title="${label}">🏖 ${label}</div>`;
+      });
+
+      // 중요업무일정 항목 표시
+      scheduleItems.forEach(r => {
+        const content = r['중요업무일정']?.['내용'] || '';
+        const label = (currentRole === 'admin')
+          ? `${r['사원명'] || ''} · ${content}`
+          : content;
+        cellHtml += `<div class="cal-item cal-item-schedule" title="${label}">📌 ${label}</div>`;
       });
 
       // 근무일지 항목 표시 (하루에 여러 프로젝트가 있으면 각각 한 줄씩)
@@ -909,6 +943,7 @@ if ('serviceWorker' in navigator) {
         <td class="nowrap" data-label="총근무">${row['총근무시간'] ?? ''}시간</td>
         <td style="min-width:220px;" data-label="프로젝트별 내역">${projectHtml}</td>
         <td class="detail-cell" data-label="상세내용">${row['상세내용'] || ''}</td>
+        <td class="detail-cell" data-label="중요업무일정">${row['중요업무일정'] ? `📌 ${row['중요업무일정']['날짜'] || ''} · ${row['중요업무일정']['내용'] || ''}` : ''}</td>
         <td class="nowrap" data-label="첨부">${attach}</td>
         <td class="nowrap" data-label="관리">
           ${canManage ? `
@@ -941,6 +976,8 @@ if ('serviceWorker' in navigator) {
     document.getElementById('f-checkout').value = row['퇴근시간'] || '';
     updateTotalHoursDisplay();
     document.getElementById('f-detail').value = row['상세내용'] || '';
+    document.getElementById('f-scheduleDate').value = row['중요업무일정']?.['날짜'] || row['날짜'] || '';
+    document.getElementById('f-schedule').value = row['중요업무일정']?.['내용'] || '';
 
     document.getElementById('projectRows').innerHTML = '';
     projectRowCount = 0;
@@ -965,6 +1002,8 @@ if ('serviceWorker' in navigator) {
     document.getElementById('f-checkout').value = '';
     updateTotalHoursDisplay();
     document.getElementById('f-detail').value = '';
+    document.getElementById('f-scheduleDate').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('f-schedule').value = '';
     document.getElementById('f-file').value = '';
     resetProjectRows();
   });
@@ -987,6 +1026,8 @@ if ('serviceWorker' in navigator) {
     const checkin = document.getElementById('f-checkin').value;
     const checkout = document.getElementById('f-checkout').value;
     const detail = document.getElementById('f-detail').value.trim();
+    const scheduleText = document.getElementById('f-schedule').value.trim();
+    const scheduleDate = document.getElementById('f-scheduleDate').value || date;
     const fileInput = document.getElementById('f-file');
 
     if (!date) {
@@ -1056,7 +1097,8 @@ if ('serviceWorker' in navigator) {
           '퇴근시간': checkout,
           '총근무시간': totalHours,
           projects: projects,
-          '상세내용': detail
+          '상세내용': detail,
+          '중요업무일정': scheduleText ? { '날짜': scheduleDate, '내용': scheduleText } : null
         };
       } else {
         docData = {
@@ -1068,6 +1110,7 @@ if ('serviceWorker' in navigator) {
           '총근무시간': totalHours,
           projects: projects,
           '상세내용': detail,
+          '중요업무일정': scheduleText ? { '날짜': scheduleDate, '내용': scheduleText } : null,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
       }
@@ -1094,6 +1137,8 @@ if ('serviceWorker' in navigator) {
       editingLogId = null;
       document.getElementById('editBanner').style.display = 'none';
       document.getElementById('f-detail').value = '';
+      document.getElementById('f-scheduleDate').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('f-schedule').value = '';
       document.getElementById('f-file').value = '';
       resetProjectRows();
 
