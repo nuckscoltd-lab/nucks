@@ -306,6 +306,7 @@ if ('serviceWorker' in navigator) {
   let isAdmin = false;
   let currentCertRole = null;
   let currentCertUser = null;
+  let currentDisplayName = '';
 
   auth.onAuthStateChanged(async (user) => {
     if (!user) return;
@@ -313,6 +314,8 @@ if ('serviceWorker' in navigator) {
     isAdmin = (role === 'admin');
     currentCertRole = role;
     currentCertUser = user;
+    const userDoc = await db.collection('users').doc(user.uid).get();
+    currentDisplayName = userDoc.data()?.displayName || user.email || '';
     document.getElementById('uploadPanel').classList.toggle('show', isAdmin);
     loadFiles();
     await initCertSection();
@@ -397,8 +400,18 @@ if ('serviceWorker' in navigator) {
     const dateStr = latest.uploadedAt?.toDate ? latest.uploadedAt.toDate().toLocaleString('ko-KR') : '-';
     previewArea.innerHTML = `
       <div class="preview-meta">최근 업데이트: ${dateStr} · ${latest.uploaderEmail || ''}</div>
-      <div class="preview-frame-wrap"><iframe src="${latest.url}"></iframe></div>
+      <div class="preview-frame-wrap"><iframe src="${withIdentity(latest.url)}"></iframe></div>
     `;
+  }
+
+  // HTML로 열리는 파일(iframe으로 로드되는 esg.html 등)에 현재 로그인한 사람의
+  // 이름을 쿼리스트링(?name=)으로 실어 보낸다. 그 파일 쪽에서 이 값을 읽어
+  // "본인 이름만" 필터링하는 데 쓸 수 있다. (query param이라 iframe 특유의
+  // cross-origin 제약 없이도 전달 가능)
+  function withIdentity(url) {
+    if (!currentDisplayName) return url;
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}name=${encodeURIComponent(currentDisplayName)}`;
   }
 
   function populateCategoryDatalist() {
@@ -423,7 +436,8 @@ if ('serviceWorker' in navigator) {
 
     filtered.forEach(f => {
       const dateStr = f.uploadedAt?.toDate ? f.uploadedAt.toDate().toLocaleDateString('ko-KR') : '-';
-      const previewUrl = buildPreviewUrl(f.name, f.url);
+      const rawPreviewUrl = buildPreviewUrl(f.name, f.url);
+      const previewUrl = rawPreviewUrl ? withIdentity(rawPreviewUrl) : null;
       const tr = document.createElement('tr');
       tr.dataset.id = f.id;
       tr.innerHTML = `
