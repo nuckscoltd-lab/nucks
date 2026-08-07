@@ -211,6 +211,15 @@ async function renderHome(){
     return;
   }
 
+  // 로그인한 사람의 이름이 있는데(=사이트를 거쳐 들어옴) 명단과 일치하지 않으면,
+  // 절대 전체 명단을 보여주지 않는다. 그러면 이 사람이 다른 동료 이름으로
+  // 대신 응답을 제출할 수 있게 되기 때문. 대신 관리자에게 확인을 요청하도록 막는다.
+  if(LOCKED_NAME && !roster.includes(LOCKED_NAME)){
+    renderNameMismatchBlocked(LOCKED_NAME);
+    return;
+  }
+
+  // 여기부터는 이름 정보 없이(예: 관리자가 파일을 직접 열어 테스트하는 경우) 접근한 경우.
   let body;
   if(!roster.length){
     body = `<div class="empty-roster">아직 직원 명단이 등록되지 않았습니다.<br>관리자에게 명단 등록을 요청해주세요.</div>`;
@@ -220,9 +229,6 @@ async function renderHome(){
       return `<button class="name-btn${done?' done':''}" data-name="${esc(n)}" ${done?'disabled':''}>${esc(n)}</button>`;
     }).join('')}</div>`;
   }
-  const mismatchNotice = (LOCKED_NAME && !roster.includes(LOCKED_NAME))
-    ? `<div class="notice">로그인된 이름(${esc(LOCKED_NAME)})이 설문 명단과 일치하지 않아 전체 명단이 표시됩니다. 이름이 다르다면 관리자에게 명단 확인을 요청해주세요.</div>`
-    : '';
   app.innerHTML = `
     <header>
       <div class="eyebrow">NUCKS · ESG SELF-ASSESSMENT (STAFF)</div>
@@ -230,13 +236,24 @@ async function renderHome(){
       <p>본인의 이름을 눌러 설문을 시작하세요. 1인 1회만 참여할 수 있으며, 응답 내용은 이름과 분리되어 완전 무기명으로 저장됩니다.</p>
     </header>
     <div class="notice">이 설문은 무기명입니다. 제출된 답변은 누가 작성했는지 알 수 없는 상태로 저장되며, 대표자는 전체 응답이 모두 취합된 이후의 종합 결과만 확인할 수 있습니다. 개별 응답은 확인할 수 없습니다.</div>
-    ${mismatchNotice}
     ${body}
     <footer>NUCKS CO., LTD · ESG STAFF SURVEY · 응답은 익명으로 집계됩니다</footer>
   `;
   app.querySelectorAll('.name-btn:not(.done)').forEach(btn=>{
     btn.addEventListener('click', ()=>{ startSurvey(btn.dataset.name); });
   });
+}
+
+function renderNameMismatchBlocked(name){
+  app.innerHTML = `
+    <div class="center-msg">
+      <h2>본인 확인이 되지 않았습니다</h2>
+      <p>로그인 계정의 이름(${esc(name)})이 설문 명단과 일치하지 않아 참여할 수 없습니다.<br>
+      다른 동료 이름으로 대신 응답하는 것을 막기 위한 보호 조치입니다.<br>
+      계정 이름이 실제 성함과 다르다면 관리자에게 정정을 요청해주세요.</p>
+    </div>
+    <footer>NUCKS CO., LTD · ESG STAFF SURVEY</footer>
+  `;
 }
 
 function renderAlreadyDone(name){
