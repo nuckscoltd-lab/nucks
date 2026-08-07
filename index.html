@@ -564,8 +564,12 @@ if ('serviceWorker' in navigator) {
                     const weekLaterStr = weekLater.toISOString().slice(0, 10);
 
                     // 2. 앞으로 7일 이내 예정된 연차
+                    // (Firestore 규칙상 admin이 아니면 전체 컬렉션을 못 읽으므로 본인 uid로 필터링)
                     const leaveLines = [];
-                    const leavesSnap = await db.collection('leaves').get();
+                    const leaveQuery = (role === 'admin')
+                        ? db.collection('leaves')
+                        : db.collection('leaves').where('uid', '==', user.uid);
+                    const leavesSnap = await leaveQuery.get();
                     const upcomingLeaves = leavesSnap.docs
                         .map(d => d.data())
                         .filter(l => l['날짜'] >= todayStr && l['날짜'] <= weekLaterStr);
@@ -580,8 +584,12 @@ if ('serviceWorker' in navigator) {
                     if (leaveLines.length > 0) sections.push(leaveLines);
 
                     // 3. 앞으로 7일 이내 예정된 중요업무일정 (근무일지에서 등록)
+                    // (마찬가지로 admin이 아니면 본인 uid로 필터링)
                     const scheduleLines = [];
-                    const worklogsSnap = await db.collection('workLogs').get();
+                    const worklogsQuery = (role === 'admin')
+                        ? db.collection('workLogs')
+                        : db.collection('workLogs').where('uid', '==', user.uid);
+                    const worklogsSnap = await worklogsQuery.get();
                     const upcomingSchedules = worklogsSnap.docs
                         .map(d => d.data())
                         .filter(w => w['중요업무일정'] && w['중요업무일정']['날짜'] >= todayStr && w['중요업무일정']['날짜'] <= weekLaterStr);
