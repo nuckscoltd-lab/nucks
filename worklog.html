@@ -241,6 +241,14 @@ if ('serviceWorker' in navigator) {
 </head>
 <body>
 
+<div id="notifPopup" style="display: none; position: fixed; top: 24px; right: 24px; z-index: 9999; max-width: 340px; background: rgb(255, 255, 255); border: 1px solid rgb(216, 213, 205); border-radius: 8px; box-shadow: rgba(0, 0, 0, 0.12) 0px 8px 28px; padding: 20px; font-family: Pretendard, -apple-system, sans-serif;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div style="font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#8a8578;">알림</div>
+        <button id="notifCloseBtn" style="background:none; border:none; cursor:pointer; font-size:14px; color:#8a8578;">✕</button>
+    </div>
+    <div id="notifBody" style="font-size:13.5px; line-height:1.7; color:#141414;"></div>
+</div>
+
 <header>
   <div>
     <div class="eyebrow">NUCKS</div>
@@ -714,7 +722,82 @@ if ('serviceWorker' in navigator) {
     document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
     document.getElementById('f-scheduleDate').value = new Date().toISOString().slice(0, 10);
 
+    if (currentRole === 'worker' || currentRole === 'admin') {
+      checkNotifications(user, currentRole);
+    }
+
     loadLogs();
+  });
+
+  // ---------- 알림: 다가오는 연차(일주일 이내) + 다가오는 중요업무일정(일주일 이내) ----------
+  // (login.html에서 근로자/관리자는 로그인 즉시 이 페이지로 이동하므로, index.html이 아니라
+  //  여기서도 동일하게 알림을 띄워줘야 실제로 노출됩니다.)
+  async function checkNotifications(user, role) {
+    const sections = [];
+
+    try {
+      const today = new Date();
+      const todayStr = today.toISOString().slice(0, 10);
+      const weekLater = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const weekLaterStr = weekLater.toISOString().slice(0, 10);
+
+      // 1. 앞으로 7일 이내 예정된 연차
+      const leaveLines = [];
+      const leavesSnap = await db.collection('leaves').get();
+      const upcomingLeaves = leavesSnap.docs
+        .map(d => d.data())
+        .filter(l => l['날짜'] >= todayStr && l['날짜'] <= weekLaterStr);
+
+      if (upcomingLeaves.length > 0) {
+        upcomingLeaves.sort((a, b) => (a['날짜'] || '').localeCompare(b['날짜'] || ''));
+        leaveLines.push('🏖 일주일 내 예정된 연차:');
+        upcomingLeaves.forEach(l => {
+          leaveLines.push(`　· ${l['사원명'] || ''} - ${l['날짜']} (${l['연차구분'] || '연차'})`);
+        });
+      }
+      if (leaveLines.length > 0) sections.push(leaveLines);
+
+      // 2. 앞으로 7일 이내 예정된 중요업무일정
+      const scheduleLines = [];
+      const worklogsSnap = await db.collection('workLogs').get();
+      const upcomingSchedules = worklogsSnap.docs
+        .map(d => d.data())
+        .filter(w => w['중요업무일정'] && w['중요업무일정']['날짜'] >= todayStr && w['중요업무일정']['날짜'] <= weekLaterStr);
+
+      if (upcomingSchedules.length > 0) {
+        upcomingSchedules.sort((a, b) => (a['중요업무일정']['날짜'] || '').localeCompare(b['중요업무일정']['날짜'] || ''));
+        scheduleLines.push('📌 일주일 내 예정된 중요업무일정:');
+        upcomingSchedules.forEach(w => {
+          const content = w['중요업무일정']['내용'] || '';
+          scheduleLines.push(`　· ${w['사원명'] || ''} - ${w['중요업무일정']['날짜']} (${content})`);
+        });
+      }
+      if (scheduleLines.length > 0) sections.push(scheduleLines);
+
+      if (sections.length > 0) {
+        showNotifPopup(sections);
+      }
+    } catch (err) {
+      console.error('알림 확인 실패:', err);
+    }
+  }
+
+  function showNotifPopup(sections) {
+    // 세션당 한 번만 팝업 (새로고침마다 계속 뜨지 않도록)
+    if (sessionStorage.getItem('notifShown')) return;
+    sessionStorage.setItem('notifShown', '1');
+
+    const popup = document.getElementById('notifPopup');
+    const body = document.getElementById('notifBody');
+    const divider = '<hr style="border:none; border-top:1px solid #d8d5cd; margin:10px 0;">';
+    body.innerHTML = sections
+      .map(lines => lines.map(i => `<div style="margin-bottom:6px;">${i}</div>`).join(''))
+      .join(divider);
+    popup.style.display = 'block';
+  }
+
+  document.getElementById('notifCloseBtn').addEventListener('click', () => {
+    document.getElementById('notifPopup').style.display = 'none';
   });
 
   document.getElementById('refreshBtn').addEventListener('click', loadLogs);
