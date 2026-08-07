@@ -97,6 +97,8 @@ if ('serviceWorker' in navigator) {
     background:#ece9e2; color:#7a766c;
   }
   .dl-link{ color:var(--ink); text-decoration:none; border-bottom:1px solid var(--ink); font-size:13px; }
+  .file-name-link{ color:var(--ink); text-decoration:none; border-bottom:1px solid transparent; }
+  .file-name-link:hover{ border-bottom-color:var(--ink); }
   .del-btn{
     margin-left:12px; font-size:12px; color:#a4453c; background:none; border:none;
     cursor:pointer; text-decoration:underline;
@@ -363,46 +365,40 @@ if ('serviceWorker' in navigator) {
     });
   }
 
-  // "회계현황" 탭이 활성화된 경우에만, 그 카테고리의 최신 파일을 미리보기로 보여줌
+  // 현재 선택된 카테고리의 최신 파일이 HTML이면 미리보기(iframe)로 보여준다.
+  // (회계현황 대시보드, ESG 설문 등 "게시 + 그 자리에서 바로 쓰는" 파일에 공통 적용)
   function renderPreview() {
     const previewArea = document.getElementById('previewArea');
 
-    if (activeCategory !== ACCOUNTING_CATEGORY) {
+    if (activeCategory === '전체') {
+      previewArea.classList.remove('show');
+      previewArea.innerHTML = '';
+      return;
+    }
+
+    const filesInCategory = allFiles.filter(f => f.category === activeCategory);
+
+    if (filesInCategory.length === 0) {
+      previewArea.classList.remove('show');
+      previewArea.innerHTML = '';
+      return;
+    }
+
+    const latest = filesInCategory[0]; // 이미 최신순 정렬되어 있음
+    const isHtml = /\.html?$/i.test(latest.name);
+
+    if (!isHtml) {
       previewArea.classList.remove('show');
       previewArea.innerHTML = '';
       return;
     }
 
     previewArea.classList.add('show');
-    const filesInCategory = allFiles.filter(f => f.category === ACCOUNTING_CATEGORY);
-
-    if (filesInCategory.length === 0) {
-      previewArea.innerHTML = `
-        <div class="preview-empty">
-          아직 등록된 회계현황 파일이 없습니다.<br>
-          위 업로드 패널에서 카테고리를 "${ACCOUNTING_CATEGORY}"로 지정해 대시보드(HTML) 또는 엑셀 파일을 업로드해 주세요.
-        </div>
-      `;
-      return;
-    }
-
-    const latest = filesInCategory[0]; // 이미 최신순 정렬되어 있음
     const dateStr = latest.uploadedAt?.toDate ? latest.uploadedAt.toDate().toLocaleString('ko-KR') : '-';
-    const isHtml = /\.html?$/i.test(latest.name);
-
-    if (isHtml) {
-      previewArea.innerHTML = `
-        <div class="preview-meta">최근 업데이트: ${dateStr} · ${latest.uploaderEmail || ''}</div>
-        <div class="preview-frame-wrap"><iframe src="${latest.url}"></iframe></div>
-      `;
-    } else {
-      previewArea.innerHTML = `
-        <div class="preview-empty">
-          최신 파일(${latest.name})은 브라우저 미리보기가 불가한 형식입니다.<br>
-          아래 목록에서 다운로드해 확인해 주세요.
-        </div>
-      `;
-    }
+    previewArea.innerHTML = `
+      <div class="preview-meta">최근 업데이트: ${dateStr} · ${latest.uploaderEmail || ''}</div>
+      <div class="preview-frame-wrap"><iframe src="${latest.url}"></iframe></div>
+    `;
   }
 
   function populateCategoryDatalist() {
@@ -431,12 +427,13 @@ if ('serviceWorker' in navigator) {
       const tr = document.createElement('tr');
       tr.dataset.id = f.id;
       tr.innerHTML = `
-        <td class="cell-name" data-label="파일명">${f.name}</td>
+        <td class="cell-name" data-label="파일명">${previewUrl
+          ? `<a class="file-name-link" href="${previewUrl}" target="_blank" rel="noopener">${f.name}</a>`
+          : f.name}</td>
         <td class="cell-category" data-label="카테고리"><span class="cat-badge">${f.category}</span></td>
         <td data-label="업로더">${f.uploaderEmail || ''}</td>
         <td data-label="날짜">${dateStr}</td>
         <td data-label="다운로드">
-          ${previewUrl ? `<a class="dl-link" href="${previewUrl}" target="_blank" rel="noopener">미리보기</a>` : ''}
           <a class="dl-link" href="${f.url}" target="_blank" rel="noopener" download>다운로드</a>
           ${isAdmin ? `
             <button class="edit-btn" data-id="${f.id}">수정</button>
