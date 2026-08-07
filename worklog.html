@@ -783,17 +783,19 @@ if ('serviceWorker' in navigator) {
       if (scheduleLines.length > 0) sections.push(scheduleLines);
 
       if (sections.length > 0) {
-        showNotifPopup(sections);
+        showNotifPopup(sections, user.uid);
       }
     } catch (err) {
       console.error('알림 확인 실패:', err);
     }
   }
 
-  function showNotifPopup(sections) {
-    // 세션당 한 번만 팝업 (새로고침마다 계속 뜨지 않도록)
-    if (sessionStorage.getItem('notifShown')) return;
-    sessionStorage.setItem('notifShown', '1');
+  function showNotifPopup(sections, uid) {
+    // 세션당(+계정당) 한 번만 팝업 (같은 탭에서 새로고침만 반복할 땐 다시 안 뜨지만,
+    // 같은 탭에서 계정을 바꿔 로그인하면 새 계정 기준으로 다시 뜬다)
+    const flagKey = 'notifShown_' + uid;
+    if (sessionStorage.getItem(flagKey)) return;
+    sessionStorage.setItem(flagKey, '1');
 
     const popup = document.getElementById('notifPopup');
     const body = document.getElementById('notifBody');

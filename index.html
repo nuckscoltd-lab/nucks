@@ -233,6 +233,44 @@ if ('serviceWorker' in navigator) {
         </nav>
     </header>
 
+    <script>
+      // 로그인/권한 캐시를 이용한 즉시 렌더링
+      // Firebase 응답을 기다리지 않고, 지난 방문 때 저장해둔 role로 먼저 메뉴를 그려서
+      // "다 보였다가 사라지는" 깜빡임을 없앤다. Firebase 응답이 오면 watchAuthState가
+      // 실제 값으로 재조정하고, 캐시도 최신 값으로 갱신한다(권한이 바뀐 경우 자동 보정됨).
+      (function () {
+        try {
+          var cachedLoggedIn = localStorage.getItem('nucks_loggedIn') === '1';
+          var cachedRole = localStorage.getItem('nucks_role');
+          var authLink = document.getElementById('authNavLink');
+
+          function toggle(id, show) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = show ? 'inline-block' : 'none';
+          }
+
+          if (cachedLoggedIn) {
+            if (authLink) { authLink.textContent = 'Logout'; authLink.href = '#'; }
+            var isAdmin = cachedRole === 'admin';
+            var isWorkerUp = cachedRole === 'worker' || cachedRole === 'admin';
+            toggle('adminNavLink', isAdmin);
+            toggle('galleryAdminNavLink', isAdmin);
+            toggle('employeeNavLink', isAdmin);
+            toggle('payslipNavLink', isWorkerUp);
+            toggle('filesNavLink', isWorkerUp);
+            toggle('worklogNavLink', isWorkerUp);
+            toggle('leaveNavLink', isWorkerUp);
+            toggle('boardNavLink', isWorkerUp);
+          } else {
+            if (authLink) { authLink.textContent = 'Login'; authLink.href = 'login.html'; }
+          }
+        } catch (e) {
+          // localStorage를 못 쓰는 환경이면 그냥 원래대로(CSS 기본값=숨김) 진행하고
+          // 뒤에서 watchAuthState가 정상적으로 채워준다.
+        }
+      })();
+    </script>
+
     <main>
         <section id="about" class="hero">
             <div class="hero-content">
@@ -469,6 +507,12 @@ if ('serviceWorker' in navigator) {
         // 로그인 상태에 따라 네비게이션의 "로그인" 링크를 바꿔줌
         watchAuthState(
             (user, role) => {
+                // 다음 방문 시 즉시 렌더링에 쓸 수 있도록 role을 캐시해둠
+                try {
+                    localStorage.setItem('nucks_loggedIn', '1');
+                    localStorage.setItem('nucks_role', role || '');
+                } catch (e) {}
+
                 const link = document.getElementById('authNavLink');
                 link.textContent = 'Logout';
                 link.href = '#';
@@ -510,6 +554,12 @@ if ('serviceWorker' in navigator) {
                 }
             },
             () => {
+                // 로그아웃 상태이므로 캐시도 함께 지움 (다음 방문 때 잘못된 role로 잠깐 보이는 것 방지)
+                try {
+                    localStorage.removeItem('nucks_loggedIn');
+                    localStorage.removeItem('nucks_role');
+                } catch (e) {}
+
                 const link = document.getElementById('authNavLink');
                 link.textContent = 'Login';
                 link.href = 'login.html';
@@ -613,17 +663,19 @@ if ('serviceWorker' in navigator) {
                 }
 
                 if (sections.length > 0) {
-                    showNotifPopup(sections);
+                    showNotifPopup(sections, user.uid);
                 }
             } catch (err) {
                 console.error('알림 확인 실패:', err);
             }
         }
 
-        function showNotifPopup(sections) {
-            // 세션당 한 번만 팝업 (새로고침마다 계속 뜨지 않도록)
-            if (sessionStorage.getItem('notifShown')) return;
-            sessionStorage.setItem('notifShown', '1');
+        function showNotifPopup(sections, uid) {
+            // 세션당(+계정당) 한 번만 팝업 (같은 탭에서 새로고침만 반복할 땐 다시 안 뜨지만,
+            // 같은 탭에서 계정을 바꿔 로그인하면 새 계정 기준으로 다시 뜬다)
+            const flagKey = 'notifShown_' + uid;
+            if (sessionStorage.getItem(flagKey)) return;
+            sessionStorage.setItem(flagKey, '1');
 
             const popup = document.getElementById('notifPopup');
             const body = document.getElementById('notifBody');
