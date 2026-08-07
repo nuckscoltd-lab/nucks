@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESG 직원 설문 · 넉스(주)</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --navy:#1C2B39; --navy-soft:#2A3D4F; --paper:#F5F2EC; --paper-dim:#ECE7DC;
+    --card:#FBFAF6; --concrete:#B8B2A7; --ink:#24211C; --ink-soft:#5B564C;
+    --ochre:#C17A3D; --moss:#4A6741; --slate:#3D5A73; --rust:#A6473A;
+    --line:rgba(28,43,57,.16); --line-soft:rgba(28,43,57,.08);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Pretendard Variable',-apple-system,sans-serif;font-size:15px;line-height:1.6}
+  .mono{font-family:'IBM Plex Mono',monospace}
+  .wrap{max-width:720px;margin:0 auto;padding:32px 20px 100px}
+  header{border:1.5px solid var(--navy);background:var(--card);padding:22px 26px;margin-bottom:26px}
+  header .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;color:var(--slate);text-transform:uppercase;margin-bottom:8px}
+  header h1{margin:0 0 6px;font-size:24px;color:var(--navy)}
+  header p{margin:0;font-size:13px;color:var(--ink-soft)}
+  .notice{background:var(--paper-dim);border-left:3px solid var(--slate);padding:12px 16px;font-size:12.5px;color:var(--ink-soft);margin-bottom:22px}
+
+  .name-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:8px}
+  .name-btn{font-family:'IBM Plex Mono',monospace;font-size:13.5px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:14px 8px;cursor:pointer;text-align:center}
+  .name-btn:hover{border-color:var(--navy);color:var(--navy)}
+  .name-btn.done{background:var(--paper-dim);color:var(--concrete);border-color:var(--line-soft);cursor:not-allowed;text-decoration:line-through}
+  .empty-roster{padding:30px;text-align:center;color:var(--ink-soft);border:1px dashed var(--line)}
+
+  .item{border-bottom:1px solid var(--line-soft);padding:16px 0}
+  .item-num{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--concrete);margin-bottom:4px}
+  .item-text{font-size:14.5px;margin-bottom:10px}
+  .scale{display:flex;gap:6px;flex-wrap:wrap}
+  .scale button{font-family:'IBM Plex Mono',monospace;font-size:12px;border:1px solid var(--line);background:var(--card);color:var(--ink-soft);padding:7px 10px;cursor:pointer}
+  .scale button:hover{border-color:var(--navy);color:var(--navy)}
+  .scale button.active{background:var(--navy);border-color:var(--navy);color:#fff}
+
+  .btn-primary{font-family:'IBM Plex Mono',monospace;font-size:14px;background:var(--navy);color:#fff;border:none;padding:14px 30px;cursor:pointer}
+  .btn-primary:disabled{background:var(--concrete);cursor:not-allowed}
+  .btn-primary:hover:not(:disabled){background:var(--navy-soft)}
+  .btn-ghost{font-family:'IBM Plex Mono',monospace;font-size:12px;background:transparent;border:1px solid var(--line);color:var(--ink-soft);padding:9px 16px;cursor:pointer}
+  .btn-ghost:hover{border-color:var(--navy);color:var(--navy)}
+  .submit-row{display:flex;justify-content:center;margin:34px 0 6px}
+  .hint{text-align:center;font-size:12px;color:var(--rust);margin-top:8px;font-family:'IBM Plex Mono',monospace}
+
+  .center-msg{text-align:center;padding:60px 20px;border:1.5px solid var(--navy);background:var(--card)}
+  .center-msg h2{color:var(--navy);margin-top:0}
+  .center-msg p{color:var(--ink-soft);font-size:13.5px}
+
+  footer{margin-top:50px;text-align:center;font-size:11px;color:var(--concrete);font-family:'IBM Plex Mono',monospace}
+  .admin-link{position:fixed;bottom:14px;right:16px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--concrete);background:var(--card);border:1px solid var(--line);padding:5px 10px;cursor:pointer}
+
+  /* admin */
+  .admin-wrap{max-width:820px}
+  .roster-box textarea{width:100%;min-height:120px;font-family:'IBM Plex Mono',monospace;font-size:13px;padding:10px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+  .status-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:16px 0}
+  .status-chip{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 10px;border:1px solid var(--line);background:var(--card);display:flex;justify-content:space-between;align-items:center}
+  .status-chip.done{border-color:var(--moss);color:var(--moss)}
+  .status-chip.pending{color:var(--rust)}
+  .progress-line{font-family:'IBM Plex Mono',monospace;font-size:13px;margin:10px 0 4px}
+  .gauges{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:26px 0}
+  .gauge-card{background:var(--card);border:1px solid var(--line);padding:18px 14px 14px;text-align:center}
+  .gauge-card h3{margin:8px 0 2px;font-size:13.5px;color:var(--navy)}
+  .gpct{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:700;color:var(--navy)}
+  .g-band{font-size:11.5px;font-weight:600}
+  .row-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+  .results-head{text-align:center;padding:32px 20px 26px;border:1.5px solid var(--navy);background:var(--card);margin-bottom:24px}
+  .results-head .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;color:var(--slate);text-transform:uppercase}
+  .overall-score{font-size:52px;font-weight:700;color:var(--navy);font-family:'IBM Plex Mono',monospace;margin:8px 0 2px}
+  .overall-band{display:inline-block;font-size:13px;padding:5px 14px;border:1px solid var(--navy);color:var(--navy);font-weight:600;margin-top:6px}
+  .reco-block{background:var(--card);border:1px solid var(--line);padding:16px 18px;margin-bottom:12px}
+  .reco-block h4{margin:0 0 6px;font-size:14px;color:var(--navy)}
+  .reco-block p{margin:0 0 8px;font-size:13px;color:var(--ink-soft)}
+  .weak-list{font-size:12px;color:var(--rust);display:flex;flex-direction:column;gap:2px}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div class="admin-link" id="adminLink">관리자</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script>
+/* ---------- Firebase 초기화 ---------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyAMFXVMwtQVQWPYcukB2OslN75r2JzcXvE",
+  authDomain: "nucks-design.firebaseapp.com",
+  projectId: "nucks-design",
+  storageBucket: "nucks-design.firebasestorage.app",
+  messagingSenderId: "365302226895",
+  appId: "1:365302226895:web:a7287dc64e5bc42bef3cba"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// 이 페이지는 별도 로그인 없이(이름 클릭만으로) 동작하지만, Firestore 규칙상
+// 최소한 "인증된 요청"이어야 읽기/쓰기가 가능하도록 익명 로그인을 붙여둔다.
+// (완전한 접근 제어는 아니고, REST로 직접 찌르는 것 정도를 막는 최소 장치)
+const authReady = firebase.auth().signInAnonymously().catch(e => console.error('익명 로그인 실패:', e));
+
+/* ---------- storage helpers (Firestore 기반) ----------
+   상태(명단/참여현황)는 esgSurvey/state 문서 하나에 저장하고,
+   개별 응답은 esgResponses 컬렉션에 문서 하나씩(익명) 저장한다. */
+const stateRef = db.collection('esgSurvey').doc('state');
+const responsesRef = db.collection('esgResponses');
+
+async function loadState(){
+  try{
+    const snap = await stateRef.get();
+    const data = snap.exists ? snap.data() : {};
+    return { roster: data.roster || DEFAULT_ROSTER, completed: data.completed || {} };
+  }catch(e){
+    console.error('상태 불러오기 실패:', e);
+    return { roster: DEFAULT_ROSTER, completed: {} };
+  }
+}
+async function saveRoster(names){
+  try{ await stateRef.set({ roster: names }, { merge: true }); }catch(e){ console.error('명단 저장 실패:', e); }
+}
+async function saveCompleted(comp){
+  try{ await stateRef.set({ completed: comp }, { merge: true }); }catch(e){ console.error('참여현황 저장 실패:', e); }
+}
+async function loadResponses(){
+  try{
+    const snap = await responsesRef.get();
+    return snap.docs.map(d => d.data());
+  }catch(e){
+    console.error('응답 불러오기 실패:', e);
+    return [];
+  }
+}
+async function addResponse(answers){
+  await responsesRef.add({ ts: firebase.firestore.FieldValue.serverTimestamp(), answers });
+}
+async function resetAll(){
+  await stateRef.set({ completed: {} }, { merge: true });
+  const snap = await responsesRef.get();
+  const batch = db.batch();
+  snap.docs.forEach(d => batch.delete(d.ref));
+  await batch.commit();
+}
+
+const ADMIN_PASS = "nucks2026"; // 관리자 비밀번호 - 필요시 이 값을 바꿔서 사용하세요
+
+/* ---------- survey content ---------- */
+const QUESTIONS = {
+  E: [
+    "나는 회사가 친환경 자재(저VOC 도료 등) 사용을 위해 노력한다고 느낀다",
+    "나는 현장에서 폐기물 분리배출이 잘 이루어진다고 느낀다",
+    "나는 사무실·현장의 냉난방/조명 등 에너지 사용이 합리적으로 관리된다고 느낀다",
+    "나는 회사가 유해화학물질 사용을 줄이려는 노력을 한다고 느낀다"
+  ],
+  S: [
+    "나는 회사에서 안전교육을 실제로 받은 적이 있다",
+    "나는 필요한 안전보호구를 지급받고 착용을 권장받는다",
+    "나는 근로계약서 작성 및 4대보험 가입이 제대로 이루어졌다고 느낀다",
+    "나는 회사의 근무시간·휴가 사용이 근로기준법에 맞게 운영된다고 느낀다",
+    "나는 성희롱·직장 내 괴롭힘 예방 교육을 받은 적이 있다",
+    "나는 직장 내에서 괴롭힘이나 차별 없이 공정하게 대우받는다고 느낀다",
+    "나는 어려움이 있을 때 회사에 이야기할 수 있는 창구가 있다고 느낀다"
+  ],
+  G: [
+    "나는 회사의 주요 결정 사항이 직원들에게 적절히 공유된다고 느낀다",
+    "나는 회사가 계약·문서 관리를 체계적으로 한다고 신뢰한다",
+    "나는 회사에 내부 신고(제보)나 고충 처리 채널이 있다는 것을 알고 있다",
+    "나는 전반적으로 회사의 경영이 투명하다고 느낀다"
+  ]
+};
+const PILLAR_INFO = {E:{name:"환경",color:"#4A6741"}, S:{name:"사회",color:"#C17A3D"}, G:{name:"지배구조",color:"#3D5A73"}};
+const SCALE_LABELS = [
+  {n:0,t:"전혀 그렇지 않다"},{n:1,t:"그렇지 않다"},{n:2,t:"보통이다"},{n:3,t:"그렇다"},{n:4,t:"매우 그렇다"}
+];
+function allKeys(){
+  const ks=[]; ['E','S','G'].forEach(p=>QUESTIONS[p].forEach((_,i)=>ks.push(p+i))); return ks;
+}
+const TOTAL_ITEMS = allKeys().length;
+
+/* ---------- state ---------- */
+let roster = [];
+let completed = {};
+let currentName = null;
+let answers = {};
+
+const app = document.getElementById('app');
+
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ---------- views ---------- */
+const DEFAULT_ROSTER = ["손영화","이연경","윤성원"];
+
+async function renderHome(){
+  const state = await loadState();
+  roster = state.roster; completed = state.completed;
+  let body;
+  if(!roster.length){
+    body = `<div class="empty-roster">아직 직원 명단이 등록되지 않았습니다.<br>관리자에게 명단 등록을 요청해주세요.</div>`;
+  }else{
+    body = `<div class="name-grid">${roster.map(n=>{
+      const done = !!completed[n];
+      return `<button class="name-btn${done?' done':''}" data-name="${esc(n)}" ${done?'disabled':''}>${esc(n)}</button>`;
+    }).join('')}</div>`;
+  }
+  app.innerHTML = `
+    <header>
+      <div class="eyebrow">NUCKS · ESG SELF-ASSESSMENT (STAFF)</div>
+      <h1>ESG 직원 설문</h1>
+      <p>본인의 이름을 눌러 설문을 시작하세요. 1인 1회만 참여할 수 있으며, 응답 내용은 이름과 분리되어 완전 무기명으로 저장됩니다.</p>
+    </header>
+    <div class="notice">이 설문은 무기명입니다. 제출된 답변은 누가 작성했는지 알 수 없는 상태로 저장되며, 대표자는 전체 응답이 모두 취합된 이후의 종합 결과만 확인할 수 있습니다. 개별 응답은 확인할 수 없습니다.</div>
+    ${body}
+    <footer>NUCKS CO., LTD · ESG STAFF SURVEY · 응답은 익명으로 집계됩니다</footer>
+  `;
+  app.querySelectorAll('.name-btn:not(.done)').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ startSurvey(btn.dataset.name); });
+  });
+}
+
+function startSurvey(name){
+  currentName = name;
+  answers = {};
+  renderSurvey();
+}
+
+function renderSurvey(){
+  let itemsHtml = '';
+  ['E','S','G'].forEach(p=>{
+    QUESTIONS[p].forEach((q,idx)=>{
+      const key = p+idx;
+      itemsHtml += `
+        <div class="item">
+          <div class="item-num mono">${p}-${String(idx+1).padStart(2,'0')}</div>
+          <div class="item-text">${esc(q)}</div>
+          <div class="scale" data-key="${key}">
+            ${SCALE_LABELS.map(s=>`<button type="button" data-val="${s.n}">${s.n} · ${s.t}</button>`).join('')}
+          </div>
+        </div>`;
+    });
+  });
+  app.innerHTML = `
+    <header>
+      <div class="eyebrow">STAFF SURVEY</div>
+      <h1>ESG 직원 설문</h1>
+      <p>모든 문항에 응답 후 제출해주세요. 응답 내용에는 이름이 저장되지 않습니다.</p>
+    </header>
+    ${itemsHtml}
+    <div class="submit-row"><button class="btn-primary" id="submitBtn" disabled>제출하기</button></div>
+    <div class="hint" id="hint"></div>
+  `;
+  app.querySelectorAll('.scale').forEach(scale=>{
+    scale.addEventListener('click', e=>{
+      const btn = e.target.closest('button'); if(!btn) return;
+      const key = scale.dataset.key;
+      answers[key] = parseInt(btn.dataset.val,10);
+      scale.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      updateSurveyProgress();
+    });
+  });
+  document.getElementById('submitBtn').addEventListener('click', submitSurvey);
+  updateSurveyProgress();
+}
+
+function updateSurveyProgress(){
+  const answered = Object.keys(answers).length;
+  const btn = document.getElementById('submitBtn');
+  const hint = document.getElementById('hint');
+  if(answered === TOTAL_ITEMS){ btn.disabled = false; hint.textContent=''; }
+  else{ btn.disabled = true; hint.textContent = `${TOTAL_ITEMS-answered}개 문항이 남았습니다.`; }
+}
+
+async function submitSurvey(){
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = '제출 중...';
+
+  // 1) save anonymous response (no name attached)
+  await addResponse(answers);
+
+  // 2) mark this name as completed (no link to the answers above)
+  const state = await loadState();
+  const comp = state.completed;
+  comp[currentName] = true;
+  await saveCompleted(comp);
+
+  currentName = null; answers = {};
+  renderDone();
+}
+
+function renderDone(){
+  app.innerHTML = `
+    <div class="center-msg">
+      <h2>제출이 완료되었습니다</h2>
+      <p>참여해주셔서 감사합니다. 응답 내용은 무기명으로 저장되며,<br>개별 결과는 본인을 포함해 누구도 확인할 수 없습니다.</p>
+    </div>
+    <footer>NUCKS CO., LTD · ESG STAFF SURVEY</footer>
+  `;
+}
+
+/* ---------- admin ---------- */
+document.getElementById('adminLink').addEventListener('click', async ()=>{
+  const pw = prompt('관리자 비밀번호를 입력하세요');
+  if(pw !== ADMIN_PASS){ if(pw!==null) alert('비밀번호가 올바르지 않습니다.'); return; }
+  renderAdmin();
+});
+
+async function renderAdmin(){
+  const state = await loadState();
+  roster = state.roster; completed = state.completed;
+  const doneCount = roster.filter(n=>completed[n]).length;
+  const allDone = roster.length>0 && doneCount===roster.length;
+
+  app.classList.add('admin-wrap');
+  app.innerHTML = `
+    <header>
+      <div class="eyebrow">ADMIN</div>
+      <h1>ESG 직원 설문 · 관리자</h1>
+      <p>직원 명단 관리, 참여 현황 확인, 전체 응답 집계 결과를 볼 수 있습니다.</p>
+    </header>
+
+    <h3>1. 직원 명단</h3>
+    <div class="roster-box">
+      <textarea id="rosterInput" placeholder="한 줄에 한 명씩 이름을 입력하세요">${roster.join('\n')}</textarea>
+      <div class="row-actions">
+        <button class="btn-ghost" id="saveRoster">명단 저장</button>
+        <span style="font-size:11.5px;color:var(--ink-soft);align-self:center">저장 시 기존 참여 현황은 유지됩니다</span>
+      </div>
+    </div>
+
+    <h3 style="margin-top:30px">2. 참여 현황</h3>
+    <div class="progress-line">${doneCount} / ${roster.length} 명 참여 완료</div>
+    <div class="status-list">${roster.map(n=>{
+      const d = !!completed[n];
+      return `<div class="status-chip ${d?'done':'pending'}"><span>${esc(n)}</span><span>${d?'✓':'미참여'}</span></div>`;
+    }).join('')}</div>
+
+    <div class="row-actions">
+      <button class="btn-primary" id="viewResults" ${allDone?'':'disabled'}>전체 결과 보기</button>
+      <button class="btn-ghost" id="resetAll">참여현황/응답 초기화</button>
+      <button class="btn-ghost" id="backHome">직원 화면으로 돌아가기</button>
+    </div>
+    ${allDone? '' : `<div class="hint" style="text-align:left;color:var(--ink-soft)">전 직원이 참여를 완료해야 결과를 확인할 수 있습니다.</div>`}
+
+    <div id="resultsArea"></div>
+    <footer>NUCKS CO., LTD · ESG STAFF SURVEY · ADMIN VIEW</footer>
+  `;
+
+  document.getElementById('saveRoster').addEventListener('click', async ()=>{
+    const names = document.getElementById('rosterInput').value
+      .split('\n').map(s=>s.trim()).filter(Boolean);
+    await saveRoster(names);
+    renderAdmin();
+  });
+  document.getElementById('resetAll').addEventListener('click', async ()=>{
+    if(!confirm('모든 참여 현황과 응답 데이터를 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+    await resetAll();
+    renderAdmin();
+  });
+  document.getElementById('backHome').addEventListener('click', ()=>{
+    app.classList.remove('admin-wrap');
+    renderHome();
+  });
+  const vBtn = document.getElementById('viewResults');
+  if(allDone){
+    vBtn.addEventListener('click', showAggregateResults);
+  }
+}
+
+function bandOf(pct){
+  if(pct>=90) return {label:'우수 (Leading)', color:'#4A6741'};
+  if(pct>=70) return {label:'양호 (Adequate)', color:'#3D5A73'};
+  if(pct>=50) return {label:'개선 필요 (Needs Improvement)', color:'#C17A3D'};
+  return {label:'취약 (At Risk)', color:'#A6473A'};
+}
+
+const RECO_TEXT = {
+  E: {
+    high: "직원들이 체감하는 환경 관리 수준이 양호합니다. 현재의 관행을 문서화해 지속적으로 유지해보세요.",
+    mid: "환경 관리에 대한 직원 체감도가 보통 수준입니다. 폐기물 분리배출, 저VOC 자재 사용 기준을 직원들에게 더 명확히 안내하는 것을 권장합니다.",
+    low: "환경 관리에 대한 직원 체감도가 낮습니다. 현장 폐기물 처리, 유해화학물질 관리 실태를 직원 관점에서 다시 점검해보시기 바랍니다."
+  },
+  S: {
+    high: "안전·노무 관리에 대한 직원 체감도가 높습니다. 안전교육 및 보호구 지급 등 현재 체계를 정기적으로 유지·점검하세요.",
+    mid: "안전교육이나 노무 관리에 대한 직원 체감도가 보통 수준입니다. 특히 하도급 근로자를 포함한 안전교육 실시 여부를 다시 확인하는 것을 권장합니다.",
+    low: "안전·노무 영역에 대한 직원 체감 리스크가 높습니다. 안전교육, 보호구 지급, 근로시간 관리 등 기본 항목을 최우선으로 점검하시기 바랍니다."
+  },
+  G: {
+    high: "지배구조 및 소통 체계에 대한 직원 신뢰도가 높습니다. 정기적인 소통 채널과 정보 공유를 유지하세요.",
+    mid: "회사 운영의 투명성에 대한 직원 체감도가 보통 수준입니다. 의사결정 공유, 내부 신고 채널 등을 좀 더 적극적으로 안내하는 것을 권장합니다.",
+    low: "지배구조에 대한 직원 신뢰도가 낮은 편입니다. 내부 소통 채널과 정보 공유 체계부터 재정비하는 것을 권장합니다."
+  }
+};
+function recoFor(p, pct){
+  if(pct>=75) return RECO_TEXT[p].high;
+  if(pct>=50) return RECO_TEXT[p].mid;
+  return RECO_TEXT[p].low;
+}
+
+function drawGauge(svgId, pct, color){
+  const svg = document.getElementById(svgId);
+  const cx=70, cy=78, r=58;
+  const toXY = (ang)=>[cx + r*Math.cos(ang), cy - r*Math.sin(ang)];
+  const bgPath = `M ${toXY(Math.PI)[0]} ${toXY(Math.PI)[1]} A ${r} ${r} 0 0 1 ${toXY(0)[0]} ${toXY(0)[1]}`;
+  const frac = Math.max(0,Math.min(1,pct/100));
+  const valAngle = Math.PI - (Math.PI*frac);
+  const valEnd = toXY(valAngle);
+  const largeArc = frac>0.5?1:0;
+  const valPath = `M ${toXY(Math.PI)[0]} ${toXY(Math.PI)[1]} A ${r} ${r} 0 ${largeArc} 1 ${valEnd[0]} ${valEnd[1]}`;
+  let ticks = '';
+  for(let i=0;i<=10;i++){
+    const a = Math.PI - (Math.PI*(i/10));
+    const inner = [cx + (r-8)*Math.cos(a), cy - (r-8)*Math.sin(a)];
+    const outer = [cx + (r+2)*Math.cos(a), cy - (r+2)*Math.sin(a)];
+    ticks += `<line x1="${inner[0]}" y1="${inner[1]}" x2="${outer[0]}" y2="${outer[1]}" stroke="#B8B2A7" stroke-width="1"/>`;
+  }
+  const needleAngle = Math.PI - (Math.PI*frac);
+  const needleEnd = [cx + (r-14)*Math.cos(needleAngle), cy - (r-14)*Math.sin(needleAngle)];
+  svg.innerHTML = `
+    <path d="${bgPath}" fill="none" stroke="#ECE7DC" stroke-width="10" stroke-linecap="round"/>
+    ${ticks}
+    <path d="${valPath}" fill="none" stroke="${color}" stroke-width="10" stroke-linecap="round"/>
+    <line x1="${cx}" y1="${cy}" x2="${needleEnd[0]}" y2="${needleEnd[1]}" stroke="#1C2B39" stroke-width="2"/>
+    <circle cx="${cx}" cy="${cy}" r="4" fill="#1C2B39"/>
+  `;
+}
+
+async function showAggregateResults(){
+  const responses = await loadResponses();
+  const area = document.getElementById('resultsArea');
+  if(!responses.length){
+    area.innerHTML = `<div class="notice">아직 저장된 응답이 없습니다.</div>`;
+    return;
+  }
+  const pillarPct = {};
+  const itemAvg = {}; // key -> avg
+  ['E','S','G'].forEach(p=>{
+    let sum=0, cnt=0;
+    QUESTIONS[p].forEach((_,i)=>{
+      const key = p+i;
+      let isum=0, icnt=0;
+      responses.forEach(r=>{
+        if(r.answers[key] !== undefined){ sum += r.answers[key]; cnt++; isum += r.answers[key]; icnt++; }
+      });
+      itemAvg[key] = icnt ? isum/icnt : 0;
+    });
+    pillarPct[p] = cnt ? Math.round((sum/(cnt*4))*100) : 0;
+  });
+  const overall = Math.round((pillarPct.E + pillarPct.S + pillarPct.G)/3);
+  const ob = bandOf(overall);
+
+  area.innerHTML = `
+    <h3 style="margin-top:34px">3. 종합 결과 (응답 ${responses.length}건 집계)</h3>
+    <div class="results-head">
+      <div class="eyebrow">Overall ESG Score · Staff Perception</div>
+      <div class="overall-score mono">${overall}</div>
+      <div class="overall-band" style="border-color:${ob.color};color:${ob.color}">${ob.label}</div>
+    </div>
+    <div class="gauges">
+      <div class="gauge-card"><svg id="gaugeE" width="140" height="90" viewBox="0 0 140 90"></svg><h3>환경 (E)</h3><div class="gpct">${pillarPct.E}%</div><div class="g-band" id="gbandE"></div></div>
+      <div class="gauge-card"><svg id="gaugeS" width="140" height="90" viewBox="0 0 140 90"></svg><h3>사회 (S)</h3><div class="gpct">${pillarPct.S}%</div><div class="g-band" id="gbandS"></div></div>
+      <div class="gauge-card"><svg id="gaugeG" width="140" height="90" viewBox="0 0 140 90"></svg><h3>지배구조 (G)</h3><div class="gpct">${pillarPct.G}%</div><div class="g-band" id="gbandG"></div></div>
+    </div>
+    <div id="recoContainer"></div>
+    <div class="notice">이 결과는 참여한 직원 전원의 응답을 합산한 평균이며, 개별 응답이나 특정 직원의 답변은 식별할 수 없습니다.</div>
+  `;
+
+  const recoContainer = document.getElementById('recoContainer');
+  ['E','S','G'].forEach(p=>{
+    const pct = pillarPct[p];
+    const b = bandOf(pct);
+    drawGauge('gauge'+p, pct, PILLAR_INFO[p].color);
+    document.getElementById('gband'+p).textContent = b.label;
+    document.getElementById('gband'+p).style.color = b.color;
+
+    const weakItems = QUESTIONS[p]
+      .map((q,i)=>({q, v:itemAvg[p+i]}))
+      .filter(o=>o.v<=1.5)
+      .map(o=>o.q);
+
+    const block = document.createElement('div');
+    block.className = 'reco-block';
+    block.innerHTML = `
+      <h4>${p} · ${PILLAR_INFO[p].name} — ${pct}% (${b.label})</h4>
+      <p>${recoFor(p, pct)}</p>
+      ${weakItems.length ? `<div class="weak-list">우선 점검 항목:${weakItems.map(w=>`<div>· ${w}</div>`).join('')}</div>` : ''}
+    `;
+    recoContainer.appendChild(block);
+  });
+}
+
+authReady.then(renderHome);
+</script>
+</body>
+</html>
