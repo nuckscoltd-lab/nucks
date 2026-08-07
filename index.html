@@ -38,6 +38,13 @@ if ('serviceWorker' in navigator) {
         .logo { font-size: 24px; font-weight: 800; text-decoration: none; color: #000; }
         nav { display: flex; gap: 40px; }
         nav a { text-decoration: none; color: #666; font-size: 14px; text-transform: uppercase; transition: 0.3s; font-weight: 500; }
+        /* 로그인 상태/권한에 따라 노출되는 메뉴는 JS가 판단을 마치기 전까지
+           기본적으로 숨겨둔다. (그렇지 않으면 로그인 직후 잠깐 모든 메뉴가
+           보였다가 사라지는 깜빡임이 생김) */
+        #employeeNavLink, #leaveNavLink, #payslipNavLink, #worklogNavLink,
+        #boardNavLink, #filesNavLink, #adminNavLink, #galleryAdminNavLink {
+            display: none;
+        }
         nav a:hover { color: #000; }
         .mobile-menu-icon { display: none; font-size: 24px; cursor: pointer; z-index: 1001; padding: 5px; }
 
@@ -214,14 +221,14 @@ if ('serviceWorker' in navigator) {
             <a href="#about">About</a>
             <a href="#projects">Projects</a>
             <a href="#contact">Contact</a>
-            <a href="employee.html" id="employeeNavLink" style="display: inline-block;">Employee</a>
-            <a href="leave.html" id="leaveNavLink" style="display: inline-block;">Leave</a>
-            <a href="payslip.html" id="payslipNavLink" style="display: inline-block;">Payslip</a>
-            <a href="worklog.html" id="worklogNavLink" style="display: inline-block;">Worklog</a>
-            <a href="board.html" id="boardNavLink" style="display: inline-block; position: relative;">Board<span id="boardBadge" style="display:none; position:absolute; top:-4px; right:-10px; width:8px; height:8px; border-radius:50%; background:#a4453c;"></span></a>
-            <a href="files.html" id="filesNavLink" style="display: inline-block;">Files</a>
-            <a href="admin.html" id="adminNavLink" style="display: inline-block;">Admin</a>
-            <a href="gallery-admin.html" id="galleryAdminNavLink" style="display: inline-block;">Gallery</a>
+            <a href="employee.html" id="employeeNavLink">Employee</a>
+            <a href="leave.html" id="leaveNavLink">Leave</a>
+            <a href="payslip.html" id="payslipNavLink">Payslip</a>
+            <a href="worklog.html" id="worklogNavLink">Worklog</a>
+            <a href="board.html" id="boardNavLink" style="position: relative;">Board<span id="boardBadge" style="display:none; position:absolute; top:-4px; right:-10px; width:8px; height:8px; border-radius:50%; background:#a4453c;"></span></a>
+            <a href="files.html" id="filesNavLink">Files</a>
+            <a href="admin.html" id="adminNavLink">Admin</a>
+            <a href="gallery-admin.html" id="galleryAdminNavLink">Gallery</a>
             <a href="#" id="authNavLink">Logout</a>
         </nav>
     </header>
