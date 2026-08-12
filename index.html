@@ -38,13 +38,6 @@ if ('serviceWorker' in navigator) {
         .logo { font-size: 24px; font-weight: 800; text-decoration: none; color: #000; }
         nav { display: flex; gap: 40px; }
         nav a { text-decoration: none; color: #666; font-size: 14px; text-transform: uppercase; transition: 0.3s; font-weight: 500; }
-        /* 로그인 상태/권한에 따라 노출되는 메뉴는 JS가 판단을 마치기 전까지
-           기본적으로 숨겨둔다. (그렇지 않으면 로그인 직후 잠깐 모든 메뉴가
-           보였다가 사라지는 깜빡임이 생김) */
-        #employeeNavLink, #leaveNavLink, #payslipNavLink, #worklogNavLink,
-        #boardNavLink, #filesNavLink, #adminNavLink, #galleryAdminNavLink {
-            display: none;
-        }
         nav a:hover { color: #000; }
         .mobile-menu-icon { display: none; font-size: 24px; cursor: pointer; z-index: 1001; padding: 5px; }
 
@@ -221,55 +214,17 @@ if ('serviceWorker' in navigator) {
             <a href="#about">About</a>
             <a href="#projects">Projects</a>
             <a href="#contact">Contact</a>
-            <a href="employee.html" id="employeeNavLink">Employee</a>
-            <a href="leave.html" id="leaveNavLink">Leave</a>
-            <a href="payslip.html" id="payslipNavLink">Payslip</a>
-            <a href="worklog.html" id="worklogNavLink">Worklog</a>
-            <a href="board.html" id="boardNavLink" style="position: relative;">Board<span id="boardBadge" style="display:none; position:absolute; top:-4px; right:-10px; width:8px; height:8px; border-radius:50%; background:#a4453c;"></span></a>
-            <a href="files.html" id="filesNavLink">Files</a>
-            <a href="admin.html" id="adminNavLink">Admin</a>
-            <a href="gallery-admin.html" id="galleryAdminNavLink">Gallery</a>
+            <a href="employee.html" id="employeeNavLink" style="display: inline-block;">Employee</a>
+            <a href="leave.html" id="leaveNavLink" style="display: inline-block;">Leave</a>
+            <a href="payslip.html" id="payslipNavLink" style="display: inline-block;">Payslip</a>
+            <a href="worklog.html" id="worklogNavLink" style="display: inline-block;">Worklog</a>
+            <a href="board.html" id="boardNavLink" style="display: inline-block; position: relative;">Board<span id="boardBadge" style="display:none; position:absolute; top:-4px; right:-10px; width:8px; height:8px; border-radius:50%; background:#a4453c;"></span></a>
+            <a href="files.html" id="filesNavLink" style="display: inline-block;">Files</a>
+            <a href="admin.html" id="adminNavLink" style="display: inline-block;">Admin</a>
+            <a href="gallery-admin.html" id="galleryAdminNavLink" style="display: inline-block;">Gallery</a>
             <a href="#" id="authNavLink">Logout</a>
         </nav>
     </header>
-
-    <script>
-      // 로그인/권한 캐시를 이용한 즉시 렌더링
-      // Firebase 응답을 기다리지 않고, 지난 방문 때 저장해둔 role로 먼저 메뉴를 그려서
-      // "다 보였다가 사라지는" 깜빡임을 없앤다. Firebase 응답이 오면 watchAuthState가
-      // 실제 값으로 재조정하고, 캐시도 최신 값으로 갱신한다(권한이 바뀐 경우 자동 보정됨).
-      (function () {
-        try {
-          var cachedLoggedIn = localStorage.getItem('nucks_loggedIn') === '1';
-          var cachedRole = localStorage.getItem('nucks_role');
-          var authLink = document.getElementById('authNavLink');
-
-          function toggle(id, show) {
-            var el = document.getElementById(id);
-            if (el) el.style.display = show ? 'inline-block' : 'none';
-          }
-
-          if (cachedLoggedIn) {
-            if (authLink) { authLink.textContent = 'Logout'; authLink.href = '#'; }
-            var isAdmin = cachedRole === 'admin';
-            var isWorkerUp = cachedRole === 'worker' || cachedRole === 'admin';
-            toggle('adminNavLink', isAdmin);
-            toggle('galleryAdminNavLink', isAdmin);
-            toggle('employeeNavLink', isAdmin);
-            toggle('payslipNavLink', isWorkerUp);
-            toggle('filesNavLink', isWorkerUp);
-            toggle('worklogNavLink', isWorkerUp);
-            toggle('leaveNavLink', isWorkerUp);
-            toggle('boardNavLink', isWorkerUp);
-          } else {
-            if (authLink) { authLink.textContent = 'Login'; authLink.href = 'login.html'; }
-          }
-        } catch (e) {
-          // localStorage를 못 쓰는 환경이면 그냥 원래대로(CSS 기본값=숨김) 진행하고
-          // 뒤에서 watchAuthState가 정상적으로 채워준다.
-        }
-      })();
-    </script>
 
     <main>
         <section id="about" class="hero">
@@ -507,18 +462,11 @@ if ('serviceWorker' in navigator) {
         // 로그인 상태에 따라 네비게이션의 "로그인" 링크를 바꿔줌
         watchAuthState(
             (user, role) => {
-                // 다음 방문 시 즉시 렌더링에 쓸 수 있도록 role을 캐시해둠
-                try {
-                    localStorage.setItem('nucks_loggedIn', '1');
-                    localStorage.setItem('nucks_role', role || '');
-                } catch (e) {}
-
                 const link = document.getElementById('authNavLink');
                 link.textContent = 'Logout';
                 link.href = '#';
                 link.onclick = async (e) => {
                     e.preventDefault();
-                    clearNotifFlags();
                     await logOut();
                     window.location.reload();
                 };
@@ -555,12 +503,6 @@ if ('serviceWorker' in navigator) {
                 }
             },
             () => {
-                // 로그아웃 상태이므로 캐시도 함께 지움 (다음 방문 때 잘못된 role로 잠깐 보이는 것 방지)
-                try {
-                    localStorage.removeItem('nucks_loggedIn');
-                    localStorage.removeItem('nucks_role');
-                } catch (e) {}
-
                 const link = document.getElementById('authNavLink');
                 link.textContent = 'Login';
                 link.href = 'login.html';
@@ -592,14 +534,12 @@ if ('serviceWorker' in navigator) {
             }
         );
 
-        // ---------- 알림: 게시판 새 글 + 다가오는 연차(일주일 이내) + 다가오는 중요업무일정(일주일 이내) ----------
+        // ---------- 알림: 게시판 새 글 + 다가오는 연차(일주일 이내) ----------
         async function checkNotifications(user, role) {
-            // 섹션별로 묶어서 수집 (섹션 사이는 구분선으로 표시)
-            const sections = [];
+            const notifItems = [];
 
             try {
                 // 1. 게시판 새 글 여부 확인 (본인이 마지막으로 게시판을 확인한 시각 이후 글이 있는지)
-                const boardLines = [];
                 const userDoc = await db.collection('users').doc(user.uid).get();
                 const lastSeenBoard = userDoc.data()?.lastSeenBoard;
 
@@ -609,91 +549,60 @@ if ('serviceWorker' in navigator) {
                     const isNew = !lastSeenBoard || (latestPost.createdAt && latestPost.createdAt.toMillis() > lastSeenBoard.toMillis());
                     if (isNew) {
                         document.getElementById('boardBadge').style.display = 'block';
-                        boardLines.push(`📋 게시판에 새 글이 있습니다: "${latestPost.title}"`);
+                        notifItems.push(`📋 게시판에 새 글이 있습니다: "${latestPost.title}"`);
                     }
                 }
-                if (boardLines.length > 0) sections.push(boardLines);
 
-                // 근로자/관리자: 앞으로 7일 이내 예정된 연차 / 중요업무일정 확인 (게스트는 제외)
-                if (role === 'worker' || role === 'admin') {
+                // 2. 관리자: 앞으로 7일 이내 예정된 연차 + 중요업무일정 확인
+                if (role === 'admin') {
                     const today = new Date();
                     const todayStr = today.toISOString().slice(0, 10);
                     const weekLater = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
                     const weekLaterStr = weekLater.toISOString().slice(0, 10);
 
-                    // 2. 앞으로 7일 이내 예정된 연차
-                    // (Firestore 규칙상 admin이 아니면 전체 컬렉션을 못 읽으므로 본인 uid로 필터링)
-                    const leaveLines = [];
-                    const leaveQuery = (role === 'admin')
-                        ? db.collection('leaves')
-                        : db.collection('leaves').where('uid', '==', user.uid);
-                    const leavesSnap = await leaveQuery.get();
-                    const upcomingLeaves = leavesSnap.docs
+                    const leavesSnap = await db.collection('leaves').get();
+                    const upcoming = leavesSnap.docs
                         .map(d => d.data())
                         .filter(l => l['날짜'] >= todayStr && l['날짜'] <= weekLaterStr);
 
-                    if (upcomingLeaves.length > 0) {
-                        upcomingLeaves.sort((a, b) => (a['날짜'] || '').localeCompare(b['날짜'] || ''));
-                        leaveLines.push('🏖 일주일 내 예정된 연차:');
-                        upcomingLeaves.forEach(l => {
-                            leaveLines.push(`　· ${l['사원명'] || ''} - ${l['날짜']} (${l['연차구분'] || '연차'})`);
+                    if (upcoming.length > 0) {
+                        upcoming.sort((a, b) => (a['날짜'] || '').localeCompare(b['날짜'] || ''));
+                        notifItems.push('🏖 일주일 내 예정된 연차:');
+                        upcoming.forEach(l => {
+                            notifItems.push(`　· ${l['사원명'] || ''} - ${l['날짜']} (${l['연차구분'] || '연차'})`);
                         });
                     }
-                    if (leaveLines.length > 0) sections.push(leaveLines);
 
-                    // 3. 앞으로 7일 이내 예정된 중요업무일정 (근무일지에서 등록)
-                    // (마찬가지로 admin이 아니면 본인 uid로 필터링)
-                    const scheduleLines = [];
-                    const worklogsQuery = (role === 'admin')
-                        ? db.collection('workLogs')
-                        : db.collection('workLogs').where('uid', '==', user.uid);
-                    const worklogsSnap = await worklogsQuery.get();
-                    const upcomingSchedules = worklogsSnap.docs
+                    const workLogsSnap = await db.collection('workLogs').get();
+                    const upcomingTasks = workLogsSnap.docs
                         .map(d => d.data())
-                        .filter(w => w['중요업무일정'] && w['중요업무일정']['날짜'] >= todayStr && w['중요업무일정']['날짜'] <= weekLaterStr);
+                        .filter(r => r['중요업무일정'] && r['중요업무일정'] >= todayStr && r['중요업무일정'] <= weekLaterStr);
 
-                    if (upcomingSchedules.length > 0) {
-                        upcomingSchedules.sort((a, b) => (a['중요업무일정']['날짜'] || '').localeCompare(b['중요업무일정']['날짜'] || ''));
-                        scheduleLines.push('📌 일주일 내 예정된 중요업무일정:');
-                        upcomingSchedules.forEach(w => {
-                            const content = w['중요업무일정']['내용'] || '';
-                            scheduleLines.push(`　· ${w['사원명'] || ''} - ${w['중요업무일정']['날짜']} (${content})`);
+                    if (upcomingTasks.length > 0) {
+                        upcomingTasks.sort((a, b) => (a['중요업무일정'] || '').localeCompare(b['중요업무일정'] || ''));
+                        notifItems.push('📌 일주일 내 중요업무일정:');
+                        upcomingTasks.forEach(r => {
+                            notifItems.push(`　· ${r['사원명'] || ''} - ${r['중요업무일정']} (${r['중요업무내용'] || '내용 없음'})`);
                         });
                     }
-                    if (scheduleLines.length > 0) sections.push(scheduleLines);
                 }
 
-                if (sections.length > 0) {
-                    showNotifPopup(sections, user.uid);
+                if (notifItems.length > 0) {
+                    showNotifPopup(notifItems);
                 }
             } catch (err) {
                 console.error('알림 확인 실패:', err);
             }
         }
 
-        // 로그아웃 시 알림 플래그를 지워서, 같은 계정이든 다른 계정이든
-        // 다음 로그인 때 알림을 새로 체크하도록 한다.
-        function clearNotifFlags() {
-            try {
-                Object.keys(sessionStorage)
-                    .filter(k => k.startsWith('notifShown_'))
-                    .forEach(k => sessionStorage.removeItem(k));
-            } catch (e) {}
-        }
-
-        function showNotifPopup(sections, uid) {
-            // 세션당(+계정당) 한 번만 팝업 (같은 탭에서 새로고침만 반복할 땐 다시 안 뜨지만,
-            // 같은 탭에서 계정을 바꿔 로그인하면 새 계정 기준으로 다시 뜬다)
-            const flagKey = 'notifShown_' + uid;
-            if (sessionStorage.getItem(flagKey)) return;
-            sessionStorage.setItem(flagKey, '1');
+        function showNotifPopup(items) {
+            // 세션당 한 번만 팝업 (새로고침마다 계속 뜨지 않도록)
+            if (sessionStorage.getItem('notifShown')) return;
+            sessionStorage.setItem('notifShown', '1');
 
             const popup = document.getElementById('notifPopup');
             const body = document.getElementById('notifBody');
-            const divider = '<hr style="border:none; border-top:1px solid #d8d5cd; margin:10px 0;">';
-            body.innerHTML = sections
-                .map(lines => lines.map(i => `<div style="margin-bottom:6px;">${i}</div>`).join(''))
-                .join(divider);
+            body.innerHTML = items.map(i => `<div style="margin-bottom:6px;">${i}</div>`).join('');
             popup.style.display = 'block';
         }
 

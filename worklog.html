@@ -325,6 +325,17 @@ if ('serviceWorker' in navigator) {
       <textarea id="f-detail" placeholder="오늘 진행한 업무 내용을 적어주세요"></textarea>
     </div>
 
+    <div class="field" style="margin-bottom:16px;">
+      <label>중요업무일정 (선택 - 마감/예정일이 있는 중요 업무만 적어주세요)</label>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-start;">
+        <input type="date" id="f-importantDate" style="max-width:180px;" title="예정일">
+        <input type="text" id="f-importantTask" placeholder="예: 힐스테이트장위 마감스펙 제출" style="flex:1; min-width:220px;">
+      </div>
+      <div style="font-size:11.5px; color:var(--muted); margin-top:4px;">
+        입력하면 예정일 기준 일주일 전부터 관리자 로그인 시 알림으로 표시됩니다.
+      </div>
+    </div>
+
     <div class="field" style="margin-bottom:16px; max-width:320px;">
       <label for="f-file">파일첨부 (선택)</label>
       <input type="file" id="f-file">
@@ -371,7 +382,7 @@ if ('serviceWorker' in navigator) {
       <thead>
         <tr>
           <th>날짜</th><th>사원명</th><th>출근</th><th>퇴근</th><th>총근무</th><th>프로젝트별 내역</th>
-          <th>상세내용</th><th>첨부</th><th>관리</th>
+          <th>상세내용</th><th>중요업무일정</th><th>첨부</th><th>관리</th>
         </tr>
       </thead>
       <tbody id="tableBody"></tbody>
@@ -948,6 +959,7 @@ if ('serviceWorker' in navigator) {
         <td class="nowrap" data-label="총근무">${row['총근무시간'] ?? ''}시간</td>
         <td style="min-width:220px;" data-label="프로젝트별 내역">${projectHtml}</td>
         <td class="detail-cell" data-label="상세내용">${row['상세내용'] || ''}</td>
+        <td class="nowrap" data-label="중요업무일정">${row['중요업무일정'] ? `${row['중요업무일정']}<br><span style="color:var(--muted); font-size:11.5px;">${row['중요업무내용'] || ''}</span>` : ''}</td>
         <td class="nowrap" data-label="첨부">${attach}</td>
         <td class="nowrap" data-label="관리">
           ${canManage ? `
@@ -980,6 +992,8 @@ if ('serviceWorker' in navigator) {
     document.getElementById('f-checkout').value = row['퇴근시간'] || '';
     updateTotalHoursDisplay();
     document.getElementById('f-detail').value = row['상세내용'] || '';
+    document.getElementById('f-importantDate').value = row['중요업무일정'] || '';
+    document.getElementById('f-importantTask').value = row['중요업무내용'] || '';
 
     document.getElementById('projectRows').innerHTML = '';
     projectRowCount = 0;
@@ -1004,6 +1018,8 @@ if ('serviceWorker' in navigator) {
     document.getElementById('f-checkout').value = '';
     updateTotalHoursDisplay();
     document.getElementById('f-detail').value = '';
+    document.getElementById('f-importantDate').value = '';
+    document.getElementById('f-importantTask').value = '';
     document.getElementById('f-file').value = '';
     resetProjectRows();
   });
@@ -1026,6 +1042,8 @@ if ('serviceWorker' in navigator) {
     const checkin = document.getElementById('f-checkin').value;
     const checkout = document.getElementById('f-checkout').value;
     const detail = document.getElementById('f-detail').value.trim();
+    const importantDate = document.getElementById('f-importantDate').value;
+    const importantTask = document.getElementById('f-importantTask').value.trim();
     const fileInput = document.getElementById('f-file');
 
     if (!date) {
@@ -1095,7 +1113,9 @@ if ('serviceWorker' in navigator) {
           '퇴근시간': checkout,
           '총근무시간': totalHours,
           projects: projects,
-          '상세내용': detail
+          '상세내용': detail,
+          '중요업무일정': importantDate,
+          '중요업무내용': importantTask
         };
       } else {
         docData = {
@@ -1107,6 +1127,8 @@ if ('serviceWorker' in navigator) {
           '총근무시간': totalHours,
           projects: projects,
           '상세내용': detail,
+          '중요업무일정': importantDate,
+          '중요업무내용': importantTask,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
       }
@@ -1133,6 +1155,8 @@ if ('serviceWorker' in navigator) {
       editingLogId = null;
       document.getElementById('editBanner').style.display = 'none';
       document.getElementById('f-detail').value = '';
+      document.getElementById('f-importantDate').value = '';
+      document.getElementById('f-importantTask').value = '';
       document.getElementById('f-file').value = '';
       resetProjectRows();
 
