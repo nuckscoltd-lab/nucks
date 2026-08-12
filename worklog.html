@@ -177,9 +177,6 @@ if ('serviceWorker' in navigator) {
   .cal-item-leave{
     background:#e8e2f2; color:#5b4b8a;
   }
-  .cal-item-schedule{
-    background:#fdeacb; color:#8a5a12;
-  }
   .cal-item-holiday{
     background:#fbe4e2; color:#a4453c; font-weight:600;
   }
@@ -240,14 +237,6 @@ if ('serviceWorker' in navigator) {
 </style>
 </head>
 <body>
-
-<div id="notifPopup" style="display: none; position: fixed; top: 24px; right: 24px; z-index: 9999; max-width: 340px; background: rgb(255, 255, 255); border: 1px solid rgb(216, 213, 205); border-radius: 8px; box-shadow: rgba(0, 0, 0, 0.12) 0px 8px 28px; padding: 20px; font-family: Pretendard, -apple-system, sans-serif;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-        <div style="font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#8a8578;">알림</div>
-        <button id="notifCloseBtn" style="background:none; border:none; cursor:pointer; font-size:14px; color:#8a8578;">✕</button>
-    </div>
-    <div id="notifBody" style="font-size:13.5px; line-height:1.7; color:#141414;"></div>
-</div>
 
 <header>
   <div>
@@ -336,17 +325,6 @@ if ('serviceWorker' in navigator) {
       <textarea id="f-detail" placeholder="오늘 진행한 업무 내용을 적어주세요"></textarea>
     </div>
 
-    <div class="field" style="margin-bottom:16px;">
-      <label for="f-schedule">중요업무일정 (선택)</label>
-      <div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:8px; flex-wrap:wrap;">
-        <div class="field" style="max-width:180px;">
-          <label for="f-scheduleDate" style="font-size:11px;">일정 날짜</label>
-          <input type="date" id="f-scheduleDate">
-        </div>
-      </div>
-      <textarea id="f-schedule" placeholder="일주일 내 팀원들이 꼭 확인해야 할 중요 업무일정을 적어주세요 (예: 8/12 마감스펙 제출)"></textarea>
-    </div>
-
     <div class="field" style="margin-bottom:16px; max-width:320px;">
       <label for="f-file">파일첨부 (선택)</label>
       <input type="file" id="f-file">
@@ -364,9 +342,17 @@ if ('serviceWorker' in navigator) {
       <button class="view-toggle-btn active" id="viewListBtn">목록보기</button>
       <button class="view-toggle-btn" id="viewCalendarBtn">달력보기</button>
     </div>
-    <select id="employeeFilter" style="display:none;">
-      <option value="전체">전체 사원</option>
-    </select>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <select id="monthFilter"><option value="전체">전체 월</option></select>
+      <span style="font-size:12px; color:var(--muted);">일자</span>
+      <input type="date" id="startDateFilter" title="시작일">
+      <span style="font-size:12px; color:var(--muted);">~</span>
+      <input type="date" id="endDateFilter" title="종료일">
+      <button class="row-btn" id="dateFilterResetBtn" style="text-decoration:underline; font-size:12px;">초기화</button>
+      <select id="employeeFilter" style="display:none;">
+        <option value="전체">전체 사원</option>
+      </select>
+    </div>
     <button class="row-btn" id="refreshBtn" style="text-decoration:none; font-size:12.5px;">새로고침</button>
   </div>
 
@@ -385,7 +371,7 @@ if ('serviceWorker' in navigator) {
       <thead>
         <tr>
           <th>날짜</th><th>사원명</th><th>출근</th><th>퇴근</th><th>총근무</th><th>프로젝트별 내역</th>
-          <th>상세내용</th><th>중요업무일정</th><th>첨부</th><th>관리</th>
+          <th>상세내용</th><th>첨부</th><th>관리</th>
         </tr>
       </thead>
       <tbody id="tableBody"></tbody>
@@ -720,108 +706,20 @@ if ('serviceWorker' in navigator) {
 
     // 오늘 날짜 기본값
     document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
-    document.getElementById('f-scheduleDate').value = new Date().toISOString().slice(0, 10);
-
-    if (currentRole === 'worker' || currentRole === 'admin') {
-      checkNotifications(user, currentRole);
-    }
 
     loadLogs();
   });
 
-  // ---------- 알림: 다가오는 연차(일주일 이내) + 다가오는 중요업무일정(일주일 이내) ----------
-  // (login.html에서 근로자/관리자는 로그인 즉시 이 페이지로 이동하므로, index.html이 아니라
-  //  여기서도 동일하게 알림을 띄워줘야 실제로 노출됩니다.)
-  async function checkNotifications(user, role) {
-    const sections = [];
-
-    try {
-      const today = new Date();
-      const todayStr = today.toISOString().slice(0, 10);
-      const weekLater = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-      const weekLaterStr = weekLater.toISOString().slice(0, 10);
-
-      // 1. 앞으로 7일 이내 예정된 연차
-      // (Firestore 규칙상 admin이 아니면 전체 컬렉션을 못 읽으므로 본인 uid로 필터링)
-      const leaveLines = [];
-      const leaveQuery = (role === 'admin')
-        ? db.collection('leaves')
-        : db.collection('leaves').where('uid', '==', user.uid);
-      const leavesSnap = await leaveQuery.get();
-      const upcomingLeaves = leavesSnap.docs
-        .map(d => d.data())
-        .filter(l => l['날짜'] >= todayStr && l['날짜'] <= weekLaterStr);
-
-      if (upcomingLeaves.length > 0) {
-        upcomingLeaves.sort((a, b) => (a['날짜'] || '').localeCompare(b['날짜'] || ''));
-        leaveLines.push('🏖 일주일 내 예정된 연차:');
-        upcomingLeaves.forEach(l => {
-          leaveLines.push(`　· ${l['사원명'] || ''} - ${l['날짜']} (${l['연차구분'] || '연차'})`);
-        });
-      }
-      if (leaveLines.length > 0) sections.push(leaveLines);
-
-      // 2. 앞으로 7일 이내 예정된 중요업무일정
-      // (마찬가지로 admin이 아니면 본인 uid로 필터링)
-      const scheduleLines = [];
-      const worklogsQuery = (role === 'admin')
-        ? db.collection('workLogs')
-        : db.collection('workLogs').where('uid', '==', user.uid);
-      const worklogsSnap = await worklogsQuery.get();
-      const upcomingSchedules = worklogsSnap.docs
-        .map(d => d.data())
-        .filter(w => w['중요업무일정'] && w['중요업무일정']['날짜'] >= todayStr && w['중요업무일정']['날짜'] <= weekLaterStr);
-
-      if (upcomingSchedules.length > 0) {
-        upcomingSchedules.sort((a, b) => (a['중요업무일정']['날짜'] || '').localeCompare(b['중요업무일정']['날짜'] || ''));
-        scheduleLines.push('📌 일주일 내 예정된 중요업무일정:');
-        upcomingSchedules.forEach(w => {
-          const content = w['중요업무일정']['내용'] || '';
-          scheduleLines.push(`　· ${w['사원명'] || ''} - ${w['중요업무일정']['날짜']} (${content})`);
-        });
-      }
-      if (scheduleLines.length > 0) sections.push(scheduleLines);
-
-      if (sections.length > 0) {
-        showNotifPopup(sections, user.uid);
-      }
-    } catch (err) {
-      console.error('알림 확인 실패:', err);
-    }
-  }
-
-  // 로그아웃 시 알림 플래그를 지워서, 같은 계정이든 다른 계정이든
-  // 다음 로그인 때 알림을 새로 체크하도록 한다.
-  function clearNotifFlags() {
-    try {
-      Object.keys(sessionStorage)
-        .filter(k => k.startsWith('notifShown_'))
-        .forEach(k => sessionStorage.removeItem(k));
-    } catch (e) {}
-  }
-
-  function showNotifPopup(sections, uid) {
-    // 세션당(+계정당) 한 번만 팝업 (같은 탭에서 새로고침만 반복할 땐 다시 안 뜨지만,
-    // 같은 탭에서 계정을 바꿔 로그인하면 새 계정 기준으로 다시 뜬다)
-    const flagKey = 'notifShown_' + uid;
-    if (sessionStorage.getItem(flagKey)) return;
-    sessionStorage.setItem(flagKey, '1');
-
-    const popup = document.getElementById('notifPopup');
-    const body = document.getElementById('notifBody');
-    const divider = '<hr style="border:none; border-top:1px solid #d8d5cd; margin:10px 0;">';
-    body.innerHTML = sections
-      .map(lines => lines.map(i => `<div style="margin-bottom:6px;">${i}</div>`).join(''))
-      .join(divider);
-    popup.style.display = 'block';
-  }
-
-  document.getElementById('notifCloseBtn').addEventListener('click', () => {
-    document.getElementById('notifPopup').style.display = 'none';
-  });
-
   document.getElementById('refreshBtn').addEventListener('click', loadLogs);
   document.getElementById('employeeFilter').addEventListener('change', () => { renderTable(); renderCalendar(); });
+  document.getElementById('monthFilter').addEventListener('change', () => { renderTable(); });
+  document.getElementById('startDateFilter').addEventListener('change', () => { renderTable(); });
+  document.getElementById('endDateFilter').addEventListener('change', () => { renderTable(); });
+  document.getElementById('dateFilterResetBtn').addEventListener('click', () => {
+    document.getElementById('startDateFilter').value = '';
+    document.getElementById('endDateFilter').value = '';
+    renderTable();
+  });
 
   // 목록/달력 전환
   let viewMode = 'list';
@@ -873,15 +771,6 @@ if ('serviceWorker' in navigator) {
       leaveByDate[d].push(r);
     });
 
-    // 중요업무일정별로 그룹핑
-    const scheduleByDate = {};
-    rows.forEach(r => {
-      const s = r['중요업무일정'];
-      if (!s || !s['날짜']) return;
-      if (!scheduleByDate[s['날짜']]) scheduleByDate[s['날짜']] = [];
-      scheduleByDate[s['날짜']].push(r);
-    });
-
     const firstOfMonth = new Date(year, month, 1);
     const startDow = firstOfMonth.getDay(); // 0=일요일
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -899,7 +788,6 @@ if ('serviceWorker' in navigator) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const items = byDate[dateStr] || [];
       const leaveItems = leaveByDate[dateStr] || [];
-      const scheduleItems = scheduleByDate[dateStr] || [];
       const holidayName = HOLIDAYS[dateStr];
       const isToday = dateStr === todayStr;
 
@@ -916,15 +804,6 @@ if ('serviceWorker' in navigator) {
           ? `${r['사원명'] || ''} · ${r['연차구분'] || '연차'}`
           : `${r['연차구분'] || '연차'}`;
         cellHtml += `<div class="cal-item cal-item-leave" title="${label}">🏖 ${label}</div>`;
-      });
-
-      // 중요업무일정 항목 표시
-      scheduleItems.forEach(r => {
-        const content = r['중요업무일정']?.['내용'] || '';
-        const label = (currentRole === 'admin')
-          ? `${r['사원명'] || ''} · ${content}`
-          : content;
-        cellHtml += `<div class="cal-item cal-item-schedule" title="${label}">📌 ${label}</div>`;
       });
 
       // 근무일지 항목 표시 (하루에 여러 프로젝트가 있으면 각각 한 줄씩)
@@ -978,6 +857,7 @@ if ('serviceWorker' in navigator) {
       allRows.sort((a, b) => (b['날짜'] || '').localeCompare(a['날짜'] || ''));
 
       if (currentRole === 'admin') populateEmployeeFilter();
+      populateMonthFilter();
       updateProjectDatalist();
       renderTable();
       renderCalendar();
@@ -999,15 +879,37 @@ if ('serviceWorker' in navigator) {
     if (names.includes(current)) select.value = current;
   }
 
+  function populateMonthFilter() {
+    const select = document.getElementById('monthFilter');
+    const current = select.value;
+    const months = [...new Set(allRows.map(r => (r['날짜'] || '').slice(0, 7)).filter(Boolean))]
+      .sort((a, b) => b.localeCompare(a)); // 최신월부터
+    select.innerHTML = '<option value="전체">전체 월</option>' +
+      months.map(m => `<option value="${m}">${m.replace('-', '년 ')}월</option>`).join('');
+    if (months.includes(current)) select.value = current;
+  }
+
   function renderTable() {
     const table = document.getElementById('logTable');
     const emptyMsg = document.getElementById('emptyMsg');
     const tbody = document.getElementById('tableBody');
 
     const filterVal = document.getElementById('employeeFilter').value;
-    const rows = (currentRole === 'admin' && filterVal !== '전체')
+    const monthVal = document.getElementById('monthFilter').value;
+    const startDate = document.getElementById('startDateFilter').value;
+    const endDate = document.getElementById('endDateFilter').value;
+    let rows = (currentRole === 'admin' && filterVal !== '전체')
       ? allRows.filter(r => r['사원명'] === filterVal)
       : allRows;
+    if (monthVal !== '전체') {
+      rows = rows.filter(r => (r['날짜'] || '').slice(0, 7) === monthVal);
+    }
+    if (startDate) {
+      rows = rows.filter(r => (r['날짜'] || '') >= startDate);
+    }
+    if (endDate) {
+      rows = rows.filter(r => (r['날짜'] || '') <= endDate);
+    }
 
     if (rows.length === 0) {
       table.style.display = 'none';
@@ -1046,7 +948,6 @@ if ('serviceWorker' in navigator) {
         <td class="nowrap" data-label="총근무">${row['총근무시간'] ?? ''}시간</td>
         <td style="min-width:220px;" data-label="프로젝트별 내역">${projectHtml}</td>
         <td class="detail-cell" data-label="상세내용">${row['상세내용'] || ''}</td>
-        <td class="detail-cell" data-label="중요업무일정">${row['중요업무일정'] ? `📌 ${row['중요업무일정']['날짜'] || ''} · ${row['중요업무일정']['내용'] || ''}` : ''}</td>
         <td class="nowrap" data-label="첨부">${attach}</td>
         <td class="nowrap" data-label="관리">
           ${canManage ? `
@@ -1079,8 +980,6 @@ if ('serviceWorker' in navigator) {
     document.getElementById('f-checkout').value = row['퇴근시간'] || '';
     updateTotalHoursDisplay();
     document.getElementById('f-detail').value = row['상세내용'] || '';
-    document.getElementById('f-scheduleDate').value = row['중요업무일정']?.['날짜'] || row['날짜'] || '';
-    document.getElementById('f-schedule').value = row['중요업무일정']?.['내용'] || '';
 
     document.getElementById('projectRows').innerHTML = '';
     projectRowCount = 0;
@@ -1105,8 +1004,6 @@ if ('serviceWorker' in navigator) {
     document.getElementById('f-checkout').value = '';
     updateTotalHoursDisplay();
     document.getElementById('f-detail').value = '';
-    document.getElementById('f-scheduleDate').value = new Date().toISOString().slice(0, 10);
-    document.getElementById('f-schedule').value = '';
     document.getElementById('f-file').value = '';
     resetProjectRows();
   });
@@ -1129,8 +1026,6 @@ if ('serviceWorker' in navigator) {
     const checkin = document.getElementById('f-checkin').value;
     const checkout = document.getElementById('f-checkout').value;
     const detail = document.getElementById('f-detail').value.trim();
-    const scheduleText = document.getElementById('f-schedule').value.trim();
-    const scheduleDate = document.getElementById('f-scheduleDate').value || date;
     const fileInput = document.getElementById('f-file');
 
     if (!date) {
@@ -1200,8 +1095,7 @@ if ('serviceWorker' in navigator) {
           '퇴근시간': checkout,
           '총근무시간': totalHours,
           projects: projects,
-          '상세내용': detail,
-          '중요업무일정': scheduleText ? { '날짜': scheduleDate, '내용': scheduleText } : null
+          '상세내용': detail
         };
       } else {
         docData = {
@@ -1213,7 +1107,6 @@ if ('serviceWorker' in navigator) {
           '총근무시간': totalHours,
           projects: projects,
           '상세내용': detail,
-          '중요업무일정': scheduleText ? { '날짜': scheduleDate, '내용': scheduleText } : null,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
       }
@@ -1240,8 +1133,6 @@ if ('serviceWorker' in navigator) {
       editingLogId = null;
       document.getElementById('editBanner').style.display = 'none';
       document.getElementById('f-detail').value = '';
-      document.getElementById('f-scheduleDate').value = new Date().toISOString().slice(0, 10);
-      document.getElementById('f-schedule').value = '';
       document.getElementById('f-file').value = '';
       resetProjectRows();
 
@@ -1661,7 +1552,6 @@ if ('serviceWorker' in navigator) {
 
   document.getElementById('logoutBtn').addEventListener('click', async (e) => {
     e.preventDefault();
-    clearNotifFlags();
     await logOut();
     window.location.href = 'login.html';
   });
