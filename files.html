@@ -774,9 +774,20 @@ if ('serviceWorker' in navigator) {
     return parts.join(' ');
   }
 
+  // 예전에 이미 "근무중" 같은 상태 태그가 섞여 저장된 문서를 재인쇄할 때도
+  // 깨끗하게 나오도록, 표시 직전에 한 번 더 걸러낸다.
+  function cleanPosition(str) {
+    return String(str || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s && s !== '근무중')
+      .join(', ');
+  }
+
   function certBodyText(doc) {
     const f = doc.fields || {};
     const name = doc.employeeName;
+    const position = cleanPosition(doc.position);
     switch (doc.type) {
       case '재직증명서': {
         const period = f.hireDate
@@ -786,7 +797,7 @@ if ('serviceWorker' in navigator) {
           <table class="p-info-table">
             <tr><th>성명</th><td>${name}</td><th>주민등록번호</th><td>${f.rrn || ''}</td></tr>
             <tr><th>주소</th><td colspan="3">${f.address || ''}</td></tr>
-            <tr><th>소속</th><td>${doc.department || ''}</td><th>직급</th><td>${doc.position || ''}</td></tr>
+            <tr><th>소속</th><td>${doc.department || ''}</td><th>직급</th><td>${position}</td></tr>
             <tr><th>기간</th><td colspan="3">${period}</td></tr>
             <tr><th>용도</th><td colspan="3">${f.purpose || ''}</td></tr>
           </table>
@@ -801,7 +812,7 @@ if ('serviceWorker' in navigator) {
           <table class="p-info-table">
             <tr><th>성명</th><td>${name}</td><th>주민등록번호</th><td>${f.rrn || ''}</td></tr>
             <tr><th>주소</th><td colspan="3">${f.address || ''}</td></tr>
-            <tr><th>소속</th><td>${doc.department || ''}</td><th>직급</th><td>${doc.position || ''}</td></tr>
+            <tr><th>소속</th><td>${doc.department || ''}</td><th>직급</th><td>${position}</td></tr>
             <tr><th>담당업무</th><td colspan="3">${f.duty || ''}</td></tr>
             <tr><th>재직기간</th><td colspan="3">${period}</td></tr>
             <tr><th>용도</th><td colspan="3">${f.purpose || ''}</td></tr>
@@ -814,7 +825,7 @@ if ('serviceWorker' in navigator) {
           <table class="p-info-table">
             <tr><th>성명</th><td>${name}</td><th>주민등록번호</th><td>${f.rrn || ''}</td></tr>
             <tr><th>주소</th><td colspan="3">${f.address || ''}</td></tr>
-            <tr><th>소속</th><td>${doc.department || ''}</td><th>직급</th><td>${doc.position || ''}</td></tr>
+            <tr><th>소속</th><td>${doc.department || ''}</td><th>직급</th><td>${position}</td></tr>
             <tr><th>재직기간</th><td colspan="3">${formatDateKR(f.hireDate)} ~ ${formatDateKR(f.resignDate)} (${calcDuration(f.hireDate, f.resignDate)})</td></tr>
             <tr><th>퇴직사유</th><td colspan="3">${f.resignReason || ''}</td></tr>
             <tr><th>용도</th><td colspan="3">${f.purpose || ''}</td></tr>
@@ -835,7 +846,7 @@ if ('serviceWorker' in navigator) {
       case '사직서':
         return `
           <table class="p-info-table">
-            <tr><th>소속</th><td>${doc.department || ''}</td><th>직위</th><td>${doc.position || ''}</td></tr>
+            <tr><th>소속</th><td>${doc.department || ''}</td><th>직위</th><td>${position}</td></tr>
             <tr><th>성명</th><td>${name}</td><th>생년월일</th><td>${formatDateKR(f.birthDate)}</td></tr>
             <tr><th>입사년월일</th><td>${formatDateKR(f.hireDate)}</td><th>주민등록번호</th><td>${f.rrn || ''}</td></tr>
             <tr><th>주소</th><td colspan="3">${f.address || ''}</td></tr>

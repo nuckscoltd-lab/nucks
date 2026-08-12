@@ -339,6 +339,16 @@ if ('serviceWorker' in navigator) {
     return `${y}년 ${Number(m)}월 ${Number(d)}일`;
   }
 
+  // 예전에 이미 "근무중" 같은 상태 태그가 섞여 저장된 명세서를 재인쇄할 때도
+  // 깨끗하게 나오도록, 표시 직전에 한 번 더 걸러낸다.
+  function cleanPosition(str) {
+    return String(str || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s && s !== '근무중')
+      .join(', ');
+  }
+
   function buildPrintHtml(s) {
     const payRows = PAY_KEYS.map(k => `<tr><th>${k}</th><td>${(s.pay?.[k] || 0).toLocaleString()}원</td></tr>`).join('');
     const dedRows = DED_KEYS.map(k => `<tr><th>${k}</th><td>${(s.deductions?.[k] || 0).toLocaleString()}원</td></tr>`).join('');
@@ -353,7 +363,7 @@ if ('serviceWorker' in navigator) {
         </div>
         <table class="p-info-table">
           <tr><th>성명</th><td>${s['사원명'] || ''}</td><th>부서</th><td>${s['부서명'] || ''}</td></tr>
-          <tr><th>직급</th><td>${s['직급'] || ''}</td><th>지급일</th><td>${formatDateKR(s['지급일'])}</td></tr>
+          <tr><th>직급</th><td>${cleanPosition(s['직급'])}</td><th>지급일</th><td>${formatDateKR(s['지급일'])}</td></tr>
         </table>
         <table class="p-pay-table">
           <thead><tr><th colspan="2">지급 항목</th></tr></thead>
