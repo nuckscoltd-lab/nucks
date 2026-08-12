@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESG 자가진단서(임원) · 넉스(주)</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --navy:#1C2B39; --navy-soft:#2A3D4F; --paper:#F5F2EC; --paper-dim:#ECE7DC;
+    --card:#FBFAF6; --concrete:#B8B2A7; --ink:#24211C; --ink-soft:#5B564C;
+    --ochre:#C17A3D; --moss:#4A6741; --slate:#3D5A73; --rust:#A6473A;
+    --eval-a:#3D5A73; --eval-b:#C17A3D;
+    --line:rgba(28,43,57,.16); --line-soft:rgba(28,43,57,.08);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Pretendard Variable',-apple-system,sans-serif;font-size:15px;line-height:1.6}
+  .mono{font-family:'IBM Plex Mono',monospace}
+  .wrap{max-width:820px;margin:0 auto;padding:32px 20px 100px}
+  header{border:1.5px solid var(--navy);background:var(--card);padding:22px 26px;margin-bottom:26px}
+  header .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;color:var(--slate);text-transform:uppercase;margin-bottom:8px}
+  header h1{margin:0 0 6px;font-size:24px;color:var(--navy)}
+  header p{margin:0;font-size:13px;color:var(--ink-soft)}
+  .notice{background:var(--paper-dim);border-left:3px solid var(--slate);padding:12px 16px;font-size:12.5px;color:var(--ink-soft);margin-bottom:22px}
+
+  .item{border-bottom:1px solid var(--line-soft);padding:16px 0}
+  .item-num{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--concrete);margin-bottom:4px}
+  .item-text{font-size:14.5px;margin-bottom:10px}
+  .scale{display:flex;gap:6px;flex-wrap:wrap}
+  .scale button{font-family:'IBM Plex Mono',monospace;font-size:12px;border:1px solid var(--line);background:var(--card);color:var(--ink-soft);padding:7px 10px;cursor:pointer;text-align:left}
+  .scale button:hover{border-color:var(--navy);color:var(--navy)}
+  .scale button.active{background:var(--navy);border-color:var(--navy);color:#fff}
+  .scale button .n{font-weight:700;margin-right:6px}
+
+  .btn-primary{font-family:'IBM Plex Mono',monospace;font-size:14px;background:var(--navy);color:#fff;border:none;padding:14px 30px;cursor:pointer}
+  .btn-primary:disabled{background:var(--concrete);cursor:not-allowed}
+  .btn-primary:hover:not(:disabled){background:var(--navy-soft)}
+  .btn-ghost{font-family:'IBM Plex Mono',monospace;font-size:12px;background:transparent;border:1px solid var(--line);color:var(--ink-soft);padding:9px 16px;cursor:pointer}
+  .btn-ghost:hover{border-color:var(--navy);color:var(--navy)}
+  .btn-secondary{font-family:'IBM Plex Mono',monospace;font-size:12.5px;background:transparent;border:1px solid var(--navy);color:var(--navy);padding:11px 20px;cursor:pointer}
+  .btn-secondary:hover{background:var(--navy);color:#fff}
+  .submit-row{display:flex;justify-content:center;margin:34px 0 6px}
+  .hint{text-align:center;font-size:12px;color:var(--rust);margin-top:8px;font-family:'IBM Plex Mono',monospace}
+
+  .center-msg{text-align:center;padding:60px 20px;border:1.5px solid var(--navy);background:var(--card)}
+  .center-msg h2{color:var(--navy);margin-top:0}
+  .center-msg p{color:var(--ink-soft);font-size:13.5px}
+
+  footer{margin-top:50px;text-align:center;font-size:11px;color:var(--concrete);font-family:'IBM Plex Mono',monospace}
+  .admin-link{position:fixed;bottom:14px;right:16px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--concrete);background:var(--card);border:1px solid var(--line);padding:5px 10px;cursor:pointer}
+
+  /* admin */
+  .status-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin:16px 0}
+  .status-chip{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:10px 12px;border:1px solid var(--line);background:var(--card)}
+  .status-chip .nm{font-weight:700;color:var(--ink);font-family:'Pretendard Variable'}
+  .status-chip .rl{color:var(--ink-soft);font-size:11px}
+  .status-chip .st{margin-top:4px}
+  .status-chip.done .st{color:var(--moss)}
+  .status-chip.pending .st{color:var(--rust)}
+  .progress-line{font-family:'IBM Plex Mono',monospace;font-size:13px;margin:10px 0 4px}
+  .row-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+
+  /* results (원본 임원용 결과 화면 스타일 그대로 유지) */
+  .results-head{text-align:center;padding:36px 20px 30px;border:1.5px solid var(--navy);background:var(--card);margin-bottom:18px}
+  .results-head .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;color:var(--slate);text-transform:uppercase}
+  .overall-score{font-size:64px;font-weight:700;color:var(--navy);font-family:'IBM Plex Mono',monospace;margin:8px 0 2px}
+  .overall-band{display:inline-block;font-size:13px;padding:5px 14px;border:1px solid var(--navy);color:var(--navy);font-weight:600;letter-spacing:.03em;margin-top:6px}
+  .overall-sub{font-size:12px;color:var(--ink-soft);margin-top:14px;font-family:'IBM Plex Mono',monospace}
+  .overall-sub span{margin:0 8px}
+  .gauges{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:14px}
+  .gauge-card{background:var(--card);border:1px solid var(--line);padding:20px 16px 16px;text-align:center}
+  .gauge-card h3{margin:10px 0 2px;font-size:14px;color:var(--navy)}
+  .gauge-card .g-pct{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600}
+  .gauge-card .g-band{font-size:11.5px;color:var(--ink-soft);margin-top:2px}
+  .compare-section{background:var(--card);border:1px solid var(--line);padding:22px 24px;margin-bottom:26px}
+  .compare-section h3{margin:0 0 4px;font-size:15px;color:var(--navy)}
+  .compare-section .sub{font-size:12px;color:var(--ink-soft);margin-bottom:16px}
+  .legend{display:flex;gap:18px;margin-bottom:16px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-soft)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend .sw{width:10px;height:10px;display:inline-block}
+  .compare-row{margin-bottom:14px}
+  .compare-row .cr-label{display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink);margin-bottom:5px;font-weight:600}
+  .bar-track{height:14px;background:var(--paper-dim);position:relative;margin-bottom:4px}
+  .bar-fill{height:100%;position:absolute;left:0;top:0;transition:width .4s ease}
+  .bar-fill.a{background:var(--eval-a)}
+  .bar-fill.b{background:var(--eval-b);opacity:.85}
+  .bar-fill-label{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);display:flex;justify-content:space-between}
+  .gap-block{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--rust);padding:18px 22px;margin-bottom:26px}
+  .gap-block h3{margin:0 0 4px;font-size:15px;color:var(--navy)}
+  .gap-block .sub{font-size:12px;color:var(--ink-soft);margin-bottom:12px}
+  .gap-item{font-size:13px;padding:8px 0;border-bottom:1px solid var(--line-soft)}
+  .gap-item:last-child{border-bottom:none}
+  .gap-item .gi-q{color:var(--ink)}
+  .gap-item .gi-scores{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--rust);margin-top:3px}
+  .gap-empty{font-size:13px;color:var(--ink-soft)}
+  .reco-block{background:var(--card);border:1px solid var(--line);padding:20px 22px;margin-bottom:16px;border-left:4px solid var(--concrete)}
+  .reco-block[data-p="E"]{border-left-color:var(--moss)}
+  .reco-block[data-p="S"]{border-left-color:var(--ochre)}
+  .reco-block[data-p="G"]{border-left-color:var(--slate)}
+  .reco-block h4{margin:0 0 8px;font-size:14.5px;color:var(--navy)}
+  .reco-block p{margin:0;font-size:13.5px;color:var(--ink-soft)}
+  .reco-block .weak-list{margin-top:10px;font-size:12.5px;color:var(--rust)}
+  .reco-block .weak-list span{display:block;margin-top:4px}
+  .result-actions{display:flex;gap:10px;justify-content:center;margin-top:26px;flex-wrap:wrap}
+
+  @media (max-width:640px){
+    .gauges{grid-template-columns:1fr}
+    .status-list{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div class="admin-link" id="adminLink">관리자</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script>
+/* ---------- Firebase 초기화 ---------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyAMFXVMwtQVQWPYcukB2OslN75r2JzcXvE",
+  authDomain: "nucks-design.firebaseapp.com",
+  projectId: "nucks-design",
+  storageBucket: "nucks-design.firebasestorage.app",
+  messagingSenderId: "365302226895",
+  appId: "1:365302226895:web:a7287dc64e5bc42bef3cba"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// 직원용(esg.html)과 동일한 방식: 별도 로그인 없이 이 페이지 자체는 익명 인증만 사용.
+// 실제 "본인 확인"은 files.html에서 넘겨주는 ?name= 값으로 처리한다.
+const authReady = firebase.auth().signInAnonymously().catch(e => console.error('익명 로그인 실패:', e));
+
+const stateRef = db.collection('esgOfficerSurvey').doc('state');
+const responsesRef = db.collection('esgOfficerResponses');
+
+async function loadState(){
+  try{
+    const snap = await stateRef.get();
+    const data = snap.exists ? snap.data() : {};
+    return { completed: data.completed || {} };
+  }catch(e){
+    console.error('상태 불러오기 실패:', e);
+    return { completed: {} };
+  }
+}
+async function saveCompleted(comp){
+  try{ await stateRef.set({ completed: comp }, { merge: true }); }catch(e){ console.error('참여현황 저장 실패:', e); }
+}
+async function saveResponse(evId, answers){
+  await responsesRef.doc(evId).set({
+    answers, submittedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+}
+async function loadResponse(evId){
+  const snap = await responsesRef.doc(evId).get();
+  return snap.exists ? snap.data() : null;
+}
+async function resetAll(){
+  await stateRef.set({ completed: {} }, { merge: true });
+  const batch = db.batch();
+  EVALUATORS.forEach(ev => batch.delete(responsesRef.doc(ev.id)));
+  await batch.commit();
+}
+
+const ADMIN_PASS = "nucks2026"; // 직원용과 동일한 관리자 비밀번호. 필요시 이 값을 바꿔서 사용하세요
+
+/* ---------- survey content (기존 임원용 문항/문구 그대로 유지) ---------- */
+const QUESTIONS = {
+  E: [
+    "친환경 인증 자재(저VOC 도료, FSC 인증 목재 등) 사용 비율을 파악하고 있다",
+    "공사 현장에서 발생하는 폐기물(자재 잔재, 포장재 등)을 분리배출·재활용하고 있다",
+    "에너지 효율 등급이 높은 조명·설비를 설계 단계에서 우선 반영한다",
+    "자재 운반 및 시공 과정에서의 탄소배출 저감 방안을 검토한 적이 있다",
+    "유해화학물질(접착제, 도료 용제 등) 사용을 최소화하거나 대체재를 사용한다",
+    "사무실 및 현장에서 종이·일회용품 사용을 줄이기 위한 조치를 시행하고 있다",
+    "사옥(넉스빌딩 포함) 및 현장의 냉난방·조명 등 에너지 사용량을 주기적으로 점검한다",
+    "설계 단계에서 리모델링이나 자재 재사용이 가능한 구조를 고려한다",
+    "자재 납품 협력업체 선정 시 환경 관련 기준을 고려한다",
+    "폐기물관리법 등 환경 관련 법규 위반 이력이 없다"
+  ],
+  S: [
+    "중대재해처벌법 등 산업안전보건 관련 법규를 숙지하고 준수하고 있다",
+    "현장 근로자(직접고용·하도급 포함) 대상 안전교육을 정기적으로 실시한다",
+    "안전보호구 지급 및 착용 여부를 점검하는 절차가 마련되어 있다",
+    "근로계약서 작성, 4대보험 가입 등 노무 관리가 적절히 이루어지고 있다",
+    "하도급업체에 대한 대금 지급이 적정 기한 내에 이루어진다",
+    "직원 대상 성희롱·직장 내 괴롭힘 예방 교육을 실시하고 있다",
+    "임직원의 근무시간·휴가 사용이 근로기준법에 맞게 관리되고 있다",
+    "고객(발주처) 및 임차인의 개인정보 보호 절차를 갖추고 있다",
+    "협력업체와의 거래에서 공정거래 원칙을 준수한다",
+    "임직원 채용·평가 시 차별 없는 기준을 적용한다"
+  ],
+  G: [
+    "대표이사 및 경영진의 주요 의사결정 과정이 문서로 기록·관리된다",
+    "회사의 재무제표 및 세무 신고를 투명하게 관리하고 있다",
+    "안전진단계획서, 현장 점검 체크리스트 등 관리 문서를 체계적으로 보관한다",
+    "도급계약, 임대차계약 등 각종 계약서의 검토·관리 절차가 있다",
+    "내부 신고(제보)나 고충 처리를 위한 채널이 마련되어 있다",
+    "개인정보·경영정보 등에 대한 정보보안 관리 체계를 갖추고 있다",
+    "임직원, 협력업체, 임차인 등 이해관계자와의 소통 채널을 운영한다",
+    "ESG 및 컴플라이언스 관련 리스크를 정기적으로 점검한다",
+    "취업규칙 등 사내 규정이 최신 법령을 반영해 정비되어 있다",
+    "경영 승계 또는 비상 상황(대표 유고 등) 대응 계획을 마련하고 있다"
+  ]
+};
+const PILLAR_INFO = {E:{name:"환경",color:"#4A6741"}, S:{name:"사회",color:"#C17A3D"}, G:{name:"지배구조",color:"#3D5A73"}};
+const SCALE_LABELS = [
+  {n:0,t:"전혀 시행 안 함"},{n:1,t:"계획·검토 중"},{n:2,t:"부분적으로 시행"},{n:3,t:"대부분 시행"},{n:4,t:"완전히 시행·체계화"}
+];
+function allKeys(){ const ks=[]; ['E','S','G'].forEach(p=>QUESTIONS[p].forEach((_,i)=>ks.push(p+i))); return ks; }
+const TOTAL_ITEMS = allKeys().length;
+
+const EVALUATORS = [
+  {id:'kim', name:'김의석', role:'사내이사', color:'var(--eval-a)'},
+  {id:'yoon', name:'윤상원', role:'대표이사', color:'var(--eval-b)'}
+];
+
+/* ---------- state ---------- */
+let completed = {};
+let currentEvaluator = null;
+let answers = {};
+
+const app = document.getElementById('app');
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// files.html에서 iframe/링크에 ?name=으로 실어 보내는, 현재 로그인한 사람의 이름
+const LOCKED_NAME = new URLSearchParams(location.search).get('name');
+
+async function renderHome(){
+  const state = await loadState();
+  completed = state.completed;
+
+  const matched = EVALUATORS.find(ev => ev.name === LOCKED_NAME);
+
+  if(LOCKED_NAME && matched){
+    if(completed[matched.id]){
+      renderAlreadyDone(matched);
+    }else{
+      startSurvey(matched);
+    }
+    return;
+  }
+
+  if(LOCKED_NAME && !matched){
+    renderNameMismatchBlocked(LOCKED_NAME);
+    return;
+  }
+
+  // 이름 정보 없이 접근한 경우 (예: 관리자가 직접 파일을 열어본 경우) - 답변은 못 하게 안내만
+  app.innerHTML = `
+    <header>
+      <div class="eyebrow">NUCKS · ESG SELF-ASSESSMENT (OFFICER)</div>
+      <h1>ESG 자가진단서 (임원)</h1>
+      <p>이 페이지는 업무 파일함(files.html)의 링크를 통해 로그인 후 접속해야 본인 확인이 되어 진단을 시작할 수 있습니다.</p>
+    </header>
+    <div class="notice">직접 이 주소로 들어오신 경우 본인 확인이 되지 않아 진단을 시작할 수 없습니다. 홈페이지에 로그인한 뒤 업무 파일함의 "ESG 자가진단서 (임원)" 버튼으로 접속해주세요.</div>
+    <footer>NUCKS CO., LTD · ESG OFFICER SURVEY</footer>
+  `;
+}
+
+function renderNameMismatchBlocked(name){
+  app.innerHTML = `
+    <div class="center-msg">
+      <h2>본인 확인이 되지 않았습니다</h2>
+      <p>로그인 계정의 이름(${esc(name)})이 평가자 명단(김의석 사내이사, 윤상원 대표이사)과 일치하지 않아 참여할 수 없습니다.<br>
+      계정 이름이 실제 성함과 다르다면 관리자에게 정정을 요청해주세요.</p>
+    </div>
+    <footer>NUCKS CO., LTD · ESG OFFICER SURVEY</footer>
+  `;
+}
+
+function renderAlreadyDone(ev){
+  app.innerHTML = `
+    <div class="center-msg">
+      <h2>이미 참여하셨습니다</h2>
+      <p>${esc(ev.name)} ${esc(ev.role)}님은 이미 진단 응답을 제출하셨습니다.<br>1인 1회만 참여할 수 있어요. 전원 참여가 완료되면 관리자가 결과를 확인할 수 있습니다.</p>
+    </div>
+    <footer>NUCKS CO., LTD · ESG OFFICER SURVEY</footer>
+  `;
+}
+
+function startSurvey(ev){
+  currentEvaluator = ev;
+  answers = {};
+  renderSurvey();
+}
+
+function renderSurvey(){
+  let itemsHtml = '';
+  ['E','S','G'].forEach(p=>{
+    QUESTIONS[p].forEach((q,idx)=>{
+      const key = p+idx;
+      itemsHtml += `
+        <div class="item">
+          <div class="item-num mono">${p}-${String(idx+1).padStart(2,'0')}</div>
+          <div class="item-text">${esc(q)}</div>
+          <div class="scale" data-key="${key}">
+            ${SCALE_LABELS.map(s=>`<button type="button" data-val="${s.n}"><span class="n">${s.n}</span>${s.t}</button>`).join('')}
+          </div>
+        </div>`;
+    });
+  });
+  app.innerHTML = `
+    <header>
+      <div class="eyebrow">OFFICER SURVEY · ${esc(currentEvaluator.name)} ${esc(currentEvaluator.role)}</div>
+      <h1>ESG 자가진단서 (임원)</h1>
+      <p>모든 문항에 응답 후 제출해주세요. 제출 후에는 수정할 수 없습니다.</p>
+    </header>
+    ${itemsHtml}
+    <div class="submit-row"><button class="btn-primary" id="submitBtn" disabled>제출하기</button></div>
+    <div class="hint" id="hint"></div>
+  `;
+  app.querySelectorAll('.scale').forEach(scale=>{
+    scale.addEventListener('click', e=>{
+      const btn = e.target.closest('button'); if(!btn) return;
+      const key = scale.dataset.key;
+      answers[key] = parseInt(btn.dataset.val,10);
+      scale.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      updateSurveyProgress();
+    });
+  });
+  document.getElementById('submitBtn').addEventListener('click', submitSurvey);
+  updateSurveyProgress();
+}
+
+function updateSurveyProgress(){
+  const answered = Object.keys(answers).length;
+  const btn = document.getElementById('submitBtn');
+  const hint = document.getElementById('hint');
+  if(answered === TOTAL_ITEMS){ btn.disabled = false; hint.textContent=''; }
+  else{ btn.disabled = true; hint.textContent = `${TOTAL_ITEMS-answered}개 문항이 남았습니다.`; }
+}
+
+async function submitSurvey(){
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = '제출 중...';
+
+  await saveResponse(currentEvaluator.id, answers);
+
+  const state = await loadState();
+  const comp = state.completed;
+  comp[currentEvaluator.id] = true;
+  await saveCompleted(comp);
+
+  currentEvaluator = null; answers = {};
+  renderDone();
+}
+
+function renderDone(){
+  app.innerHTML = `
+    <div class="center-msg">
+      <h2>제출이 완료되었습니다</h2>
+      <p>참여해주셔서 감사합니다.<br>두 분 모두 제출을 완료하면 관리자가 비교 결과를 확인할 수 있습니다.</p>
+    </div>
+    <footer>NUCKS CO., LTD · ESG OFFICER SURVEY</footer>
+  `;
+}
+
+/* ---------- admin ---------- */
+document.getElementById('adminLink').addEventListener('click', async ()=>{
+  const pw = prompt('관리자 비밀번호를 입력하세요');
+  if(pw !== ADMIN_PASS){ if(pw!==null) alert('비밀번호가 올바르지 않습니다.'); return; }
+  renderAdmin();
+});
+
+async function renderAdmin(){
+  const state = await loadState();
+  completed = state.completed;
+  const doneCount = EVALUATORS.filter(ev=>completed[ev.id]).length;
+  const allDone = doneCount === EVALUATORS.length;
+
+  app.innerHTML = `
+    <header>
+      <div class="eyebrow">ADMIN</div>
+      <h1>ESG 자가진단서(임원) · 관리자</h1>
+      <p>두 평가자의 참여 현황을 확인하고, 전원 제출이 완료되면 비교 결과를 볼 수 있습니다.</p>
+    </header>
+
+    <h3>참여 현황</h3>
+    <div class="progress-line">${doneCount} / ${EVALUATORS.length} 명 참여 완료</div>
+    <div class="status-list">${EVALUATORS.map(ev=>{
+      const d = !!completed[ev.id];
+      return `<div class="status-chip ${d?'done':'pending'}">
+        <div class="nm">${esc(ev.name)}</div>
+        <div class="rl">${esc(ev.role)}</div>
+        <div class="st">${d?'✓ 참여완료':'미참여'}</div>
+      </div>`;
+    }).join('')}</div>
+
+    <div class="row-actions">
+      <button class="btn-primary" id="viewResults" ${allDone?'':'disabled'}>비교 결과 보기</button>
+      <button class="btn-ghost" id="resetAll">참여현황/응답 초기화</button>
+      <button class="btn-ghost" id="backHome">처음 화면으로</button>
+    </div>
+    ${allDone? '' : `<div class="hint" style="text-align:left;color:var(--ink-soft)">두 분 모두 참여를 완료해야 결과를 확인할 수 있습니다.</div>`}
+
+    <div id="resultsArea"></div>
+    <footer>NUCKS CO., LTD · ESG OFFICER SURVEY · ADMIN VIEW</footer>
+  `;
+
+  document.getElementById('resetAll').addEventListener('click', async ()=>{
+    if(!confirm('모든 참여 현황과 응답 데이터를 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+    await resetAll();
+    renderAdmin();
+  });
+  document.getElementById('backHome').addEventListener('click', ()=>{ renderHome(); });
+  const vBtn = document.getElementById('viewResults');
+  if(allDone){ vBtn.addEventListener('click', showResults); }
+}
+
+function bandOf(pct){
+  if(pct>=90) return {label:'우수 (Leading)', color:'#4A6741'};
+  if(pct>=70) return {label:'양호 (Adequate)', color:'#3D5A73'};
+  if(pct>=50) return {label:'개선 필요 (Needs Improvement)', color:'#C17A3D'};
+  return {label:'취약 (At Risk)', color:'#A6473A'};
+}
+const RECO_TEXT = {
+  E: {
+    high: "환경 관리 체계가 안정적으로 자리잡고 있습니다. 친환경 자재 사용 비율이나 에너지 절감 실적을 정량적으로 기록해두면 향후 발주처 대상 ESG 소명 자료로 활용할 수 있습니다.",
+    mid: "기본적인 환경 관리는 이루어지고 있으나 체계화가 더 필요합니다. 폐기물 분리배출, 저VOC 자재 사용 기준을 문서화하는 것부터 시작해보세요.",
+    low: "환경 관리 체계가 초기 단계입니다. 현장별 폐기물 처리 및 유해화학물질 사용 현황부터 파악하는 것을 권장합니다."
+  },
+  S: {
+    high: "안전·노무 관리 수준이 높은 편입니다. 중대재해처벌법 대응 문서(안전진단계획서, 점검 체크리스트 등)를 최신 상태로 유지하고 정기 갱신 주기를 정해두세요.",
+    mid: "안전교육이나 노무 관리 일부가 미흡할 수 있습니다. 특히 하도급 근로자에 대한 안전교육·보호구 지급 여부를 우선 점검하는 것을 권장합니다.",
+    low: "사회(안전·노무) 영역의 리스크가 높습니다. 중대재해처벌법 등 법적 의무사항을 최우선으로 점검하시기 바랍니다."
+  },
+  G: {
+    high: "지배구조 및 문서관리 체계가 잘 갖춰져 있습니다. 정기적인 컴플라이언스 점검 주기를 유지하고 경영 승계·비상 대응 계획도 함께 관리하세요.",
+    mid: "문서관리 체계는 있으나 일부 절차가 비정형적일 수 있습니다. 계약서·안전 문서의 보관 및 검토 프로세스를 표준화하는 것을 권장합니다.",
+    low: "지배구조 체계화가 필요합니다. 의사결정 기록, 계약서 관리, 내부 신고 채널부터 최소한의 체계를 갖추는 것을 권장합니다."
+  }
+};
+function recoFor(p, pct){
+  if(pct>=75) return RECO_TEXT[p].high;
+  if(pct>=50) return RECO_TEXT[p].mid;
+  return RECO_TEXT[p].low;
+}
+
+function drawGauge(svgId, pct, color){
+  const svg = document.getElementById(svgId);
+  const cx=70, cy=78, r=58;
+  const toXY = (ang)=>[cx + r*Math.cos(ang), cy - r*Math.sin(ang)];
+  const bgPath = `M ${toXY(Math.PI)[0]} ${toXY(Math.PI)[1]} A ${r} ${r} 0 0 1 ${toXY(0)[0]} ${toXY(0)[1]}`;
+  const frac = Math.max(0,Math.min(1,pct/100));
+  const valAngle = Math.PI - (Math.PI*frac);
+  const valEnd = toXY(valAngle);
+  const largeArc = frac>0.5?1:0;
+  const valPath = `M ${toXY(Math.PI)[0]} ${toXY(Math.PI)[1]} A ${r} ${r} 0 ${largeArc} 1 ${valEnd[0]} ${valEnd[1]}`;
+  let ticks = '';
+  for(let i=0;i<=10;i++){
+    const a = Math.PI - (Math.PI*(i/10));
+    const inner = [cx + (r-8)*Math.cos(a), cy - (r-8)*Math.sin(a)];
+    const outer = [cx + (r+2)*Math.cos(a), cy - (r+2)*Math.sin(a)];
+    ticks += `<line x1="${inner[0]}" y1="${inner[1]}" x2="${outer[0]}" y2="${outer[1]}" stroke="#B8B2A7" stroke-width="1"/>`;
+  }
+  const needleAngle = Math.PI - (Math.PI*frac);
+  const needleEnd = [cx + (r-14)*Math.cos(needleAngle), cy - (r-14)*Math.sin(needleAngle)];
+  svg.innerHTML = `
+    <path d="${bgPath}" fill="none" stroke="#ECE7DC" stroke-width="10" stroke-linecap="round"/>
+    ${ticks}
+    <path d="${valPath}" fill="none" stroke="${color}" stroke-width="10" stroke-linecap="round"/>
+    <line x1="${cx}" y1="${cy}" x2="${needleEnd[0]}" y2="${needleEnd[1]}" stroke="#1C2B39" stroke-width="2"/>
+    <circle cx="${cx}" cy="${cy}" r="4" fill="#1C2B39"/>
+  `;
+}
+
+async function showResults(){
+  const [kimData, yoonData] = await Promise.all([loadResponse('kim'), loadResponse('yoon')]);
+  const respByEv = { kim: kimData?.answers || {}, yoon: yoonData?.answers || {} };
+  const area = document.getElementById('resultsArea');
+
+  function pillarPctFor(evId, p){
+    const sum = QUESTIONS[p].reduce((acc,_,i)=>acc+(respByEv[evId][p+i]||0),0);
+    return Math.round((sum/40)*100);
+  }
+  function combinedPillarPct(p){
+    const sum = QUESTIONS[p].reduce((acc,_,i)=>{
+      const a = respByEv[EVALUATORS[0].id][p+i] || 0;
+      const b = respByEv[EVALUATORS[1].id][p+i] || 0;
+      return acc + (a+b)/2;
+    },0);
+    return Math.round((sum/40)*100);
+  }
+
+  const pillarPct = {};
+  ['E','S','G'].forEach(p=>{ pillarPct[p] = combinedPillarPct(p); });
+  const overall = Math.round((pillarPct.E + pillarPct.S + pillarPct.G)/3);
+  const ob = bandOf(overall);
+
+  const indivOverall = EVALUATORS.map(ev=>{
+    const avg = Math.round((pillarPctFor(ev.id,'E')+pillarPctFor(ev.id,'S')+pillarPctFor(ev.id,'G'))/3);
+    return `${esc(ev.name)} ${esc(ev.role)} <span class="mono">${avg}%</span>`;
+  });
+
+  area.innerHTML = `
+    <div class="results-head">
+      <div class="eyebrow">Combined ESG Score · 2인 평균</div>
+      <div class="overall-score mono">${overall}</div>
+      <div class="overall-band" style="border-color:${ob.color};color:${ob.color}">${ob.label}</div>
+      <div class="overall-sub">${indivOverall.join('<span>·</span>')}</div>
+    </div>
+    <div class="gauges">
+      <div class="gauge-card"><svg id="gaugeE" width="140" height="90" viewBox="0 0 140 90"></svg><h3>환경 (E)</h3><div class="g-pct mono" id="gpctE">${pillarPct.E}%</div><div class="g-band" id="gbandE"></div></div>
+      <div class="gauge-card"><svg id="gaugeS" width="140" height="90" viewBox="0 0 140 90"></svg><h3>사회 (S)</h3><div class="g-pct mono" id="gpctS">${pillarPct.S}%</div><div class="g-band" id="gbandS"></div></div>
+      <div class="gauge-card"><svg id="gaugeG" width="140" height="90" viewBox="0 0 140 90"></svg><h3>지배구조 (G)</h3><div class="g-pct mono" id="gpctG">${pillarPct.G}%</div><div class="g-band" id="gbandG"></div></div>
+    </div>
+    <div class="compare-section">
+      <h3>평가자별 비교</h3>
+      <div class="sub">두 평가자의 영역별 점수를 비교합니다. 시각이 크게 다른 항목은 아래 "인식 차이" 섹션에서 확인하세요.</div>
+      <div class="legend">${EVALUATORS.map(ev=>`<span><span class="sw" style="background:${ev.color}"></span>${esc(ev.name)} ${esc(ev.role)}</span>`).join('')}</div>
+      <div id="compareRows"></div>
+    </div>
+    <div class="gap-block">
+      <h3>인식 차이가 큰 항목</h3>
+      <div class="sub">두 평가자의 응답 차이가 2점 이상인 문항입니다. 논의를 통해 실제 수준을 맞춰보시기를 권장합니다.</div>
+      <div id="gapList"></div>
+    </div>
+    <div id="recoContainer"></div>
+    <div class="result-actions">
+      <button type="button" class="btn-secondary" id="printBtn">인쇄 / PDF 저장</button>
+    </div>
+  `;
+
+  ['E','S','G'].forEach(p=>{
+    const pct = pillarPct[p];
+    const b = bandOf(pct);
+    drawGauge('gauge'+p, pct, PILLAR_INFO[p].color);
+    document.getElementById('gband'+p).textContent = b.label;
+    document.getElementById('gband'+p).style.color = b.color;
+  });
+
+  document.getElementById('compareRows').innerHTML = ['E','S','G'].map(p=>{
+    const pctA = pillarPctFor(EVALUATORS[0].id, p);
+    const pctB = pillarPctFor(EVALUATORS[1].id, p);
+    return `
+      <div class="compare-row">
+        <div class="cr-label"><span>${p} · ${PILLAR_INFO[p].name}</span></div>
+        <div class="bar-track"><div class="bar-fill a" style="width:${pctA}%"></div></div>
+        <div class="bar-fill-label"><span>${esc(EVALUATORS[0].name)}</span><span>${pctA}%</span></div>
+        <div class="bar-track" style="margin-top:6px;"><div class="bar-fill b" style="width:${pctB}%"></div></div>
+        <div class="bar-fill-label"><span>${esc(EVALUATORS[1].name)}</span><span>${pctB}%</span></div>
+      </div>
+    `;
+  }).join('');
+
+  const gapItems = [];
+  ['E','S','G'].forEach(p=>{
+    QUESTIONS[p].forEach((q,i)=>{
+      const a = respByEv[EVALUATORS[0].id][p+i] ?? 0;
+      const b = respByEv[EVALUATORS[1].id][p+i] ?? 0;
+      if(Math.abs(a-b) >= 2){ gapItems.push({p, q, a, b, diff:Math.abs(a-b)}); }
+    });
+  });
+  gapItems.sort((x,y)=>y.diff-x.diff);
+  const gapList = document.getElementById('gapList');
+  gapList.innerHTML = gapItems.length === 0
+    ? '<div class="gap-empty">두 평가자의 응답 차이가 2점 이상인 문항이 없습니다. 인식 수준이 비교적 일치합니다.</div>'
+    : gapItems.map(g=>`
+      <div class="gap-item">
+        <div class="gi-q">[${g.p}] ${esc(g.q)}</div>
+        <div class="gi-scores">${esc(EVALUATORS[0].name)} ${g.a}점 · ${esc(EVALUATORS[1].name)} ${g.b}점 (차이 ${g.diff}점)</div>
+      </div>
+    `).join('');
+
+  const recoContainer = document.getElementById('recoContainer');
+  recoContainer.innerHTML = '';
+  ['E','S','G'].forEach(p=>{
+    const pct = pillarPct[p];
+    const b = bandOf(pct);
+    const weakItems = QUESTIONS[p]
+      .map((q,i)=>{
+        const a = respByEv[EVALUATORS[0].id][p+i] || 0;
+        const bb = respByEv[EVALUATORS[1].id][p+i] || 0;
+        return {q, avg:(a+bb)/2};
+      })
+      .filter(o=>o.avg<=1)
+      .map(o=>o.q);
+
+    const block = document.createElement('div');
+    block.className = 'reco-block';
+    block.dataset.p = p;
+    block.innerHTML = `
+      <h4>${p} · ${PILLAR_INFO[p].name} — ${pct}% (${b.label})</h4>
+      <p>${recoFor(p, pct)}</p>
+      ${weakItems.length ? `<div class="weak-list">우선 점검 항목(2인 평균 1점 이하):${weakItems.map(w=>`<span>· ${esc(w)}</span>`).join('')}</div>` : ''}
+    `;
+    recoContainer.appendChild(block);
+  });
+
+  document.getElementById('printBtn').addEventListener('click', ()=>window.print());
+}
+
+authReady.then(renderHome);
+</script>
+</body>
+</html>
