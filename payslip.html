@@ -464,7 +464,7 @@ if ('serviceWorker' in navigator) {
     const uid = document.getElementById('f-employee').value;
     const emp = employees.find(e => e.uid === uid);
     document.getElementById('f-department').value = emp?.department || '';
-    document.getElementById('f-position').value = (emp?.positionTags || []).join(', ');
+    document.getElementById('f-position').value = (emp?.positionTags || []).filter(t => t !== '근무중').join(', ');
   }
 
   function updateSums() {
