@@ -62,6 +62,7 @@ if ('serviceWorker' in navigator) {
     border-radius:4px; font-size:12.5px; text-decoration:none;
   }
   .esg-link-btn:hover{ opacity:.85; }
+  .esg-link-btn.disabled{ opacity:.4; pointer-events:none; cursor:default; }
 
   .upload-panel .panel-title{
     font-size:11px; letter-spacing:.16em; text-transform:uppercase;
@@ -243,8 +244,8 @@ if ('serviceWorker' in navigator) {
   <!-- ESG 자가진단서 바로가기 (근로자/관리자 모두 노출) -->
   <div class="esg-link-bar">
     <span class="esg-link-label">ESG 자가진단서</span>
-    <a href="esg-officer.html" class="esg-link-btn" id="esgOfficerLink">임원용</a>
-    <a href="esg.html" class="esg-link-btn" id="esgStaffLink">직원용</a>
+    <a href="#" class="esg-link-btn disabled" id="esgOfficerLink" target="_blank" rel="noopener">임원용</a>
+    <a href="#" class="esg-link-btn disabled" id="esgStaffLink" target="_blank" rel="noopener">직원용</a>
   </div>
 
   <div class="tabs" id="tabs"></div>
@@ -337,14 +338,30 @@ if ('serviceWorker' in navigator) {
 
     // ESG 자가진단(임원/직원) 모두에 로그인한 사람 이름을 실어 보내서, 각 페이지가 이름
     // 선택/입력 없이 바로 본인 설문(또는 이미 참여함 안내)으로 진입시키게 한다.
-    const staffName = user.displayName || '';
+    // 주의: Firebase 로그인 프로필의 displayName은 비어있을 수 있어서, admin.html에서
+    // 실제로 관리하는 Firestore users 문서의 이름을 우선으로 사용한다.
+    let staffName = '';
+    try {
+      const myDoc = await db.collection('users').doc(user.uid).get();
+      staffName = myDoc.data()?.displayName || user.displayName || '';
+    } catch (err) {
+      console.error('이름 조회 실패:', err);
+      staffName = user.displayName || '';
+    }
+
     const officerLink = document.getElementById('esgOfficerLink');
     const staffLink = document.getElementById('esgStaffLink');
-    if (officerLink && staffName) {
-      officerLink.href = 'esg-officer.html?name=' + encodeURIComponent(staffName);
-    }
-    if (staffLink && staffName) {
-      staffLink.href = 'esg.html?name=' + encodeURIComponent(staffName);
+    if (staffName) {
+      if (officerLink) {
+        officerLink.href = 'esg-officer.html?name=' + encodeURIComponent(staffName);
+        officerLink.classList.remove('disabled');
+      }
+      if (staffLink) {
+        staffLink.href = 'esg.html?name=' + encodeURIComponent(staffName);
+        staffLink.classList.remove('disabled');
+      }
+    } else {
+      console.error('사용자 이름을 찾지 못해 ESG 링크에 이름을 실어 보낼 수 없습니다.');
     }
   });
 
