@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>고용·산재보험료 신고서 | NUCKS</title>
+<style>
+  :root{
+    --ink:#141414; --paper:#f7f6f3; --line:#d8d5cd; --muted:#8a8578;
+    --accent:#3f6b52; --warn:#a4453c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background:var(--paper);
+    font-family:'Pretendard', -apple-system, sans-serif; color:var(--ink); font-size:14px;
+  }
+  header{
+    padding:24px 32px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;
+    background:#fff; position:sticky; top:0; z-index:10;
+  }
+  header h1{ font-size:20px; margin:0 0 4px; }
+  header p{ font-size:12.5px; color:var(--muted); margin:0; }
+  .header-actions{ display:flex; gap:16px; align-items:center; }
+  .header-actions a{ font-size:13px; color:var(--muted); text-decoration:none; border-bottom:1px solid var(--muted); }
+
+  main{ max-width:1040px; margin:0 auto; padding:28px 32px 100px; }
+
+  .top-row{ display:flex; gap:12px; align-items:center; margin-bottom:24px; flex-wrap:wrap; }
+  .top-row select{ padding:9px 12px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:14px; background:#fff; }
+  .btn-ghost{
+    padding:9px 16px; background:#fff; color:var(--ink); border:1px solid var(--line);
+    font-size:12.5px; cursor:pointer; border-radius:4px; white-space:nowrap;
+  }
+  .btn-ghost:hover{ border-color:var(--ink); }
+  .btn-ghost.danger{ color:var(--warn); border-color:#f0c9c4; }
+
+  .panel{
+    background:#fff; border:1px solid var(--line); border-radius:8px;
+    padding:22px 24px; margin-bottom:22px;
+  }
+  .panel-title{ font-size:15px; font-weight:600; margin-bottom:4px; }
+  .panel-sub{ font-size:12px; color:var(--muted); margin-bottom:16px; }
+
+  table.calc-table{ width:100%; border-collapse:collapse; margin-bottom:8px; }
+  table.calc-table th{ text-align:left; font-size:11px; color:var(--muted); font-weight:500; padding:6px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  table.calc-table td{ padding:6px 8px; vertical-align:middle; }
+  table.calc-table td.rowlabel{ font-size:12.5px; font-weight:500; white-space:nowrap; }
+  table.calc-table input{
+    width:100%; box-sizing:border-box; padding:7px 8px; border:1px solid var(--line);
+    border-radius:4px; font-family:'IBM Plex Mono', monospace; font-size:12.5px; text-align:right; background:#fff;
+  }
+  table.calc-table .computed{ font-family:'IBM Plex Mono', monospace; font-size:12.5px; text-align:right; color:var(--ink); font-weight:600; white-space:nowrap; }
+  table.calc-table tr.sum td{ border-top:1.5px solid var(--ink); font-weight:700; }
+
+  .summary-row{ display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; margin-top:18px; }
+  .summary-card{ background:var(--paper); border:1px solid var(--line); border-radius:6px; padding:14px 16px; }
+  .summary-card .label{ font-size:11.5px; color:var(--muted); margin-bottom:4px; }
+  .summary-card .value{ font-size:18px; font-weight:700; font-family:'IBM Plex Mono', monospace; }
+  .summary-card.highlight{ background:#fbe9d8; border-color:#e8c9a3; }
+  .summary-card.highlight .value{ color:#7a5a2e; }
+
+  .btn-primary{
+    padding:10px 22px; background:var(--ink); color:var(--paper);
+    border:none; font-size:12.5px; cursor:pointer; border-radius:4px; white-space:nowrap; margin-top:16px;
+  }
+  .status-line{ font-size:12.5px; margin-top:10px; min-height:16px; }
+  .status-line.ok{ color:var(--accent); }
+  .status-line.err{ color:var(--warn); }
+
+  .history-table{ width:100%; border-collapse:collapse; }
+  .history-table th{ text-align:left; font-size:11.5px; color:var(--muted); font-weight:500; padding:8px; border-bottom:1px solid var(--line); }
+  .history-table td{ padding:8px; font-size:13px; border-bottom:1px solid var(--line); }
+  .history-table td.amt{ font-family:'IBM Plex Mono', monospace; text-align:right; }
+  .history-table button{ font-size:11px; background:none; border:1px solid var(--line); border-radius:4px; padding:4px 8px; cursor:pointer; color:var(--muted); margin-right:4px; }
+  .history-table button:hover{ border-color:var(--ink); color:var(--ink); }
+
+  @media (max-width:768px){
+    table.calc-table{ font-size:11px; }
+    .summary-row{ grid-template-columns:1fr; }
+    main{ padding:20px 16px 80px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>고용·산재보험료 신고서</h1>
+    <p>연도별 확정보험료 정산 + 다음해 개산보험료를 자동 계산하고 기록합니다.</p>
+  </div>
+  <div class="header-actions">
+    <a href="admin.html">Admin</a>
+    <a href="index.html">Home</a>
+  </div>
+</header>
+
+<main>
+
+  <div class="top-row">
+    <select id="yearSelect"></select>
+    <button class="btn-ghost" id="newYearBtn">+ 새 연도 추가</button>
+    <button class="btn-ghost danger" id="deleteYearBtn">이 연도 삭제</button>
+  </div>
+
+  <!-- 확정보험료 (해당연도 실제) -->
+  <div class="panel">
+    <div class="panel-title" id="finalTitle">확정보험료</div>
+    <div class="panel-sub">해당 연도 실제 보수총액 기준으로 계산하고, 전년도에 미리 낸 개산보험료(신고액=납부액)와 비교합니다.</div>
+    <table class="calc-table">
+      <thead>
+        <tr><th>구분</th><th>보수총액</th><th>보험료율(%)</th><th>확정보험료액</th><th>전년도 개산보험료(신고·납부액)</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="rowlabel">산재보험</td>
+          <td><input type="number" id="f-ind-wage"></td>
+          <td><input type="number" step="0.001" id="f-ind-rate"></td>
+          <td class="computed" id="f-ind-premium">0</td>
+          <td><input type="number" id="f-ind-declared"></td>
+        </tr>
+        <tr>
+          <td class="rowlabel">고용보험(실업급여)</td>
+          <td><input type="number" id="f-emp-wage"></td>
+          <td><input type="number" step="0.001" id="f-emp-rate"></td>
+          <td class="computed" id="f-emp-premium">0</td>
+          <td><input type="number" id="f-emp-declared"></td>
+        </tr>
+        <tr>
+          <td class="rowlabel">고용안정·직업능력개발</td>
+          <td><input type="number" id="f-tr-wage"></td>
+          <td><input type="number" step="0.001" id="f-tr-rate"></td>
+          <td class="computed" id="f-tr-premium">0</td>
+          <td><input type="number" id="f-tr-declared"></td>
+        </tr>
+        <tr class="sum">
+          <td class="rowlabel">합계</td>
+          <td></td><td></td>
+          <td class="computed" id="f-total-premium">0</td>
+          <td class="computed" id="f-total-declared">0</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 개산보험료 (다음해 예상) -->
+  <div class="panel">
+    <div class="panel-title" id="nextTitle">개산보험료 (다음해 예상)</div>
+    <div class="panel-sub">다음 연도 예상 보수총액과 그 해 요율로 미리 계산합니다. 일시납은 3% 경감, 분할납부는 4회 균등분할입니다.</div>
+    <table class="calc-table">
+      <thead>
+        <tr><th>구분</th><th>보수총액(예상)</th><th>보험료율(%)</th><th>개산보험료액</th><th>일시납(3%경감)</th><th>1회분할(1/4)</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="rowlabel">산재보험</td>
+          <td><input type="number" id="n-ind-wage"></td>
+          <td><input type="number" step="0.001" id="n-ind-rate"></td>
+          <td class="computed" id="n-ind-premium">0</td>
+          <td class="computed" id="n-ind-lump">0</td>
+          <td class="computed" id="n-ind-install">0</td>
+        </tr>
+        <tr>
+          <td class="rowlabel">고용보험(실업급여)</td>
+          <td><input type="number" id="n-emp-wage"></td>
+          <td><input type="number" step="0.001" id="n-emp-rate"></td>
+          <td class="computed" id="n-emp-premium">0</td>
+          <td class="computed" id="n-emp-lump">0</td>
+          <td class="computed" id="n-emp-install">0</td>
+        </tr>
+        <tr>
+          <td class="rowlabel">고용안정·직업능력개발</td>
+          <td><input type="number" id="n-tr-wage"></td>
+          <td><input type="number" step="0.001" id="n-tr-rate"></td>
+          <td class="computed" id="n-tr-premium">0</td>
+          <td class="computed" id="n-tr-lump">0</td>
+          <td class="computed" id="n-tr-install">0</td>
+        </tr>
+        <tr class="sum">
+          <td class="rowlabel">합계</td>
+          <td></td><td></td>
+          <td class="computed" id="n-total-premium">0</td>
+          <td class="computed" id="n-total-lump">0</td>
+          <td class="computed" id="n-total-install">0</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="summary-row">
+      <div class="summary-card">
+        <div class="label">확정보험료 추가납부할액</div>
+        <div class="value" id="sumAdditional">0원</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">다음해 개산보험료 (일시납 기준)</div>
+        <div class="value" id="sumNextLump">0원</div>
+      </div>
+      <div class="summary-card highlight">
+        <div class="label">최종납부액 (추가납부 + 개산 일시납)</div>
+        <div class="value" id="sumFinal">0원</div>
+      </div>
+    </div>
+
+    <button class="btn-primary" id="saveBtn">저장</button>
+    <div class="status-line" id="saveStatus"></div>
+  </div>
+
+  <!-- 연도별 요약 이력 -->
+  <div class="panel">
+    <div class="panel-title">연도별 요약</div>
+    <table class="history-table">
+      <thead>
+        <tr><th>연도</th><th>확정보험료 합계</th><th>추가납부할액</th><th>다음해 개산(일시납)</th><th>최종납부액</th><th>관리</th></tr>
+      </thead>
+      <tbody id="historyBody"></tbody>
+    </table>
+  </div>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+  requireRole(['admin']);
+
+  const yearsRef = db.collection('insurancePremiumYears');
+  let allYears = [];
+  let currentYear = null;
+
+  function fmtWon(n){ return Math.round(n || 0).toLocaleString() + '원'; }
+  function num(id){ return Number(document.getElementById(id).value) || 0; }
+  function setText(id, val){ document.getElementById(id).textContent = fmtWon(val); }
+
+  function recalc(){
+    // 확정보험료
+    const fIndWage = num('f-ind-wage'), fIndRate = num('f-ind-rate') / 100;
+    const fEmpWage = num('f-emp-wage'), fEmpRate = num('f-emp-rate') / 100;
+    const fTrWage = num('f-tr-wage'), fTrRate = num('f-tr-rate') / 100;
+
+    const fIndPremium = fIndWage * fIndRate;
+    const fEmpPremium = fEmpWage * fEmpRate;
+    const fTrPremium = fTrWage * fTrRate;
+    const fTotalPremium = fIndPremium + fEmpPremium + fTrPremium;
+
+    const fTotalDeclared = num('f-ind-declared') + num('f-emp-declared') + num('f-tr-declared');
+
+    setText('f-ind-premium', fIndPremium);
+    setText('f-emp-premium', fEmpPremium);
+    setText('f-tr-premium', fTrPremium);
+    setText('f-total-premium', fTotalPremium);
+    setText('f-total-declared', fTotalDeclared);
+
+    const additional = fTotalPremium - fTotalDeclared;
+
+    // 개산보험료 (다음해)
+    const nIndWage = num('n-ind-wage'), nIndRate = num('n-ind-rate') / 100;
+    const nEmpWage = num('n-emp-wage'), nEmpRate = num('n-emp-rate') / 100;
+    const nTrWage = num('n-tr-wage'), nTrRate = num('n-tr-rate') / 100;
+
+    const nIndPremium = nIndWage * nIndRate;
+    const nEmpPremium = nEmpWage * nEmpRate;
+    const nTrPremium = nTrWage * nTrRate;
+    const nTotalPremium = nIndPremium + nEmpPremium + nTrPremium;
+
+    setText('n-ind-premium', nIndPremium);
+    setText('n-emp-premium', nEmpPremium);
+    setText('n-tr-premium', nTrPremium);
+    setText('n-total-premium', nTotalPremium);
+
+    [['ind', nIndPremium], ['emp', nEmpPremium], ['tr', nTrPremium]].forEach(([key, premium]) => {
+      const lump = premium * 0.97;
+      const install = premium / 4;
+      setText(`n-${key}-lump`, lump);
+      setText(`n-${key}-install`, install);
+    });
+    const nTotalLump = nTotalPremium * 0.97;
+    const nTotalInstall = nTotalPremium / 4;
+    setText('n-total-lump', nTotalLump);
+    setText('n-total-install', nTotalInstall);
+
+    const finalPayment = additional + nTotalLump;
+
+    setText('sumAdditional', additional);
+    setText('sumNextLump', nTotalLump);
+    setText('sumFinal', finalPayment);
+
+    return { fTotalPremium, additional, nTotalLump, finalPayment };
+  }
+
+  ['f-ind-wage','f-ind-rate','f-ind-declared','f-emp-wage','f-emp-rate','f-emp-declared',
+   'f-tr-wage','f-tr-rate','f-tr-declared','n-ind-wage','n-ind-rate','n-emp-wage','n-emp-rate',
+   'n-tr-wage','n-tr-rate'].forEach(id => {
+    document.getElementById(id).addEventListener('input', recalc);
+  });
+
+  function clearForm(){
+    ['f-ind-wage','f-ind-rate','f-ind-declared','f-emp-wage','f-emp-rate','f-emp-declared',
+     'f-tr-wage','f-tr-rate','f-tr-declared','n-ind-wage','n-ind-rate','n-emp-wage','n-emp-rate',
+     'n-tr-wage','n-tr-rate'].forEach(id => { document.getElementById(id).value = ''; });
+    recalc();
+  }
+
+  function fillForm(data){
+    document.getElementById('f-ind-wage').value = data.final?.industrial?.wageBase || '';
+    document.getElementById('f-ind-rate').value = data.final?.industrial?.rate || '';
+    document.getElementById('f-ind-declared').value = data.final?.declaredIndustrial || '';
+    document.getElementById('f-emp-wage').value = data.final?.employment?.wageBase || '';
+    document.getElementById('f-emp-rate').value = data.final?.employment?.rate || '';
+    document.getElementById('f-emp-declared').value = data.final?.declaredEmployment || '';
+    document.getElementById('f-tr-wage').value = data.final?.training?.wageBase || '';
+    document.getElementById('f-tr-rate').value = data.final?.training?.rate || '';
+    document.getElementById('f-tr-declared').value = data.final?.declaredTraining || '';
+
+    document.getElementById('n-ind-wage').value = data.nextEstimate?.industrial?.wageBase || '';
+    document.getElementById('n-ind-rate').value = data.nextEstimate?.industrial?.rate || '';
+    document.getElementById('n-emp-wage').value = data.nextEstimate?.employment?.wageBase || '';
+    document.getElementById('n-emp-rate').value = data.nextEstimate?.employment?.rate || '';
+    document.getElementById('n-tr-wage').value = data.nextEstimate?.training?.wageBase || '';
+    document.getElementById('n-tr-rate').value = data.nextEstimate?.training?.rate || '';
+    recalc();
+  }
+
+  function populateYearSelect(){
+    const select = document.getElementById('yearSelect');
+    const nowY = new Date().getFullYear();
+    const existing = allYears.map(y => y.id);
+    const years = new Set(existing);
+    years.add(String(nowY));
+    const sorted = [...years].sort((a, b) => b.localeCompare(a));
+    select.innerHTML = sorted.map(y => `<option value="${y}">${y}년</option>`).join('');
+    if (currentYear && sorted.includes(currentYear)) select.value = currentYear;
+    else currentYear = select.value;
+  }
+
+  document.getElementById('yearSelect').addEventListener('change', (e) => {
+    currentYear = e.target.value;
+    loadYear(currentYear);
+  });
+
+  document.getElementById('newYearBtn').addEventListener('click', () => {
+    const y = prompt('추가할 연도를 입력하세요 (예: 2027)');
+    if (!y || !/^\d{4}$/.test(y)) return;
+    currentYear = y;
+    populateYearSelect();
+    document.getElementById('yearSelect').value = y;
+    document.getElementById('finalTitle').textContent = `${y}년도 확정보험료`;
+    document.getElementById('nextTitle').textContent = `${Number(y) + 1}년도 개산보험료 (예상)`;
+    clearForm();
+  });
+
+  document.getElementById('deleteYearBtn').addEventListener('click', async () => {
+    if (!currentYear) return;
+    if (!confirm(`${currentYear}년 기록을 삭제할까요?`)) return;
+    await yearsRef.doc(currentYear).delete();
+    await loadAllYears();
+  });
+
+  async function loadYear(year){
+    document.getElementById('finalTitle').textContent = `${year}년도 확정보험료`;
+    document.getElementById('nextTitle').textContent = `${Number(year) + 1}년도 개산보험료 (예상)`;
+    const found = allYears.find(y => y.id === year);
+    if (found) fillForm(found);
+    else clearForm();
+  }
+
+  document.getElementById('saveBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('saveStatus');
+    if (!currentYear) { statusEl.className = 'status-line err'; statusEl.textContent = '연도를 선택해주세요.'; return; }
+
+    const data = {
+      final: {
+        industrial: { wageBase: num('f-ind-wage'), rate: num('f-ind-rate') },
+        employment: { wageBase: num('f-emp-wage'), rate: num('f-emp-rate') },
+        training: { wageBase: num('f-tr-wage'), rate: num('f-tr-rate') },
+        declaredIndustrial: num('f-ind-declared'),
+        declaredEmployment: num('f-emp-declared'),
+        declaredTraining: num('f-tr-declared')
+      },
+      nextEstimate: {
+        industrial: { wageBase: num('n-ind-wage'), rate: num('n-ind-rate') },
+        employment: { wageBase: num('n-emp-wage'), rate: num('n-emp-rate') },
+        training: { wageBase: num('n-tr-wage'), rate: num('n-tr-rate') }
+      },
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    try {
+      await yearsRef.doc(currentYear).set(data);
+      statusEl.className = 'status-line ok';
+      statusEl.textContent = '저장되었습니다.';
+      await loadAllYears();
+    } catch (err) {
+      statusEl.className = 'status-line err';
+      statusEl.textContent = '저장 실패: ' + err.message;
+    }
+  });
+
+  function renderHistory(){
+    const tbody = document.getElementById('historyBody');
+    const sorted = [...allYears].sort((a, b) => b.id.localeCompare(a.id));
+    tbody.innerHTML = sorted.map(y => {
+      const finalTotal = (y.final?.industrial?.wageBase || 0) * (y.final?.industrial?.rate || 0) / 100
+        + (y.final?.employment?.wageBase || 0) * (y.final?.employment?.rate || 0) / 100
+        + (y.final?.training?.wageBase || 0) * (y.final?.training?.rate || 0) / 100;
+      const declared = (y.final?.declaredIndustrial || 0) + (y.final?.declaredEmployment || 0) + (y.final?.declaredTraining || 0);
+      const additional = finalTotal - declared;
+      const nextTotal = (y.nextEstimate?.industrial?.wageBase || 0) * (y.nextEstimate?.industrial?.rate || 0) / 100
+        + (y.nextEstimate?.employment?.wageBase || 0) * (y.nextEstimate?.employment?.rate || 0) / 100
+        + (y.nextEstimate?.training?.wageBase || 0) * (y.nextEstimate?.training?.rate || 0) / 100;
+      const nextLump = nextTotal * 0.97;
+      const finalPayment = additional + nextLump;
+      return `
+        <tr>
+          <td>${y.id}년</td>
+          <td class="amt">${fmtWon(finalTotal)}</td>
+          <td class="amt">${fmtWon(additional)}</td>
+          <td class="amt">${fmtWon(nextLump)}</td>
+          <td class="amt">${fmtWon(finalPayment)}</td>
+          <td><button data-load="${y.id}">불러오기</button></td>
+        </tr>
+      `;
+    }).join('');
+
+    tbody.querySelectorAll('[data-load]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentYear = btn.dataset.load;
+        document.getElementById('yearSelect').value = currentYear;
+        loadYear(currentYear);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    });
+  }
+
+  async function loadAllYears(){
+    const snap = await yearsRef.get();
+    allYears = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    populateYearSelect();
+    renderHistory();
+    loadYear(currentYear);
+  }
+
+  loadAllYears();
+</script>
+</body>
+</html>

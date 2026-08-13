@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>개인투자 및 가수금 현황 | NUCKS</title>
+<style>
+  :root{
+    --ink:#141414; --paper:#f7f6f3; --line:#d8d5cd; --muted:#8a8578;
+    --accent:#3f6b52; --warn:#a4453c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background:var(--paper);
+    font-family:'Pretendard', -apple-system, sans-serif; color:var(--ink); font-size:14px;
+  }
+  header{
+    padding:24px 32px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;
+    background:#fff; position:sticky; top:0; z-index:10;
+  }
+  header h1{ font-size:20px; margin:0 0 4px; }
+  header p{ font-size:12.5px; color:var(--muted); margin:0; }
+  .header-actions{ display:flex; gap:16px; align-items:center; }
+  .header-actions a{ font-size:13px; color:var(--muted); text-decoration:none; border-bottom:1px solid var(--muted); }
+
+  main{ max-width:1040px; margin:0 auto; padding:28px 32px 100px; }
+
+  .tabs{ display:flex; gap:8px; margin-bottom:24px; flex-wrap:wrap; }
+  .tab-btn{
+    padding:9px 18px; background:#fff; border:1px solid var(--line); border-radius:20px;
+    font-size:13px; cursor:pointer; color:var(--muted);
+  }
+  .tab-btn.active{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+
+  .section{ display:none; }
+  .section.active{ display:block; }
+
+  .summary-row{ display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:14px; margin-bottom:22px; }
+  .summary-card{ background:#fff; border:1px solid var(--line); border-radius:8px; padding:16px 18px; }
+  .summary-card .label{ font-size:11.5px; color:var(--muted); margin-bottom:4px; }
+  .summary-card .value{ font-size:19px; font-weight:700; font-family:'IBM Plex Mono', monospace; }
+
+  .panel{
+    background:#fff; border:1px solid var(--line); border-radius:8px;
+    padding:22px 24px; margin-bottom:22px;
+  }
+  .panel-title{ font-size:15px; font-weight:600; margin-bottom:14px; }
+
+  .form-row{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+  .field{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .field label{ font-size:11.5px; color:var(--muted); }
+  .field input, .field select{
+    width:160px; box-sizing:border-box; padding:9px 10px; border:1px solid var(--line);
+    border-radius:4px; font-family:inherit; font-size:13.5px; background:#fff;
+  }
+  .field.wide input{ width:240px; }
+  .btn-primary{
+    padding:10px 22px; background:var(--ink); color:var(--paper);
+    border:none; font-size:12.5px; cursor:pointer; border-radius:4px; white-space:nowrap;
+  }
+  .status-line{ font-size:12.5px; margin-top:10px; min-height:16px; }
+  .status-line.ok{ color:var(--accent); }
+  .status-line.err{ color:var(--warn); }
+
+  table{ width:100%; border-collapse:collapse; }
+  th{ text-align:left; font-size:11.5px; color:var(--muted); font-weight:500; padding:8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  td{ padding:8px; font-size:13px; border-bottom:1px solid var(--line); }
+  td.amt{ font-family:'IBM Plex Mono', monospace; text-align:right; white-space:nowrap; }
+  .table-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:8px; margin-bottom:8px; }
+  td button{ font-size:11px; background:none; border:1px solid var(--line); border-radius:4px; padding:4px 8px; cursor:pointer; color:var(--muted); margin-right:4px; }
+  td button:hover{ border-color:var(--ink); color:var(--ink); }
+  td button.danger{ color:var(--warn); border-color:#f0c9c4; }
+
+  @media (max-width:768px){
+    .field{ width:100% !important; }
+    .field input, .field select{ width:100% !important; }
+    main{ padding:20px 16px 80px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>개인투자 및 대표자 가수금 현황</h1>
+    <p>개인투자·가수금, 기보대출금 매칭출자, 기보금 사용내역을 관리합니다.</p>
+  </div>
+  <div class="header-actions">
+    <a href="admin.html">Admin</a>
+    <a href="index.html">Home</a>
+  </div>
+</header>
+
+<main>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="invest">개인투자·가수금</button>
+    <button class="tab-btn" data-tab="loan">기보대출금 매칭출자</button>
+    <button class="tab-btn" data-tab="usage">기보금 사용내역</button>
+  </div>
+
+  <!-- Section A: 개인투자 및 가수금 -->
+  <div class="section active" id="section-invest">
+    <div class="summary-row" id="investSummary"></div>
+
+    <div class="panel">
+      <div class="panel-title">내역 추가</div>
+      <div class="form-row">
+        <div class="field wide">
+          <label for="inv-investor">구분</label>
+          <input type="text" id="inv-investor" placeholder="예: 개인투자(윤상원), 대표자가수금">
+        </div>
+        <div class="field">
+          <label for="inv-date">유치월</label>
+          <input type="month" id="inv-date">
+        </div>
+        <div class="field">
+          <label for="inv-raise">유치금</label>
+          <input type="number" id="inv-raise" placeholder="0">
+        </div>
+        <div class="field">
+          <label for="inv-repay">회수금</label>
+          <input type="number" id="inv-repay" placeholder="0">
+        </div>
+        <div class="field wide">
+          <label for="inv-memo">비고 (선택)</label>
+          <input type="text" id="inv-memo">
+        </div>
+        <button class="btn-primary" id="saveInvestBtn">저장</button>
+      </div>
+      <div class="status-line" id="investStatus"></div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>구분</th><th>유치월</th><th>유치금</th><th>회수금</th><th>비고</th><th>관리</th></tr></thead>
+        <tbody id="investBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Section B: 기보대출금 매칭출자 -->
+  <div class="section" id="section-loan">
+    <div class="summary-row" id="loanSummary"></div>
+
+    <div class="panel">
+      <div class="panel-title">기준 정보 / 내역 추가</div>
+      <div class="form-row" style="margin-bottom:16px;">
+        <div class="field">
+          <label for="loan-total">총대출금(기보)</label>
+          <input type="number" id="loan-total" placeholder="예: 400000000">
+        </div>
+        <button class="btn-primary" id="saveLoanTotalBtn">기준금액 저장</button>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label for="loan-date">출자일</label>
+          <input type="date" id="loan-date">
+        </div>
+        <div class="field">
+          <label for="loan-amount">출자금</label>
+          <input type="number" id="loan-amount" placeholder="0">
+        </div>
+        <div class="field wide">
+          <label for="loan-content">출자내용</label>
+          <input type="text" id="loan-content" placeholder="예: 법인운영자금">
+        </div>
+        <button class="btn-primary" id="saveLoanBtn">저장</button>
+      </div>
+      <div class="status-line" id="loanStatus"></div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>출자일</th><th>출자금</th><th>출자내용</th><th>잔여금(누적차감)</th><th>관리</th></tr></thead>
+        <tbody id="loanBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Section C: 기보금 사용내역 -->
+  <div class="section" id="section-usage">
+    <div class="summary-row" id="usageSummary"></div>
+
+    <div class="panel">
+      <div class="panel-title">내역 추가</div>
+      <div class="form-row">
+        <div class="field wide">
+          <label for="use-item">항목</label>
+          <input type="text" id="use-item" placeholder="예: 인건비(정규,외주)">
+        </div>
+        <div class="field">
+          <label for="use-amount">금액</label>
+          <input type="number" id="use-amount" placeholder="0">
+        </div>
+        <div class="field wide">
+          <label for="use-evidence">증빙유형</label>
+          <input type="text" id="use-evidence" placeholder="예: 급여대장/이체내역">
+        </div>
+        <button class="btn-primary" id="saveUsageBtn">저장</button>
+      </div>
+      <div class="status-line" id="usageStatus"></div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>항목</th><th>금액</th><th>증빙유형</th><th>관리</th></tr></thead>
+        <tbody id="usageBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+  requireRole(['admin']);
+
+  const investRef = db.collection('investmentEntries');
+  const loanRef = db.collection('loanMatchingEntries');
+  const loanConfigRef = db.collection('loanMatchingConfig').doc('settings');
+  const usageRef = db.collection('loanUsageEntries');
+
+  function esc(s){ return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+  function fmtWon(n){ return Math.round(n || 0).toLocaleString() + '원'; }
+
+  // 탭 전환
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('section-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ---------- Section A: 개인투자·가수금 ----------
+  const SEED_INVEST = [{"investor": "개인투자(윤상원)", "raiseDate": "2024-01", "raiseAmount": 50000000, "repayAmount": 0, "memo": ""}, {"investor": "개인투자(김의석)", "raiseDate": "2024-01", "raiseAmount": 50000000, "repayAmount": 0, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2024-02", "raiseAmount": 50000000, "repayAmount": 50000000, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2024-04", "raiseAmount": 50000000, "repayAmount": 50000000, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2024-05", "raiseAmount": 50000000, "repayAmount": 50000000, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2024-12", "raiseAmount": 10000000, "repayAmount": 10000000, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2025-01", "raiseAmount": 30000000, "repayAmount": 30000000, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2025-02", "raiseAmount": 100000000, "repayAmount": 30000000, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2025-08", "raiseAmount": 20000000, "repayAmount": 90000000, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2025-07", "raiseAmount": 9000000, "repayAmount": 0, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2026-07", "raiseAmount": 20000000, "repayAmount": 0, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2026-08", "raiseAmount": 10000000, "repayAmount": 0, "memo": ""}];
+  let allInvest = [];
+
+  async function ensureInvestSeeded(){
+    const snap = await investRef.limit(1).get();
+    if (!snap.empty) return;
+    const batch = db.batch();
+    SEED_INVEST.forEach(e => batch.set(investRef.doc(), e));
+    await batch.commit();
+  }
+
+  async function loadInvest(){
+    const snap = await investRef.orderBy('raiseDate', 'asc').get();
+    allInvest = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderInvest();
+  }
+
+  function renderInvest(){
+    const byInvestor = {};
+    allInvest.forEach(e => {
+      const key = e.investor || '(미지정)';
+      if (!byInvestor[key]) byInvestor[key] = { raise: 0, repay: 0 };
+      byInvestor[key].raise += e.raiseAmount || 0;
+      byInvestor[key].repay += e.repayAmount || 0;
+    });
+
+    const summaryEl = document.getElementById('investSummary');
+    summaryEl.innerHTML = Object.entries(byInvestor).map(([name, v]) => `
+      <div class="summary-card">
+        <div class="label">${esc(name)} · 잔여채권</div>
+        <div class="value">${fmtWon(v.raise - v.repay)}</div>
+      </div>
+    `).join('');
+
+    const tbody = document.getElementById('investBody');
+    tbody.innerHTML = allInvest.slice().reverse().map(e => `
+      <tr>
+        <td>${esc(e.investor)}</td>
+        <td class="nowrap">${e.raiseDate || ''}</td>
+        <td class="amt">${fmtWon(e.raiseAmount)}</td>
+        <td class="amt">${fmtWon(e.repayAmount)}</td>
+        <td>${esc(e.memo)}</td>
+        <td><button class="danger" data-del-invest="${e.id}">삭제</button></td>
+      </tr>
+    `).join('');
+
+    tbody.querySelectorAll('[data-del-invest]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('삭제할까요?')) return;
+        await investRef.doc(btn.dataset.delInvest).delete();
+        await loadInvest();
+      });
+    });
+  }
+
+  document.getElementById('saveInvestBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('investStatus');
+    const investor = document.getElementById('inv-investor').value.trim();
+    const raiseDate = document.getElementById('inv-date').value;
+    const raiseAmount = Number(document.getElementById('inv-raise').value) || 0;
+    const repayAmount = Number(document.getElementById('inv-repay').value) || 0;
+    const memo = document.getElementById('inv-memo').value.trim();
+
+    if (!investor || !raiseDate) { statusEl.className = 'status-line err'; statusEl.textContent = '구분과 유치월은 필수입니다.'; return; }
+
+    try {
+      await investRef.add({ investor, raiseDate, raiseAmount, repayAmount, memo });
+      statusEl.className = 'status-line ok';
+      statusEl.textContent = '저장되었습니다.';
+      document.getElementById('inv-investor').value = '';
+      document.getElementById('inv-date').value = '';
+      document.getElementById('inv-raise').value = '';
+      document.getElementById('inv-repay').value = '';
+      document.getElementById('inv-memo').value = '';
+      await loadInvest();
+    } catch (err) {
+      statusEl.className = 'status-line err';
+      statusEl.textContent = '저장 실패: ' + err.message;
+    }
+  });
+
+  // ---------- Section B: 기보대출금 매칭출자 ----------
+  const SEED_LOAN = [{"date": "2025-02-25", "amount": 100000000, "content": "대표자가수금 일부지급(1억)"}, {"date": "2025-03-06", "amount": 150000000, "content": "대표자가수금 일부지급(1억2천) + 법인운영자금(3천)"}, {"date": "2025-06-02", "amount": 50000000, "content": "법인운영자금"}, {"date": "2025-07-23", "amount": 50000000, "content": "법인운영자금"}, {"date": "2025-08-04", "amount": 30000000, "content": "법인운영자금(공사대금선결제)"}, {"date": "2026-01-21", "amount": 20000000, "content": "법인운영자금(법인통장 잔고유지)"}];
+  let allLoan = [];
+  let loanTotal = 400000000;
+
+  async function ensureLoanSeeded(){
+    const cfgSnap = await loanConfigRef.get();
+    if (!cfgSnap.exists) {
+      await loanConfigRef.set({ totalLoan: 400000000 });
+    }
+    const snap = await loanRef.limit(1).get();
+    if (!snap.empty) return;
+    const batch = db.batch();
+    SEED_LOAN.forEach(e => batch.set(loanRef.doc(), e));
+    await batch.commit();
+  }
+
+  async function loadLoan(){
+    const cfgSnap = await loanConfigRef.get();
+    loanTotal = cfgSnap.exists ? (cfgSnap.data().totalLoan || 400000000) : 400000000;
+    document.getElementById('loan-total').value = loanTotal;
+
+    const snap = await loanRef.orderBy('date', 'asc').get();
+    allLoan = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderLoan();
+  }
+
+  function renderLoan(){
+    const totalMatched = allLoan.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const remaining = loanTotal - totalMatched;
+
+    document.getElementById('loanSummary').innerHTML = `
+      <div class="summary-card"><div class="label">총대출금</div><div class="value">${fmtWon(loanTotal)}</div></div>
+      <div class="summary-card"><div class="label">누적 출자금</div><div class="value">${fmtWon(totalMatched)}</div></div>
+      <div class="summary-card"><div class="label">잔여금</div><div class="value">${fmtWon(remaining)}</div></div>
+    `;
+
+    let running = loanTotal;
+    const rows = allLoan.map(e => {
+      running -= (e.amount || 0);
+      return { ...e, remainAfter: running };
+    });
+
+    const tbody = document.getElementById('loanBody');
+    tbody.innerHTML = rows.slice().reverse().map(e => `
+      <tr>
+        <td class="nowrap">${e.date || ''}</td>
+        <td class="amt">${fmtWon(e.amount)}</td>
+        <td>${esc(e.content)}</td>
+        <td class="amt">${fmtWon(e.remainAfter)}</td>
+        <td><button class="danger" data-del-loan="${e.id}">삭제</button></td>
+      </tr>
+    `).join('');
+
+    tbody.querySelectorAll('[data-del-loan]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('삭제할까요?')) return;
+        await loanRef.doc(btn.dataset.delLoan).delete();
+        await loadLoan();
+      });
+    });
+  }
+
+  document.getElementById('saveLoanTotalBtn').addEventListener('click', async () => {
+    const total = Number(document.getElementById('loan-total').value) || 0;
+    await loanConfigRef.set({ totalLoan: total });
+    await loadLoan();
+  });
+
+  document.getElementById('saveLoanBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('loanStatus');
+    const date = document.getElementById('loan-date').value;
+    const amount = Number(document.getElementById('loan-amount').value) || 0;
+    const content = document.getElementById('loan-content').value.trim();
+
+    if (!date || !amount) { statusEl.className = 'status-line err'; statusEl.textContent = '출자일과 출자금은 필수입니다.'; return; }
+
+    try {
+      await loanRef.add({ date, amount, content });
+      statusEl.className = 'status-line ok';
+      statusEl.textContent = '저장되었습니다.';
+      document.getElementById('loan-date').value = '';
+      document.getElementById('loan-amount').value = '';
+      document.getElementById('loan-content').value = '';
+      await loadLoan();
+    } catch (err) {
+      statusEl.className = 'status-line err';
+      statusEl.textContent = '저장 실패: ' + err.message;
+    }
+  });
+
+  // ---------- Section C: 기보금 사용내역 ----------
+  const SEED_USAGE = [{"item": "인건비(정규,외주)", "amount": 171000000, "evidence": "급여대장/이체내역"}, {"item": "시설운용(임차료)", "amount": 22000000, "evidence": "임차료/이체내역"}, {"item": "연구개발비 (전산프로그램 ERP/AI등)", "amount": 1000000, "evidence": "카드내역/이체내역"}, {"item": "시설투자(사옥수선,신용평가)", "amount": 2000000, "evidence": "수선,신용평가/계산서"}];
+  let allUsage = [];
+
+  async function ensureUsageSeeded(){
+    const snap = await usageRef.limit(1).get();
+    if (!snap.empty) return;
+    const batch = db.batch();
+    SEED_USAGE.forEach(e => batch.set(usageRef.doc(), e));
+    await batch.commit();
+  }
+
+  async function loadUsage(){
+    const snap = await usageRef.get();
+    allUsage = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderUsage();
+  }
+
+  function renderUsage(){
+    const total = allUsage.reduce((sum, e) => sum + (e.amount || 0), 0);
+    document.getElementById('usageSummary').innerHTML = `
+      <div class="summary-card"><div class="label">사용내역 합계</div><div class="value">${fmtWon(total)}</div></div>
+    `;
+
+    const tbody = document.getElementById('usageBody');
+    tbody.innerHTML = allUsage.map(e => `
+      <tr>
+        <td>${esc(e.item)}</td>
+        <td class="amt">${fmtWon(e.amount)}</td>
+        <td>${esc(e.evidence)}</td>
+        <td><button class="danger" data-del-usage="${e.id}">삭제</button></td>
+      </tr>
+    `).join('');
+
+    tbody.querySelectorAll('[data-del-usage]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('삭제할까요?')) return;
+        await usageRef.doc(btn.dataset.delUsage).delete();
+        await loadUsage();
+      });
+    });
+  }
+
+  document.getElementById('saveUsageBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('usageStatus');
+    const item = document.getElementById('use-item').value.trim();
+    const amount = Number(document.getElementById('use-amount').value) || 0;
+    const evidence = document.getElementById('use-evidence').value.trim();
+
+    if (!item || !amount) { statusEl.className = 'status-line err'; statusEl.textContent = '항목과 금액은 필수입니다.'; return; }
+
+    try {
+      await usageRef.add({ item, amount, evidence });
+      statusEl.className = 'status-line ok';
+      statusEl.textContent = '저장되었습니다.';
+      document.getElementById('use-item').value = '';
+      document.getElementById('use-amount').value = '';
+      document.getElementById('use-evidence').value = '';
+      await loadUsage();
+    } catch (err) {
+      statusEl.className = 'status-line err';
+      statusEl.textContent = '저장 실패: ' + err.message;
+    }
+  });
+
+  (async function init(){
+    await ensureInvestSeeded();
+    await ensureLoanSeeded();
+    await ensureUsageSeeded();
+    await loadInvest();
+    await loadLoan();
+    await loadUsage();
+  })();
+</script>
+</body>
+</html>

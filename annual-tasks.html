@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>연간 주요직무 준비현황 | NUCKS</title>
+<style>
+  :root{
+    --ink:#141414; --paper:#f7f6f3; --line:#d8d5cd; --muted:#8a8578;
+    --done-bg:#dfe9e2; --done-text:#3f6b52; --pending-bg:#fbe9d8; --pending-text:#7a5a2e;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background:var(--paper);
+    font-family:'Pretendard', -apple-system, sans-serif; color:var(--ink); font-size:14px;
+  }
+  header{
+    padding:24px 32px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;
+    background:#fff; position:sticky; top:0; z-index:10;
+  }
+  header h1{ font-size:20px; margin:0 0 4px; }
+  header p{ font-size:12.5px; color:var(--muted); margin:0; }
+  .header-actions{ display:flex; gap:16px; align-items:center; }
+  .header-actions a{ font-size:13px; color:var(--muted); text-decoration:none; border-bottom:1px solid var(--muted); }
+
+  main{ max-width:960px; margin:0 auto; padding:28px 32px 100px; }
+
+  .top-row{ display:flex; gap:16px; flex-wrap:wrap; margin-bottom:24px; align-items:center; }
+  .year-select{ display:flex; align-items:center; gap:8px; }
+  .year-select select{ padding:8px 12px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:14px; background:#fff; }
+  .owner-field{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); }
+  .owner-field input{ padding:7px 10px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; }
+
+  .progress-card{
+    background:#fff; border:1px solid var(--line); border-radius:8px; padding:18px 22px; margin-bottom:24px;
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;
+  }
+  .progress-card .pc-num{ font-size:26px; font-weight:700; font-family:'IBM Plex Mono', monospace; }
+  .progress-card .pc-label{ font-size:12px; color:var(--muted); }
+  .progress-bar-outer{ flex:1; min-width:160px; height:8px; background:var(--line); border-radius:4px; overflow:hidden; }
+  .progress-bar-inner{ height:100%; background:var(--done-text); transition:width .3s; }
+
+  .month-group{ margin-bottom:20px; }
+  .month-header{
+    font-size:14px; font-weight:600; padding:10px 4px; border-bottom:1.5px solid var(--ink);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .month-header .m-progress{ font-size:11.5px; color:var(--muted); font-weight:400; }
+
+  .task-row{
+    display:flex; gap:12px; align-items:flex-start; padding:12px 4px; border-bottom:1px solid var(--line);
+  }
+  .task-row.done{ opacity:.6; }
+  .task-check{ margin-top:3px; width:18px; height:18px; cursor:pointer; flex:none; }
+  .task-body{ flex:1; min-width:0; }
+  .task-name{ font-size:13.5px; font-weight:500; }
+  .task-row.done .task-name{ text-decoration:line-through; }
+  .task-prep{ font-size:12px; color:var(--muted); margin-top:2px; }
+  .task-memo{ font-size:11.5px; color:#a6473a; margin-top:2px; }
+  .task-actions{ display:flex; gap:6px; flex:none; }
+  .task-actions button{
+    font-size:11px; background:none; border:1px solid var(--line); border-radius:4px;
+    padding:4px 8px; cursor:pointer; color:var(--muted); white-space:nowrap;
+  }
+  .task-actions button:hover{ border-color:var(--ink); color:var(--ink); }
+  .task-actions button.danger{ color:#a4453c; border-color:#f0c9c4; }
+
+  .panel{
+    background:#fff; border:1px solid var(--line); border-radius:8px;
+    padding:22px 24px; margin-top:32px;
+  }
+  .panel-title{ font-size:15px; font-weight:600; margin-bottom:14px; }
+  .form-row{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+  .field{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .field label{ font-size:11.5px; color:var(--muted); }
+  .field input, .field select{
+    width:160px; box-sizing:border-box; padding:9px 10px; border:1px solid var(--line);
+    border-radius:4px; font-family:inherit; font-size:13.5px; background:#fff;
+  }
+  .field.wide input{ width:240px; }
+  .btn-primary{
+    padding:10px 22px; background:var(--ink); color:var(--paper);
+    border:none; font-size:12.5px; cursor:pointer; border-radius:4px; white-space:nowrap;
+  }
+  .status-line{ font-size:12.5px; margin-top:10px; min-height:16px; }
+  .status-line.ok{ color:var(--done-text); }
+  .status-line.err{ color:#a4453c; }
+
+  .edit-banner{
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+    background:var(--pending-bg); border:1px solid #e8c9a3; border-radius:6px;
+    padding:10px 14px; margin-bottom:16px; font-size:12.5px; color:var(--pending-text);
+  }
+  .edit-banner button{
+    background:none; border:1px solid #c79a5e; color:var(--pending-text); border-radius:4px;
+    padding:5px 12px; font-size:12px; cursor:pointer; white-space:nowrap;
+  }
+
+  @media (max-width:640px){
+    .field{ width:100% !important; }
+    .field input, .field select{ width:100% !important; }
+    main{ padding:20px 16px 80px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>연간 주요직무 준비현황</h1>
+    <p>매년 반복되는 정기 신고/납부 업무를 월별로 관리하고 완료 여부를 체크합니다.</p>
+  </div>
+  <div class="header-actions">
+    <a href="admin.html">Admin</a>
+    <a href="index.html">Home</a>
+  </div>
+</header>
+
+<main>
+
+  <div class="top-row">
+    <div class="year-select">
+      <label>기준연도</label>
+      <select id="yearSelect"></select>
+    </div>
+    <div class="owner-field">
+      담당직무자:
+      <input type="text" id="ownerInput" placeholder="예: 이연경 과장">
+      <button class="btn-primary" id="saveOwnerBtn" style="padding:7px 14px;">저장</button>
+    </div>
+  </div>
+
+  <div class="progress-card">
+    <div>
+      <div class="pc-num" id="progressNum">0 / 0</div>
+      <div class="pc-label">이번해 완료 현황</div>
+    </div>
+    <div class="progress-bar-outer"><div class="progress-bar-inner" id="progressBar" style="width:0%;"></div></div>
+  </div>
+
+  <div id="monthsContainer"></div>
+
+  <div class="panel">
+    <div class="panel-title" id="taskPanelTitle">업무 추가</div>
+    <div class="edit-banner" id="editBanner" style="display:none;">
+      <span id="editBannerText"></span>
+      <button type="button" id="cancelEditBtn">취소</button>
+    </div>
+    <div class="form-row">
+      <div class="field">
+        <label for="f-month">월</label>
+        <select id="f-month">
+          <option value="1">1월</option><option value="2">2월</option><option value="3">3월</option>
+          <option value="4">4월</option><option value="5">5월</option><option value="6">6월</option>
+          <option value="7">7월</option><option value="8">8월</option><option value="9">9월</option>
+          <option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
+        </select>
+      </div>
+      <div class="field wide">
+        <label for="f-task">직무명</label>
+        <input type="text" id="f-task" placeholder="예: 부가세 확정신고(1분기)">
+      </div>
+      <div class="field wide">
+        <label for="f-prep">준비사항</label>
+        <input type="text" id="f-prep" placeholder="예: 세무사">
+      </div>
+      <div class="field wide">
+        <label for="f-memo">비고 (선택)</label>
+        <input type="text" id="f-memo">
+      </div>
+      <button class="btn-primary" id="saveTaskBtn">저장</button>
+    </div>
+    <div class="status-line" id="taskStatus"></div>
+  </div>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+  requireRole(['admin']);
+
+  const tasksRef = db.collection('annualTasks');
+  const configRef = db.collection('annualTaskConfig').doc('settings');
+
+  const MONTH_NAMES = ['','1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
+  // 최초 접속 시 기존 27개 업무가 하나도 없으면 아래 시드 데이터로 자동 채워넣는다
+  // (엑셀 "연간주요직무준비현황" 시트에서 그대로 가져온 내용)
+  const SEED_TASKS = [{"order": 1, "month": 1, "task": "연말정산 서류취합", "prep": "직원개인연말정산자료 세무사 직접제출", "memo": ""}, {"order": 2, "month": 1, "task": "건설업등록면허세 납부", "prep": "", "memo": ""}, {"order": 3, "month": 1, "task": "설명절선물준비", "prep": "수신자리스트 확인 및 현대 담당자 order", "memo": ""}, {"order": 4, "month": 1, "task": "부가세 확정신고(전년도4분기)", "prep": "세무사", "memo": ""}, {"order": 5, "month": 2, "task": "공사실적신고(1차)", "prep": "전년도 연간 총 공사실적신고(건설공사통합실적관리시스템)", "memo": "26.2.2~19"}, {"order": 6, "month": 2, "task": "부가세환급금 입금 또는 부과납부", "prep": "환급 또는 부과", "memo": ""}, {"order": 7, "month": 2, "task": "법정의무교육신청", "prep": "한국기업교육진흥원/송희호과장", "memo": "일정확인중"}, {"order": 8, "month": 2, "task": "연말정산 환급금 또는 부과납부", "prep": "2월급여대장 적용", "memo": ""}, {"order": 9, "month": 3, "task": "고용,산재보험 확정 및 개산보험료신고 및 납부", "prep": "서면신고 또는 전산신고(근.복 토탈서비스)", "memo": ""}, {"order": 10, "month": 3, "task": "전년도 결산법인 주주총회 안내장", "prep": "주주총회 안내장 발송(윤상원 김의석 김경은)", "memo": ""}, {"order": 11, "month": 3, "task": "법인세 신고 및 납부", "prep": "세무사", "memo": ""}, {"order": 12, "month": 3, "task": "신용평가", "prep": "나라장터 입찰용", "memo": "나이스디앤비 등"}, {"order": 13, "month": 4, "task": "주식배당금 입금(전문건설협회)", "prep": "전문건설협회 일괄(계좌)지급", "memo": ""}, {"order": 14, "month": 4, "task": "공사실적신고(2차/재무제표)", "prep": "전년도 연간 재무제표 (건설공사통합실적관리시스템)", "memo": ""}, {"order": 15, "month": 4, "task": "세무사무소(정해석) 신고수수료 납부", "prep": "일반수수료", "memo": "2026년도~ 성실신고대상해제"}, {"order": 16, "month": 4, "task": "부가세 확정신고(1분기)", "prep": "세무사", "memo": ""}, {"order": 17, "month": 4, "task": "정기 신용평가", "prep": "전문건설공제조합", "memo": "2025.4.1~5.31"}, {"order": 18, "month": 4, "task": "주식배당 및 배당소득신고(넉스)", "prep": "세무사", "memo": "신고진행/실배당사후지급예정"}, {"order": 19, "month": 5, "task": "종합소득확정신고", "prep": "세무사", "memo": "대표님,소장님 개인"}, {"order": 20, "month": 5, "task": "연구개발활동조사", "prep": "koita", "memo": ""}, {"order": 21, "month": 5, "task": "법정의무교육비 환급진행", "prep": "모두의러닝/한국토픽교육원", "memo": "사업주90%환급"}, {"order": 22, "month": 6, "task": "공사실적/경영상태 확인서 발급", "prep": "전년도 연간 공사실적/경영상태확인(건설공사통합실적관리시스템)", "memo": "투찰업체 해당자료송부"}, {"order": 23, "month": 6, "task": "공인인증서갱신", "prep": "신한은행", "memo": "1년주기(110,000원)"}, {"order": 24, "month": 7, "task": "부가세 확정신고(2분기)", "prep": "세무사", "memo": "개인사업자 계산서발행분 제출"}, {"order": 25, "month": 7, "task": "여성기업확인서 신청", "prep": "공공구매 종합정보망(신청), 주식등변동사항확인서(세무사)", "memo": "3년주기"}, {"order": 26, "month": 8, "task": "시공능력평가 공시", "prep": "전문건설협회(7월말 공시, 8월초 기재)", "memo": "수첩기재(방문)"}, {"order": 27, "month": 8, "task": "법인세 중간예납기간", "prep": "세무사", "memo": "전년도 vs 금년도(상반기) 매출비교"}];
+
+  let allTasks = [];
+  let currentYear = new Date().getFullYear();
+  let editingId = null;
+
+  function esc(s){ return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+
+  function populateYearSelect(){
+    const select = document.getElementById('yearSelect');
+    const nowY = new Date().getFullYear();
+    const years = [];
+    for (let y = nowY - 1; y <= nowY + 2; y++) years.push(y);
+    select.innerHTML = years.map(y => `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y}년</option>`).join('');
+    select.addEventListener('change', () => { currentYear = Number(select.value); renderAll(); });
+  }
+
+  async function ensureSeeded(){
+    const snap = await tasksRef.limit(1).get();
+    if (!snap.empty) return;
+    const batch = db.batch();
+    SEED_TASKS.forEach(t => {
+      const ref = tasksRef.doc();
+      batch.set(ref, { order: t.order, month: t.month, task: t.task, prep: t.prep, memo: t.memo, completedYears: {} });
+    });
+    await batch.commit();
+  }
+
+  async function loadConfig(){
+    const snap = await configRef.get();
+    const owner = snap.exists ? (snap.data().owner || '') : '';
+    document.getElementById('ownerInput').value = owner;
+  }
+  document.getElementById('saveOwnerBtn').addEventListener('click', async () => {
+    const owner = document.getElementById('ownerInput').value.trim();
+    await configRef.set({ owner }, { merge: true });
+  });
+
+  async function loadTasks(){
+    const snap = await tasksRef.orderBy('order', 'asc').get();
+    allTasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  }
+
+  function renderAll(){
+    renderProgress();
+    renderMonths();
+  }
+
+  function renderProgress(){
+    const total = allTasks.length;
+    const done = allTasks.filter(t => t.completedYears && t.completedYears[currentYear]).length;
+    document.getElementById('progressNum').textContent = `${done} / ${total}`;
+    document.getElementById('progressBar').style.width = total ? `${Math.round(done / total * 100)}%` : '0%';
+  }
+
+  function renderMonths(){
+    const container = document.getElementById('monthsContainer');
+    container.innerHTML = '';
+
+    for (let m = 1; m <= 12; m++) {
+      const monthTasks = allTasks.filter(t => t.month === m);
+      if (monthTasks.length === 0) continue;
+
+      const doneCount = monthTasks.filter(t => t.completedYears && t.completedYears[currentYear]).length;
+
+      const group = document.createElement('div');
+      group.className = 'month-group';
+      group.innerHTML = `
+        <div class="month-header">
+          <span>${MONTH_NAMES[m]}</span>
+          <span class="m-progress">${doneCount} / ${monthTasks.length} 완료</span>
+        </div>
+        <div class="month-body"></div>
+      `;
+      const body = group.querySelector('.month-body');
+
+      monthTasks.forEach(t => {
+        const isDone = !!(t.completedYears && t.completedYears[currentYear]);
+        const row = document.createElement('div');
+        row.className = 'task-row' + (isDone ? ' done' : '');
+        row.innerHTML = `
+          <input type="checkbox" class="task-check" ${isDone ? 'checked' : ''} data-toggle="${t.id}">
+          <div class="task-body">
+            <div class="task-name">${esc(t.task)}</div>
+            ${t.prep ? `<div class="task-prep">${esc(t.prep)}</div>` : ''}
+            ${t.memo ? `<div class="task-memo">${esc(t.memo)}</div>` : ''}
+          </div>
+          <div class="task-actions">
+            <button data-edit="${t.id}">수정</button>
+            <button class="danger" data-delete="${t.id}">삭제</button>
+          </div>
+        `;
+        body.appendChild(row);
+      });
+
+      container.appendChild(group);
+    }
+
+    container.querySelectorAll('[data-toggle]').forEach(cb => {
+      cb.addEventListener('click', async () => {
+        const t = allTasks.find(x => x.id === cb.dataset.toggle);
+        const completedYears = { ...(t.completedYears || {}) };
+        completedYears[currentYear] = cb.checked;
+        await tasksRef.doc(t.id).update({ completedYears });
+        t.completedYears = completedYears;
+        renderAll();
+      });
+    });
+    container.querySelectorAll('[data-edit]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const t = allTasks.find(x => x.id === btn.dataset.edit);
+        if (t) startEditTask(t);
+      });
+    });
+    container.querySelectorAll('[data-delete]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('이 업무를 삭제할까요?')) return;
+        await tasksRef.doc(btn.dataset.delete).delete();
+        await loadTasks();
+      });
+    });
+  }
+
+  function startEditTask(t){
+    editingId = t.id;
+    document.getElementById('f-month').value = t.month;
+    document.getElementById('f-task').value = t.task || '';
+    document.getElementById('f-prep').value = t.prep || '';
+    document.getElementById('f-memo').value = t.memo || '';
+    document.getElementById('taskPanelTitle').textContent = '업무 수정';
+    document.getElementById('editBannerText').textContent = `"${t.task}" 업무를 수정 중입니다.`;
+    document.getElementById('editBanner').style.display = 'flex';
+    document.getElementById('saveTaskBtn').textContent = '수정 저장';
+    document.querySelector('.panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function cancelEditTask(){
+    editingId = null;
+    document.getElementById('f-task').value = '';
+    document.getElementById('f-prep').value = '';
+    document.getElementById('f-memo').value = '';
+    document.getElementById('taskPanelTitle').textContent = '업무 추가';
+    document.getElementById('editBanner').style.display = 'none';
+    document.getElementById('saveTaskBtn').textContent = '저장';
+    document.getElementById('taskStatus').textContent = '';
+  }
+  document.getElementById('cancelEditBtn').addEventListener('click', cancelEditTask);
+
+  document.getElementById('saveTaskBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('taskStatus');
+    const month = Number(document.getElementById('f-month').value);
+    const task = document.getElementById('f-task').value.trim();
+    const prep = document.getElementById('f-prep').value.trim();
+    const memo = document.getElementById('f-memo').value.trim();
+
+    if (!task) { statusEl.className = 'status-line err'; statusEl.textContent = '직무명을 입력해주세요.'; return; }
+
+    try {
+      if (editingId) {
+        await tasksRef.doc(editingId).update({ month, task, prep, memo });
+        statusEl.className = 'status-line ok';
+        statusEl.textContent = '수정되었습니다.';
+        cancelEditTask();
+      } else {
+        const maxOrder = allTasks.reduce((max, t) => Math.max(max, t.order || 0), 0);
+        await tasksRef.add({ order: maxOrder + 1, month, task, prep, memo, completedYears: {} });
+        statusEl.className = 'status-line ok';
+        statusEl.textContent = '추가되었습니다.';
+        document.getElementById('f-task').value = '';
+        document.getElementById('f-prep').value = '';
+        document.getElementById('f-memo').value = '';
+      }
+      await loadTasks();
+    } catch (err) {
+      statusEl.className = 'status-line err';
+      statusEl.textContent = '저장 실패: ' + err.message;
+    }
+  });
+
+  (async function init(){
+    populateYearSelect();
+    await loadConfig();
+    await ensureSeeded();
+    await loadTasks();
+  })();
+</script>
+</body>
+</html>
