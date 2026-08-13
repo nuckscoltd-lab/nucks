@@ -110,7 +110,7 @@
   <!-- 확정보험료 (해당연도 실제) -->
   <div class="panel">
     <div class="panel-title" id="finalTitle">확정보험료</div>
-    <div class="panel-sub">해당 연도 실제 보수총액 기준으로 계산하고, 전년도에 미리 낸 개산보험료(신고액=납부액)와 비교합니다.</div>
+    <div class="panel-sub">해당 연도 실제 보수총액 기준으로 계산하고, 전년도에 미리 낸 개산보험료(신고액=납부액)와 비교합니다. "전년도 개산보험료"는 전년도에 입력한 "다음해 개산보험료" 계산값으로 자동 채워지며, 필요하면 직접 수정할 수 있습니다.</div>
     <div class="table-wrap">
     <table class="calc-table">
       <thead>
@@ -288,6 +288,21 @@
   function num(id){ return Number(document.getElementById(id).value) || 0; }
   function setText(id, val){ document.getElementById(id).textContent = fmtWon(val); }
 
+  // 전년도 "다음해 개산보험료(예상)" 계산값을 이번 연도의 "전년도 개산보험료(신고·납부액)"로 자동 채워준다 (이월잔액처럼)
+  function computedPremium(wageObj){
+    if (!wageObj) return 0;
+    return (wageObj.wageBase || 0) * (wageObj.rate || 0) / 100;
+  }
+  function getAutoDeclared(year){
+    const prev = allYears.find(y => y.id === String(Number(year) - 1));
+    if (!prev) return { industrial: 0, employment: 0, training: 0 };
+    return {
+      industrial: computedPremium(prev.nextEstimate?.industrial),
+      employment: computedPremium(prev.nextEstimate?.employment),
+      training: computedPremium(prev.nextEstimate?.training)
+    };
+  }
+
   function recalc(){
     // 확정보험료
     const fIndWage = num('f-ind-wage'), fIndRate = num('f-ind-rate') / 100;
@@ -350,23 +365,31 @@
     document.getElementById(id).addEventListener('input', recalc);
   });
 
-  function clearForm(){
-    ['f-ind-wage','f-ind-rate','f-ind-declared','f-emp-wage','f-emp-rate','f-emp-declared',
-     'f-tr-wage','f-tr-rate','f-tr-declared','n-ind-wage','n-ind-rate','n-emp-wage','n-emp-rate',
+  function clearForm(year){
+    ['f-ind-wage','f-ind-rate','f-emp-wage','f-emp-rate',
+     'f-tr-wage','f-tr-rate','n-ind-wage','n-ind-rate','n-emp-wage','n-emp-rate',
      'n-tr-wage','n-tr-rate'].forEach(id => { document.getElementById(id).value = ''; });
+
+    const auto = year ? getAutoDeclared(year) : { industrial: 0, employment: 0, training: 0 };
+    document.getElementById('f-ind-declared').value = auto.industrial || '';
+    document.getElementById('f-emp-declared').value = auto.employment || '';
+    document.getElementById('f-tr-declared').value = auto.training || '';
     recalc();
   }
 
-  function fillForm(data){
+  function fillForm(data, year){
     document.getElementById('f-ind-wage').value = data.final?.industrial?.wageBase || '';
     document.getElementById('f-ind-rate').value = data.final?.industrial?.rate || '';
-    document.getElementById('f-ind-declared').value = data.final?.declaredIndustrial || '';
     document.getElementById('f-emp-wage').value = data.final?.employment?.wageBase || '';
     document.getElementById('f-emp-rate').value = data.final?.employment?.rate || '';
-    document.getElementById('f-emp-declared').value = data.final?.declaredEmployment || '';
     document.getElementById('f-tr-wage').value = data.final?.training?.wageBase || '';
     document.getElementById('f-tr-rate').value = data.final?.training?.rate || '';
-    document.getElementById('f-tr-declared').value = data.final?.declaredTraining || '';
+
+    // 전년도 개산보험료: 이 연도에 직접 저장해둔 값이 있으면 그 값을, 없으면(0) 전년도 계산값으로 자동 채움
+    const auto = year ? getAutoDeclared(year) : { industrial: 0, employment: 0, training: 0 };
+    document.getElementById('f-ind-declared').value = data.final?.declaredIndustrial || auto.industrial || '';
+    document.getElementById('f-emp-declared').value = data.final?.declaredEmployment || auto.employment || '';
+    document.getElementById('f-tr-declared').value = data.final?.declaredTraining || auto.training || '';
 
     document.getElementById('n-ind-wage').value = data.nextEstimate?.industrial?.wageBase || '';
     document.getElementById('n-ind-rate').value = data.nextEstimate?.industrial?.rate || '';
@@ -402,7 +425,7 @@
     document.getElementById('yearSelect').value = y;
     document.getElementById('finalTitle').textContent = `${y}년도 확정보험료`;
     document.getElementById('nextTitle').textContent = `${Number(y) + 1}년도 개산보험료 (예상)`;
-    clearForm();
+    clearForm(y);
   });
 
   document.getElementById('deleteYearBtn').addEventListener('click', async () => {
@@ -416,8 +439,8 @@
     document.getElementById('finalTitle').textContent = `${year}년도 확정보험료`;
     document.getElementById('nextTitle').textContent = `${Number(year) + 1}년도 개산보험료 (예상)`;
     const found = allYears.find(y => y.id === year);
-    if (found) fillForm(found);
-    else clearForm();
+    if (found) fillForm(found, year);
+    else clearForm(year);
   }
 
   document.getElementById('saveBtn').addEventListener('click', async () => {
