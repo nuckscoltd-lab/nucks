@@ -26,6 +26,9 @@
 
   main{ max-width:1180px; margin:0 auto; padding:28px 32px 100px; }
 
+  .forecast-control{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .forecast-control label{ font-size:12.5px; color:var(--muted); }
+  .forecast-control input[type=date]{ padding:8px 10px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff; }
   .summary-row{ display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:28px; }
   .summary-card{
     background:#fff; border:1px solid var(--line); border-radius:8px; padding:20px 22px;
@@ -126,6 +129,13 @@
 
 <main>
 
+  <div class="forecast-control">
+    <label for="forecastDate">예상잔고 기준일</label>
+    <input type="date" id="forecastDate">
+    <button type="button" class="btn-ghost" id="setMonthEndBtn">이번달 말일</button>
+    <button type="button" class="btn-ghost" id="setNextMonthStartBtn">다음달 5일</button>
+  </div>
+
   <div class="summary-row">
     <div class="summary-card actual">
       <div class="label">현재 잔액 (확정 기준)</div>
@@ -133,14 +143,14 @@
       <div class="sub" id="actualBalanceSub"></div>
     </div>
     <div class="summary-card forecast">
-      <div class="label">예정 반영 시 예상 잔액</div>
+      <div class="label" id="forecastLabel">예상잔고</div>
       <div class="value" id="forecastBalance">-</div>
-      <div class="sub">확정 잔액 + 미확정(예정) 입출금 반영</div>
+      <div class="sub" id="forecastBalanceSub">확정 잔액 + 기준일까지의 예정 입출금 반영</div>
     </div>
     <div class="summary-card">
-      <div class="label">예정 항목</div>
+      <div class="label">반영된 예정 항목</div>
       <div class="value" id="pendingCount">-</div>
-      <div class="sub">아직 확정되지 않은 건수</div>
+      <div class="sub" id="pendingCountSub">기준일까지, 아직 확정되지 않은 건수</div>
     </div>
   </div>
 
@@ -328,19 +338,47 @@
 
   function renderSummary(){
     const confirmedAfterStart = allEntries.filter(e => e.status === '확정' && (!config.startDate || e.date >= config.startDate));
-    const pendingAfterStart = allEntries.filter(e => e.status === '예정' && (!config.startDate || e.date >= config.startDate));
-
     const confirmedNet = confirmedAfterStart.reduce((sum, e) => sum + (e.type === '입금' ? e.amount : -e.amount), 0);
-    const pendingNet = pendingAfterStart.reduce((sum, e) => sum + (e.type === '입금' ? e.amount : -e.amount), 0);
-
     const actual = config.startBalance + confirmedNet;
+
+    // 기준일까지 발생 예정인 "예정" 항목을 전부 반영 (월 경계에 상관없이 자유롭게 지정 가능)
+    const forecastDateInput = document.getElementById('forecastDate');
+    if (!forecastDateInput.value) {
+      const d = new Date();
+      forecastDateInput.value = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10); // 이번달 말일 기본값
+    }
+    const forecastDate = forecastDateInput.value;
+
+    const pendingUntilDate = allEntries.filter(e =>
+      e.status === '예정' &&
+      (!config.startDate || e.date >= config.startDate) &&
+      e.date && e.date <= forecastDate
+    );
+    const pendingNet = pendingUntilDate.reduce((sum, e) => sum + (e.type === '입금' ? e.amount : -e.amount), 0);
     const forecast = actual + pendingNet;
 
     document.getElementById('actualBalance').textContent = fmtWon(actual);
     document.getElementById('actualBalanceSub').textContent = config.startDate ? `${config.startDate} 기준 ${fmtWon(config.startBalance)} + 확정 내역` : '이월잔액을 먼저 설정해주세요';
+
+    document.getElementById('forecastLabel').textContent = `예상잔고 (${forecastDate} 기준)`;
     document.getElementById('forecastBalance').textContent = fmtWon(forecast);
-    document.getElementById('pendingCount').textContent = pendingAfterStart.length + '건';
+    document.getElementById('forecastBalanceSub').textContent = `확정 잔액 + ${forecastDate}까지의 예정 입출금 ${pendingUntilDate.length}건 반영`;
+
+    document.getElementById('pendingCount').textContent = pendingUntilDate.length + '건';
+    document.getElementById('pendingCountSub').textContent = `${forecastDate}까지, 아직 확정되지 않은 건수`;
   }
+
+  document.getElementById('forecastDate').addEventListener('change', renderSummary);
+  document.getElementById('setMonthEndBtn').addEventListener('click', () => {
+    const d = new Date();
+    document.getElementById('forecastDate').value = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
+    renderSummary();
+  });
+  document.getElementById('setNextMonthStartBtn').addEventListener('click', () => {
+    const d = new Date();
+    document.getElementById('forecastDate').value = new Date(d.getFullYear(), d.getMonth() + 1, 5).toISOString().slice(0, 10);
+    renderSummary();
+  });
 
   function renderTable(){
     const table = document.getElementById('entryTable');
