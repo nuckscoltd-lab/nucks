@@ -170,7 +170,7 @@
         </div>
         <div class="field wide">
           <label for="cfg-startBalance">기준일 잔액</label>
-          <input type="number" id="cfg-startBalance" placeholder="예: 32662799">
+          <input type="text" inputmode="numeric" id="cfg-startBalance" placeholder="예: 32,662,799">
         </div>
         <button class="btn-primary" id="saveConfigBtn">저장</button>
       </div>
@@ -207,7 +207,7 @@
       </div>
       <div class="field">
         <label for="f-amount">금액</label>
-        <input type="number" id="f-amount" placeholder="0">
+        <input type="text" inputmode="numeric" id="f-amount" placeholder="0">
       </div>
       <div class="field wide">
         <label for="f-content">내용</label>
@@ -240,13 +240,14 @@
 
   <!-- 내역 -->
   <div class="filter-bar">
-    <select id="monthFilter"><option value="전체">전체 월</option></select>
+    <select id="monthFilter"><option value="최근3개월">최근 3개월</option><option value="전체">전체 월</option></select>
     <select id="statusFilter">
       <option value="전체">전체 상태</option>
       <option value="확정">확정만</option>
       <option value="예정">예정만</option>
     </select>
   </div>
+  <div class="import-help" style="margin-bottom:10px;">기본적으로 최근 3개월 내역만 표시됩니다. 이전 내역은 위 필터에서 "전체 월" 또는 원하는 월을 선택하면 볼 수 있어요. (잔액 계산에는 전체 데이터가 그대로 반영됩니다.)</div>
   <div class="table-wrap">
     <table id="entryTable" style="display:none;">
       <thead>
@@ -277,17 +278,38 @@
   let config = { startDate: '', startBalance: 0 };
   let allEntries = [];
   let editingId = null;
-  let activeMonth = '전체';
+  let activeMonth = '최근3개월';
   let activeStatus = '전체';
 
   function esc(s){ return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
   function fmtWon(n){ return (n || 0).toLocaleString() + '원'; }
 
+  // ---------- 금액 입력란 천단위 콤마 표시 ----------
+  // type=text 입력란에 숫자만 남기고 3자리마다 콤마를 넣어 표시하고,
+  // 저장 시에는 parseMoneyInput()으로 콤마를 제거한 순수 숫자를 사용한다.
+  function attachMoneyInputFormatter(el){
+    el.addEventListener('input', () => {
+      const cursorFromEnd = el.value.length - el.selectionStart; // 콤마 삽입 후에도 커서 위치 유지
+      const digits = el.value.replace(/[^\d]/g, '');
+      el.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
+      const pos = Math.max(0, el.value.length - cursorFromEnd);
+      el.setSelectionRange(pos, pos);
+    });
+  }
+  function setMoneyInputValue(el, amount){
+    el.value = amount ? Number(amount).toLocaleString('ko-KR') : '';
+  }
+  function parseMoneyInput(el){
+    return Number(String(el.value).replace(/[^\d]/g, '')) || 0;
+  }
+  attachMoneyInputFormatter(document.getElementById('cfg-startBalance'));
+  attachMoneyInputFormatter(document.getElementById('f-amount'));
+
   async function loadConfig(){
     const snap = await configRef.get();
     if (snap.exists) config = { startDate: snap.data().startDate || '', startBalance: snap.data().startBalance || 0 };
     document.getElementById('cfg-startDate').value = config.startDate;
-    document.getElementById('cfg-startBalance').value = config.startBalance;
+    setMoneyInputValue(document.getElementById('cfg-startBalance'), config.startBalance);
   }
 
   document.getElementById('toggleConfigBtn').addEventListener('click', () => {
@@ -299,7 +321,7 @@
 
   document.getElementById('saveConfigBtn').addEventListener('click', async () => {
     const startDate = document.getElementById('cfg-startDate').value;
-    const startBalance = Number(document.getElementById('cfg-startBalance').value) || 0;
+    const startBalance = parseMoneyInput(document.getElementById('cfg-startBalance'));
     const statusEl = document.getElementById('configStatus');
     if (!startDate) { statusEl.className = 'status-line err'; statusEl.textContent = '기준일을 입력해주세요.'; return; }
     try {
@@ -333,9 +355,9 @@
     const current = select.value;
     const months = [...new Set(allEntries.map(e => (e.date || '').slice(0, 7)).filter(Boolean))]
       .sort((a, b) => b.localeCompare(a));
-    select.innerHTML = '<option value="전체">전체 월</option>' +
+    select.innerHTML = '<option value="최근3개월">최근 3개월</option><option value="전체">전체 월</option>' +
       months.map(m => `<option value="${m}">${m.replace('-', '년 ')}월</option>`).join('');
-    if (months.includes(current)) select.value = current;
+    if (current === '최근3개월' || current === '전체' || months.includes(current)) select.value = current;
   }
 
   document.getElementById('monthFilter').addEventListener('change', (e) => { activeMonth = e.target.value; renderAll(); });
@@ -347,7 +369,8 @@
   }
 
   function renderSummary(){
-    const confirmedAfterStart = allEntries.filter(e => e.status === '확정' && (!config.startDate || e.date >= config.startDate));
+    // 기준일 잔액에는 기준일 당일 거래까지 이미 반영돼 있으므로, 집계는 기준일 "이후"(당일 제외)부터
+    const confirmedAfterStart = allEntries.filter(e => e.status === '확정' && (!config.startDate || e.date > config.startDate));
     const confirmedNet = confirmedAfterStart.reduce((sum, e) => sum + (e.type === '입금' ? e.amount : -e.amount), 0);
     const actual = config.startBalance + confirmedNet;
 
@@ -361,7 +384,7 @@
 
     const pendingUntilDate = allEntries.filter(e =>
       e.status === '예정' &&
-      (!config.startDate || e.date >= config.startDate) &&
+      (!config.startDate || e.date > config.startDate) &&
       e.date && e.date <= forecastDate
     );
     const pendingNet = pendingUntilDate.reduce((sum, e) => sum + (e.type === '입금' ? e.amount : -e.amount), 0);
@@ -396,7 +419,17 @@
     const emptyMsg = document.getElementById('emptyMsg');
 
     let rows = allEntries;
-    if (activeMonth !== '전체') rows = rows.filter(e => (e.date || '').slice(0, 7) === activeMonth);
+    if (activeMonth === '최근3개월') {
+      // 잔액 계산(allEntries)에는 영향 없이, 화면에 그리는 행 수만 최근 3개월로 줄여서
+      // 클릭할 때마다 전체 목록을 다시 렌더링하는 비용을 낮춘다.
+      const latestDate = allEntries.length ? allEntries[allEntries.length - 1].date : new Date().toISOString().slice(0, 10);
+      const d = new Date(latestDate);
+      d.setMonth(d.getMonth() - 3);
+      const threshold = d.toISOString().slice(0, 10);
+      rows = rows.filter(e => (e.date || '') >= threshold);
+    } else if (activeMonth !== '전체') {
+      rows = rows.filter(e => (e.date || '').slice(0, 7) === activeMonth);
+    }
     if (activeStatus !== '전체') rows = rows.filter(e => e.status === activeStatus);
 
     if (rows.length === 0) {
@@ -412,7 +445,7 @@
     let running = config.startBalance;
     const balanceById = {};
     allEntries.forEach(e => {
-      if (config.startDate && e.date < config.startDate) return;
+      if (config.startDate && e.date <= config.startDate) return;
       if (e.status !== '확정') return;
       running += (e.type === '입금' ? e.amount : -e.amount);
       balanceById[e.id] = running;
@@ -463,7 +496,7 @@
     document.getElementById('f-date').value = entry.date || '';
     document.getElementById('f-type').value = entry.type || '입금';
     document.getElementById('f-status').value = entry.status || '확정';
-    document.getElementById('f-amount').value = entry.amount || 0;
+    setMoneyInputValue(document.getElementById('f-amount'), entry.amount);
     document.getElementById('f-content').value = entry.content || '';
     document.getElementById('f-memo').value = entry.memo || '';
 
@@ -496,7 +529,7 @@
     const date = document.getElementById('f-date').value;
     const type = document.getElementById('f-type').value;
     const status = document.getElementById('f-status').value;
-    const amount = Number(document.getElementById('f-amount').value);
+    const amount = parseMoneyInput(document.getElementById('f-amount'));
     const content = document.getElementById('f-content').value.trim();
     const memo = document.getElementById('f-memo').value.trim();
 
