@@ -145,6 +145,16 @@ if ('serviceWorker' in navigator) {
   }
   .section-title:first-of-type{ margin-top:56px; }
   #certFieldsArea .upload-row{ margin-top:6px; }
+  .edit-banner{
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+    background:#fbe9d8; border:1px solid #e8c9a3; border-radius:6px;
+    padding:10px 14px; margin-bottom:16px; font-size:12.5px; color:#7a5a2e;
+  }
+  .edit-banner button{
+    background:none; border:1px solid #c79a5e; color:#7a5a2e; border-radius:4px;
+    padding:5px 12px; font-size:12px; cursor:pointer; white-space:nowrap;
+  }
+  .edit-banner button:hover{ background:#f3dcbb; }
   #certWritePanel .field{ width:210px; }
   #certWritePanel .field input,
   #certWritePanel .field select{
@@ -270,7 +280,11 @@ if ('serviceWorker' in navigator) {
   <!-- 증명서 발급 -->
   <div class="section-title">증명서 발급</div>
   <div class="upload-panel show" id="certWritePanel">
-    <div class="panel-title">문서 작성</div>
+    <div class="panel-title" id="certPanelTitle">문서 작성</div>
+    <div class="edit-banner" id="certEditBanner" style="display:none;">
+      <span id="certEditBannerText"></span>
+      <button type="button" id="certCancelEditBtn">취소</button>
+    </div>
     <div class="upload-row">
       <div class="field">
         <label for="cert-type">문서 종류</label>
@@ -285,6 +299,10 @@ if ('serviceWorker' in navigator) {
       <div class="field">
         <label for="cert-employee">사원 선택</label>
         <select id="cert-employee"></select>
+      </div>
+      <div class="field" id="cert-issueDate-field" style="display:none;">
+        <label for="cert-issueDate">발급일</label>
+        <input type="date" id="cert-issueDate">
       </div>
     </div>
 
@@ -923,6 +941,8 @@ if ('serviceWorker' in navigator) {
     if (area) area.innerHTML = '';
   });
 
+  let editingDocId = null;
+
   document.getElementById('certGenerateBtn').addEventListener('click', async () => {
     const type = document.getElementById('cert-type').value;
     const uid = document.getElementById('cert-employee').value;
@@ -943,38 +963,119 @@ if ('serviceWorker' in navigator) {
     }
 
     btn.disabled = true;
-    btn.textContent = '처리 중...';
     statusEl.textContent = '';
 
     try {
-      const docNumber = await getNextDocNumber(type);
+      if (editingDocId) {
+        // 수정 모드: 문서번호/문서종류/발급일(선택입력)은 유지하고 내용만 갱신
+        btn.textContent = '수정 저장 중...';
+        const issueDate = document.getElementById('cert-issueDate').value;
 
-      const docData = {
-        type,
-        docNumber,
-        uid,
-        employeeName: emp?.displayName || emp?.email || '',
-        department: emp?.department || '',
-        position: (emp?.positionTags || []).filter(t => t !== '근무중').join(', ') || '',
-        fields: values,
-        issueDate: new Date().toISOString().slice(0, 10),
-        createdByEmail: auth.currentUser.email,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      };
+        await db.collection('issuedDocuments').doc(editingDocId).update({
+          uid,
+          employeeName: emp?.displayName || emp?.email || '',
+          department: emp?.department || '',
+          position: (emp?.positionTags || []).filter(t => t !== '근무중').join(', ') || '',
+          fields: values,
+          issueDate
+        });
 
-      const ref = await db.collection('issuedDocuments').add(docData);
-      printCertificate({ id: ref.id, ...docData });
-      statusEl.style.color = '#3f6b52';
-      statusEl.textContent = '발급 완료. 인쇄 창이 열립니다.';
-      await loadCertHistory();
+        statusEl.style.color = '#3f6b52';
+        statusEl.textContent = '수정되었습니다. (문서번호는 그대로 유지됩니다)';
+        const savedId = editingDocId;
+        cancelEditDoc();
+        await loadCertHistory();
+
+        const updatedDoc = allCertDocs.find(d => d.id === savedId);
+        if (updatedDoc) printCertificate(updatedDoc);
+      } else {
+        btn.textContent = '처리 중...';
+        const docNumber = await getNextDocNumber(type);
+
+        const docData = {
+          type,
+          docNumber,
+          uid,
+          employeeName: emp?.displayName || emp?.email || '',
+          department: emp?.department || '',
+          position: (emp?.positionTags || []).filter(t => t !== '근무중').join(', ') || '',
+          fields: values,
+          issueDate: new Date().toISOString().slice(0, 10),
+          createdByEmail: auth.currentUser.email,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        const ref = await db.collection('issuedDocuments').add(docData);
+        printCertificate({ id: ref.id, ...docData });
+        statusEl.style.color = '#3f6b52';
+        statusEl.textContent = '발급 완료. 인쇄 창이 열립니다.';
+        await loadCertHistory();
+      }
     } catch (err) {
       statusEl.style.color = '#a4453c';
-      statusEl.textContent = '발급 실패: ' + err.message;
+      statusEl.textContent = (editingDocId ? '수정' : '발급') + ' 실패: ' + err.message;
     } finally {
       btn.disabled = false;
-      btn.textContent = '발급 및 인쇄';
+      btn.textContent = editingDocId ? '수정 저장' : '발급 및 인쇄';
     }
   });
+
+  function startEditDoc(doc) {
+    editingDocId = doc.id;
+
+    const typeSelect = document.getElementById('cert-type');
+    const empSelect = document.getElementById('cert-employee');
+    const issueDateField = document.getElementById('cert-issueDate-field');
+    const issueDateInput = document.getElementById('cert-issueDate');
+
+    // 수정 화면에서도 문서종류/사원 전체 목록을 보여줘야 하므로 admin 기준 옵션으로 고정
+    typeSelect.innerHTML = `
+      <option value="재직증명서">재직증명서</option>
+      <option value="경력증명서">경력증명서</option>
+      <option value="퇴직증명서">퇴직증명서</option>
+      <option value="해촉증명서">해촉증명서</option>
+      <option value="사직서">사직서</option>
+    `;
+    typeSelect.value = doc.type;
+    typeSelect.disabled = true; // 문서번호에 이미 종류가 반영되어 있어 종류는 바꿀 수 없음
+
+    empSelect.innerHTML = certEmployees.map(e => `<option value="${e.uid}">${e.displayName || e.email}</option>`).join('');
+    empSelect.value = doc.uid;
+    empSelect.disabled = false;
+
+    issueDateField.style.display = '';
+    issueDateInput.value = doc.issueDate || '';
+
+    renderCertFields();
+
+    // renderCertFields()가 사원 프로필로 일부 값을 자동 채운 뒤, 저장되어 있던 값으로 다시 덮어쓴다
+    const defs = CERT_FIELD_DEFS[doc.type] || [];
+    defs.forEach(f => {
+      const el = document.getElementById('cf-' + f.key);
+      if (el) el.value = (doc.fields && doc.fields[f.key]) || '';
+    });
+
+    document.getElementById('certPanelTitle').textContent = '문서 수정';
+    document.getElementById('certEditBannerText').textContent =
+      `"${doc.docNumber}" 문서를 수정 중입니다. 저장해도 문서번호는 그대로 유지됩니다. (문서종류는 변경 불가)`;
+    document.getElementById('certEditBanner').style.display = 'flex';
+    document.getElementById('certGenerateBtn').textContent = '수정 저장';
+    document.getElementById('certStatus').textContent = '';
+
+    document.getElementById('certWritePanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function cancelEditDoc() {
+    editingDocId = null;
+    document.getElementById('cert-issueDate-field').style.display = 'none';
+    document.getElementById('certPanelTitle').textContent = '문서 작성';
+    document.getElementById('certEditBanner').style.display = 'none';
+    document.getElementById('certGenerateBtn').textContent = '발급 및 인쇄';
+    document.getElementById('certStatus').textContent = '';
+    initCertSection(); // 근로자/관리자 기본 상태(문서종류·사원 잠금 등)로 재초기화
+  }
+
+  document.getElementById('certCancelEditBtn').addEventListener('click', cancelEditDoc);
 
   // 문서종류별로 "코드-연도-4자리 일련번호" 형태의 문서번호를 트랜잭션으로 발급
   // (docCounters/{문서종류} 문서의 seq 필드를 원자적으로 1씩 증가시켜 중복 없이 채번)
@@ -1049,6 +1150,7 @@ if ('serviceWorker' in navigator) {
         <td data-label="용도/사유">${(d.fields && (d.fields.purpose || d.fields.resignReason)) || ''}</td>
         <td data-label="관리">
           <button class="dl-link" style="background:none; border:none; cursor:pointer; padding:0;" data-reprint="${d.id}">인쇄</button>
+          ${currentCertRole === 'admin' ? `<button class="dl-link" style="background:none; border:none; cursor:pointer; padding:0; margin-left:8px;" data-certedit="${d.id}">수정</button>` : ''}
           ${currentCertRole === 'admin' ? `<button class="del-btn" data-certdel="${d.id}">삭제</button>` : ''}
         </td>
       </tr>
@@ -1060,9 +1162,15 @@ if ('serviceWorker' in navigator) {
         if (d) printCertificate(d);
       });
     });
+    tbody.querySelectorAll('[data-certedit]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const d = docs.find(x => x.id === btn.dataset.certedit);
+        if (d) startEditDoc(d);
+      });
+    });
     tbody.querySelectorAll('[data-certdel]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!confirm('이 발급 이력을 삭제할까요?')) return;
+        if (!confirm('이 발급 이력을 삭제할까요? (문서번호는 재사용되지 않습니다. 잘못 발급한 경우 삭제 대신 "수정"을 이용해주세요)')) return;
         await db.collection('issuedDocuments').doc(btn.dataset.certdel).delete();
         await loadCertHistory();
       });
