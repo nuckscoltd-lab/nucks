@@ -64,6 +64,8 @@
     font-size:12.5px; cursor:pointer; border-radius:4px; white-space:nowrap;
   }
   .btn-ghost:hover{ border-color:var(--ink); }
+  .btn-ghost.danger{ color:var(--out-color); border-color:#f0c9c4; }
+  .btn-ghost.danger:hover{ background:#fdf1f0; border-color:var(--out-color); }
   .status-line{ font-size:12.5px; margin-top:10px; min-height:16px; }
   .status-line.ok{ color:var(--in-color); }
   .status-line.err{ color:var(--out-color); }
@@ -227,6 +229,7 @@
       <input type="file" id="importFile" accept=".xlsx,.xls,.csv">
       <button class="btn-primary" id="importBtn">가져오기</button>
       <button class="btn-ghost" id="exportBtn">현재 내역 엑셀로 내보내기</button>
+      <button class="btn-ghost danger" id="clearAllBtn">전체 내역 삭제</button>
     </div>
     <div class="import-help">
       가져오기용 엑셀은 <b>거래일자 / 구분 / 상태 / 금액 / 내용 / 비고</b> 6개 컬럼 형식이어야 합니다.
@@ -531,11 +534,13 @@
 
   // ---------- 엑셀 가져오기 ----------
   document.getElementById('importBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('importBtn');
     const fileInput = document.getElementById('importFile');
     const statusEl = document.getElementById('importStatus');
     const file = fileInput.files[0];
     if (!file) { statusEl.className = 'status-line err'; statusEl.textContent = '파일을 선택해주세요.'; return; }
 
+    btn.disabled = true; // 처리 중 중복 클릭으로 같은 내역이 두 번 들어가는 것을 방지
     statusEl.className = 'status-line';
     statusEl.textContent = '읽는 중...';
 
@@ -597,6 +602,44 @@
     } catch (err) {
       statusEl.className = 'status-line err';
       statusEl.textContent = '가져오기 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // ---------- 전체 내역 삭제 ----------
+  document.getElementById('clearAllBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('importStatus');
+    if (allEntries.length === 0) { statusEl.className = 'status-line err'; statusEl.textContent = '삭제할 내역이 없습니다.'; return; }
+
+    const first = confirm(`현재 등록된 거래 내역 ${allEntries.length}건을 전부 삭제할까요?\n\n(이월잔액 설정값은 그대로 남습니다. 이 작업은 되돌릴 수 없습니다.)`);
+    if (!first) return;
+    const second = confirm('정말로 전체 삭제하시겠습니까? 마지막 확인입니다.');
+    if (!second) return;
+
+    const btn = document.getElementById('clearAllBtn');
+    btn.disabled = true;
+    statusEl.className = 'status-line';
+    statusEl.textContent = '삭제 중...';
+
+    try {
+      const snap = await entriesRef.get();
+      const ids = snap.docs.map(d => d.id);
+      const chunkSize = 400;
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const batch = db.batch();
+        chunk.forEach(id => batch.delete(entriesRef.doc(id)));
+        await batch.commit();
+      }
+      statusEl.className = 'status-line ok';
+      statusEl.textContent = `${ids.length}건 삭제 완료.`;
+      await loadEntries();
+    } catch (err) {
+      statusEl.className = 'status-line err';
+      statusEl.textContent = '삭제 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
     }
   });
 
