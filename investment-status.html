@@ -46,6 +46,15 @@
     padding:22px 24px; margin-bottom:22px;
   }
   .panel-title{ font-size:15px; font-weight:600; margin-bottom:14px; }
+  .edit-banner{
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+    background:#fbe9d8; border:1px solid #e8c9a3; border-radius:6px;
+    padding:10px 14px; margin-bottom:16px; font-size:12.5px; color:#7a5a2e;
+  }
+  .edit-banner button{
+    background:none; border:1px solid #c79a5e; color:#7a5a2e; border-radius:4px;
+    padding:5px 12px; font-size:12px; cursor:pointer; white-space:nowrap;
+  }
 
   .form-row{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
   .field{ display:flex; flex-direction:column; gap:6px; min-width:0; }
@@ -105,7 +114,11 @@
     <div class="summary-row" id="investSummary"></div>
 
     <div class="panel">
-      <div class="panel-title">내역 추가</div>
+      <div class="panel-title" id="investPanelTitle">내역 추가</div>
+      <div class="edit-banner" id="investEditBanner" style="display:none;">
+        <span>선택한 내역을 수정 중입니다.</span>
+        <button type="button" id="cancelInvestEditBtn">취소</button>
+      </div>
       <div class="form-row">
         <div class="field wide">
           <label for="inv-investor">구분</label>
@@ -145,7 +158,11 @@
     <div class="summary-row" id="loanSummary"></div>
 
     <div class="panel">
-      <div class="panel-title">기준 정보 / 내역 추가</div>
+      <div class="panel-title" id="loanPanelTitle">기준 정보 / 내역 추가</div>
+      <div class="edit-banner" id="loanEditBanner" style="display:none;">
+        <span>선택한 내역을 수정 중입니다.</span>
+        <button type="button" id="cancelLoanEditBtn">취소</button>
+      </div>
       <div class="form-row" style="margin-bottom:16px;">
         <div class="field">
           <label for="loan-total">총대출금(기보)</label>
@@ -184,7 +201,11 @@
     <div class="summary-row" id="usageSummary"></div>
 
     <div class="panel">
-      <div class="panel-title">내역 추가</div>
+      <div class="panel-title" id="usagePanelTitle">내역 추가</div>
+      <div class="edit-banner" id="usageEditBanner" style="display:none;">
+        <span>선택한 내역을 수정 중입니다.</span>
+        <button type="button" id="cancelUsageEditBtn">취소</button>
+      </div>
       <div class="form-row">
         <div class="field wide">
           <label for="use-item">항목</label>
@@ -282,10 +303,16 @@
         <td class="amt">${fmtWon(e.raiseAmount)}</td>
         <td class="amt">${fmtWon(e.repayAmount)}</td>
         <td>${esc(e.memo)}</td>
-        <td><button class="danger" data-del-invest="${e.id}">삭제</button></td>
+        <td><button data-edit-invest="${e.id}">수정</button> <button class="danger" data-del-invest="${e.id}">삭제</button></td>
       </tr>
     `).join('');
 
+    tbody.querySelectorAll('[data-edit-invest]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const entry = allInvest.find(x => x.id === btn.dataset.editInvest);
+        if (entry) startEditInvest(entry);
+      });
+    });
     tbody.querySelectorAll('[data-del-invest]').forEach(btn => {
       btn.addEventListener('click', async () => {
         if (!confirm('삭제할까요?')) return;
@@ -294,6 +321,35 @@
       });
     });
   }
+
+  let editingInvestId = null;
+
+  function startEditInvest(e){
+    editingInvestId = e.id;
+    document.getElementById('inv-investor').value = e.investor || '';
+    document.getElementById('inv-date').value = e.raiseDate || '';
+    document.getElementById('inv-raise').value = e.raiseAmount || '';
+    document.getElementById('inv-repay').value = e.repayAmount || '';
+    document.getElementById('inv-memo').value = e.memo || '';
+    document.getElementById('investPanelTitle').textContent = '내역 수정';
+    document.getElementById('investEditBanner').style.display = 'flex';
+    document.getElementById('saveInvestBtn').textContent = '수정 저장';
+    document.querySelector('#section-invest .panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function cancelEditInvest(){
+    editingInvestId = null;
+    document.getElementById('inv-investor').value = '';
+    document.getElementById('inv-date').value = '';
+    document.getElementById('inv-raise').value = '';
+    document.getElementById('inv-repay').value = '';
+    document.getElementById('inv-memo').value = '';
+    document.getElementById('investPanelTitle').textContent = '내역 추가';
+    document.getElementById('investEditBanner').style.display = 'none';
+    document.getElementById('saveInvestBtn').textContent = '저장';
+    document.getElementById('investStatus').textContent = '';
+  }
+  document.getElementById('cancelInvestEditBtn').addEventListener('click', cancelEditInvest);
 
   document.getElementById('saveInvestBtn').addEventListener('click', async () => {
     const statusEl = document.getElementById('investStatus');
@@ -306,14 +362,21 @@
     if (!investor || !raiseDate) { statusEl.className = 'status-line err'; statusEl.textContent = '구분과 유치월은 필수입니다.'; return; }
 
     try {
-      await investRef.add({ investor, raiseDate, raiseAmount, repayAmount, memo });
-      statusEl.className = 'status-line ok';
-      statusEl.textContent = '저장되었습니다.';
-      document.getElementById('inv-investor').value = '';
-      document.getElementById('inv-date').value = '';
-      document.getElementById('inv-raise').value = '';
-      document.getElementById('inv-repay').value = '';
-      document.getElementById('inv-memo').value = '';
+      if (editingInvestId) {
+        await investRef.doc(editingInvestId).update({ investor, raiseDate, raiseAmount, repayAmount, memo });
+        statusEl.className = 'status-line ok';
+        statusEl.textContent = '수정되었습니다.';
+        cancelEditInvest();
+      } else {
+        await investRef.add({ investor, raiseDate, raiseAmount, repayAmount, memo });
+        statusEl.className = 'status-line ok';
+        statusEl.textContent = '저장되었습니다.';
+        document.getElementById('inv-investor').value = '';
+        document.getElementById('inv-date').value = '';
+        document.getElementById('inv-raise').value = '';
+        document.getElementById('inv-repay').value = '';
+        document.getElementById('inv-memo').value = '';
+      }
       await loadInvest();
     } catch (err) {
       statusEl.className = 'status-line err';
@@ -371,10 +434,16 @@
         <td class="amt">${fmtWon(e.amount)}</td>
         <td>${esc(e.content)}</td>
         <td class="amt">${fmtWon(e.remainAfter)}</td>
-        <td><button class="danger" data-del-loan="${e.id}">삭제</button></td>
+        <td><button data-edit-loan="${e.id}">수정</button> <button class="danger" data-del-loan="${e.id}">삭제</button></td>
       </tr>
     `).join('');
 
+    tbody.querySelectorAll('[data-edit-loan]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const entry = allLoan.find(x => x.id === btn.dataset.editLoan);
+        if (entry) startEditLoan(entry);
+      });
+    });
     tbody.querySelectorAll('[data-del-loan]').forEach(btn => {
       btn.addEventListener('click', async () => {
         if (!confirm('삭제할까요?')) return;
@@ -383,6 +452,31 @@
       });
     });
   }
+
+  let editingLoanId = null;
+
+  function startEditLoan(e){
+    editingLoanId = e.id;
+    document.getElementById('loan-date').value = e.date || '';
+    document.getElementById('loan-amount').value = e.amount || '';
+    document.getElementById('loan-content').value = e.content || '';
+    document.getElementById('loanPanelTitle').textContent = '내역 수정';
+    document.getElementById('loanEditBanner').style.display = 'flex';
+    document.getElementById('saveLoanBtn').textContent = '수정 저장';
+    document.querySelector('#section-loan .panel:nth-of-type(1)').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function cancelEditLoan(){
+    editingLoanId = null;
+    document.getElementById('loan-date').value = '';
+    document.getElementById('loan-amount').value = '';
+    document.getElementById('loan-content').value = '';
+    document.getElementById('loanPanelTitle').textContent = '기준 정보 / 내역 추가';
+    document.getElementById('loanEditBanner').style.display = 'none';
+    document.getElementById('saveLoanBtn').textContent = '저장';
+    document.getElementById('loanStatus').textContent = '';
+  }
+  document.getElementById('cancelLoanEditBtn').addEventListener('click', cancelEditLoan);
 
   document.getElementById('saveLoanTotalBtn').addEventListener('click', async () => {
     const total = Number(document.getElementById('loan-total').value) || 0;
@@ -399,12 +493,19 @@
     if (!date || !amount) { statusEl.className = 'status-line err'; statusEl.textContent = '출자일과 출자금은 필수입니다.'; return; }
 
     try {
-      await loanRef.add({ date, amount, content });
-      statusEl.className = 'status-line ok';
-      statusEl.textContent = '저장되었습니다.';
-      document.getElementById('loan-date').value = '';
-      document.getElementById('loan-amount').value = '';
-      document.getElementById('loan-content').value = '';
+      if (editingLoanId) {
+        await loanRef.doc(editingLoanId).update({ date, amount, content });
+        statusEl.className = 'status-line ok';
+        statusEl.textContent = '수정되었습니다.';
+        cancelEditLoan();
+      } else {
+        await loanRef.add({ date, amount, content });
+        statusEl.className = 'status-line ok';
+        statusEl.textContent = '저장되었습니다.';
+        document.getElementById('loan-date').value = '';
+        document.getElementById('loan-amount').value = '';
+        document.getElementById('loan-content').value = '';
+      }
       await loadLoan();
     } catch (err) {
       statusEl.className = 'status-line err';
@@ -442,10 +543,16 @@
         <td>${esc(e.item)}</td>
         <td class="amt">${fmtWon(e.amount)}</td>
         <td>${esc(e.evidence)}</td>
-        <td><button class="danger" data-del-usage="${e.id}">삭제</button></td>
+        <td><button data-edit-usage="${e.id}">수정</button> <button class="danger" data-del-usage="${e.id}">삭제</button></td>
       </tr>
     `).join('');
 
+    tbody.querySelectorAll('[data-edit-usage]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const entry = allUsage.find(x => x.id === btn.dataset.editUsage);
+        if (entry) startEditUsage(entry);
+      });
+    });
     tbody.querySelectorAll('[data-del-usage]').forEach(btn => {
       btn.addEventListener('click', async () => {
         if (!confirm('삭제할까요?')) return;
@@ -454,6 +561,31 @@
       });
     });
   }
+
+  let editingUsageId = null;
+
+  function startEditUsage(e){
+    editingUsageId = e.id;
+    document.getElementById('use-item').value = e.item || '';
+    document.getElementById('use-amount').value = e.amount || '';
+    document.getElementById('use-evidence').value = e.evidence || '';
+    document.getElementById('usagePanelTitle').textContent = '내역 수정';
+    document.getElementById('usageEditBanner').style.display = 'flex';
+    document.getElementById('saveUsageBtn').textContent = '수정 저장';
+    document.querySelector('#section-usage .panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function cancelEditUsage(){
+    editingUsageId = null;
+    document.getElementById('use-item').value = '';
+    document.getElementById('use-amount').value = '';
+    document.getElementById('use-evidence').value = '';
+    document.getElementById('usagePanelTitle').textContent = '내역 추가';
+    document.getElementById('usageEditBanner').style.display = 'none';
+    document.getElementById('saveUsageBtn').textContent = '저장';
+    document.getElementById('usageStatus').textContent = '';
+  }
+  document.getElementById('cancelUsageEditBtn').addEventListener('click', cancelEditUsage);
 
   document.getElementById('saveUsageBtn').addEventListener('click', async () => {
     const statusEl = document.getElementById('usageStatus');
@@ -464,12 +596,19 @@
     if (!item || !amount) { statusEl.className = 'status-line err'; statusEl.textContent = '항목과 금액은 필수입니다.'; return; }
 
     try {
-      await usageRef.add({ item, amount, evidence });
-      statusEl.className = 'status-line ok';
-      statusEl.textContent = '저장되었습니다.';
-      document.getElementById('use-item').value = '';
-      document.getElementById('use-amount').value = '';
-      document.getElementById('use-evidence').value = '';
+      if (editingUsageId) {
+        await usageRef.doc(editingUsageId).update({ item, amount, evidence });
+        statusEl.className = 'status-line ok';
+        statusEl.textContent = '수정되었습니다.';
+        cancelEditUsage();
+      } else {
+        await usageRef.add({ item, amount, evidence });
+        statusEl.className = 'status-line ok';
+        statusEl.textContent = '저장되었습니다.';
+        document.getElementById('use-item').value = '';
+        document.getElementById('use-amount').value = '';
+        document.getElementById('use-evidence').value = '';
+      }
       await loadUsage();
     } catch (err) {
       statusEl.className = 'status-line err';

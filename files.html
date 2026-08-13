@@ -393,6 +393,17 @@ if ('serviceWorker' in navigator) {
     } else {
       console.error('사용자 이름을 찾지 못해 ESG 링크에 이름을 실어 보낼 수 없습니다.');
     }
+
+    // index.html의 Files 드롭다운(#uploadPanel, #cashbookLinkBar 등)으로 들어온 경우,
+    // 그 구역들은 관리자 확인 전까지 화면에 숨겨져 있어서(0px) 브라우저가 처음엔 정확한
+    // 위치를 못 찾고 페이지 맨 위로만 열린다. 표시 상태가 다 정리된 지금 시점에
+    // 주소의 #앵커로 한 번 더 정확히 스크롤해준다.
+    if (location.hash) {
+      const target = document.querySelector(location.hash);
+      if (target) {
+        setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+      }
+    }
   });
 
   const ACCOUNTING_CATEGORY = '회계현황';

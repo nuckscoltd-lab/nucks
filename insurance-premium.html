@@ -42,12 +42,13 @@
   .panel-title{ font-size:15px; font-weight:600; margin-bottom:4px; }
   .panel-sub{ font-size:12px; color:var(--muted); margin-bottom:16px; }
 
-  table.calc-table{ width:100%; border-collapse:collapse; margin-bottom:8px; }
+  .table-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  table.calc-table{ width:100%; min-width:560px; border-collapse:collapse; margin-bottom:8px; }
   table.calc-table th{ text-align:left; font-size:11px; color:var(--muted); font-weight:500; padding:6px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
   table.calc-table td{ padding:6px 8px; vertical-align:middle; }
   table.calc-table td.rowlabel{ font-size:12.5px; font-weight:500; white-space:nowrap; }
   table.calc-table input{
-    width:100%; box-sizing:border-box; padding:7px 8px; border:1px solid var(--line);
+    width:100px; min-width:100px; box-sizing:border-box; padding:7px 8px; border:1px solid var(--line);
     border-radius:4px; font-family:'IBM Plex Mono', monospace; font-size:12.5px; text-align:right; background:#fff;
   }
   table.calc-table .computed{ font-family:'IBM Plex Mono', monospace; font-size:12.5px; text-align:right; color:var(--ink); font-weight:600; white-space:nowrap; }
@@ -74,6 +75,8 @@
   .history-table td.amt{ font-family:'IBM Plex Mono', monospace; text-align:right; }
   .history-table button{ font-size:11px; background:none; border:1px solid var(--line); border-radius:4px; padding:4px 8px; cursor:pointer; color:var(--muted); margin-right:4px; }
   .history-table button:hover{ border-color:var(--ink); color:var(--ink); }
+  .history-table tr.clickable-row{ cursor:pointer; }
+  .history-table tr.clickable-row:hover{ background:var(--paper); }
 
   @media (max-width:768px){
     table.calc-table{ font-size:11px; }
@@ -107,6 +110,7 @@
   <div class="panel">
     <div class="panel-title" id="finalTitle">확정보험료</div>
     <div class="panel-sub">해당 연도 실제 보수총액 기준으로 계산하고, 전년도에 미리 낸 개산보험료(신고액=납부액)와 비교합니다.</div>
+    <div class="table-wrap">
     <table class="calc-table">
       <thead>
         <tr><th>구분</th><th>보수총액</th><th>보험료율(%)</th><th>확정보험료액</th><th>전년도 개산보험료(신고·납부액)</th></tr>
@@ -141,12 +145,14 @@
         </tr>
       </tbody>
     </table>
+    </div>
   </div>
 
   <!-- 개산보험료 (다음해 예상) -->
   <div class="panel">
     <div class="panel-title" id="nextTitle">개산보험료 (다음해 예상)</div>
     <div class="panel-sub">다음 연도 예상 보수총액과 그 해 요율로 미리 계산합니다. 일시납은 3% 경감, 분할납부는 4회 균등분할입니다.</div>
+    <div class="table-wrap">
     <table class="calc-table">
       <thead>
         <tr><th>구분</th><th>보수총액(예상)</th><th>보험료율(%)</th><th>개산보험료액</th><th>일시납(3%경감)</th><th>1회분할(1/4)</th></tr>
@@ -185,6 +191,7 @@
         </tr>
       </tbody>
     </table>
+    </div>
 
     <div class="summary-row">
       <div class="summary-card">
@@ -227,6 +234,50 @@
   requireRole(['admin']);
 
   const yearsRef = db.collection('insurancePremiumYears');
+
+  // 원본 엑셀("확정,개산보험료신고서" 시트)의 2024/2025년 실제 값을 최초 접속 시 자동으로 채워넣는다
+  const SEED_YEARS = {
+    "2024": {
+      final: {
+        industrial: { wageBase: 54990900, rate: 3.626 },
+        employment: { wageBase: 54990900, rate: 1.8 },
+        training: { wageBase: 54990900, rate: 0.25 },
+        declaredIndustrial: 1087800,
+        declaredEmployment: 360000,
+        declaredTraining: 50000
+      },
+      nextEstimate: {
+        industrial: { wageBase: 54990900, rate: 3.626 },
+        employment: { wageBase: 54990900, rate: 1.8 },
+        training: { wageBase: 54990900, rate: 0.25 }
+      }
+    },
+    "2025": {
+      final: {
+        industrial: { wageBase: 63532910, rate: 3.626 },
+        employment: { wageBase: 62564310, rate: 1.8 },
+        training: { wageBase: 63532910, rate: 0.25 },
+        declaredIndustrial: 1993970,
+        declaredEmployment: 989830,
+        declaredTraining: 137470
+      },
+      nextEstimate: {
+        industrial: { wageBase: 63532910, rate: 3.656 },
+        employment: { wageBase: 63532910, rate: 1.8 },
+        training: { wageBase: 63532910, rate: 0.25 }
+      }
+    }
+  };
+
+  async function ensureYearsSeeded(){
+    const snap = await yearsRef.limit(1).get();
+    if (!snap.empty) return;
+    const batch = db.batch();
+    Object.entries(SEED_YEARS).forEach(([year, data]) => {
+      batch.set(yearsRef.doc(year), data);
+    });
+    await batch.commit();
+  }
   let allYears = [];
   let currentYear = null;
 
@@ -413,7 +464,7 @@
       const nextLump = nextTotal * 0.97;
       const finalPayment = additional + nextLump;
       return `
-        <tr>
+        <tr class="clickable-row" data-load="${y.id}">
           <td>${y.id}년</td>
           <td class="amt">${fmtWon(finalTotal)}</td>
           <td class="amt">${fmtWon(additional)}</td>
@@ -424,9 +475,10 @@
       `;
     }).join('');
 
-    tbody.querySelectorAll('[data-load]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        currentYear = btn.dataset.load;
+    tbody.querySelectorAll('[data-load]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        currentYear = el.dataset.load;
         document.getElementById('yearSelect').value = currentYear;
         loadYear(currentYear);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -442,7 +494,7 @@
     loadYear(currentYear);
   }
 
-  loadAllYears();
+  ensureYearsSeeded().then(loadAllYears);
 </script>
 </body>
 </html>
