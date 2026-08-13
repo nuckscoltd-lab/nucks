@@ -21,6 +21,8 @@ if ('serviceWorker' in navigator) {
     --muted:#8a8578;
   }
   *{box-sizing:border-box;}
+  html{ scroll-behavior:smooth; }
+  [id^="uploadPanel"], [id^="section-"], [id^="cashbookLinkBar"], [id^="certWritePanel"]{ scroll-margin-top:20px; }
   body{
     margin:0; min-height:100vh; background:var(--paper);
     font-family:'Pretendard', -apple-system, sans-serif; color:var(--ink);
@@ -252,7 +254,7 @@ if ('serviceWorker' in navigator) {
   </div>
 
   <!-- ESG 자가진단서 바로가기 (근로자/관리자 모두 노출) -->
-  <div class="esg-link-bar">
+  <div class="esg-link-bar" id="section-esg">
     <span class="esg-link-label">ESG 자가진단서</span>
     <a href="#" class="esg-link-btn disabled" id="esgOfficerLink" target="_blank" rel="noopener">임원용</a>
     <a href="#" class="esg-link-btn disabled" id="esgStaffLink" target="_blank" rel="noopener">직원용</a>
@@ -321,7 +323,7 @@ if ('serviceWorker' in navigator) {
     <div class="upload-status" id="certStatus"></div>
   </div>
 
-  <div class="section-title">증명서 발급 이력</div>
+  <div class="section-title" id="section-history">증명서 발급 이력</div>
   <div class="tabs" id="certTabs"></div>
   <table>
     <thead>

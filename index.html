@@ -39,6 +39,24 @@ if ('serviceWorker' in navigator) {
         nav { display: flex; gap: 40px; }
         nav a { text-decoration: none; color: #666; font-size: 14px; text-transform: uppercase; transition: 0.3s; font-weight: 500; }
         nav a:hover { color: #000; }
+
+        .nav-item-dropdown{ position: relative; }
+        .nav-dropdown-toggle{ display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+        .nav-dropdown-toggle .caret{ font-size: 10px; transition: transform 0.2s; cursor: pointer; padding: 4px; margin: -4px; }
+        .nav-dropdown-menu{
+            display: none; position: absolute; top: 100%; left: 0; margin-top: 14px;
+            background: #fff; border: 1px solid #eee; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+            min-width: 190px; padding: 8px; z-index: 1001;
+        }
+        .nav-dropdown-menu a{
+            display: block; padding: 9px 12px; font-size: 12.5px; text-transform: none;
+            color: #333; border-radius: 5px; white-space: nowrap;
+        }
+        .nav-dropdown-menu a:hover{ background: #f5f5f5; color: #000; }
+        .nav-item-dropdown:hover .nav-dropdown-menu{ display: block; }
+        .nav-item-dropdown:hover .caret{ transform: rotate(180deg); }
+        .nav-item-dropdown.open .nav-dropdown-menu{ display: block; }
+        .nav-item-dropdown.open .caret{ transform: rotate(180deg); }
         .mobile-menu-icon { display: none; font-size: 24px; cursor: pointer; z-index: 1001; padding: 5px; }
 
         .hero {
@@ -162,6 +180,13 @@ if ('serviceWorker' in navigator) {
                 -webkit-overflow-scrolling: touch;
                 padding-bottom: 30px;
             }
+            .nav-dropdown-menu{
+                position: static; display: none; box-shadow: none; border: none;
+                margin: 8px 0 0 12px; padding: 0; min-width: 0;
+                border-left: 2px solid #eee; padding-left: 10px;
+            }
+            .nav-item-dropdown:hover .nav-dropdown-menu{ display: none; }
+            .nav-item-dropdown.open .nav-dropdown-menu{ display: block; }
             .hero { flex-direction: column; padding: 20px; margin-top: 70px; gap: 30px;}
             .hero-video-area { width: 100%; height: auto; aspect-ratio: 16 / 9; flex: none; }
             .grid { grid-template-columns: repeat(2, 1fr); }
@@ -219,8 +244,30 @@ if ('serviceWorker' in navigator) {
             <a href="payslip.html" id="payslipNavLink" style="display: inline-block;">Payslip</a>
             <a href="worklog.html" id="worklogNavLink" style="display: inline-block;">Worklog</a>
             <a href="board.html" id="boardNavLink" style="display: inline-block; position: relative;">Board<span id="boardBadge" style="display:none; position:absolute; top:-4px; right:-10px; width:8px; height:8px; border-radius:50%; background:#a4453c;"></span></a>
-            <a href="files.html" id="filesNavLink" style="display: inline-block;">Files</a>
-            <a href="admin.html" id="adminNavLink" style="display: inline-block;">Admin</a>
+
+            <div class="nav-item-dropdown" id="filesNavLink" style="display: inline-block;">
+                <a href="files.html" class="nav-dropdown-toggle">Files <span class="caret" onclick="return toggleNavDropdown(event, this)">▾</span></a>
+                <div class="nav-dropdown-menu">
+                    <a href="files.html#uploadPanel">업무파일 업로드</a>
+                    <a href="files.html#section-esg">ESG 자가진단서</a>
+                    <a href="files.html#cashbookLinkBar" id="filesAccountingSubLink" style="display:none;">회계관리</a>
+                    <a href="files.html#certWritePanel">문서발급</a>
+                    <a href="files.html#section-history">문서발급이력</a>
+                </div>
+            </div>
+
+            <div class="nav-item-dropdown" id="adminNavLink" style="display: inline-block;">
+                <a href="admin.html" class="nav-dropdown-toggle">Admin <span class="caret" onclick="return toggleNavDropdown(event, this)">▾</span></a>
+                <div class="nav-dropdown-menu">
+                    <a href="admin.html">회원 관리</a>
+                    <a href="gallery-admin.html">Gallery</a>
+                    <a href="cashbook.html">Cashbook</a>
+                    <a href="annual-tasks.html">Tasks</a>
+                    <a href="insurance-premium.html">Insurance</a>
+                    <a href="investment-status.html">Investment</a>
+                </div>
+            </div>
+
             <a href="#" id="authNavLink">Logout</a>
         </nav>
     </header>
@@ -350,6 +397,21 @@ if ('serviceWorker' in navigator) {
         }
 
         function toggleMenu() { document.getElementById("navbar").classList.toggle("active"); }
+
+        function toggleNavDropdown(e, el) {
+            e.preventDefault();
+            e.stopPropagation();
+            const wrap = el.closest('.nav-item-dropdown');
+            const wasOpen = wrap.classList.contains('open');
+            document.querySelectorAll('.nav-item-dropdown.open').forEach(d => d.classList.remove('open'));
+            if (!wasOpen) wrap.classList.add('open');
+            return false;
+        }
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.nav-item-dropdown')) {
+                document.querySelectorAll('.nav-item-dropdown.open').forEach(d => d.classList.remove('open'));
+            }
+        });
 
         function filterSelection(cat, btn) {
             const items = document.querySelectorAll('.project-item');
@@ -484,6 +546,9 @@ if ('serviceWorker' in navigator) {
 
                 const filesLink = document.getElementById('filesNavLink');
                 filesLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
+
+                const filesAccountingSubLink = document.getElementById('filesAccountingSubLink');
+                filesAccountingSubLink.style.display = (role === 'admin') ? 'block' : 'none';
 
                 const worklogLink = document.getElementById('worklogNavLink');
                 worklogLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
