@@ -221,7 +221,6 @@ if ('serviceWorker' in navigator) {
             <a href="board.html" id="boardNavLink" style="display: inline-block; position: relative;">Board<span id="boardBadge" style="display:none; position:absolute; top:-4px; right:-10px; width:8px; height:8px; border-radius:50%; background:#a4453c;"></span></a>
             <a href="files.html" id="filesNavLink" style="display: inline-block;">Files</a>
             <a href="admin.html" id="adminNavLink" style="display: inline-block;">Admin</a>
-            <a href="gallery-admin.html" id="galleryAdminNavLink" style="display: inline-block;">Gallery</a>
             <a href="#" id="authNavLink">Logout</a>
         </nav>
     </header>
@@ -475,9 +474,6 @@ if ('serviceWorker' in navigator) {
                 const adminLink = document.getElementById('adminNavLink');
                 adminLink.style.display = (role === 'admin') ? 'inline-block' : 'none';
 
-                const galleryAdminLink = document.getElementById('galleryAdminNavLink');
-                galleryAdminLink.style.display = (role === 'admin') ? 'inline-block' : 'none';
-
                 const payslipLink = document.getElementById('payslipNavLink');
                 payslipLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
 
@@ -509,9 +505,6 @@ if ('serviceWorker' in navigator) {
 
                 const adminLink = document.getElementById('adminNavLink');
                 adminLink.style.display = 'none';
-
-                const galleryAdminLink = document.getElementById('galleryAdminNavLink');
-                galleryAdminLink.style.display = 'none';
 
                 const payslipLink = document.getElementById('payslipNavLink');
                 payslipLink.style.display = 'none';
