@@ -44,9 +44,12 @@ if ('serviceWorker' in navigator) {
         .nav-dropdown-toggle{ display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
         .nav-dropdown-toggle .caret{ font-size: 10px; transition: transform 0.2s; cursor: pointer; padding: 4px; margin: -4px; }
         .nav-dropdown-menu{
-            display: none; position: absolute; top: 100%; left: 0; margin-top: 14px;
+            display: none; position: absolute; top: 100%; left: 0; padding-top: 14px;
+            min-width: 190px; z-index: 1001;
+        }
+        .nav-dropdown-menu-inner{
             background: #fff; border: 1px solid #eee; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.08);
-            min-width: 190px; padding: 8px; z-index: 1001;
+            padding: 8px;
         }
         .nav-dropdown-menu a{
             display: block; padding: 9px 12px; font-size: 12.5px; text-transform: none;
@@ -181,8 +184,11 @@ if ('serviceWorker' in navigator) {
                 padding-bottom: 30px;
             }
             .nav-dropdown-menu{
-                position: static; display: none; box-shadow: none; border: none;
-                margin: 8px 0 0 12px; padding: 0; min-width: 0;
+                position: static; display: none; padding-top: 0;
+                margin: 8px 0 0 12px; min-width: 0;
+            }
+            .nav-dropdown-menu-inner{
+                box-shadow: none; border: none; border-radius: 0; padding: 0;
                 border-left: 2px solid #eee; padding-left: 10px;
             }
             .nav-item-dropdown:hover .nav-dropdown-menu{ display: none; }
@@ -247,25 +253,25 @@ if ('serviceWorker' in navigator) {
 
             <div class="nav-item-dropdown" id="filesNavLink" style="display: inline-block;">
                 <a href="files.html" class="nav-dropdown-toggle">Files <span class="caret" onclick="return toggleNavDropdown(event, this)">▾</span></a>
-                <div class="nav-dropdown-menu">
+                <div class="nav-dropdown-menu"><div class="nav-dropdown-menu-inner">
                     <a href="files.html#uploadPanel">업무파일 업로드</a>
                     <a href="files.html#section-esg">ESG 자가진단서</a>
                     <a href="files.html#cashbookLinkBar" id="filesAccountingSubLink" style="display:none;">회계관리</a>
                     <a href="files.html#certWritePanel">문서발급</a>
                     <a href="files.html#section-history">문서발급이력</a>
-                </div>
+                </div></div>
             </div>
 
             <div class="nav-item-dropdown" id="adminNavLink" style="display: inline-block;">
                 <a href="admin.html" class="nav-dropdown-toggle">Admin <span class="caret" onclick="return toggleNavDropdown(event, this)">▾</span></a>
-                <div class="nav-dropdown-menu">
+                <div class="nav-dropdown-menu"><div class="nav-dropdown-menu-inner">
                     <a href="admin.html">회원 관리</a>
                     <a href="gallery-admin.html">Gallery</a>
                     <a href="cashbook.html">Cashbook</a>
                     <a href="annual-tasks.html">Tasks</a>
                     <a href="insurance-premium.html">Insurance</a>
                     <a href="investment-status.html">Investment</a>
-                </div>
+                </div></div>
             </div>
 
             <a href="#" id="authNavLink">Logout</a>
