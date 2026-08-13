@@ -83,6 +83,19 @@ if ('serviceWorker' in navigator) {
     display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:600;
     flex-shrink:0;
   }
+  .avatar-wrap{
+    position:relative; width:32px; height:32px; flex-shrink:0; cursor:pointer; border-radius:50%;
+  }
+  .avatar-wrap input[type="file"]{
+    position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer;
+  }
+  .avatar-wrap .avatar-overlay{
+    position:absolute; inset:0; border-radius:50%; background:rgba(20,20,20,.55);
+    color:#fff; font-size:9px; display:flex; align-items:center; justify-content:center;
+    opacity:0; transition:opacity .15s; pointer-events:none; text-align:center; line-height:1.2;
+  }
+  .avatar-wrap:hover .avatar-overlay{ opacity:1; }
+  .avatar-wrap.uploading .avatar-overlay{ opacity:1; content:''; }
   .role-badge{
     display:inline-block; font-size:11px; padding:3px 10px;
     border-radius:20px; letter-spacing:.02em; white-space:nowrap;
@@ -178,6 +191,7 @@ if ('serviceWorker' in navigator) {
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-functions-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="auth.js"></script>
@@ -213,9 +227,13 @@ if ('serviceWorker' in navigator) {
       tr.innerHTML = `
         <td data-label="이름">
           <div class="name-cell">
-            ${data.photoURL
-              ? `<img src="${data.photoURL}" class="avatar-img">`
-              : `<span class="avatar-fallback">${(data.displayName || '?').charAt(0)}</span>`}
+            <label class="avatar-wrap" data-avatar-wrap="${uid}">
+              ${data.photoURL
+                ? `<img src="${data.photoURL}" class="avatar-img">`
+                : `<span class="avatar-fallback">${(data.displayName || '?').charAt(0)}</span>`}
+              <span class="avatar-overlay">변경</span>
+              <input type="file" accept="image/*" data-photo-uid="${uid}">
+            </label>
             <span>${data.displayName || '(이름 없음)'}</span>
           </div>
         </td>
@@ -246,6 +264,51 @@ if ('serviceWorker' in navigator) {
         const uid = btn.dataset.edit;
         const data = usersCache[uid];
         startEditHrInfo(uid, data);
+      });
+    });
+
+    // 프로필 사진 업로드 (아바타 클릭)
+    document.querySelectorAll('[data-photo-uid]').forEach((input) => {
+      input.addEventListener('change', async () => {
+        const uid = input.dataset.photoUid;
+        const file = input.files[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+          statusMsg.style.color = '#a4453c';
+          statusMsg.textContent = '이미지 파일만 업로드할 수 있습니다.';
+          input.value = '';
+          return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          statusMsg.style.color = '#a4453c';
+          statusMsg.textContent = '5MB 이하 이미지만 업로드할 수 있습니다.';
+          input.value = '';
+          return;
+        }
+
+        const wrap = document.querySelector(`[data-avatar-wrap="${uid}"]`);
+        const overlay = wrap.querySelector('.avatar-overlay');
+        wrap.classList.add('uploading');
+        overlay.textContent = '업로드중';
+        statusMsg.style.color = '';
+        statusMsg.textContent = '';
+
+        try {
+          const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+          const storageRef = firebase.storage().ref(`avatars/${uid}/${Date.now()}.${ext}`);
+          await storageRef.put(file);
+          const photoURL = await storageRef.getDownloadURL();
+          await db.collection('users').doc(uid).update({ photoURL });
+          statusMsg.style.color = '#3f6b52';
+          statusMsg.textContent = '프로필 사진이 변경되었습니다.';
+          await loadUsers();
+        } catch (err) {
+          statusMsg.style.color = '#a4453c';
+          statusMsg.textContent = '업로드 실패: ' + (err.message || '알 수 없는 오류');
+          wrap.classList.remove('uploading');
+          overlay.textContent = '변경';
+        }
       });
     });
 
