@@ -183,8 +183,8 @@
       <input type="text" id="f-subtitle" placeholder="예: 대치동 비취타운 | 2026년">
     </div>
     <div class="field">
-      <label for="f-builder">시공사</label>
-      <input type="text" id="f-builder" placeholder="예: OO건설">
+      <label for="f-builder">시공사 (Enter로 줄바꿈 가능)</label>
+      <textarea id="f-builder" rows="2" placeholder="예: (주)OO건설"></textarea>
     </div>
 
     <div class="field">
@@ -849,7 +849,7 @@
     infoEl.innerHTML = `
       <input type="text" class="edit-input" data-field="title" value="${esc(d.title)}" placeholder="제목 (예: HWASUNG)">
       <input type="text" class="edit-input" data-field="subtitle" value="${esc(d.subtitle)}" placeholder="부제 (예: 대치동 비취타운 | 2026년)">
-      <input type="text" class="edit-input" data-field="builder" value="${esc(d.builder)}" placeholder="시공사 (예: OO건설)">
+      <textarea class="edit-input" data-field="builder" rows="2" placeholder="시공사 (Enter로 줄바꿈 가능)">${esc(d.builder)}</textarea>
       <select class="edit-input" data-field="category" style="margin-bottom:0;">
         <option value="unit" ${d.category === 'unit' ? 'selected' : ''}>Unit / 주거</option>
         <option value="menual" ${d.category === 'menual' ? 'selected' : ''}>Menual / 상업</option>
