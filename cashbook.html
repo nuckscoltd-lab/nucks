@@ -222,6 +222,64 @@
     <div class="status-line" id="entryStatus"></div>
   </div>
 
+  <!-- 고정 항목 (매월 반복되는 거래) -->
+  <div class="panel">
+    <div class="panel-title">
+      고정 항목 (매월 반복되는 거래)
+      <button type="button" class="toggle-btn" id="toggleRecurringBtn">펼치기</button>
+    </div>
+    <div id="recurringBody" style="display:none;">
+      <div class="import-help">임차료·급여·통신비처럼 매달 같은 금액이 나가는 항목을 여기 한 번 등록해두면, 아래 "이 달에 일괄 추가" 버튼 한 번으로 예정 거래가 자동으로 채워집니다. 이미 추가된 달에는 같은 항목이 중복으로 들어가지 않아요.</div>
+
+      <div class="form-row" style="margin-top:14px;">
+        <div class="field">
+          <label for="r-type">구분</label>
+          <select id="r-type">
+            <option value="출금">출금</option>
+            <option value="입금">입금</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="r-day">매월 지급일</label>
+          <input type="number" id="r-day" min="1" max="28" value="15" style="width:90px;">
+        </div>
+        <div class="field">
+          <label for="r-amount">금액</label>
+          <input type="text" inputmode="numeric" id="r-amount" placeholder="0">
+        </div>
+        <div class="field wide">
+          <label for="r-content">내용</label>
+          <input type="text" id="r-content" placeholder="예: 임차료">
+        </div>
+        <div class="field wide">
+          <label for="r-memo">비고 (선택)</label>
+          <input type="text" id="r-memo">
+        </div>
+        <button class="btn-primary" id="saveRecurringBtn">등록</button>
+      </div>
+      <div class="status-line" id="recurringStatus"></div>
+
+      <div class="table-wrap" style="margin-top:16px;">
+        <table id="recurringTable" style="display:none;">
+          <thead>
+            <tr><th>구분</th><th>지급일</th><th>금액</th><th>내용</th><th>비고</th><th>관리</th></tr>
+          </thead>
+          <tbody id="recurringTableBody"></tbody>
+        </table>
+        <div class="empty-msg" id="recurringEmptyMsg">등록된 고정 항목이 없습니다.</div>
+      </div>
+
+      <div class="form-row" style="margin-top:18px; align-items:center;">
+        <div class="field">
+          <label for="recurringMonth">추가할 달</label>
+          <input type="month" id="recurringMonth">
+        </div>
+        <button class="btn-primary" id="applyRecurringBtn">이 달에 고정 항목 일괄 추가 (예정)</button>
+      </div>
+      <div class="status-line" id="applyRecurringStatus"></div>
+    </div>
+  </div>
+
   <!-- 엑셀 가져오기/내보내기 -->
   <div class="panel">
     <div class="panel-title">엑셀 일괄 가져오기 / 내보내기</div>
@@ -274,10 +332,13 @@
 
   const configRef = db.collection('cashbookConfig').doc('settings');
   const entriesRef = db.collection('cashbookEntries');
+  const recurringRef = db.collection('cashbookRecurring');
 
   let config = { startDate: '', startBalance: 0 };
   let allEntries = [];
+  let allRecurring = [];
   let editingId = null;
+  let editingRecurringId = null;
   let activeMonth = '최근3개월';
   let activeStatus = '전체';
 
@@ -304,6 +365,7 @@
   }
   attachMoneyInputFormatter(document.getElementById('cfg-startBalance'));
   attachMoneyInputFormatter(document.getElementById('f-amount'));
+  attachMoneyInputFormatter(document.getElementById('r-amount'));
 
   async function loadConfig(){
     const snap = await configRef.get();
@@ -565,6 +627,171 @@
     }
   });
 
+  // ---------- 고정 항목 (매월 반복되는 거래) ----------
+  document.getElementById('toggleRecurringBtn').addEventListener('click', () => {
+    const body = document.getElementById('recurringBody');
+    const show = body.style.display === 'none';
+    body.style.display = show ? 'block' : 'none';
+    document.getElementById('toggleRecurringBtn').textContent = show ? '접기' : '펼치기';
+  });
+
+  (function initRecurringMonth(){
+    const d = new Date();
+    document.getElementById('recurringMonth').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  })();
+
+  async function loadRecurring(){
+    const snap = await recurringRef.orderBy('order', 'asc').get();
+    allRecurring = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderRecurringTable();
+  }
+
+  function renderRecurringTable(){
+    const table = document.getElementById('recurringTable');
+    const tbody = document.getElementById('recurringTableBody');
+    const emptyMsg = document.getElementById('recurringEmptyMsg');
+
+    if (allRecurring.length === 0) {
+      table.style.display = 'none';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+    table.style.display = 'table';
+
+    tbody.innerHTML = allRecurring.map(r => `
+      <tr>
+        <td>${r.type || ''}</td>
+        <td class="nowrap">매월 ${r.day || 1}일</td>
+        <td class="amount ${r.type === '입금' ? 'in' : 'out'}">${r.type === '입금' ? '+' : '-'}${fmtWon(r.amount)}</td>
+        <td>${esc(r.content)}</td>
+        <td>${esc(r.memo)}</td>
+        <td>
+          <div class="row-actions">
+            <button data-r-edit="${r.id}">수정</button>
+            <button class="danger" data-r-delete="${r.id}">삭제</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+
+    tbody.querySelectorAll('[data-r-edit]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const r = allRecurring.find(x => x.id === btn.dataset.rEdit);
+        if (r) startEditRecurring(r);
+      });
+    });
+    tbody.querySelectorAll('[data-r-delete]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('이 고정 항목을 삭제할까요? (이미 추가된 거래 내역은 그대로 남습니다)')) return;
+        await recurringRef.doc(btn.dataset.rDelete).delete();
+        await loadRecurring();
+      });
+    });
+  }
+
+  function startEditRecurring(r){
+    editingRecurringId = r.id;
+    document.getElementById('r-type').value = r.type || '출금';
+    document.getElementById('r-day').value = r.day || 15;
+    setMoneyInputValue(document.getElementById('r-amount'), r.amount);
+    document.getElementById('r-content').value = r.content || '';
+    document.getElementById('r-memo').value = r.memo || '';
+    document.getElementById('saveRecurringBtn').textContent = '수정 저장';
+    document.getElementById('recurringStatus').textContent = '';
+  }
+
+  function resetRecurringForm(){
+    editingRecurringId = null;
+    document.getElementById('r-type').value = '출금';
+    document.getElementById('r-day').value = 15;
+    document.getElementById('r-amount').value = '';
+    document.getElementById('r-content').value = '';
+    document.getElementById('r-memo').value = '';
+    document.getElementById('saveRecurringBtn').textContent = '등록';
+  }
+
+  document.getElementById('saveRecurringBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('recurringStatus');
+    const type = document.getElementById('r-type').value;
+    const day = Math.min(28, Math.max(1, Number(document.getElementById('r-day').value) || 1));
+    const amount = parseMoneyInput(document.getElementById('r-amount'));
+    const content = document.getElementById('r-content').value.trim();
+    const memo = document.getElementById('r-memo').value.trim();
+
+    if (!amount || !content) {
+      statusEl.className = 'status-line err';
+      statusEl.textContent = '금액 / 내용은 필수입니다.';
+      return;
+    }
+
+    try {
+      if (editingRecurringId) {
+        await recurringRef.doc(editingRecurringId).update({ type, day, amount, content, memo });
+        statusEl.className = 'status-line ok';
+        statusEl.textContent = '수정되었습니다.';
+      } else {
+        await recurringRef.add({ type, day, amount, content, memo, order: Date.now() });
+        statusEl.className = 'status-line ok';
+        statusEl.textContent = '등록되었습니다.';
+      }
+      resetRecurringForm();
+      await loadRecurring();
+    } catch (err) {
+      statusEl.className = 'status-line err';
+      statusEl.textContent = '저장 실패: ' + err.message;
+    }
+  });
+
+  document.getElementById('applyRecurringBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('applyRecurringStatus');
+    const month = document.getElementById('recurringMonth').value; // YYYY-MM
+    const btn = document.getElementById('applyRecurringBtn');
+
+    if (!month) { statusEl.className = 'status-line err'; statusEl.textContent = '달을 선택해주세요.'; return; }
+    if (allRecurring.length === 0) { statusEl.className = 'status-line err'; statusEl.textContent = '등록된 고정 항목이 없습니다.'; return; }
+
+    btn.disabled = true;
+    statusEl.className = 'status-line';
+    statusEl.textContent = '추가하는 중...';
+
+    try {
+      // 이미 해당 달에 같은 고정 항목이 추가돼 있으면 중복으로 다시 넣지 않는다.
+      const already = new Set(
+        allEntries.filter(e => e.recurringId && (e.date || '').slice(0, 7) === month).map(e => e.recurringId)
+      );
+      const toAdd = allRecurring.filter(r => !already.has(r.id));
+
+      if (toAdd.length === 0) {
+        statusEl.className = 'status-line ok';
+        statusEl.textContent = '이 달에는 이미 모든 고정 항목이 추가되어 있습니다.';
+        return;
+      }
+
+      const [y, m] = month.split('-');
+      const batch = db.batch();
+      toAdd.forEach((r, i) => {
+        const day = String(Math.min(28, Math.max(1, r.day || 1))).padStart(2, '0');
+        const date = `${y}-${m}-${day}`;
+        batch.set(entriesRef.doc(), {
+          date, type: r.type, status: '예정', amount: r.amount, content: r.content, memo: r.memo,
+          recurringId: r.id, order: Date.now() + i,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      });
+      await batch.commit();
+
+      statusEl.className = 'status-line ok';
+      statusEl.textContent = `${toAdd.length}건 추가되었습니다.${already.size ? ` (이미 있던 ${already.size}건은 건너뜀)` : ''}`;
+      await loadEntries();
+    } catch (err) {
+      statusEl.className = 'status-line err';
+      statusEl.textContent = '추가 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
   // ---------- 엑셀 가져오기 ----------
   document.getElementById('importBtn').addEventListener('click', async () => {
     const btn = document.getElementById('importBtn');
@@ -691,6 +918,7 @@
   (async function init(){
     await loadConfig();
     await loadEntries();
+    await loadRecurring();
   })();
 </script>
 </body>
