@@ -152,10 +152,6 @@ if ('serviceWorker' in navigator) {
       <button id="cancelEditBtn" style="margin-left:10px; background:none; border:none; color:#a4453c; text-decoration:underline; cursor:pointer; font-size:12.5px;">수정 취소</button>
     </div>
     <div class="form-row">
-      <div class="field" id="f-employee-field" style="display:none; min-width:150px;">
-        <label for="f-employee">사원 (관리자 전용)</label>
-        <select id="f-employee"><option value="__self__">본인</option></select>
-      </div>
       <div class="field">
         <label for="f-date">날짜</label>
         <input type="date" id="f-date">
@@ -183,25 +179,6 @@ if ('serviceWorker' in navigator) {
       <button class="submit-btn" id="submitBtn">등록</button>
     </div>
     <div class="submit-status" id="submitStatus"></div>
-  </div>
-
-  <div class="write-panel" id="bulkPanel" style="display:none;">
-    <div class="panel-title">과거 연차 내역 일괄 등록 (관리자 전용)</div>
-    <div class="form-row">
-      <div class="field" style="min-width:160px;">
-        <label for="bulk-employee">사원</label>
-        <select id="bulk-employee"></select>
-      </div>
-    </div>
-    <div class="field" style="margin-bottom:14px;">
-      <label for="bulk-text">한 줄에 하나씩, 콤마로 구분: 날짜,사용량,구분,비고(선택)</label>
-      <textarea id="bulk-text" rows="6" style="width:100%; padding:9px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; resize:vertical;" placeholder="2026-07-24,1,연차
-2026-04-06,0,연차
-2026-01-08,1,연차
-2026-01-06,1,연차"></textarea>
-    </div>
-    <button class="submit-btn" id="bulkSubmitBtn">일괄 등록</button>
-    <div class="submit-status" id="bulkStatus"></div>
   </div>
 
   <div class="summary-bar" id="summaryBar"></div>
@@ -236,9 +213,12 @@ if ('serviceWorker' in navigator) {
   let currentHireDate = null;
   let allRows = [];
   let hireDateByName = {}; // 관리자용: 사원명 -> 입사일 매핑
-  let allEmployeesForAdmin = []; // 관리자용: [{uid, displayName}]
 
   // 근로기준법 기준 총연차 자동 계산 (employee.html과 동일한 로직)
+  // 근로기준법 기준 총연차 자동 계산 (employee.html과 동일한 로직)
+  // - 입사 1년 미만: "오늘" 기준으로 1년 미만인지 판단하되, 실제 부여 일수는
+  //   그 해(올해) 12월 31일까지 채워지는 개월수를 기준으로 미리 산정 (연간 총 연차 사전 산정)
+  // - 입사 1년 이상: 15일 + 매 2년마다 1일 추가, 최대 25일
   function calcTotalLeave(hireDate) {
     if (!hireDate) return 0;
     const start = new Date(hireDate);
@@ -246,7 +226,11 @@ if ('serviceWorker' in navigator) {
     const now = new Date();
     const totalMonths = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
     const years = totalMonths / 12;
-    if (years < 1) return Math.min(Math.max(totalMonths, 0), 11);
+    if (years < 1) {
+      const yearEnd = new Date(now.getFullYear(), 11, 31);
+      const monthsAtYearEnd = (yearEnd.getFullYear() - start.getFullYear()) * 12 + (yearEnd.getMonth() - start.getMonth());
+      return Math.max(0, Math.round(monthsAtYearEnd));
+    }
     const extra = Math.floor((Math.floor(years) - 1) / 2);
     return Math.min(15 + extra, 25);
   }
@@ -267,21 +251,10 @@ if ('serviceWorker' in navigator) {
     // 관리자는 전체 사원의 입사일을 미리 확보해서 사원별 잔여연차 계산에 사용
     if (currentRole === 'admin') {
       const usersSnap = await db.collection('users').get();
-      allEmployeesForAdmin = [];
       usersSnap.docs.forEach(d => {
         const data = d.data();
         if (data.displayName) hireDateByName[data.displayName] = data.hireDate || null;
-        if (data.displayName && ['worker', 'admin'].includes(data.role)) {
-          allEmployeesForAdmin.push({ uid: d.id, displayName: data.displayName });
-        }
       });
-      allEmployeesForAdmin.sort((a, b) => a.displayName.localeCompare(b.displayName));
-
-      document.getElementById('f-employee-field').style.display = 'flex';
-      document.getElementById('bulkPanel').style.display = 'block';
-      const employeeOptions = allEmployeesForAdmin.map(e => `<option value="${e.uid}">${e.displayName}</option>`).join('');
-      document.getElementById('f-employee').innerHTML = '<option value="__self__">본인</option>' + employeeOptions;
-      document.getElementById('bulk-employee').innerHTML = employeeOptions;
     }
 
     loadLeaves();
@@ -360,6 +333,37 @@ if ('serviceWorker' in navigator) {
     return total - used;
   }
 
+  // 날짜 오름차순으로 하나씩 차감해나가는 "장부식" 잔여연차 계산.
+  // 반환값: { 문서id: 그 시점까지 차감된 잔여연차 }
+  // - 승인완료 + 병가/휴가가 아닌 건만 실제로 차감됨 (계획없음/승인요청 건은 그 시점 잔여를 그대로 표시)
+  // - 같은 날짜에 여러 건이 있으면 문서 id 순으로 안정적으로 정렬해 처리
+  function buildRunningRemainingMap() {
+    const map = {};
+    const names = [...new Set(allRows.map(r => r['사원명']).filter(Boolean))];
+
+    names.forEach(name => {
+      const hireDate = (currentRole === 'admin') ? hireDateByName[name] : currentHireDate;
+      const total = calcTotalLeave(hireDate);
+
+      const sortedAsc = allRows
+        .filter(r => r['사원명'] === name)
+        .sort((a, b) => {
+          const byDate = (a['날짜'] || '').localeCompare(b['날짜'] || '');
+          if (byDate !== 0) return byDate;
+          return (a.id || '').localeCompare(b.id || '');
+        });
+
+      let cumUsed = 0;
+      sortedAsc.forEach(r => {
+        const countsTowardUsage = r['승인상태'] === '승인완료' && !['병가', '휴가'].includes(r['연차구분']);
+        if (countsTowardUsage) cumUsed += (Number(r['사용량']) || 0);
+        map[r.id] = total - cumUsed;
+      });
+    });
+
+    return map;
+  }
+
   function renderTable() {
     const table = document.getElementById('logTable');
     const emptyMsg = document.getElementById('emptyMsg');
@@ -381,10 +385,12 @@ if ('serviceWorker' in navigator) {
     emptyMsg.style.display = 'none';
     table.style.display = 'table';
 
+    const remainingByDocId = buildRunningRemainingMap();
+
     tbody.innerHTML = '';
     rows.forEach(row => {
       const canManage = (row.uid === currentUser.uid) || (currentRole === 'admin');
-      const remaining = calcRemainingForName(row['사원명']);
+      const remaining = remainingByDocId[row.id] ?? calcRemainingForName(row['사원명']);
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td data-label="사원명">${row['사원명'] || ''}</td>
@@ -488,23 +494,12 @@ if ('serviceWorker' in navigator) {
     btn.disabled = true;
     btn.textContent = isEditing ? '수정 저장 중...' : '등록 중...';
 
-    // 관리자가 사원 선택칸에서 다른 사원을 골랐다면 그 사원 몫으로 등록
-    let targetUid = currentUser.uid;
-    let targetName = currentDisplayName;
-    if (currentRole === 'admin') {
-      const empSelect = document.getElementById('f-employee');
-      if (empSelect && empSelect.value && empSelect.value !== '__self__') {
-        const emp = allEmployeesForAdmin.find(e => e.uid === empSelect.value);
-        if (emp) { targetUid = emp.uid; targetName = emp.displayName; }
-      }
-    }
-
     try {
       if (isEditing) {
         const original = allRows.find(r => r.id === editingLeaveId);
         await db.collection('leaves').doc(editingLeaveId).update({
-          uid: original?.uid || targetUid,
-          '사원명': original?.['사원명'] || targetName,
+          uid: original?.uid || currentUser.uid,
+          '사원명': original?.['사원명'] || currentDisplayName,
           '날짜': date,
           '사용량': amount,
           '연차구분': type,
@@ -515,8 +510,8 @@ if ('serviceWorker' in navigator) {
         statusEl.textContent = '수정되었습니다.';
       } else {
         await db.collection('leaves').add({
-          uid: targetUid,
-          '사원명': targetName,
+          uid: currentUser.uid,
+          '사원명': currentDisplayName,
           '날짜': date,
           '사용량': amount,
           '연차구분': type,
@@ -545,85 +540,6 @@ if ('serviceWorker' in navigator) {
     e.preventDefault();
     await logOut();
     window.location.href = 'login.html';
-  });
-
-  // ---------- 과거 연차 내역 일괄 등록 (관리자 전용) ----------
-  const VALID_TYPES = ['연차', '오전반차', '오후반차', '병가', '휴가', '경조사', '기타'];
-
-  document.getElementById('bulkSubmitBtn').addEventListener('click', async () => {
-    const statusEl = document.getElementById('bulkStatus');
-    const btn = document.getElementById('bulkSubmitBtn');
-    const empUid = document.getElementById('bulk-employee').value;
-    const emp = allEmployeesForAdmin.find(e => e.uid === empUid);
-    const rawText = document.getElementById('bulk-text').value.trim();
-
-    if (!emp) {
-      statusEl.style.color = '#a4453c';
-      statusEl.textContent = '사원을 선택해주세요.';
-      return;
-    }
-    if (!rawText) {
-      statusEl.style.color = '#a4453c';
-      statusEl.textContent = '등록할 내역을 입력해주세요.';
-      return;
-    }
-
-    const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
-    const parsed = [];
-    for (const line of lines) {
-      const parts = line.split(',').map(p => p.trim());
-      const [date, amountStr, type, note] = parts;
-      const amount = Number(amountStr);
-
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) {
-        statusEl.style.color = '#a4453c';
-        statusEl.textContent = `날짜 형식이 올바르지 않습니다: "${line}" (예: 2026-07-24)`;
-        return;
-      }
-      if (isNaN(amount)) {
-        statusEl.style.color = '#a4453c';
-        statusEl.textContent = `사용량이 숫자가 아닙니다: "${line}"`;
-        return;
-      }
-      if (!VALID_TYPES.includes(type)) {
-        statusEl.style.color = '#a4453c';
-        statusEl.textContent = `연차구분이 올바르지 않습니다: "${line}" (연차/오전반차/오후반차/병가/휴가/경조사/기타 중 하나)`;
-        return;
-      }
-      parsed.push({ date, amount, type, note: note || '' });
-    }
-
-    btn.disabled = true;
-    statusEl.style.color = '';
-    statusEl.textContent = '등록하는 중...';
-
-    try {
-      const batch = db.batch();
-      parsed.forEach(p => {
-        const docRef = db.collection('leaves').doc();
-        batch.set(docRef, {
-          uid: emp.uid,
-          '사원명': emp.displayName,
-          '날짜': p.date,
-          '사용량': p.amount,
-          '연차구분': p.type,
-          '승인상태': '승인완료', // 과거 확정 내역이므로 승인완료로 바로 등록
-          '비고': p.note,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-      });
-      await batch.commit();
-
-      statusEl.style.color = '#3f6b52';
-      statusEl.textContent = `${emp.displayName}님 ${parsed.length}건 등록되었습니다.`;
-      document.getElementById('bulk-text').value = '';
-      await loadLeaves();
-    } catch (err) {
-      statusEl.style.color = '#a4453c';
-      statusEl.textContent = '일괄 등록 실패: ' + err.message;
-    } finally {
-      btn.disabled = false;
-    }
   });
 </script>
 </body>
