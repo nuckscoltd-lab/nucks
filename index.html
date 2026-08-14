@@ -144,6 +144,11 @@ if ('serviceWorker' in navigator) {
             padding-bottom: 15px; }
         .project-info h3 { font-size: 14px; }
         .project-info p { font-size: 10px; }
+        .builder-badge{
+            position: absolute; bottom: 8px; right: 8px; z-index: 2;
+            font-size: 10px; color: rgba(255,255,255,.92); background: rgba(0,0,0,.5);
+            padding: 2px 7px; border-radius: 3px; letter-spacing: .01em; pointer-events: none;
+        }
 
     footer { padding: 40px 60px; background: #1a1a1a; color: #fff; font-size: 13px; }
     .footer-grid { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 20px; }
@@ -171,6 +176,12 @@ if ('serviceWorker' in navigator) {
         .gallery-nav.next { right: 0; }
         .close { position: absolute; top: 20px; right: 40px; color: #fff; font-size: 40px; cursor: pointer; z-index: 2006; }
         .image-counter { position: absolute; bottom: -40px; color: #fff; font-size: 14px; }
+        .modal-builder-badge{
+            position: absolute; bottom: 12px; right: 12px; z-index: 2010;
+            font-size: 12px; color: rgba(255,255,255,.95); background: rgba(0,0,0,.55);
+            padding: 4px 10px; border-radius: 4px; letter-spacing: .01em; pointer-events: none;
+            display: none;
+        }
 
         @media (max-width: 768px) {
             header { padding: 15px 20px; }
@@ -352,6 +363,7 @@ if ('serviceWorker' in navigator) {
             <div id="zoomFrame" class="zoom-frame"><img class="modal-content" id="modalImg" src="00. 대치 비취타운 투시도.webp"></div>
             <span class="gallery-nav next" onclick="changeSlide(1)">❯</span>
             <div class="image-counter" id="imageCounter">1 / 6</div>
+            <div class="modal-builder-badge" id="modalBuilderBadge"></div>
         </div>
     </div>
 
@@ -438,6 +450,16 @@ if ('serviceWorker' in navigator) {
                 currentModalImages = JSON.parse(el.dataset.images);
                 modalIdx = 0;
                 showSlide(modalIdx);
+
+                const badge = document.getElementById('modalBuilderBadge');
+                const builder = el.dataset.builder || '';
+                if (builder) {
+                    badge.textContent = builder;
+                    badge.style.display = 'block';
+                } else {
+                    badge.style.display = 'none';
+                }
+
                 document.getElementById("imageModal").style.display = "flex";
             } catch (e) {
                 console.error("Image data error", e);
@@ -504,10 +526,12 @@ if ('serviceWorker' in navigator) {
                     item.className = 'project-item';
                     item.dataset.category = d.category || '';
                     item.setAttribute('data-images', JSON.stringify(imageUrls));
+                    item.dataset.builder = d.builder || '';
                     item.onclick = function () { openModal(item); };
                     item.innerHTML = `
                         <img src="${safeImgSrc(thumb.url)}" alt="${escapeHtml(d.title || '')}" style="object-position:${focalX}% ${focalY}%;">
                         <div class="project-info"><h3>${escapeHtml(d.title || '')} ${subtitleLines}</h3></div>
+                        ${d.builder ? `<div class="builder-badge">${escapeHtml(d.builder)}</div>` : ''}
                     `;
                     grid.appendChild(item);
                 });

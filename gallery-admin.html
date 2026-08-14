@@ -182,6 +182,10 @@
       <label for="f-subtitle">부제 (예: 대치동 비취타운 | 2026년)</label>
       <input type="text" id="f-subtitle" placeholder="예: 대치동 비취타운 | 2026년">
     </div>
+    <div class="field">
+      <label for="f-builder">시공사</label>
+      <input type="text" id="f-builder" placeholder="예: OO건설">
+    </div>
 
     <div class="field">
       <label>사진 (여러 장 선택 가능, 첫 번째로 지정된 사진이 목록 썸네일로 쓰입니다)</label>
@@ -692,6 +696,7 @@
   document.getElementById('uploadBtn').addEventListener('click', async () => {
     const title = document.getElementById('f-title').value.trim();
     const subtitle = document.getElementById('f-subtitle').value.trim();
+    const builder = document.getElementById('f-builder').value.trim();
     const category = document.getElementById('f-category').value;
     const statusEl = document.getElementById('uploadStatus');
     const btn = document.getElementById('uploadBtn');
@@ -723,7 +728,7 @@
       }
 
       await db.collection('galleryProjects').doc(projectId).set({
-        title, subtitle, category, images,
+        title, subtitle, category, builder, images,
         order: Date.now(),
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
@@ -735,6 +740,7 @@
       // 폼 초기화
       document.getElementById('f-title').value = '';
       document.getElementById('f-subtitle').value = '';
+      document.getElementById('f-builder').value = '';
       selectedFiles = [];
       renderPreview();
       loadProjectList();
@@ -775,7 +781,7 @@
         <div class="info" data-info="${doc.id}">
           <div class="t">${d.title || '(제목 없음)'}</div>
           <div class="s">${d.subtitle || ''}</div>
-          <div class="m">${(d.images || []).length}장 · ${categoryLabel(d.category)}</div>
+          <div class="m">${(d.images || []).length}장 · ${categoryLabel(d.category)}${d.builder ? ' · 시공: ' + d.builder : ''}</div>
         </div>
         <div class="actions">
           <button data-edit="${doc.id}">수정</button>
@@ -843,6 +849,7 @@
     infoEl.innerHTML = `
       <input type="text" class="edit-input" data-field="title" value="${esc(d.title)}" placeholder="제목 (예: HWASUNG)">
       <input type="text" class="edit-input" data-field="subtitle" value="${esc(d.subtitle)}" placeholder="부제 (예: 대치동 비취타운 | 2026년)">
+      <input type="text" class="edit-input" data-field="builder" value="${esc(d.builder)}" placeholder="시공사 (예: OO건설)">
       <select class="edit-input" data-field="category" style="margin-bottom:0;">
         <option value="unit" ${d.category === 'unit' ? 'selected' : ''}>Unit / 주거</option>
         <option value="menual" ${d.category === 'menual' ? 'selected' : ''}>Menual / 상업</option>
@@ -859,11 +866,12 @@
     actionsEl.querySelector('[data-save]').addEventListener('click', async () => {
       const title = infoEl.querySelector('[data-field="title"]').value.trim();
       const subtitle = infoEl.querySelector('[data-field="subtitle"]').value.trim();
+      const builder = infoEl.querySelector('[data-field="builder"]').value.trim();
       const category = infoEl.querySelector('[data-field="category"]').value;
 
       if (!title) { alert('제목을 입력해주세요.'); return; }
 
-      await db.collection('galleryProjects').doc(docId).update({ title, subtitle, category });
+      await db.collection('galleryProjects').doc(docId).update({ title, subtitle, builder, category });
       loadProjectList();
     });
 
