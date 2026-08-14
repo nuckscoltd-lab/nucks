@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#141414">
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+</script>
+<title>기성청구현황 | NUCKS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
+
+  :root{
+    --ink:#141414;
+    --paper:#f7f6f3;
+    --line:#d8d5cd;
+    --muted:#8a8578;
+    --green:#3f6b52;
+    --red:#a4453c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background:var(--paper);
+    font-family:'Pretendard', -apple-system, sans-serif; color:var(--ink);
+  }
+  header{
+    padding:28px 48px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .eyebrow{
+    font-size:11px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:6px;
+  }
+  h1{
+    font-family:'Cormorant Garamond', serif; font-weight:500;
+    font-size:32px; margin:0; letter-spacing:.01em;
+  }
+  .header-right{ display:flex; align-items:center; gap:24px; }
+  .header-right a{
+    font-size:13px; color:var(--muted); text-decoration:none;
+    border-bottom:1px solid var(--muted); cursor:pointer;
+  }
+  main{ max-width:1280px; margin:0 auto; padding:40px 48px; }
+
+  .panel{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:24px; margin-bottom:24px;
+  }
+  .panel-title{
+    font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:16px;
+  }
+
+  .summary-bar{ display:flex; gap:16px; flex-wrap:wrap; margin-bottom:24px; }
+  .summary-chip{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:14px 20px; font-size:13px; color:var(--muted); flex:1; min-width:150px;
+  }
+  .summary-chip b{ color:var(--ink); font-size:18px; display:block; margin-top:4px; }
+  .summary-chip.warn b{ color:var(--red); }
+
+  .toolbar{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; align-items:center; }
+  .toolbar select, .toolbar input{
+    padding:8px 10px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13px; background:#fff;
+  }
+  .toolbar input[type="text"]{ flex:1; min-width:180px; }
+  .add-btn{
+    padding:8px 16px; background:var(--ink); color:var(--paper);
+    border:none; font-size:12.5px; letter-spacing:.05em; cursor:pointer; border-radius:4px;
+  }
+
+  .project-card{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    margin-bottom:12px; overflow:hidden;
+  }
+  .project-head{
+    display:flex; align-items:center; gap:14px; padding:16px 18px; cursor:pointer;
+  }
+  .project-head:hover{ background:#fafaf8; }
+  .project-name{ font-size:14.5px; font-weight:500; }
+  .project-sub{ font-size:12px; color:var(--muted); margin-top:3px; }
+  .project-meta{ margin-left:auto; display:flex; gap:22px; align-items:center; flex-wrap:wrap; }
+  .project-meta .m-item{ text-align:right; font-size:11.5px; color:var(--muted); min-width:90px; }
+  .project-meta .m-item b{ display:block; font-size:13.5px; color:var(--ink); font-weight:500; margin-top:2px; }
+  .status-badge{
+    display:inline-block; font-size:11px; padding:3px 10px; border-radius:12px;
+    background:#ece9e2; color:#7a766c; white-space:nowrap;
+  }
+  .status-badge.done{ background:#dfe9e2; color:var(--green); }
+  .status-badge.review{ background:#fbe4e2; color:var(--red); }
+  .source-tag{
+    font-size:10px; padding:2px 7px; border-radius:10px; background:#f1eee6; color:var(--muted);
+    margin-left:8px;
+  }
+
+  .project-body{ display:none; border-top:1px solid var(--line); padding:18px; background:#fcfbf9; }
+  .project-body.open{ display:block; }
+
+  .subsection-title{ font-size:11.5px; color:var(--muted); margin:0 0 10px; letter-spacing:.06em; text-transform:uppercase; }
+
+  table.mini{ width:100%; border-collapse:collapse; margin-bottom:20px; }
+  table.mini th{
+    text-align:left; font-size:11px; color:var(--muted); font-weight:500;
+    padding:7px 8px; border-bottom:1px solid var(--line);
+  }
+  table.mini td{ padding:8px; font-size:13px; border-bottom:1px solid var(--line); }
+  table.mini tr:last-child td{ border-bottom:none; }
+  .amt-in{ color:var(--green); }
+  .amt-out{ color:var(--red); }
+
+  .edit-row input, .edit-row select{
+    width:100%; padding:6px 7px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:12.5px;
+  }
+  .row-btn{
+    font-size:11.5px; background:none; border:none; cursor:pointer;
+    text-decoration:underline; color:var(--muted); margin-right:8px; padding:0;
+  }
+  .row-btn.danger{ color:var(--red); }
+
+  .inline-add{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; align-items:flex-end; }
+  .inline-add .field{ display:flex; flex-direction:column; gap:4px; }
+  .inline-add label{ font-size:10.5px; color:var(--muted); }
+  .inline-add input, .inline-add select{
+    padding:6px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:12.5px;
+  }
+  .inline-add button{
+    padding:7px 14px; background:var(--ink); color:var(--paper); border:none;
+    font-size:11.5px; cursor:pointer; border-radius:4px; height:31px;
+  }
+
+  .project-edit-form{ margin-top:14px; padding-top:14px; border-top:1px dashed var(--line); }
+  .project-edit-form .form-row{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+  .project-edit-form .field{ display:flex; flex-direction:column; gap:4px; }
+  .project-edit-form label{ font-size:10.5px; color:var(--muted); }
+  .project-edit-form input, .project-edit-form select, .project-edit-form textarea{
+    padding:7px 9px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:12.5px; min-width:140px;
+  }
+  .project-edit-form textarea{ width:100%; min-height:60px; resize:vertical; }
+
+  .status-line{ font-size:12.5px; margin-top:8px; min-height:16px; }
+  .empty{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:36px; text-align:center; color:var(--muted); font-size:13.5px;
+  }
+  .content-box{
+    white-space:pre-line; font-size:12.5px; color:#54514a; background:#f4f2ec;
+    border-radius:4px; padding:10px 12px; margin-bottom:16px; line-height:1.6;
+  }
+
+  @media (max-width: 720px) {
+    header{ padding:20px !important; flex-wrap:wrap; gap:10px; }
+    .header-right{ flex-wrap:wrap; gap:12px !important; }
+    main{ padding:24px 16px !important; }
+    h1{ font-size:24px !important; }
+    input, select, textarea{ font-size:16px !important; }
+    .project-head{ flex-wrap:wrap; }
+    .project-meta{ margin-left:0; width:100%; justify-content:space-between; }
+    table.mini{ min-width:0 !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">NUCKS</div>
+    <h1>기성청구현황</h1>
+  </div>
+  <div class="header-right">
+    <a href="index.html">Home</a>
+    <a href="#" id="logoutBtn">Logout</a>
+  </div>
+</header>
+
+<main id="mainArea">
+  <div class="empty">불러오는 중...</div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+  requireRole(['admin']);
+
+  // 📌 [내장 초기 데이터] — Firestore billingProjects 컬렉션이 비어있을 때(처음 실행 시)만 자동으로 채워지는 마이그레이션 데이터.
+  // 출처: 기성청구현황통합.xlsx 내 "프로젝트대분류표"(계약금액·최종사업비·잔금·청구미수금·총청구액·총수령액·회차별 청구/수령까지 정리된 원본 표) 전체 53건.
+  const EMBEDDED_PROJECTS = [{"seq": 1, "name": "HS/대명동 공공민간임대 인테리어 설계용역", "client": "에이치에스화성 주식회사", "category": "설계", "code": "D-2026", "contractDate": "2026-04-23", "startDate": null, "endDate": null, "contractAmount": 79200000, "finalCost": 79200000, "balance": 79200000, "totalClaim": 0, "totalReceived": 0, "outstanding": 0, "status": "미청구", "content": "", "note": "", "rounds": []}, {"seq": 2, "name": "HS/청원맨션 소규모재건축사업 인테리어 설계용역", "client": "에이치에스화성 주식회사", "category": "설계", "code": "D-2026", "contractDate": "2026-04-23", "startDate": null, "endDate": null, "contractAmount": 36300000, "finalCost": 36300000, "balance": 36300000, "totalClaim": 0, "totalReceived": 0, "outstanding": 0, "status": "미청구", "content": "", "note": "", "rounds": []}, {"seq": 3, "name": "HS/대치동 비취타운 설계용역", "client": "에이치에스화성 주식회사", "category": "설계", "code": "D-2026", "contractDate": null, "startDate": null, "endDate": null, "contractAmount": 49720000, "finalCost": 49720000, "balance": 49720000, "totalClaim": 49720000, "totalReceived": 0, "outstanding": 49720000, "status": "진행중", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 49720000, "collectAmount": 0}]}, {"seq": 4, "name": "HDC/천안 부성지구 견본주택 설계용역", "client": "에이치디씨 현대산업개발", "category": "설계", "code": "D-2025", "contractDate": "2025-08-18", "startDate": null, "endDate": null, "contractAmount": 58300000, "finalCost": 58300000, "balance": 0, "totalClaim": 58300000, "totalReceived": 58300000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 5830000, "collectAmount": 5830000}, {"round": 2, "claimAmount": 29150000, "collectAmount": 29150000}, {"round": 3, "claimAmount": 23320000, "collectAmount": 23320000}]}, {"seq": 5, "name": "HDC/천안 부성지구 단위세대 설계용역", "client": "에이치디씨 현대산업개발", "category": "설계", "code": "D-2025", "contractDate": "2025-08-18", "startDate": null, "endDate": null, "contractAmount": 213510000, "finalCost": 213510000, "balance": 85404000, "totalClaim": 128106000, "totalReceived": 128106000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 21351000, "collectAmount": 21351000}, {"round": 2, "claimAmount": 106755000, "collectAmount": 106755000}]}, {"seq": 6, "name": "개포 우성4차 재건축 수주설계 용역", "client": "고우건축", "category": "설계", "code": "D-2025", "contractDate": "2025-10-02", "startDate": null, "endDate": null, "contractAmount": 79200000, "finalCost": 0, "balance": 0, "totalClaim": 0, "totalReceived": 0, "outstanding": 0, "status": "미청구", "content": "", "note": "", "rounds": []}, {"seq": 7, "name": "광명아파트 재건축정비사업 인테리어 설계용역", "client": "에이치에스화성 주식회사", "category": "설계", "code": "D-2025", "contractDate": "2025-06-23", "startDate": null, "endDate": null, "contractAmount": 137703500, "finalCost": 137703500, "balance": 0, "totalClaim": 137703500, "totalReceived": 137703500, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 12120350, "collectAmount": 12120350}, {"round": 2, "claimAmount": 60601750, "collectAmount": 60601750}, {"round": 3, "claimAmount": 52861050, "collectAmount": 52861050}, {"round": 4, "claimAmount": 12120350, "collectAmount": 12120350}]}, {"seq": 8, "name": "롯데건설 - 용산 산호아파트 재개발 수주설계용역", "client": "고우건축", "category": "설계", "code": "D-2025", "contractDate": "2024-06-14", "startDate": null, "endDate": null, "contractAmount": 64350000, "finalCost": 64350000, "balance": 0, "totalClaim": 64350000, "totalReceived": 64350000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 19305000, "collectAmount": 19305000}, {"round": 2, "claimAmount": 12870000, "collectAmount": 12870000}, {"round": 3, "claimAmount": 25740000, "collectAmount": 25740000}, {"round": 4, "claimAmount": 6435000, "collectAmount": 6435000}]}, {"seq": 9, "name": "만촌 파크드림 에디움 인테리어 설계용역", "client": "에이치에스화성 주식회사", "category": "설계", "code": "D-2025", "contractDate": "2025-04-30", "startDate": null, "endDate": null, "contractAmount": 24090000, "finalCost": 24090000, "balance": 0, "totalClaim": 24090000, "totalReceived": 24090000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 9636000, "collectAmount": 9636000}, {"round": 2, "claimAmount": 12045000, "collectAmount": 12045000}, {"round": 3, "claimAmount": 2409000, "collectAmount": 2409000}]}, {"seq": 10, "name": "삼성동 89/89-3 고급공동주택 인테리어설계", "client": "(주)현대레져", "category": "설계", "code": "D-2025", "contractDate": "2025-11-30", "startDate": null, "endDate": null, "contractAmount": 353100000, "finalCost": 353100000, "balance": 353100000, "totalClaim": 0, "totalReceived": 0, "outstanding": 0, "status": "미청구", "content": "", "note": "", "rounds": []}, {"seq": 11, "name": "장위15구역 재건축 대안설계용역", "client": "㈜하우드엔지니어링종합건축사사무소", "category": "설계", "code": "D-2025", "contractDate": "2025-08-18", "startDate": null, "endDate": null, "contractAmount": 99000000, "finalCost": 99000000, "balance": 0, "totalClaim": 99000000, "totalReceived": 99000000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 69300000, "collectAmount": 69300000}, {"round": 2, "claimAmount": 29700000, "collectAmount": 29700000}]}, {"seq": 12, "name": "HDC/안양신한 재개발정비사업 단위세대 인테리어 설계용역", "client": "에이치디씨현대산업개발", "category": "설계", "code": "D-2024", "contractDate": "2024-09-23", "startDate": null, "endDate": null, "contractAmount": 57640000, "finalCost": 57640000, "balance": 0, "totalClaim": 57640000, "totalReceived": 57640000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 5764000, "collectAmount": 5764000}, {"round": 2, "claimAmount": 28820000, "collectAmount": 28820000}, {"round": 3, "claimAmount": 23056000, "collectAmount": 23056000}]}, {"seq": 13, "name": "HDC/안양신한 재개발정비사업 모델하우스 인테리어 설계용역", "client": "에이치디씨현대산업개발", "category": "설계", "code": "D-2024", "contractDate": "2024-09-23", "startDate": null, "endDate": null, "contractAmount": 21340000, "finalCost": 21340000, "balance": 0, "totalClaim": 21340000, "totalReceived": 21340000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 2134000, "collectAmount": 2134000}, {"round": 2, "claimAmount": 10670000, "collectAmount": 10670000}, {"round": 3, "claimAmount": 8536000, "collectAmount": 8536000}]}, {"seq": 14, "name": "롯데건설 - 용산산호아파트", "client": "고우건축", "category": "설계", "code": "D-2024", "contractDate": "2024-06-14", "startDate": null, "endDate": null, "contractAmount": 64350000, "finalCost": 64350000, "balance": 0, "totalClaim": 64350000, "totalReceived": 64350000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 19305000, "collectAmount": 19305000}, {"round": 2, "claimAmount": 12870000, "collectAmount": 12870000}, {"round": 3, "claimAmount": 25740000, "collectAmount": 25740000}, {"round": 4, "claimAmount": 6435000, "collectAmount": 6435000}]}, {"seq": 15, "name": "밥장인 돼지김치찌개 고속버스터미널점 설계용역", "client": "밥장인", "category": "설계", "code": "D-2024", "contractDate": "2024-12-15", "startDate": null, "endDate": null, "contractAmount": 15400000, "finalCost": 15400000, "balance": 0, "totalClaim": 15400000, "totalReceived": 15400000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 15400000, "collectAmount": 15400000}]}, {"seq": 16, "name": "전농8 재정비 촉진구역 주택재개발 정비사업 대안설계", "client": "고우건축", "category": "설계", "code": "D-2024", "contractDate": "2024-01-10", "startDate": null, "endDate": null, "contractAmount": 66000000, "finalCost": 66000000, "balance": 0, "totalClaim": 66000000, "totalReceived": 66000000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 19800000, "collectAmount": 19800000}, {"round": 2, "claimAmount": 13200000, "collectAmount": 13200000}, {"round": 3, "claimAmount": 26400000, "collectAmount": 26400000}, {"round": 4, "claimAmount": 6600000, "collectAmount": 6600000}]}, {"seq": 17, "name": "홍천 대상 웰라움 단위세대 설계", "client": "대신자산신탁", "category": "설계", "code": "D-2024", "contractDate": "2024-03-01", "startDate": null, "endDate": null, "contractAmount": 176000000, "finalCost": 176000000, "balance": 0, "totalClaim": 176000000, "totalReceived": 176000000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 52800000, "collectAmount": 52800000}, {"round": 2, "claimAmount": 88000000, "collectAmount": 88000000}, {"round": 3, "claimAmount": 35200000, "collectAmount": 35200000}]}, {"seq": 18, "name": "HDC/광주화정 A1현장 단위세대 마감 트렌드업 인테리어 설계용역", "client": "에이치디씨현대산업개발", "category": "설계", "code": "D-2023", "contractDate": "2023-10-01", "startDate": null, "endDate": null, "contractAmount": 88000000, "finalCost": 88000000, "balance": 0, "totalClaim": 88000000, "totalReceived": 88000000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 8800000, "collectAmount": 8800000}, {"round": 2, "claimAmount": 17600000, "collectAmount": 17600000}, {"round": 3, "claimAmount": 17600000, "collectAmount": 17600000}, {"round": 4, "claimAmount": 44000000, "collectAmount": 44000000}]}, {"seq": 19, "name": "HDC/보문5구역 MH및 단위세대 인테리어 설계용역", "client": "에이치디씨현대산업개발", "category": "설계", "code": "D-2023", "contractDate": "2023-04-12", "startDate": null, "endDate": null, "contractAmount": 59950000, "finalCost": 59950000, "balance": 0, "totalClaim": 59950000, "totalReceived": 59950000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 5995000, "collectAmount": 5995000}, {"round": 2, "claimAmount": 29975000, "collectAmount": 29975000}, {"round": 3, "claimAmount": 6160000, "collectAmount": 6160000}, {"round": 4, "claimAmount": 17820000, "collectAmount": 17820000}]}, {"seq": 20, "name": "HDC/익산부송4지구 단위세대 인테리어설계용역", "client": "에이치디씨현대산업개발", "category": "설계", "code": "D-2023", "contractDate": "2023-12-27", "startDate": null, "endDate": null, "contractAmount": 81070000, "finalCost": 81070000, "balance": 0, "totalClaim": 81070000, "totalReceived": 81070000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 8107000, "collectAmount": 8107000}, {"round": 2, "claimAmount": 40535000, "collectAmount": 40535000}, {"round": 3, "claimAmount": 32428000, "collectAmount": 32428000}]}, {"seq": 21, "name": "HDC/익산부송4지구 아이파크 MH 인테리어 설계", "client": "에이치디씨현대산업개발", "category": "설계", "code": "D-2023", "contractDate": "2023-12-27", "startDate": null, "endDate": null, "contractAmount": 28380000, "finalCost": 28380000, "balance": 0, "totalClaim": 28380000, "totalReceived": 28380000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 2838000, "collectAmount": 2828000}, {"round": 2, "claimAmount": 14190000, "collectAmount": 14190000}, {"round": 3, "claimAmount": 11352000, "collectAmount": 11352000}, {"round": 4, "claimAmount": 0, "collectAmount": 10000}]}, {"seq": 22, "name": "광주운암구역 재개발정비사업 대안설계", "client": "㈜하우드엔지니어링종합건축사사무소", "category": "설계", "code": "D-2023", "contractDate": "2023-04-12", "startDate": null, "endDate": null, "contractAmount": 88000000, "finalCost": 88000000, "balance": 0, "totalClaim": 88000000, "totalReceived": 88000000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 70400000, "collectAmount": 70400000}, {"round": 2, "claimAmount": 17600000, "collectAmount": 17600000}]}, {"seq": 23, "name": "HDC/경산2차 아이파크 M/H 인테리어 설계", "client": "에이치디씨현대산업개발", "category": "설계", "code": "D-2022", "contractDate": "2022-04-05", "startDate": null, "endDate": null, "contractAmount": 29700000, "finalCost": 29700000, "balance": 0, "totalClaim": 29700000, "totalReceived": 29700000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 29700000, "collectAmount": 29700000}]}, {"seq": 24, "name": "HDC/경산2차 아이파크 단위세대 인테리어 설계용역", "client": "에이치디씨현대산업개발", "category": "설계", "code": "D-2022", "contractDate": "2022-04-05", "startDate": null, "endDate": null, "contractAmount": 154550000, "finalCost": 154550000, "balance": 0, "totalClaim": 154550000, "totalReceived": 154550000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 15455000, "collectAmount": 15000000}, {"round": 2, "claimAmount": 92730000, "collectAmount": 92971513}, {"round": 3, "claimAmount": 46365000, "collectAmount": 46122734}, {"round": 4, "claimAmount": 0, "collectAmount": 455753}]}, {"seq": 25, "name": "강원도 속초시 금호동 공동주택 신축공사", "client": "㈜ 화승디앤씨", "category": "설계", "code": "D-2022", "contractDate": "2022-07-01", "startDate": null, "endDate": null, "contractAmount": 258500000, "finalCost": 258500000, "balance": 0, "totalClaim": 258500000, "totalReceived": 258500000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 51700000, "collectAmount": 47000000}, {"round": 2, "claimAmount": 77550000, "collectAmount": 4700000}, {"round": 3, "claimAmount": 77550000, "collectAmount": 77550000}, {"round": 4, "claimAmount": 51700000, "collectAmount": 77550000}, {"round": 5, "claimAmount": 0, "collectAmount": 51700000}]}, {"seq": 26, "name": "몽촌토성역세권 장기전세주택 인테리어 설계용역(방이동 역세권 청년주택 인테리어 설계용역)", "client": "주)동일건축", "category": "설계", "code": "D-2022", "contractDate": "2022-10-24", "startDate": null, "endDate": null, "contractAmount": 99000000, "finalCost": 9900000, "balance": 0, "totalClaim": 9900000, "totalReceived": 9900000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 9900000, "collectAmount": 9900000}]}, {"seq": 27, "name": "장안동 오피스텔 견본주택 설계용역", "client": "주식회사 담건축", "category": "설계", "code": "D-2022", "contractDate": "2022-03-17", "startDate": null, "endDate": null, "contractAmount": 33000000, "finalCost": 33000000, "balance": 0, "totalClaim": 33000000, "totalReceived": 33000000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 33000000, "collectAmount": 33000000}]}, {"seq": 28, "name": "장안동 오피스텔 인테리어설계", "client": "주식회사 더보니타", "category": "설계", "code": "D-2022", "contractDate": "2022-03-17", "startDate": null, "endDate": null, "contractAmount": 91861000, "finalCost": 91861000, "balance": 0, "totalClaim": 91861000, "totalReceived": 91861000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 18372200, "collectAmount": 14300000}, {"round": 2, "claimAmount": 27558300, "collectAmount": 21450000}, {"round": 3, "claimAmount": 18372200, "collectAmount": 17820000}, {"round": 4, "claimAmount": 18372200, "collectAmount": 15000000}, {"round": 5, "claimAmount": 9186100, "collectAmount": 23291000}]}, {"seq": 29, "name": "창원 반지1구역 재건축정비사업 입찰설계 용역", "client": "㈜하우드엔지니어링종합건축사사무소", "category": "설계", "code": "D-2022", "contractDate": "2022-04-05", "startDate": null, "endDate": null, "contractAmount": 110000000, "finalCost": 110000000, "balance": 0, "totalClaim": 110000000, "totalReceived": 110000000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 77000000, "collectAmount": 77000000}, {"round": 2, "claimAmount": 33000000, "collectAmount": 33000000}]}, {"seq": 30, "name": "행정중심복합도시 6-4 생활권 블럭형주택 커뮤니티 인테리어설계", "client": "(주)건영", "category": "설계", "code": "D-2022", "contractDate": "2022-05-01", "startDate": null, "endDate": null, "contractAmount": 11000000, "finalCost": 11000000, "balance": 0, "totalClaim": 11000000, "totalReceived": 11000000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 11000000, "collectAmount": 11000000}]}, {"seq": 31, "name": "행정중심복합도시 블록형 딘독주택용지 개발사업 인테리어 설게", "client": "리실리오 주식회사", "category": "설계", "code": "D-2022", "contractDate": "2022-07-01", "startDate": null, "endDate": null, "contractAmount": 165000000, "finalCost": 0, "balance": 0, "totalClaim": 0, "totalReceived": 0, "outstanding": 0, "status": "미청구", "content": "", "note": "", "rounds": []}, {"seq": 32, "name": "HDC/광주운암3단지 MH 설계 용역", "client": "에이치디씨현대산업개발", "category": "설계", "code": "D-2021", "contractDate": "2021-12-01", "startDate": null, "endDate": null, "contractAmount": 16500000, "finalCost": 16500000, "balance": 36137, "totalClaim": 16500000, "totalReceived": 16463863, "outstanding": 36137, "status": "진행중", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 16500000, "collectAmount": 16463863}]}, {"seq": 33, "name": "HDC/광주운암3단지 아이파크  단위세대 인테리어설계", "client": "에이치디씨현대산업개발", "category": "설계", "code": "D-2021", "contractDate": "2021-12-01", "startDate": "2025-03-24", "endDate": "2025-05-23", "contractAmount": 42801000, "finalCost": 42801000, "balance": 0, "totalClaim": 42801000, "totalReceived": 42801000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 14267000, "collectAmount": 14267000}, {"round": 2, "claimAmount": 28534000, "collectAmount": 28534000}]}, {"seq": 34, "name": "HDC/대전 아이파크시티 오피스텔 M/H 설계용역", "client": "에이치디씨현대산업개발", "category": "설계", "code": "D-2021", "contractDate": "2021-07-23", "startDate": null, "endDate": null, "contractAmount": 14300000, "finalCost": 14300000, "balance": 0, "totalClaim": 14300000, "totalReceived": 14300000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 14300000, "collectAmount": 14300000}]}, {"seq": 35, "name": "HDC/대전 아이파크시티 오피스텔 단위세대 인테리어 설계 용역", "client": "에이치디씨현대산업개발", "category": "설계", "code": "D-2021", "contractDate": "2021-08-02", "startDate": null, "endDate": null, "contractAmount": 74800000, "finalCost": 74800000, "balance": 0, "totalClaim": 74800000, "totalReceived": 74800000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 7480000, "collectAmount": 7480000}, {"round": 2, "claimAmount": 44880000, "collectAmount": 44880000}, {"round": 3, "claimAmount": 22440000, "collectAmount": 22440000}]}, {"seq": 36, "name": "극동/진주 주약동 주상복합인테리어설계", "client": "㈜ 건화디엔씨", "category": "설계", "code": "D-2021", "contractDate": "2021-10-01", "startDate": null, "endDate": null, "contractAmount": 82500000, "finalCost": 82500000, "balance": 0, "totalClaim": 82500000, "totalReceived": 82500000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 41250000, "collectAmount": 41250000}, {"round": 2, "claimAmount": 33000000, "collectAmount": 33000000}, {"round": 3, "claimAmount": 8250000, "collectAmount": 8250000}]}, {"seq": 37, "name": "극동/천안 주공4단지 주택재건축 단위세대 인테리어 설계용역", "client": "(주)가온디에스", "category": "설계", "code": "D-2021", "contractDate": "2021-09-01", "startDate": null, "endDate": null, "contractAmount": 104500000, "finalCost": 104500000, "balance": 0, "totalClaim": 104500000, "totalReceived": 104500000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 52250000, "collectAmount": 52250000}, {"round": 2, "claimAmount": 52250000, "collectAmount": 52250000}]}, {"seq": 38, "name": "김포 더 끌리움 오피스텔 인테리어 설계", "client": "주식회사 고도아이디", "category": "설계", "code": "D-2021", "contractDate": "2021-10-01", "startDate": "2025-03-24", "endDate": "2025-05-23", "contractAmount": 16500000, "finalCost": 16500000, "balance": 0, "totalClaim": 16500000, "totalReceived": 16500000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 16500000, "collectAmount": 16500000}]}, {"seq": 39, "name": "서대신동3가 ○○아파트 개발사업 인테리어 설계 용역", "client": "주식회사본개발", "category": "설계", "code": "D-2021", "contractDate": "2021-09-23", "startDate": null, "endDate": null, "contractAmount": 88000000, "finalCost": 17600000, "balance": 0, "totalClaim": 17600000, "totalReceived": 17600000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 17600000, "collectAmount": 17600000}]}, {"seq": 40, "name": "선사현대아파트 리모델링 대안설계", "client": "㈜포르테라인", "category": "설계", "code": "D-2021", "contractDate": "2021-08-21", "startDate": null, "endDate": null, "contractAmount": 82500000, "finalCost": 82500000, "balance": 0, "totalClaim": 82500000, "totalReceived": 82500000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 16500000, "collectAmount": 16500000}, {"round": 2, "claimAmount": 66000000, "collectAmount": 66000000}]}, {"seq": 41, "name": "성수1 주택 재건축 대안설계", "client": "가람건축", "category": "설계", "code": "D-2021", "contractDate": "2021-10-21", "startDate": null, "endDate": null, "contractAmount": 72600000, "finalCost": 72600000, "balance": 0, "totalClaim": 72600000, "totalReceived": 72600000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 7260000, "collectAmount": 7260000}, {"round": 2, "claimAmount": 29040000, "collectAmount": 29040000}, {"round": 3, "claimAmount": 29040000, "collectAmount": 29040000}, {"round": 4, "claimAmount": 7260000, "collectAmount": 7260000}]}, {"seq": 42, "name": "잠원동 리모델링 입찰함여 대안설계용역", "client": "(주)시공그룹 건축사사무소", "category": "설계", "code": "D-2021", "contractDate": "2021-11-01", "startDate": null, "endDate": null, "contractAmount": 121000000, "finalCost": 121000000, "balance": 0, "totalClaim": 121000000, "totalReceived": 121000000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 12100000, "collectAmount": 12100000}, {"round": 2, "claimAmount": 54450000, "collectAmount": 53119000}, {"round": 3, "claimAmount": 54450000, "collectAmount": 55781000}]}, {"seq": 43, "name": "공사/넉스빌딩개보수", "client": "넉스빌딩(윤상원)", "category": "공사", "code": "C-2026", "contractDate": "2026-02-01", "startDate": null, "endDate": null, "contractAmount": 0, "finalCost": 0, "balance": 0, "totalClaim": 0, "totalReceived": 0, "outstanding": 0, "status": "미청구", "content": "", "note": "", "rounds": []}, {"seq": 44, "name": "공사/밥장인 돼지김치찌개 고속버스터미널점", "client": "밥장인", "category": "공사", "code": "C-2025", "contractDate": "2025-03-18", "startDate": null, "endDate": null, "contractAmount": 286000000, "finalCost": 286000000, "balance": 0, "totalClaim": 286000000, "totalReceived": 286000000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 50000000, "collectAmount": 50000000}, {"round": 2, "claimAmount": 93000000, "collectAmount": 93000000}, {"round": 3, "claimAmount": 100000000, "collectAmount": 100000000}, {"round": 4, "claimAmount": 14400000, "collectAmount": 14400000}, {"round": 5, "claimAmount": 15600000, "collectAmount": 15600000}, {"round": 6, "claimAmount": 10000000, "collectAmount": 10000000}, {"round": 7, "claimAmount": 3000000, "collectAmount": 3000000}]}, {"seq": 45, "name": "공사/월계초등학교 소강당 공사", "client": "서울월계초등학교", "category": "공사", "code": "C-2025", "contractDate": "2025-07-26", "startDate": null, "endDate": null, "contractAmount": 149827970, "finalCost": 149827970, "balance": 0, "totalClaim": 149827970, "totalReceived": 149827970, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 149827970, "collectAmount": 149827970}]}, {"seq": 46, "name": "공사/잠실 레이크펠리스 아파트 공사", "client": "서정수", "category": "공사", "code": "C-2025", "contractDate": "2025-07-22", "startDate": null, "endDate": null, "contractAmount": 88000000, "finalCost": 88000000, "balance": 0, "totalClaim": 88000000, "totalReceived": 88000000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 44000000, "collectAmount": 44000000}, {"round": 2, "claimAmount": 34000000, "collectAmount": 34000000}, {"round": 3, "claimAmount": 10000000, "collectAmount": 10000000}]}, {"seq": 47, "name": "공사/밥장인부산대연점", "client": "밥장인㈜", "category": "공사", "code": "C-2024", "contractDate": "2024-06-21", "startDate": null, "endDate": null, "contractAmount": 118800000, "finalCost": 118800000, "balance": 0, "totalClaim": 118800000, "totalReceived": 118800000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 35640000, "collectAmount": 10000000}, {"round": 2, "claimAmount": 59400000, "collectAmount": 10000000}, {"round": 3, "claimAmount": 23760000, "collectAmount": 10000000}, {"round": 4, "claimAmount": 0, "collectAmount": 10000000}, {"round": 5, "claimAmount": 0, "collectAmount": 10000000}, {"round": 6, "claimAmount": 0, "collectAmount": 10000000}, {"round": 7, "claimAmount": 0, "collectAmount": 10000000}, {"round": 8, "claimAmount": 0, "collectAmount": 10000000}, {"round": 9, "claimAmount": 0, "collectAmount": 10000000}, {"round": 10, "claimAmount": 0, "collectAmount": 10000000}, {"round": 11, "claimAmount": 0, "collectAmount": 10000000}, {"round": 12, "claimAmount": 0, "collectAmount": 8800000}]}, {"seq": 48, "name": "공사/밥장인부산중앙점", "client": "밥장인㈜", "category": "공사", "code": "C-2024", "contractDate": "2024-01-30", "startDate": null, "endDate": null, "contractAmount": 198000000, "finalCost": 198000000, "balance": 0, "totalClaim": 198000000, "totalReceived": 198000000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 20000000, "collectAmount": 20000000}, {"round": 2, "claimAmount": 80000000, "collectAmount": 80000000}, {"round": 3, "claimAmount": 50000000, "collectAmount": 50000000}, {"round": 4, "claimAmount": 48000000, "collectAmount": 48000000}]}, {"seq": 49, "name": "공사/밥장인홍대점", "client": "이설아", "category": "공사", "code": "C-2024", "contractDate": "2024-06-20", "startDate": null, "endDate": null, "contractAmount": 168932500, "finalCost": 168932500, "balance": 0, "totalClaim": 168932500, "totalReceived": 168932500, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 50679750, "collectAmount": 80000000}, {"round": 2, "claimAmount": 84466250, "collectAmount": 10000000}, {"round": 3, "claimAmount": 33786500, "collectAmount": 10000000}, {"round": 4, "claimAmount": 0, "collectAmount": 10000000}, {"round": 5, "claimAmount": 0, "collectAmount": 2000000}, {"round": 6, "claimAmount": 0, "collectAmount": 10000000}, {"round": 7, "claimAmount": 0, "collectAmount": 6932500}, {"round": 8, "claimAmount": 0, "collectAmount": 40000000}]}, {"seq": 50, "name": "공사/서초 르니드 홍보관 인테리어 공사", "client": "에스앤에이치씨", "category": "공사", "code": "C-2023", "contractDate": "2023-09-07", "startDate": null, "endDate": null, "contractAmount": 1727000000, "finalCost": 1727000000, "balance": 0, "totalClaim": 1727000000, "totalReceived": 1727000000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 330000000, "collectAmount": 330000000}, {"round": 2, "claimAmount": 660000000, "collectAmount": 660000000}, {"round": 3, "claimAmount": 564300000, "collectAmount": 564300000}, {"round": 4, "claimAmount": 88000000, "collectAmount": 88000000}, {"round": 5, "claimAmount": 84700000, "collectAmount": 84700000}]}, {"seq": 51, "name": "공사/넉스빌딩 1층 공용공간 공사", "client": "이승자", "category": "공사", "code": "C-2022", "contractDate": "2022-04-01", "startDate": null, "endDate": null, "contractAmount": 55000000, "finalCost": 55000000, "balance": 0, "totalClaim": 55000000, "totalReceived": 55000000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 55000000, "collectAmount": 55000000}]}, {"seq": 52, "name": "공사/넉스빌딩 Rooftop", "client": "이승자", "category": "공사", "code": "C-2022", "contractDate": "2023-01-31", "startDate": null, "endDate": null, "contractAmount": 33000000, "finalCost": 33000000, "balance": 0, "totalClaim": 33000000, "totalReceived": 33000000, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 11000000, "collectAmount": 1000000}, {"round": 2, "claimAmount": 11000000, "collectAmount": 10000000}, {"round": 3, "claimAmount": 11000000, "collectAmount": 11000000}, {"round": 4, "claimAmount": 0, "collectAmount": 11000000}]}, {"seq": 53, "name": "공사/서서울생활과학고교 환경개선공사", "client": "서울시교육청", "category": "공사", "code": "C-2022", "contractDate": "2023-02-01", "startDate": null, "endDate": null, "contractAmount": 83134230, "finalCost": 83134230, "balance": 0, "totalClaim": 83134230, "totalReceived": 83134230, "outstanding": 0, "status": "완료", "content": "", "note": "", "rounds": [{"round": 1, "claimAmount": 83134230, "collectAmount": 83134230}]}];
+</script>
+<script>
+  document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await logOut();
+    window.location.href = 'login.html';
+  });
+</script>
+<script>
+  const projectsRef = db.collection('billingProjects');
+  let allProjects = [];
+  let openIds = new Set();
+  let editingProjectId = null;
+  let activeStatus = '전체';
+  let activeCategory = '전체';
+  let searchText = '';
+
+  function fmtWon(n){ return (Math.round(n) || 0).toLocaleString() + '원'; }
+  function num(v){ return Number(v) || 0; }
+  function esc(s){ return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+
+  function totalClaim(p){
+    if (p.rounds && p.rounds.length) return p.rounds.reduce((s, r) => s + num(r.claimAmount), 0);
+    return 0;
+  }
+  function totalCollect(p){
+    if (p.rounds && p.rounds.length) return p.rounds.reduce((s, r) => s + num(r.collectAmount), 0);
+    return 0;
+  }
+  function outstanding(p){
+    const claim = totalClaim(p);
+    if (!claim) return 0;
+    return claim - totalCollect(p);
+  }
+
+  async function seedIfEmpty(){
+    const snap = await projectsRef.limit(1).get();
+    if (!snap.empty) return;
+    const batch = db.batch();
+    EMBEDDED_PROJECTS.forEach((p, i) => {
+      const docRef = projectsRef.doc();
+      batch.set(docRef, Object.assign({}, p, { order: i, createdAt: firebase.firestore.FieldValue.serverTimestamp() }));
+    });
+    await batch.commit();
+  }
+
+  async function loadProjects(){
+    await seedIfEmpty();
+    const snap = await projectsRef.orderBy('order', 'asc').get();
+    allProjects = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  }
+
+  function renderAll(){
+    const main = document.getElementById('mainArea');
+    main.innerHTML = `
+      <div class="summary-bar" id="summaryBar"></div>
+      <div class="panel" style="padding:16px 18px;">
+        <div class="toolbar">
+          <select id="statusFilter">
+            <option value="전체">전체 상태</option>
+          </select>
+          <select id="categoryFilter">
+            <option value="전체">전체 구분</option>
+            <option value="공사">공사</option>
+            <option value="설계">설계</option>
+          </select>
+          <input type="text" id="searchInput" placeholder="계약명 · 거래처명 검색">
+          <button class="add-btn" id="newProjectBtn">+ 새 프로젝트</button>
+        </div>
+      </div>
+      <div id="projectList"></div>
+      <div class="empty" id="emptyMsg" style="display:none;">조건에 맞는 프로젝트가 없습니다.</div>
+    `;
+
+    // 상태 옵션 동적 채우기
+    const statuses = [...new Set(allProjects.map(p => p.status).filter(Boolean))].sort();
+    document.getElementById('statusFilter').innerHTML =
+      '<option value="전체">전체 상태</option>' + statuses.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+    document.getElementById('statusFilter').value = activeStatus;
+    document.getElementById('categoryFilter').value = activeCategory;
+    document.getElementById('searchInput').value = searchText;
+
+    document.getElementById('statusFilter').addEventListener('change', (e) => { activeStatus = e.target.value; renderList(); });
+    document.getElementById('categoryFilter').addEventListener('change', (e) => { activeCategory = e.target.value; renderList(); });
+    document.getElementById('searchInput').addEventListener('input', (e) => { searchText = e.target.value.trim(); renderList(); });
+    document.getElementById('newProjectBtn').addEventListener('click', createBlankProject);
+
+    renderSummary();
+    renderList();
+  }
+
+  function renderSummary(){
+    const bar = document.getElementById('summaryBar');
+    const totalContract = allProjects.reduce((s, p) => s + num(p.contractAmount), 0);
+    const totalCol = allProjects.reduce((s, p) => s + totalCollect(p), 0);
+    const totalOut = allProjects.reduce((s, p) => s + outstanding(p), 0);
+    const inProgress = allProjects.filter(p => p.status && !['완료', '지급완료'].includes(p.status)).length;
+
+    bar.innerHTML = `
+      <div class="summary-chip">프로젝트 수<b>${allProjects.length}건</b></div>
+      <div class="summary-chip">총계약금 합계<b>${fmtWon(totalContract)}</b></div>
+      <div class="summary-chip">총수금 합계<b>${fmtWon(totalCol)}</b></div>
+      <div class="summary-chip ${totalOut > 0 ? 'warn' : ''}">청구미수금 합계<b>${fmtWon(totalOut)}</b></div>
+      <div class="summary-chip">진행중/확인필요<b>${inProgress}건</b></div>
+    `;
+  }
+
+  function statusClass(status){
+    if (['완료', '지급완료'].includes(status)) return 'done';
+    if (status === '확인필요') return 'review';
+    return '';
+  }
+
+  function renderList(){
+    const listEl = document.getElementById('projectList');
+    const emptyMsg = document.getElementById('emptyMsg');
+
+    let rows = allProjects;
+    if (activeStatus !== '전체') rows = rows.filter(p => p.status === activeStatus);
+    if (activeCategory !== '전체') rows = rows.filter(p => (p.category || '').includes(activeCategory));
+    if (searchText) {
+      const q = searchText.toLowerCase();
+      rows = rows.filter(p => (p.name || '').toLowerCase().includes(q) || (p.client || '').toLowerCase().includes(q));
+    }
+
+    if (rows.length === 0) {
+      listEl.innerHTML = '';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+
+    listEl.innerHTML = rows.map(p => renderProjectCard(p)).join('');
+
+    rows.forEach(p => {
+      const head = document.querySelector(`[data-head="${p.id}"]`);
+      if (head) head.addEventListener('click', () => toggleOpen(p.id));
+    });
+
+    rows.forEach(p => {
+      if (openIds.has(p.id)) bindCardEvents(p);
+    });
+  }
+
+  function toggleOpen(id){
+    if (openIds.has(id)) openIds.delete(id); else openIds.add(id);
+    renderList();
+  }
+
+  function renderProjectCard(p){
+    const isOpen = openIds.has(p.id);
+    const claim = totalClaim(p);
+    const collect = totalCollect(p);
+    const out = outstanding(p);
+
+    return `
+      <div class="project-card">
+        <div class="project-head" data-head="${p.id}">
+          <div>
+            <div class="project-name">${esc(p.name)}</div>
+            <div class="project-sub">${esc(p.client || '-')} · ${esc(p.category || '-')}${p.contractDate ? ' · 계약 ' + p.contractDate : ''}</div>
+          </div>
+          <div class="project-meta">
+            <div class="m-item">총계약금<b>${p.contractAmount ? fmtWon(p.contractAmount) : '-'}</b></div>
+            <div class="m-item">청구액<b>${claim ? fmtWon(claim) : '-'}</b></div>
+            <div class="m-item">수금액<b>${fmtWon(collect)}</b></div>
+            <div class="m-item">미수금<b style="${out > 0 ? 'color:var(--red);' : ''}">${claim ? fmtWon(out) : '-'}</b></div>
+            <span class="status-badge ${statusClass(p.status)}">${esc(p.status || '-')}</span>
+          </div>
+        </div>
+        <div class="project-body ${isOpen ? 'open' : ''}" data-body="${p.id}">
+          ${isOpen ? renderProjectBody(p) : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderProjectBody(p){
+    const roundsHtml = (p.rounds || []).length ? `
+      <div class="subsection-title">회차별 청구 / 수금</div>
+      <table class="mini">
+        <thead><tr><th>회차</th><th>청구금액</th><th>수금금액</th><th>관리</th></tr></thead>
+        <tbody id="rounds-${p.id}">
+          ${p.rounds.map((r, i) => `
+            <tr>
+              <td>${r.round}차</td>
+              <td>${fmtWon(r.claimAmount)}</td>
+              <td>${fmtWon(r.collectAmount)}</td>
+              <td>
+                <button class="row-btn" data-round-edit="${p.id}:${i}">수정</button>
+                <button class="row-btn danger" data-round-del="${p.id}:${i}">삭제</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      <div class="inline-add">
+        <div class="field"><label>회차</label><input type="number" id="nr-round-${p.id}" style="width:60px;" value="${(p.rounds.length || 0) + 1}"></div>
+        <div class="field"><label>청구금액</label><input type="text" inputmode="numeric" id="nr-claim-${p.id}" class="money-in" style="width:120px;" placeholder="0"></div>
+        <div class="field"><label>수금금액</label><input type="text" inputmode="numeric" id="nr-collect-${p.id}" class="money-in" style="width:120px;" placeholder="0"></div>
+        <button data-round-add="${p.id}">회차 추가</button>
+      </div>
+    ` : `
+      <div class="subsection-title">회차별 청구 / 수금 (없음 — 은행 거래내역만 이관된 건)</div>
+      <div class="inline-add">
+        <div class="field"><label>회차</label><input type="number" id="nr-round-${p.id}" style="width:60px;" value="1"></div>
+        <div class="field"><label>청구금액</label><input type="text" inputmode="numeric" id="nr-claim-${p.id}" class="money-in" style="width:120px;" placeholder="0"></div>
+        <div class="field"><label>수금금액</label><input type="text" inputmode="numeric" id="nr-collect-${p.id}" class="money-in" style="width:120px;" placeholder="0"></div>
+        <button data-round-add="${p.id}">회차 추가</button>
+      </div>
+    `;
+
+    const contentHtml = p.content ? `<div class="subsection-title">진행 메모</div><div class="content-box">${esc(p.content)}</div>` : '';
+    const noteHtml = p.note ? `<div class="subsection-title">특이사항</div><div class="content-box">${esc(p.note)}</div>` : '';
+    const extraInfo = `
+      <div class="subsection-title">추가 정보</div>
+      <table class="mini" style="margin-bottom:20px;">
+        <tbody>
+          <tr><td style="color:var(--muted); width:120px;">최종사업비</td><td>${p.finalCost ? fmtWon(p.finalCost) : '-'}</td>
+              <td style="color:var(--muted); width:100px;">착수일</td><td>${p.startDate || '-'}</td></tr>
+          <tr><td style="color:var(--muted);">코드</td><td>${esc(p.code || '-')}</td>
+              <td style="color:var(--muted);">종료일</td><td>${p.endDate || '-'}</td></tr>
+        </tbody>
+      </table>
+    `;
+
+    return `
+      ${contentHtml}
+      ${noteHtml}
+      ${extraInfo}
+      ${roundsHtml}
+      <button class="row-btn" data-project-edit="${p.id}" style="margin-top:6px;">프로젝트 정보 수정</button>
+      <button class="row-btn danger" data-project-del="${p.id}">프로젝트 삭제</button>
+      <div id="editForm-${p.id}"></div>
+      <div class="status-line" id="status-${p.id}"></div>
+    `;
+  }
+
+  function bindCardEvents(p){
+    const addRoundBtn = document.querySelector(`[data-round-add="${p.id}"]`);
+    if (addRoundBtn) addRoundBtn.addEventListener('click', () => addRound(p.id));
+
+    document.querySelectorAll(`[data-round-del^="${p.id}:"]`).forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.roundDel.split(':')[1]);
+        deleteRound(p.id, idx);
+      });
+    });
+    document.querySelectorAll(`[data-round-edit^="${p.id}:"]`).forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.roundEdit.split(':')[1]);
+        editRoundPrompt(p.id, idx);
+      });
+    });
+
+    const editBtn = document.querySelector(`[data-project-edit="${p.id}"]`);
+    if (editBtn) editBtn.addEventListener('click', () => openProjectEditForm(p.id));
+
+    const delBtn = document.querySelector(`[data-project-del="${p.id}"]`);
+    if (delBtn) delBtn.addEventListener('click', () => deleteProject(p.id));
+  }
+
+  function parseMoney(el){
+    return Number(String(el.value || '').replace(/[^\d]/g, '')) || 0;
+  }
+
+  async function addRound(id){
+    const p = allProjects.find(x => x.id === id);
+    const round = Number(document.getElementById(`nr-round-${id}`).value) || (p.rounds.length + 1);
+    const claimAmount = parseMoney(document.getElementById(`nr-claim-${id}`));
+    const collectAmount = parseMoney(document.getElementById(`nr-collect-${id}`));
+    const rounds = [...(p.rounds || []), { round, claimAmount, collectAmount }];
+    await projectsRef.doc(id).update({ rounds });
+    await loadProjects();
+  }
+
+  async function deleteRound(id, idx){
+    if (!confirm('이 회차를 삭제할까요?')) return;
+    const p = allProjects.find(x => x.id === id);
+    const rounds = p.rounds.filter((_, i) => i !== idx);
+    await projectsRef.doc(id).update({ rounds });
+    await loadProjects();
+  }
+
+  async function editRoundPrompt(id, idx){
+    const p = allProjects.find(x => x.id === id);
+    const r = p.rounds[idx];
+    const newClaim = prompt('청구금액', r.claimAmount);
+    if (newClaim === null) return;
+    const newCollect = prompt('수금금액', r.collectAmount);
+    if (newCollect === null) return;
+    const rounds = [...p.rounds];
+    rounds[idx] = { round: r.round, claimAmount: Number(newClaim) || 0, collectAmount: Number(newCollect) || 0 };
+    await projectsRef.doc(id).update({ rounds });
+    await loadProjects();
+  }
+
+  function openProjectEditForm(id){
+    const p = allProjects.find(x => x.id === id);
+    const container = document.getElementById(`editForm-${id}`);
+    container.innerHTML = `
+      <div class="project-edit-form">
+        <div class="form-row">
+          <div class="field" style="min-width:220px;"><label>계약명</label><input type="text" id="ep-name-${id}" value="${esc(p.name)}"></div>
+          <div class="field"><label>거래처명</label><input type="text" id="ep-client-${id}" value="${esc(p.client)}"></div>
+          <div class="field"><label>구분</label>
+            <select id="ep-category-${id}">
+              <option value="공사" ${p.category === '공사' ? 'selected' : ''}>공사</option>
+              <option value="설계" ${p.category === '설계' ? 'selected' : ''}>설계</option>
+            </select>
+          </div>
+          <div class="field"><label>상태</label><input type="text" id="ep-status-${id}" value="${esc(p.status)}" placeholder="완료/진행중 등"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>계약일자</label><input type="date" id="ep-contractDate-${id}" value="${p.contractDate || ''}"></div>
+          <div class="field"><label>시작일</label><input type="date" id="ep-startDate-${id}" value="${p.startDate || ''}"></div>
+          <div class="field"><label>종료일</label><input type="date" id="ep-endDate-${id}" value="${p.endDate || ''}"></div>
+          <div class="field"><label>총계약금(부가세포함)</label><input type="text" inputmode="numeric" id="ep-contractAmount-${id}" class="money-in" value="${p.contractAmount ? p.contractAmount.toLocaleString('ko-KR') : ''}"></div>
+          <div class="field"><label>최종사업비</label><input type="text" inputmode="numeric" id="ep-finalCost-${id}" class="money-in" value="${p.finalCost ? p.finalCost.toLocaleString('ko-KR') : ''}"></div>
+        </div>
+        <div class="field" style="margin-bottom:10px;"><label>특이사항</label><textarea id="ep-note-${id}">${esc(p.note)}</textarea></div>
+        <button class="add-btn" id="ep-save-${id}">저장</button>
+        <button class="row-btn" id="ep-cancel-${id}" style="margin-left:8px;">취소</button>
+      </div>
+    `;
+    document.getElementById(`ep-save-${id}`).addEventListener('click', () => saveProjectEdit(id));
+    document.getElementById(`ep-cancel-${id}`).addEventListener('click', () => { container.innerHTML = ''; });
+  }
+
+  async function saveProjectEdit(id){
+    const statusEl = document.getElementById(`status-${id}`);
+    const updateData = {
+      name: document.getElementById(`ep-name-${id}`).value.trim(),
+      client: document.getElementById(`ep-client-${id}`).value.trim(),
+      category: document.getElementById(`ep-category-${id}`).value,
+      status: document.getElementById(`ep-status-${id}`).value.trim(),
+      contractDate: document.getElementById(`ep-contractDate-${id}`).value || null,
+      startDate: document.getElementById(`ep-startDate-${id}`).value || null,
+      endDate: document.getElementById(`ep-endDate-${id}`).value || null,
+      contractAmount: parseMoney(document.getElementById(`ep-contractAmount-${id}`)),
+      finalCost: parseMoney(document.getElementById(`ep-finalCost-${id}`)),
+      note: document.getElementById(`ep-note-${id}`).value.trim()
+    };
+    try {
+      await projectsRef.doc(id).update(updateData);
+      await loadProjects();
+    } catch (err) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '저장 실패: ' + err.message;
+    }
+  }
+
+  async function deleteProject(id){
+    const p = allProjects.find(x => x.id === id);
+    if (!confirm(`"${p.name}" 프로젝트를 삭제할까요? 회차/거래 이력이 모두 함께 삭제됩니다.`)) return;
+    await projectsRef.doc(id).delete();
+    await loadProjects();
+  }
+
+  async function createBlankProject(){
+    const name = prompt('새 프로젝트의 계약명을 입력하세요');
+    if (!name) return;
+    await projectsRef.add({
+      source: 'manual', name, client: '', category: '공사', status: '진행중',
+      contractDate: null, startDate: null, endDate: null, contractAmount: 0,
+      note: '', content: '', rounds: [], finalCost: 0,
+      order: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await loadProjects();
+  }
+
+  auth.onAuthStateChanged((user) => {
+    if (user) loadProjects();
+  });
+
+  // 금액 입력칸(money-in) 실시간 콤마 포맷팅 — 동적으로 계속 새로 생기는 요소들이라 이벤트 위임 방식 사용
+  document.addEventListener('input', (e) => {
+    if (!e.target.classList || !e.target.classList.contains('money-in')) return;
+    const el = e.target;
+    const cursorFromEnd = el.value.length - el.selectionStart;
+    const digits = el.value.replace(/[^\d]/g, '');
+    el.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
+    const pos = Math.max(0, el.value.length - cursorFromEnd);
+    el.setSelectionRange(pos, pos);
+  });
+</script>
+</body>
+</html>
