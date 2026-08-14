@@ -135,7 +135,9 @@
     <label for="forecastDate">예상잔고 기준일</label>
     <input type="date" id="forecastDate">
     <button type="button" class="btn-ghost" id="setMonthEndBtn">이번달 말일</button>
-    <button type="button" class="btn-ghost" id="setNextMonthStartBtn">다음달 5일</button>
+    <button type="button" class="btn-ghost" id="setNextMonthStartBtn">다음달</button>
+    <input type="number" id="nextMonthDay" min="1" max="31" value="5" style="width:60px; padding:8px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff;">
+    <label for="nextMonthDay" style="font-size:12.5px; color:var(--muted);">일</label>
   </div>
 
   <div class="summary-row">
@@ -471,7 +473,8 @@
   });
   document.getElementById('setNextMonthStartBtn').addEventListener('click', () => {
     const d = new Date();
-    document.getElementById('forecastDate').value = new Date(d.getFullYear(), d.getMonth() + 1, 5).toISOString().slice(0, 10);
+    const day = Math.min(31, Math.max(1, Number(document.getElementById('nextMonthDay').value) || 5));
+    document.getElementById('forecastDate').value = new Date(d.getFullYear(), d.getMonth() + 1, day).toISOString().slice(0, 10);
     renderSummary();
   });
 
