@@ -148,7 +148,9 @@ if ('serviceWorker' in navigator) {
             position: absolute; bottom: 8px; right: 8px; z-index: 2;
             font-size: 10px; color: rgba(255,255,255,.92); background: rgba(0,0,0,.5);
             padding: 2px 7px; border-radius: 3px; letter-spacing: .01em; pointer-events: none;
+            opacity: 0; transition: 0.3s;
         }
+        .project-item:hover .builder-badge{ opacity: 1; }
 
     footer { padding: 40px 60px; background: #1a1a1a; color: #fff; font-size: 13px; }
     .footer-grid { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 20px; }
@@ -235,6 +237,7 @@ if ('serviceWorker' in navigator) {
            opacity: 1;
             padding-bottom: 15px;
         }
+        .builder-badge{ opacity: 1; }
         }
         .hide { display: none !important; }
     </style>
