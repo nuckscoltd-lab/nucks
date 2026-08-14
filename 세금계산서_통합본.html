@@ -1,0 +1,2762 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>세금계산서 자동 생성 및 관리 시스템 (통합)</title>
+    <style>
+        /* 기본 리셋 및 프린트 색상 강제 유지 옵션 */
+        *, *::before, *::after {
+            box-shadow: none;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+            background-color: #f1f5f9;
+            color: #333;
+            margin: 0;
+            padding: 15px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* 웹 인터페이스 헤더 */
+        header {
+            background-color: #1e293b;
+            color: #fff;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+        header p { margin: 5px 0 0 0; font-size: 13px; color: #94a3b8; }
+
+        /* 🔗 [NAS 공유 데이터 연동 영역] */
+        .sync-box {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 10px 14px;
+            min-width: 280px;
+            font-size: 12.5px;
+        }
+        .sync-box .sync-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .sync-box .sync-status .dot {
+            width: 9px; height: 9px; border-radius: 50%;
+            background: #ef4444; flex-shrink: 0;
+            box-shadow: 0 0 0 0 rgba(239,68,68,.6);
+        }
+        .sync-box .sync-status.connected .dot { background: #22c55e; }
+        .sync-box .sync-status .label { color: #e2e8f0; }
+        .sync-box .sync-detail { color: #94a3b8; font-size: 11.5px; margin-bottom: 8px; line-height: 1.4; }
+        .sync-box .sync-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+        .sync-box button {
+            font-size: 12px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid #475569;
+            background: #1e293b;
+            color: #e2e8f0;
+            cursor: pointer;
+        }
+        .sync-box button:hover { background: #334155; }
+        .sync-box button.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+        .sync-box button.primary:hover { background: #1d4ed8; }
+        .sync-box button:disabled { opacity: .5; cursor: not-allowed; }
+        .sync-toast {
+            position: fixed;
+            top: 16px; right: 16px;
+            background: #0f172a;
+            color: #fff;
+            padding: 12px 18px;
+            border-radius: 8px;
+            font-size: 13px;
+            box-shadow: 0 4px 14px rgba(0,0,0,.25);
+            border: 1px solid #334155;
+            z-index: 9999;
+            opacity: 0;
+            transform: translateY(-8px);
+            transition: opacity .2s, transform .2s;
+            pointer-events: none;
+            max-width: 320px;
+            line-height: 1.4;
+        }
+        .sync-toast.show { opacity: 1; transform: translateY(0); }
+        .sync-toast.error { border-color: #ef4444; }
+        .sync-toast.ok { border-color: #22c55e; }
+
+        /* 🗂️ [거래처 전환 토글 탭] */
+        .client-tabs {
+            display: flex;
+            gap: 6px;
+            background: #fff;
+            padding: 8px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #e2e8f0;
+            flex-wrap: wrap;
+        }
+        .client-tab {
+            position: relative;
+            flex: 1;
+            min-width: 130px;
+            padding: 10px 8px;
+            text-align: center;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            color: #475569;
+            transition: all 0.15s ease;
+        }
+        .client-tab:hover { background: #eff6ff; border-color: #93c5fd; }
+        .client-tab.active {
+            background: #1e293b;
+            color: #fff;
+            border-color: #1e293b;
+        }
+        .client-tab .sub {
+            display: block;
+            font-size: 10px;
+            font-weight: normal;
+            margin-top: 2px;
+            opacity: 0.75;
+        }
+        .client-tab.summary-tab {
+            border-color: #16a34a;
+            color: #16a34a;
+            background: #f0fdf4;
+        }
+        .client-tab.summary-tab:hover { background: #dcfce7; border-color: #16a34a; }
+        .client-tab.summary-tab.active {
+            background: #16a34a;
+            color: #fff;
+            border-color: #16a34a;
+        }
+        .client-tab.add-tab {
+            flex: 0 0 70px;
+            min-width: 60px;
+            border-style: dashed;
+            color: #94a3b8;
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .client-tab.add-tab .sub { font-size: 9px; }
+        .client-tab.add-tab:hover { background: #f1f5f9; border-color: #94a3b8; color: #475569; }
+        .client-tab.expired {
+            opacity: 0.55;
+        }
+        .client-tab.expired::after {
+            content: '계약종료';
+            display: inline-block;
+            font-size: 9px;
+            font-weight: bold;
+            color: #fff;
+            background: #94a3b8;
+            border-radius: 3px;
+            padding: 1px 4px;
+            margin-left: 4px;
+            vertical-align: middle;
+        }
+        .client-tab-close {
+            position: absolute;
+            top: 3px;
+            right: 5px;
+            font-size: 11px;
+            color: #94a3b8;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .client-tab-close:hover { color: #dc2626; }
+
+        /* 사이드바 배치 그리드 */
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 20px;
+        }
+
+        /* 옵션 제어 카드 */
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 18px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            height: fit-content;
+        }
+        .card h2 {
+            font-size: 15px;
+            margin-top: 0;
+            margin-bottom: 12px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #3b82f6;
+            color: #1e293b;
+        }
+        .form-group { margin-bottom: 10px; }
+        .form-group label {
+            display: block;
+            font-size: 11px;
+            font-weight: bold;
+            margin-bottom: 3px;
+            color: #475569;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .form-group input[type="file"] {
+            padding: 4px;
+            background: #f8fafc;
+            cursor: pointer;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        /* 인터렉티브 버튼 */
+        .btn {
+            display: inline-block;
+            width: 100%;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            margin-top: 8px;
+        }
+        .btn:hover { background-color: #2563eb; }
+        .btn-secondary { background-color: #475569; }
+        .btn-secondary:hover { background-color: #334155; }
+
+        /* 💾 [거래처 정보 저장 버튼] */
+        .btn-save {
+            background-color: #0f766e;
+        }
+        .btn-save:hover { background-color: #0d5d56; }
+        .btn-save.unsaved {
+            background-color: #ea580c;
+            animation: save-pulse 1.6s ease-in-out infinite;
+        }
+        .btn-save.unsaved:hover { background-color: #c2410c; }
+        @keyframes save-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(234, 88, 12, 0.4); }
+            50% { box-shadow: 0 0 0 5px rgba(234, 88, 12, 0); }
+        }
+        .save-status {
+            font-size: 11px;
+            text-align: center;
+            margin-top: 6px;
+            color: #94a3b8;
+            line-height: 1.4;
+        }
+        .save-status.unsaved-text {
+            color: #ea580c;
+            font-weight: bold;
+        }
+
+        /* 프리뷰 및 출력 서식 존 */
+        .preview-area { overflow-x: auto; }
+        .action-bar {
+            background: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* 📍 [A4 비례 균형 무대 세팅]: 상하좌우 여백 조율 패널 */
+        .invoice-print-wrapper {
+            width: 790px;
+            background: #fff;
+            margin: 0 auto;
+            padding: 45px 40px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 1060px;
+        }
+
+        /* 🔴 공급자용 적색 서식 */
+        .tax-invoice-box {
+            width: 100%;
+            border: 2px solid #9e2a2b;
+            padding: 1px;
+            font-size: 11px;
+            position: relative;
+            background-color: #fff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .tax-invoice-box .tax-invoice-table th,
+        .tax-invoice-box .tax-invoice-table td {
+            border: 1px solid #9e2a2b;
+            height: 24px;
+            text-align: center;
+            padding: 1px 2px;
+            color: #111;
+        }
+        .tax-invoice-box .bg-label {
+            background-color: #f5dede !important;
+            color: #5c1819;
+        }
+
+        /* 🔵 공급받는자용 청색 서식 */
+        .tax-invoice-box.blue-version {
+            border-color: #1e427b;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .tax-invoice-box.blue-version .tax-invoice-table th,
+        .tax-invoice-box.blue-version .tax-invoice-table td {
+            border-color: #1e427b;
+        }
+        .blue-version .bg-label {
+            background-color: #e6edf5 !important;
+            color: #112a52;
+        }
+
+        /* 테이블 공통 구조 */
+        .tax-invoice-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .text-left { text-align: left !important; padding-left: 6px !important; }
+        .text-right { text-align: right !important; padding-right: 6px !important; }
+        .font-bold { font-weight: bold !important; }
+
+        /* 🎯 [세금계산서 메인 타이틀 및 대표자 미들라인 정렬] */
+        .middle-align-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        .stamp-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            width: 100%;
+            height: 100%;
+            min-height: 22px;
+            padding: 0 0 0 6px;
+            margin: 0;
+        }
+        .stamp-image {
+            position: absolute;
+            left: 60%;
+            top: 50%;
+            transform: translate(-15%, -50%);
+            width: 42px;
+            height: 42px;
+            object-fit: contain;
+            mix-blend-mode: multiply;
+            z-index: 10;
+        }
+        .stamp-image[src=""], .stamp-image:not([src]) {
+            opacity: 0 !important;
+        }
+
+        /* 격자 자릿수 숫자 폰트 정의 */
+        .amt-cell {
+            font-family: 'Malgun Gothic', sans-serif;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        /* 📍 [중앙 절개선 밸런스 패널] */
+        .cut-line {
+            border-top: 1px dashed #cbd5e1;
+            margin: 35px 0;
+            text-align: center;
+            font-size: 11px;
+            color: #94a3b8;
+            letter-spacing: 4px;
+            width: 100%;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        @media print {
+            @page { size: a4 portrait; margin: 0; }
+            html, body { background: white; padding: 0; margin: 0; width: 210mm; overflow: visible !important; }
+            .grid-layout { display: block; overflow: visible !important; }
+            .preview-area { overflow: visible !important; }
+            .card, header, .action-bar, .client-tabs, #contractWarningBanner, .sync-box, .sync-toast { display: none !important; }
+            .invoice-print-wrapper {
+                width: 210mm;
+                height: 297mm;
+                max-width: 210mm;
+                min-height: 297mm;
+                margin: 0;
+                padding: 15mm 12mm;
+                box-shadow: none;
+                justify-content: space-between;
+                page-break-after: always;
+                box-sizing: border-box;
+            }
+            .invoice-print-wrapper:last-child { page-break-after: auto; }
+            .tax-invoice-box { page-break-inside: avoid; }
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+        }
+
+        /* 📅 [월별 개별 금액 수정 패널] */
+        .month-override-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 6px;
+            max-height: 320px;
+            overflow-y: auto;
+            padding: 8px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .month-override-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 4px 6px;
+        }
+        .month-override-item label {
+            font-size: 10px;
+            font-weight: bold;
+            color: #475569;
+            white-space: nowrap;
+            width: 28px;
+        }
+        .month-override-item input {
+            width: 100%;
+            border: none;
+            font-size: 11px;
+            padding: 2px;
+            background: transparent;
+        }
+        .month-override-item input:focus {
+            outline: 1px solid #3b82f6;
+            background: #eff6ff;
+        }
+        .month-override-item.is-custom {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+        .month-override-item.is-locked {
+            border-color: #16a34a;
+            background: #f0fdf4;
+        }
+        .month-override-item.is-locked input {
+            color: #15803d;
+            font-weight: bold;
+            cursor: not-allowed;
+        }
+        .mo-lock-btn {
+            flex-shrink: 0;
+            border: 1px solid #cbd5e1;
+            background: #fff;
+            color: #64748b;
+            font-size: 10px;
+            font-weight: bold;
+            border-radius: 4px;
+            padding: 4px 7px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .mo-lock-btn:hover { background: #f1f5f9; }
+        .mo-lock-btn.locked {
+            background: #16a34a;
+            border-color: #16a34a;
+            color: #fff;
+        }
+        .mo-lock-btn.locked:hover { background: #15803d; }
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .toggle-row label {
+            font-size: 11px;
+            font-weight: bold;
+            color: #475569;
+            cursor: pointer;
+        }
+
+        /* 📑 [1년치 미리보기시 월 구분 라벨] */
+        .annual-month-label {
+            text-align: center;
+            font-size: 13px;
+            font-weight: bold;
+            color: #1e293b;
+            background: #e2e8f0;
+            padding: 6px;
+            border-radius: 6px;
+            margin: 20px 0 10px 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        @media print {
+            .annual-month-label { display: none; }
+        }
+
+        /* 📊 [통합정산 페이지] */
+        .summary-panel {
+            background: #fff;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            padding: 24px;
+        }
+        .summary-panel h2 {
+            font-size: 17px;
+            margin: 0 0 4px 0;
+            color: #1e293b;
+        }
+        .summary-panel .summary-sub {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-bottom: 18px;
+        }
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            margin-bottom: 10px;
+        }
+        .summary-table th, .summary-table td {
+            border: 1px solid #e2e8f0;
+            padding: 10px 12px;
+            text-align: right;
+        }
+        .summary-table th {
+            background: #f1f5f9;
+            color: #475569;
+            font-size: 12px;
+            text-align: center;
+        }
+        .summary-table td.label-cell {
+            text-align: left;
+            font-weight: bold;
+            color: #1e293b;
+        }
+        .summary-table td.label-cell .sub {
+            display: block;
+            font-size: 11px;
+            font-weight: normal;
+            color: #94a3b8;
+        }
+        .summary-table tr.total-row td {
+            background: #ecfdf5;
+            font-weight: bold;
+            color: #16a34a;
+            border-top: 2px solid #16a34a;
+        }
+        .summary-group-heading {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin: 22px 0 8px 0;
+        }
+        .summary-group-heading:first-of-type { margin-top: 0; }
+        .summary-group-heading .biz-name {
+            font-size: 14px;
+            font-weight: bold;
+            color: #1e293b;
+        }
+        .summary-group-heading .biz-regno {
+            font-size: 11px;
+            color: #94a3b8;
+        }
+        .summary-table tr.subtotal-row td {
+            background: #eff6ff;
+            font-weight: bold;
+            color: #1d4ed8;
+            border-top: 2px solid #93c5fd;
+        }
+        .summary-note {
+            font-size: 11px;
+            color: #94a3b8;
+            line-height: 1.5;
+            margin-top: 10px;
+        }
+
+        /* 🧾 [사업자별 매입 기록] */
+        .purchase-section {
+            margin-top: 14px;
+            margin-bottom: 28px;
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .purchase-section h3 {
+            font-size: 13px;
+            margin: 0 0 10px 0;
+            color: #92400e;
+        }
+        .purchase-form-row {
+            display: grid;
+            grid-template-columns: 130px 1fr 1fr 130px 130px auto;
+            gap: 8px;
+            margin-bottom: 10px;
+            align-items: end;
+        }
+        .purchase-form-row label {
+            display: block;
+            font-size: 10px;
+            font-weight: bold;
+            color: #92400e;
+            margin-bottom: 3px;
+        }
+        .purchase-form-row input {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #fcd34d;
+            border-radius: 4px;
+            font-size: 12px;
+            background: #fff;
+        }
+        .purchase-add-btn {
+            background-color: #d97706;
+            color: #fff;
+            border: none;
+            padding: 7px 14px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .purchase-add-btn:hover { background-color: #b45309; }
+        .purchase-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-top: 8px;
+            background: #fff;
+        }
+        .purchase-table th, .purchase-table td {
+            border: 1px solid #fde68a;
+            padding: 7px 9px;
+            text-align: right;
+        }
+        .purchase-table th {
+            background: #fef3c7;
+            color: #92400e;
+            font-size: 11px;
+            text-align: center;
+        }
+        .purchase-table td.pt-left {
+            text-align: left;
+        }
+        .purchase-table tr.purchase-total-row td {
+            background: #fef3c7;
+            font-weight: bold;
+            color: #92400e;
+            border-top: 2px solid #f59e0b;
+        }
+        .purchase-empty-row td {
+            text-align: center;
+            color: #b45309;
+            font-style: italic;
+            padding: 14px;
+        }
+        .purchase-del-btn {
+            background: none;
+            border: none;
+            color: #dc2626;
+            cursor: pointer;
+            font-size: 13px;
+            padding: 2px 6px;
+        }
+        .purchase-del-btn:hover { color: #991b1b; }
+
+        /* 🧮 [부가세 납부예상액 카드] */
+        .vat-result-card {
+            margin-top: 8px;
+            background: #f0fdf4;
+            border: 2px solid #16a34a;
+            border-radius: 8px;
+            padding: 14px 18px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            text-align: center;
+        }
+        .vat-result-card .vat-item .vat-label {
+            font-size: 11px;
+            color: #475569;
+            margin-bottom: 4px;
+        }
+        .vat-result-card .vat-item .vat-value {
+            font-size: 17px;
+            font-weight: bold;
+            color: #1e293b;
+        }
+        .vat-result-card .vat-item.vat-final .vat-value {
+            color: #16a34a;
+        }
+        .vat-result-card .vat-item.vat-final .vat-value.negative {
+            color: #dc2626;
+        }
+        @media print {
+            .summary-panel { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div>
+            <h1 id="mainTitle">넉스빌딩 세금계산서 자동 생성 시스템 (통합본)</h1>
+            <p id="mainSubtitle">4개 거래처를 탭으로 전환하며 발급 — A4 출력 여백 균형 보정 적용</p>
+        </div>
+        <div class="sync-box">
+            <div class="sync-status connected" id="syncStatus">
+                <span class="dot"></span>
+                <span class="label" id="syncStatusLabel">NAS 공유 데이터 (파일 주고받기 방식)</span>
+            </div>
+            <div class="sync-detail" id="syncDetail">
+                먼저 "📂 NAS에서 불러오기"로 최신 데이터를 가져온 뒤 작업하고, 끝나면 "💾 NAS에 저장하기"로 같은 파일에 덮어써 주세요.
+            </div>
+            <div class="sync-btns">
+                <button id="btnReloadSync" onclick="openSyncFilePicker()">📂 NAS에서 불러오기</button>
+                <button class="primary" id="btnConnectSync" onclick="downloadSyncFile()">💾 NAS에 저장하기</button>
+            </div>
+        </div>
+    </header>
+    <div class="sync-toast" id="syncToast"></div>
+
+    <div class="client-tabs" id="clientTabs">
+        <div id="dynamicClientTabs" style="display:contents;"></div>
+        <div class="client-tab add-tab" onclick="addNewClient()" title="새 거래처 추가">➕<span class="sub">거래처 추가</span></div>
+        <div class="client-tab summary-tab" data-client="summary" onclick="showSummary()">📊 통합정산<span class="sub">전체 합산</span></div>
+    </div>
+
+    <div class="grid-layout">
+        <div class="card">
+            <h2>⚙️ 공급조건 및 정보 수정</h2>
+
+            <div class="form-group">
+                <label>작성 연도</label>
+                <input type="number" id="cfgYear" value="2026" oninput="onMonthOrYearChange()">
+            </div>
+
+            <div class="toggle-row" style="margin-top:2px;">
+                <label for="chkSupplyBase">📐 공급가액 기준으로 입력 (부가세 별도 계산)</label>
+                <input type="checkbox" id="chkSupplyBase" onchange="calculateTax(); syncBaseToOverrides();">
+            </div>
+            <div class="form-group">
+                <label id="lblTotalAmt">매월 청구 총액 (부가세 포함) — 기본값</label>
+                <input type="number" id="cfgTotalAmt" value="4500000" step="10000" oninput="calculateTax(); syncBaseToOverrides();">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>공급가액</label>
+                    <input type="text" id="cfgSupplyAmt" readonly style="background:#f1f5f9;">
+                </div>
+                <div class="form-group">
+                    <label>세액 (부가세)</label>
+                    <input type="text" id="cfgTaxAmt" readonly style="background:#f1f5f9;">
+                </div>
+            </div>
+
+            <div class="toggle-row" style="margin-top:10px;">
+                <label for="chkMonthOverride">📝 월별로 금액이 다른가요? (개별 수정)</label>
+                <input type="checkbox" id="chkMonthOverride" onchange="toggleMonthOverridePanel()">
+            </div>
+            <div class="month-override-grid" id="monthOverrideGrid" style="display:none;">
+                <!-- JS가 1~12월 입력칸을 동적으로 생성합니다 -->
+            </div>
+            <div style="font-size:10px; color:#94a3b8; margin-bottom:10px; line-height:1.4;">
+                ※ 체크 해제 시 모든 달이 위 '기본값'을 따릅니다.<br>
+                ※ 특정 달만 금액이 다르면 해당 달에 금액을 입력하세요.<br>
+                ※ <b style="color:#16a34a;">렌트프리·공사·감액 등으로 발급이 끝난 달</b>은 "확정" 버튼을 눌러 그 금액을 고정해두세요. 확정된 달은 잠겨서 실수로 바뀌지 않고, 통합정산에도 그 값이 그대로 반영됩니다. (다시 누르면 잠금 해제)<br>
+                ※ 확정 정보는 이 PC/브라우저에 저장됩니다(다른 PC에서는 보이지 않음).
+            </div>
+
+            <div class="form-group">
+                <label>월별 품목명 (1월 / 그 외)</label>
+                <div class="form-row">
+                    <input type="text" id="cfgProdNameJan" value="임차료" placeholder="1월 품목명">
+                    <input type="text" id="cfgProdNameRest" value="임차료" placeholder="그 외 월 품목명">
+                </div>
+            </div>
+
+            <h3 style="font-size:12px; margin: 15px 0 6px 0; color:#9e2a2b; border-top:1px solid #f5dede; padding-top:8px;">🍷 [공급자 정보 및 인감]</h3>
+            <div class="form-group">
+                <label>등록번호</label>
+                <input type="text" id="cfgProvRegNo" value="204-30-80210">
+            </div>
+            <div class="form-group">
+                <label>상호 (넉스빌딩 고정)</label>
+                <input type="text" id="cfgProvName" value="넉스빌딩">
+            </div>
+            <div class="form-group">
+                <label>대표자명</label>
+                <input type="text" id="cfgProvCEO" value="윤상원">
+            </div>
+            <div class="form-group">
+                <label>주소</label>
+                <input type="text" id="cfgProvAddr" value="서울 광진구 광나루로 46길 26">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>업태</label>
+                    <input type="text" id="cfgProvType" value="부동산업">
+                </div>
+                <div class="form-group">
+                    <label>종목</label>
+                    <input type="text" id="cfgProvItem" value="비거주용 건물임대업">
+                </div>
+            </div>
+            <div class="form-group">
+                <label style="color:#9e2a2b;">인감 등록 (.png / .jpg)</label>
+                <input type="file" id="uploadProvStamp" accept="image/*" onchange="loadStamp(this, 'prov')">
+            </div>
+
+            <h3 style="font-size:12px; margin: 15px 0 6px 0; color:#1e427b; border-top:1px solid #e6edf5; padding-top:8px;">💙 [공급받는자 정보 및 직인]</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>계약 시작일</label>
+                    <input type="date" id="cfgContractStart">
+                </div>
+                <div class="form-group">
+                    <label>계약 종료일 (비워두면 무기한)</label>
+                    <input type="date" id="cfgContractEnd">
+                </div>
+            </div>
+            <div style="font-size:10px; color:#94a3b8; margin-bottom:10px; line-height:1.4;">
+                ※ 계약기간 밖의 달은 "1~12월/상반기/하반기 생성" 시 자동으로 건너뜁니다.<br>
+                ※ 예: 계약종료일이 5월 31일이면 6월부터는 발행 대상에서 제외됩니다.
+            </div>
+            <div class="form-group">
+                <label>등록번호</label>
+                <input type="text" id="cfgReciRegNo" value="268-81-02656">
+            </div>
+            <div class="form-group">
+                <label>상호(법인명)</label>
+                <input type="text" id="cfgReciName" value="넉스(주)">
+            </div>
+            <div class="form-group">
+                <label>대표자명</label>
+                <input type="text" id="cfgReciCEO" value="윤상원">
+            </div>
+            <div class="form-group">
+                <label>주소지</label>
+                <input type="text" id="cfgReciAddr" value="서울 광진구 광나루로 46길 26 2층, 지하1층">
+            </div>
+            <div class="form-group">
+                <label>연락처(휴대폰 번호) — 세금계산서에는 표시되지 않음</label>
+                <input type="text" id="cfgReciPhone" placeholder="예: 010-1234-5678">
+            </div>
+            <button type="button" class="btn" id="btnSendSms" style="background-color:#2563eb;" onclick="openSmsApp()">📱 이 거래처에 문자 보내기 (문자 앱 열기)</button>
+            <div style="font-size:10px; color:#94a3b8; margin-bottom:10px; line-height:1.4;">
+                ※ 휴대폰에서 열면 문자 앱이 수신번호·내용을 채운 채로 열립니다(PC에서는 동작하지 않을 수 있음).<br>
+                ※ PDF 파일은 자동으로 첨부되지 않습니다 — 먼저 "인쇄 / PDF 저장"으로 PDF를 받아두신 뒤, 문자 앱에서 직접 첨부해주세요.
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>업태</label>
+                    <input type="text" id="cfgReciType" value="건설업 서비스업">
+                </div>
+                <div class="form-group">
+                    <label>종목</label>
+                    <input type="text" id="cfgReciItem" value="실내건축 및 설계">
+                </div>
+            </div>
+            <div class="toggle-row">
+                <label for="chkReciStampImage">🖼️ 직인을 이미지로 표시 (해제 시 "(인)" 텍스트)</label>
+                <input type="checkbox" id="chkReciStampImage" checked onchange="applyData()">
+            </div>
+            <div class="form-group">
+                <label style="color:#1e427b;">직인 등록 (.png / .jpg)</label>
+                <input type="file" id="uploadReciStamp" accept="image/*" onchange="loadStamp(this, 'reci')">
+            </div>
+
+            <button class="btn btn-save" id="btnSaveClient" onclick="saveClientToStorage()">💾 이 거래처 정보 저장</button>
+            <div class="save-status" id="saveStatusText">저장된 정보가 표시되고 있습니다.</div>
+
+            <button class="btn" onclick="applyData()" style="margin-top:14px;">🔄 변경사항 실시간 적용</button>
+            <button class="btn btn-secondary" onclick="window.print()">🖨️ 현재 보이는 내용 인쇄 / PDF 저장</button>
+            <button class="btn" style="background-color:#16a34a; margin-top:14px;" onclick="generateAnnual()">📆 1~12월 전체 생성 (1년치)</button>
+            <div class="form-row" style="margin-top:8px;">
+                <button class="btn" style="background-color:#0d9488;" onclick="generateFirstHalf()">📆 1~6월 생성 (상반기)</button>
+                <button class="btn" style="background-color:#0d9488;" onclick="generateSecondHalf()">📆 7~12월 생성 (하반기)</button>
+            </div>
+            <button class="btn btn-secondary" style="background-color:#0f172a; margin-top:8px;" onclick="window.print()" id="btnPrintAnnual">🖨️ 위에서 생성한 기간 전체 인쇄 / PDF 저장</button>
+            <button class="btn btn-secondary" onclick="clearStamps()" style="background-color:#94a3b8;">↩️ 기본 인감/직인으로 되돌리기</button>
+            <button class="btn btn-secondary" onclick="resetClientToDefault()" style="background-color:#b45309;">♻️ 이 거래처 입력값 초기화</button>
+        </div>
+
+        <div class="preview-area">
+            <div class="action-bar">
+                <div class="month-selector" style="display:flex; align-items:center; gap:8px;">
+                    <label style="font-weight: bold; font-size: 13px;">📅 발급 일자 선택:</label>
+                    <select id="selectMonth" onchange="onMonthOrYearChange()" style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:4px; font-size:13px;">
+                        <option value="1" selected>01월</option>
+                        <option value="2">02월</option>
+                        <option value="3">03월</option>
+                        <option value="4">04월</option>
+                        <option value="5">05월</option>
+                        <option value="6">06월</option>
+                        <option value="7">07월</option>
+                        <option value="8">08월</option>
+                        <option value="9">09월</option>
+                        <option value="10">10월</option>
+                        <option value="11">11월</option>
+                        <option value="12">12월</option>
+                    </select>
+                    <select id="selectDay" onchange="applyData()" style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:4px; font-size:13px;">
+                        <option value="1" selected>01일</option>
+                        <option value="2">02일</option>
+                        <option value="3">03일</option>
+                        <option value="4">04일</option>
+                        <option value="5">05일</option>
+                        <option value="6">06일</option>
+                        <option value="7">07일</option>
+                        <option value="8">08일</option>
+                        <option value="9">09일</option>
+                        <option value="10">10일</option>
+                        <option value="11">11일</option>
+                        <option value="12">12일</option>
+                        <option value="13">13일</option>
+                        <option value="14">14일</option>
+                        <option value="15">15일</option>
+                        <option value="16">16일</option>
+                        <option value="17">17일</option>
+                        <option value="18">18일</option>
+                        <option value="19">19일</option>
+                        <option value="20">20일</option>
+                        <option value="21">21일</option>
+                        <option value="22">22일</option>
+                        <option value="23">23일</option>
+                        <option value="24">24일</option>
+                        <option value="25">25일</option>
+                        <option value="26">26일</option>
+                        <option value="27">27일</option>
+                        <option value="28">28일</option>
+                        <option value="29">29일</option>
+                        <option value="30">30일</option>
+                        <option value="31">31일</option>
+                    </select>
+                </div>
+                <div id="annualModeBadge" style="display:none; font-size:12px; font-weight:bold; color:#16a34a; background:#dcfce7; padding:5px 10px; border-radius:5px;">
+                    📆 1~12월 전체 보기 중 (총 12개월 / 24장)
+                    <button onclick="exitAnnualMode()" style="margin-left:8px; font-size:11px; background:#fff; border:1px solid #16a34a; color:#16a34a; border-radius:4px; padding:2px 8px; cursor:pointer;">단일월로 돌아가기</button>
+                </div>
+            </div>
+
+            <!-- 🚫 계약기간 밖 안내 배너 (applyData()가 표시/숨김 처리) -->
+            <div id="contractWarningBanner" style="display:none; background:#fef2f2; border:1px solid #fca5a5; color:#b91c1c; font-size:12px; font-weight:bold; padding:10px 14px; border-radius:6px; margin-bottom:12px;"></div>
+
+            <!-- 단일 월 보기 컨테이너 -->
+            <div id="singleMonthContainer">
+                <div class="invoice-print-wrapper">
+                    <div class="tax-invoice-box" id="invoiceRed"></div>
+
+                    <div class="cut-line">이 하 절 취 선</div>
+
+                    <div class="tax-invoice-box blue-version" id="invoiceBlue"></div>
+                </div>
+            </div>
+
+            <!-- 1년치(1~12월) 보기 컨테이너: generateAnnual()이 동적으로 채웁니다 -->
+            <div id="annualContainer" style="display:none;"></div>
+
+        </div>
+    </div>
+
+    <!-- 📊 [통합정산 페이지] — showSummary() 호출 시 grid-layout을 대체해서 표시됩니다 -->
+    <div class="summary-panel" id="summaryPanel" style="display:none;">
+        <h2>📊 통합정산 — 사업자별 공급가액·세액·합계금액</h2>
+        <p class="summary-sub" id="summarySubLabel">공급자(사업자) 등록번호가 서로 달라 매출 주체가 다른 점을 반영해, 사업자별로 구분하여 합산합니다. 각 거래처는 1년(1~12월) 기준입니다.</p>
+        <div id="summaryGroupsContainer">
+            <!-- JS가 사업자 그룹별 헤딩 + 표를 동적으로 채웁니다 -->
+        </div>
+        <p class="summary-note">
+            ※ 각 거래처의 "월별로 금액이 다른가요?" 개별 수정값이 켜져 있으면 해당 월은 수정된 금액으로 계산됩니다.<br>
+            ※ "확정"한 달은 그 고정된 금액이 그대로 반영됩니다(렌트프리·공사 등으로 감액 발급한 달 포함).<br>
+            ※ 거래처 탭으로 돌아가 금액을 바꾼 뒤, 통합정산 탭을 다시 누르면 최신 값으로 갱신됩니다.<br>
+            ※ 공급자(사업자)가 서로 다르므로 두 그룹의 금액은 합산하지 않고 별도로 표시합니다.<br>
+            ※ 매입 기록은 사업자별로 따로 관리되며, 입력 즉시 저장됩니다("+추가" 버튼을 누르면 바로 저장).<br>
+            ※ 부가세 납부예상액 = 매출세액 − 매입세액 (참고용 추정치이며, 실제 신고 시 세무 처리와 다를 수 있습니다).
+        </p>
+    </div>
+</div>
+
+<script>
+    /* ════════════════════════════════════════════════════════════════════
+       🔗 [NAS 공유 데이터 동기화 모듈] — 파일 선택/다운로드 방식
+       ------------------------------------------------------------------
+       이 html은 NAS 네트워크 드라이브에서 "파일 탐색기로 직접 더블클릭해서"
+       여는 방식(file:// 프로토콜)으로 사용됩니다. 이 경우 브라우저 보안 정책상
+       File System Access API(자동 파일 쓰기)가 동작하지 않으므로,
+       대신 다음 방식으로 NAS와 데이터를 주고받습니다.
+
+       - "💾 NAS에 저장하기" 버튼: 현재 데이터를 JSON 파일로 다운로드합니다.
+         다운로드 시 같은 파일명(세금계산서_데이터.json)으로 저장되도록 안내하며,
+         다운로드 폴더가 NAS 폴더로 지정되어 있다면 그대로 NAS에 저장됩니다.
+         (브라우저 다운로드 기본 폴더를 NAS의 이 폴더로 바꿔두면 매번 자동 저장됩니다.)
+       - "📂 NAS에서 불러오기" 버튼: 파일 선택 창에서 NAS의
+         세금계산서_데이터.json을 선택하면 그 내용을 화면에 반영합니다.
+
+       두 사람이 같은 파일명을 공유하면, "저장(다운로드)" → 동료가 "불러오기"
+       하는 흐름으로 데이터를 주고받을 수 있습니다. 완전 자동 동기화는 아니지만
+       file:// 환경에서도 항상 동작합니다.
+       ════════════════════════════════════════════════════════════════════ */
+
+    const SYNC_SUGGESTED_NAME = '세금계산서_데이터.json';
+    let syncFileInputEl = null; // 숨겨진 <input type="file"> 엘리먼트(불러오기용, 매번 새로 생성)
+
+    function showSyncToast(message, kind) {
+        const toast = document.getElementById('syncToast');
+        if (!toast) return;
+        toast.textContent = message;
+        toast.classList.remove('ok', 'error');
+        if (kind) toast.classList.add(kind);
+        toast.classList.add('show');
+        clearTimeout(toast._hideTimer);
+        toast._hideTimer = setTimeout(() => toast.classList.remove('show'), 3600);
+    }
+
+    function updateSyncUi(detailOverride) {
+        const detailEl = document.getElementById('syncDetail');
+        if (!detailEl) return;
+        detailEl.textContent = detailOverride || '먼저 "📂 NAS에서 불러오기"로 최신 데이터를 가져온 뒤 작업하고, 끝나면 "💾 NAS에 저장하기"로 같은 파일에 덮어써 주세요.';
+    }
+
+    // 현재 메모리의 4종 데이터를 하나의 JSON으로 합쳐 다운로드합니다.
+    function buildSyncPayload() {
+        return {
+            _meta: {
+                savedAt: new Date().toISOString(),
+                source: '넉스빌딩 세금계산서 자동 생성 시스템'
+            },
+            clientIdList,
+            monthAmountOverridesByClient,
+            clientDataCache,
+            purchasesByBizRegNo
+        };
+    }
+
+    // "💾 NAS에 저장하기" 버튼 — JSON 파일을 다운로드합니다.
+    function downloadSyncFile() {
+        try {
+            const payload = buildSyncPayload();
+            const json = JSON.stringify(payload, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = SYNC_SUGGESTED_NAME;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            showSyncToast('💾 "' + SYNC_SUGGESTED_NAME + '" 파일이 다운로드되었습니다. NAS의 이 폴더로 이동(또는 덮어쓰기)해주세요.', 'ok');
+            updateSyncUi('마지막 저장: ' + new Date().toLocaleString('ko-KR') + '. 다운로드된 파일을 NAS의 같은 폴더에 같은 파일명으로 덮어써 주세요.');
+        } catch (e) {
+            console.error(e);
+            showSyncToast('⚠️ 저장 파일 생성에 실패했습니다: ' + (e && e.message ? e.message : e), 'error');
+        }
+    }
+
+    // "📂 NAS에서 불러오기" 버튼 — 파일 선택 창을 열어 JSON을 읽어옵니다.
+    function openSyncFilePicker() {
+        if (syncFileInputEl) {
+            document.body.removeChild(syncFileInputEl);
+            syncFileInputEl = null;
+        }
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.style.display = 'none';
+        input.addEventListener('change', function (e) {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (evt) {
+                try {
+                    const parsed = JSON.parse(evt.target.result);
+                    applySyncDataToMemory(parsed);
+                    rebuildUiFromMemory();
+                    const savedAt = parsed && parsed._meta && parsed._meta.savedAt
+                        ? new Date(parsed._meta.savedAt).toLocaleString('ko-KR')
+                        : '알 수 없음';
+                    showSyncToast('📂 NAS 파일을 불러왔습니다. (저장 시각: ' + savedAt + ')', 'ok');
+                    updateSyncUi('마지막 불러오기: ' + new Date().toLocaleString('ko-KR') + ' (파일 내 저장 시각: ' + savedAt + ')');
+                } catch (err) {
+                    console.error(err);
+                    showSyncToast('⚠️ 파일 형식이 올바르지 않습니다. "' + SYNC_SUGGESTED_NAME + '" 파일이 맞는지 확인해주세요.', 'error');
+                }
+            };
+            reader.onerror = function () {
+                showSyncToast('⚠️ 파일을 읽는 중 오류가 발생했습니다.', 'error');
+            };
+            reader.readAsText(file, 'utf-8');
+        });
+        document.body.appendChild(input);
+        syncFileInputEl = input;
+        input.click();
+    }
+
+    // 파싱된 JSON을 각 전역 데이터 구조에 반영
+    function applySyncDataToMemory(parsed) {
+        if (!parsed || typeof parsed !== 'object') return;
+        if (Array.isArray(parsed.clientIdList) && parsed.clientIdList.length > 0) {
+            clientIdList = parsed.clientIdList;
+        }
+        if (parsed.monthAmountOverridesByClient && typeof parsed.monthAmountOverridesByClient === 'object') {
+            monthAmountOverridesByClient = parsed.monthAmountOverridesByClient;
+        }
+        if (parsed.clientDataCache && typeof parsed.clientDataCache === 'object') {
+            clientDataCache = parsed.clientDataCache;
+            savedClientIds = new Set(Object.keys(parsed.clientDataCache));
+        }
+        if (parsed.purchasesByBizRegNo && typeof parsed.purchasesByBizRegNo === 'object') {
+            purchasesByBizRegNo = parsed.purchasesByBizRegNo;
+        }
+        // localStorage에도 백업해 둡니다(이 PC에서 다음에 열 때도 직전 데이터가 남아있도록).
+        persistAllToLocalStorageBackup();
+    }
+
+    // 화면(탭/그리드/폼)을 메모리 데이터 기준으로 다시 그립니다.
+    function rebuildUiFromMemory() {
+        buildMonthOverrideGrid();
+        renderClientTabs();
+        const stillExists = clientIdList.includes(currentClient);
+        switchClient(stillExists ? currentClient : clientIdList[0], true);
+    }
+
+    // 데이터가 바뀔 때마다 호출되는 공통 진입점. (기존 localStorage 백업만 수행 — 자동 NAS 저장은 없음)
+    // NAS 동기화는 "💾 NAS에 저장하기" 버튼을 직접 눌러야 이루어집니다(다운로드 알림이 매번 뜨는 것을 방지).
+    function syncAllData() {
+        persistAllToLocalStorageBackup();
+    }
+
+    function persistAllToLocalStorageBackup() {
+        try { localStorage.setItem(CLIENT_LIST_STORAGE_KEY, JSON.stringify(clientIdList)); } catch (e) {}
+        try { localStorage.setItem(MONTH_OVERRIDE_STORAGE_KEY, JSON.stringify(monthAmountOverridesByClient)); } catch (e) {}
+        try { localStorage.setItem(CLIENT_DATA_STORAGE_KEY, JSON.stringify(clientDataCache)); } catch (e) {}
+        try { localStorage.setItem(PURCHASE_STORAGE_KEY, JSON.stringify(purchasesByBizRegNo)); } catch (e) {}
+    }
+
+    // 🎯 [기본 인감/직인] 코드에 내장되어 있어 파일을 다시 올리지 않아도 항상 표시됩니다.
+    // 새 도장으로 교체하려면 좌측 패널에서 파일을 다시 선택하면 됩니다.
+const DEFAULT_PROV_STAMP = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAANwAAADaCAMAAAD63dyuAAAA/1BMVEXhapDmkKvULl7ZU3ewLVKxUmv1rcvx3Of32ObcoLLxzNvqt8rur8n/fn7/AAC2cYd+fn76ra2nFDjarrm1jJb/AP+urq7/fv/ys+L3zN/MCTn9a7O4nqW2bm62bra59vB/AH9/BAT3PIO4srH/AHp1GzHXeJF/f//PwbvPwL4A/wB///+qAFW2xLu+yMTCgX8AAP8A//93J0N/fwBVqqp//39mzJmqqv++vsX/fwD//wDFwrUAAAD+/v7PR27tZ48AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABvnVk8AAAAQHRSTlP99v7+/v76Jf2jVGWbAgH5AgT+au0BAwIYlv4DoAMDCgIC/mwC/bQCX/8BAgObYP8BAf0CAwIFA2sCAY8ABf7+H+YBSAAAPRlJREFUeNrtfYea5DhyNEAQZNFUsbwZu+5Od7K/twT4/m+ljEiQ5dg9rndP0qeWdm6mu7qKCSTSREYmTP8f+Mv8p3D/KdzrXyv5LwT5b7k8rAK//r0LF8KnzadT2GxOq+cf/rRchn+fwmF3lsu7b30u6/C+3DW7quEe4nub5eHflXBUuiRWKOumKUv5s6r70tq6r8wwGNtW8vWhKXXn1svfR0fN2yviahQLIhnnnF0U1haXvjW+a63Loi1snjtjjK3aOh2+97/DITRvvWmUL4TSeidbNBgXs6FYWNvgW7k31uUUbpvJT7LM2KKqdmkH31q8txSOuhjKyorK2ZjHLM+cLQoz2GKxqPt631kjwuZxwP+KYPgjivyygyJgWcrqnPrT6d+ecCFs8OfOdmYQVfS5c6J6MRproZiLFlK3bWHy3MiGGhOzKMdPxMtkEaIoqW2xgWd5k9W/xZ1rKivPHl0U6XLvcyP7l0VRRjl1LbWuxPGzslFGtNa5JBz2T35BNHRX9mcRr38bH/FmwpV1aweDB5WnhlTOGqifNd7bpmzOMP3r8tI2zW4Xwg7msrIDzEqUBTEumZhL0UI/+/BvQriwXPXr0FiruyDmEbponMXha5pajlMYNbfnwUr/CNjqqqkbGBrZYfkjz0yBra1EQZd/e+HUiIgLM/J8mShaYeT8WBGp7HfVVZL1tBPrj3CEo+vGt2UVZItz+fIOSivn1bThDZTzB4WTTy9l+atWjCIshDGFFdtHodayS0dxz8f13DOuYDVk07mDIdQ7q5JBtu02H2hdflA5zQ+KFmpropyqxWIhBy5GcWSNfPvUL5df9WwQcaOHtpKjKQa16XKcwUKsThl+zPX9gHDhE+2jHLWcwsGImK5q4MunJOAr3QjiGrx88+Es3kQ8+6IwEsngzTbH8IcLtzrKQ0lAJWZfrL1I5b3YOkSL6/C9apAC7VCJcBZ2V9XgD985aOSuMuJ/+RCmk6+q+SEbnjY6/Nz/urcaquEAj9H1HyZc+Ch2xCLKEAMJ+y/ei8+wfoPwcB3OHyor59jahQTYoull+L6Y7LuEW/ew/aKMEoBILOVMRZF+Pr5V4CuB925XeRFQdMNZLtvhDxFu/bMYEotwVwJFMd8tfNrH9Wn9ViFh+qr3260YTXGdTQOFX/4xO1dKmibpjLUxs3XZf9VBC5vjtwUHEqJJCoHgoOsQwQUozO8sXIBDkmjEDGJHnGnoqp5lC4cnA/Qdeycnz3nfdfmfxMPX/W+n31W4cBRDLZHSVs6aN9WuDqfl6oUUJZTTXw9LMUB1eEnEpUYpj7+/7su9d3ShcvwyLOS3LdK375wsJ0KIIfr2Nc3dScDx9+FWk22lvv0ZcUlRypN8x/5zBdnkS453lOhFpQtl+fbCbRBISpArwZF8mG/6j/OhbcCSe19JvDxmesWQ5aJYYda1lTi4/PtZHlsSgjWMUzhCJVrZNwZ3kifK5jFbCF/p+sw3yRaQZML2F0XnP4TV+iVDXolPz02pFu7Ui3GNEqRVYSajCGUrFrcGOPF/yrIub+UOZyzmIHZFhEO8AKcjv/W/31w4mBLvoyaV3b4qXzxCIowrihitSvfbobGSnue5baZfEc3SIEdctYNDkTzQdBKOQDl2jAjklLZIdY1Bli5/k/w+OnmPU3jzMyc2AacNYAfTGpjm5fLQHzefHj5sg1RB8tUsqxRYQRDqxKbDHY/eCvonL3NR3nMr7yrBTpSNgYmUONXsQmnlcxwCVgbSC/mX7H9Ou/J3byxckE91OXNlnO/mLEKsx3wlPFr9slkUw7uswmOEXnRL9sVRuNPN+wFgyBmbypZI+j5k3eWf9rJZEleKNc59xEJanrkFgmmxmQimyzfeOTHLFlGkPI1EDbYNBAz4325XPvqAuqkXC/funS1p5y38hh3kUZM3gEUIQI8yoCeAFoZhEDmih7+WDYvMDZGSQy/toiD64P5F/pC/VeHrNPPrhAvLsmyJ/sininCMam0lR0L+cxLZ/ny+eqdm30GXJCHLYDC5RVTlwdhdEu64lPeTkyRCy7cL/NACa3C+ww5RQ+RL9ttvt14zdMOcWETM7OXzV4UrXyWcmOQdjocBGIen8PiKEZIOjsHDqG7i5ZuUrshad7aVfMEC1SrwsLJ1yyPcx7KvTd6JehOXplzyJ+BMCBqzdxnU1AK1yLce50D+wZzYejmhOPHhzXZOzpuJcdAHlGUGVCzGfZs5bORgR8084bWiXgabRR0qYA31QZHMpjhTzEVk+t5h68b3FbHEbkbmiJLWi3NzhfgAPXKWUToMlRheAEjhLYRjNElvw+fFcwxQGKCUDmCH2BlPBw3srtp3ljqZe5wWmLkIK8DHL1qgSWfxzWeAZPihYUXBUC2hpbIyNDISkMgu5QQJKZvoiySP0SQ8oy2/rJlfFu506Cs810Bo3GKhB/w3EDGWT5dzkm/Fp/10RJQFi4A0FimRnJJCFEpMfFoUHhxfwXPL+3kVzvHdoMeFEWsCFA12yxbUfq00FDAqJqeiMNJ0X7N3XyGcGISIDTJxAEA8YNuGJKKcA4+PM5KMi2hwuhCEVgc1kFyMgryc6kkDAXSyq9IhgwXkGxFrLvh6JAJYAc80XHSarsd6iQqcHAWUFcQ3evmctjyHHxRu2et5w0KKtgAhFwV11EtUPPTDRQ1N86uoruPmZJm8vDOoHCC4wNIXVks72QD/BXM4iELzLOqR475mwC6xLgsqNHTeLDQtMPghfL38j0OebJofVctTH/aSbQD6T8LRnIilZBQ20OgvbOcySbvkBREfCysKtyQvkq1gUK+bJA8oJh62iKdK3k7tU5IOP8WrOy4YTKQsh+XaiU3O3jl4QFgxeZhBFlCSqMMPCLfiKSK+hW2iNCgoRjgtVSt5/gXOutkDUBfp5XnkyMsZGWRNdN1pChlrSDxF8yFvss3hSYbkAgyrWhRl0cEm7feG5Umrb4BKCc+ay9+94+/JQn7h3H1BuM/ipLJIm2gAdLn0YE6tG3RKwk0cdofAQt18lMOTUbkGnBz5zW2uBQ49e5nuuEfhUeWiiNw5btneFh6FAwikgO9CNB7GV3X3HTy85FCimWH9XcJ9DuGTOGQsHj7aIyhHfQpeySEOi3ISdbk9pSskZ8uy7RbGRPYEscYgDyY2X6wfMkCj0iFjGtTzIW6hU0naOagOd57OEb7AS0aghzp6ug41u/pAsq3XYPXbhEP8VxmgJaI4yHRUrlQuRF00KiCLKB4ZLEtt2y32EEURbGsBRwzDwjoczhx+30ARsdMqHKSjt4Ns0AEjETNtbCf75vOCpw+eiEaGTlP+gsVG9hq+Sy0PIltEQEQrh01zxiTRGFbEVLLnlsljyy46eRjIlU1BChyVlX/id/S3AVKkxKmg3+Sb4f/Be8A7oj4bUZ+V3TKycwxyYlJt/QLmZxiqfJdwkqpw30ZgOeKzYDcNiooVbSXF5GFxsKOifotCUhuHoJmRoDqLQl6EUJiyiZZynQp7DXjo6cQk7q0yAXJ+ZXLQCsrhkFXQfzNmLegSIl4n/nX57cIt10hOJcZDcvXnijnz3qayJzK2pmnh3vhVVbvd+VwDyCxQHIHQhRpK+D61hbluupqlKWBRnaSlisBJMq6Y/LBD5dmrDUJKJ15PNhZ6ZBcDDzfdpaRVp28XDhuHer3vdmQzSeJW1xuNCla6WmUjyZwiBgo0GoKZiEQ1nmLgDG3NNHZTxZS/ttgOZKR+lBRqnI1fEKPziGxSnqo2VONnBJwGdgn+VqzZ+aW9e1G4I1GdKNr2YSfCvL/+5ONG8s8Nvq7ffL9cLkGtgbKSUsL0j2Ja+F+x+rYoy7ptqz/Lt2pZEZuSARTRnUbOEr7StdEjeL/3RnE92lCwWKxG0ID5Ls2uNnC3ObCJbxNOUsy9p7luE/zWtE35iJ0iH5fNu0FL6zptYynCiYGlv5LTatqEa41cxIClG5jDys+H8eRZNceieX+VA2YQ26iACDvdKGy+NfJuO9lEUjyaF2Bh85JOAgWgJUC+WTc7JtJV9aGqGigiCBdtpdYguqo839RRlydAyNj4ASgRrT8Ah/XpcC2llkht1NQMKfLCyWPQI8vSYbdGYSBP9o4/E+9JJ9iVPy0JD2cIIl7gjZmXNq4dsH4atJuUd8O8M3XGGsN0R330rZ8qoFDYT6egAQCyh/QKkT9sUBo+bU6aIxYSf+0ZcRsNCwysPzN4Yn30/5ZWTITziCwLpOE4pMj95ZxVVC2fu3r+1JmXUoFks9TMq8/GZyL2Gb24i7rsLt8ORcuSyOpGPxqb80US4cieDMX0BFo5qS3ACBgF+hJgGFg0xmvQRwgn7sPBfgD2kt23PmFluf+LYh8MXeQnzawrNy/k3pJL4V3gXhy/kODwECbR3AgPaJYgf28Tc6Mhw5IkPRDbLBUO3mBHdZSztyKc1nTi713yc5nTjE4soqRKYjAsXDli60ziuUipkGcgAkQIvS/740HMlmX8YKqvVkuEXY7oK3MLlQ2yuBQjDC7JBtWEbkLzc0fGk/pj8YasKiOGcrkerkg2n4hAqDqswgevmRHdu1fTCjXzGYEGsKbkvSUHyByFM0pSGhAZ7Ov+4wqKyaq8qWd93axwEnZlitiINSHfKTmjQYUTXcLJiwzJ4JtFs7xi+VxHRtSaJojMGX1cYVyKvuwlKAs4EN0yKjtofgjOJT6O2wyBv6xvkT5JFHKroQ1jdzn9VgsmpR4aM18eM3MFd1FKFW5X0izQVAM00WBcfiSfa7G2oqid8g5p5TQZTfuAkFAedPsO+4PAQl3YiFytALJnJGDmiGtYL1CYjxxM1JFsSpMWdo892+Z4HTTBUTh5j2pA1OrsbOXCzMaUsk5QuYpmgYpGkCAiuisUDxHhBsUD7JADb1wwNrKMqZifFwuTjYzDDvjINteI0I4P0qDmgDIOk6G6Lqq2vdTnsq5bFtxxNIbo94tajKt8jGQcNEEwpmcJM/rlqiTyII50rvj3LNwn8b+Syv8iGwW8eOeJ8CgYYFPyD9lQVyo0IMpSwqw/pVwSCfqOog3KiUWQK4suCmW6hDv3IgUsz6VtdizMocBaphCAkTMiLHEYn0WQshY7wEjH0GOo7Q2K8sN+zhhM84wuh8orCrKvWLl1CtsMJoXCHnmq2g3PnIUIcYI9ICxlc15Zpaz2GFUxo8L56n6RR3ZNQm3EVYbabwGVEP0Va3GGzKXNEgF1PHMJv5JTI6raPZU2Z4QTpURkKua15mLu+HDUHWTTRk1ZnjIW1DDggZ3Zq60jtIrUgN+0BMfhoQxycCQ7EpmMwWA4n4/i1iU0/bQ5nlgzoaBL7pxLNFpTr5doQBDhMhjuLN6k4PILFYyOHP/2CaU1M1W4PLeAZOr0BBWNBIFTenTaBehkqpoNyN5Qa6X9RvzraNejCgcvXCjGk6VY5MErrcIz0c1mOVhlrIjUeGoJCAsGnQPt41QsQLwBYy6qUT7GKY/CnVDQJ2ogL8YyHvqdZPNOBeTWMKIUCxlpUaivjnYUH0pQjOkMCzcGGS6wLMRZdMOwebdljDDTEoLCEAkTiLujHi84X9H+ARhMdpOiUrcgcm7sl9QS72s1ElK1Xq7OqTYgjrmR+KLciA2Qw41DAXyZ2CxTK1MZljwAHRN1ILoIf+c7BIopF89FuNX4ZGsGK2sGpecln3Uj/9dK4GmS5S1q+QZ0torERQvNv8d86yBSe54W06yXrwm3xithJorLVL88I9nZ7e7YcyViIwf9Q7ASM9Q9JAbaeViuVAeCNwJUNOAQEpxTMBZ6FlJlDBYzkG7Pt/0pjG8v5kjWJKLkKju3CeH4UZJnDREy4H3hRpl3CGAg3INJedo5WTMC4KXSDu9evdqcN+dTAM/pYjKidYob8BA2TLHgkgklEzxaLIZ3GSN8y8A0IptolF+00swHyKoksfU1ExSH18EADYqkKLFNXnwxDHgZqvvrAVv3Z8U8x9RzXjhW5skckOcpw3okTKzWy6nhLWx+7su2hTlVnMb8gmMfwWsOAKh9dMSLEIs5kkKJGTsv+fdut4MIq/RhF7tHadi2VsO67kN9ubQI9VFeMYwmWe+5XOr6AsDC7xs5GKhe3FSwyB9n/P0Qp5h7oknN8qVopZXI9DhPIiUVXeE95vmImxGWb7RtbNNKPCqWMg4SKnV08dzjiaquTxXWQVYo/xNibsSs0AFP+q/WTxE0u4IxAfHKBdCvYv8r36GVHGd1YwThJbCfD77uQS2ruI2IqIrmkTIQElm8BKjHDgDkA6IivyAKaca6cdIs8pRFIt9Rcw3off37zceVZOnrVGHBEYI3E/OJg7TNNEJNidUW1WGmQIUGd/hDdr1sysfTAvelwbv4utULwiFOl8+Ao7L3oq3BHjieEB2x7h9R+BgGVmngq9twGDPx47EsxUAo7q3OD1iACHfcbD6Gm6qfyVHQQCiMs0TTDweNGF2sETaO8Q8AWSDXNke3Ty0b2NYP1OBDaAZiYl7O8+Yl4bACKE+J5ZOjNdITaK/JJTtXooa/EA5FVhNRjshuFE4rSp8T/CPPBKUEEu+yoX1i7LAPwUHlOqWjuOzdlokiQpBiUNIAoBbk5RbNPnAuYpeRq67vH1wRHwmHf17NCrdeAmJm9mbPScEUoCzrxko0BlNKXzWQXAGb78joOqymTzmfN7vqz3921FxaFjgLVNN29a4qZWfPogAHsVzMNLKcZQ7EcCy0ICDV/E++h2RnAWkYnitRg60nCJM3D+C41+rDbWJn7opxrc+J/0whBA6ZeDjm4/SpKEvDv6KCEeHh4k3UM1IDUFe2lgWiX5DrMnhmhtiW6fwGPHiBk1Yo45B1OsSjSH41cEVkvl8UETYOdf8R5JMg51G4FQhYWJNq8pX3wn1C0JMjNrzlDtZVZ7Va602ChIlAOcaYuauueO+SHQEEIQYtxDmtChklH8n/LoDXlvQ5SuJAwWvBgJyuPzXVMcfC76AIEkHqgNqJdH8FKX+bbx8TnBMZ5YCQb527uSGmSnwTWW4Zkr8ILOFHyiH5P8J6bczEQzPccNUN9VjyYlEOZiQmVV8VBUhlL01o4UIl22+NT+UDo1wAYkhRWQyMbTLlmYnN0f2Dgdl70sRyv+sfg++WxQZ36yPMHSyUMRWMMJZr/Q55Q+QKgQ4CmqVdsE4P8CHDC49Xm7XTncWz2QgDT+RhAk9YgQXlqKKWaNkcp2uAZTLEZpiR7D1yUuwq61yWFHwaT8a9+MZupiQVYW3tjR9/EC5yn8Sg/l8lszFL0aOemURi0jxAa+S2vPaCL9EmXRAUcbDc4CsAMFP0BZG1vH5ApAmmYlmQ3OJIMtEfqPIynsHLGP4ABfY86NzhDu9j1IqFRzQSGpZLmr+eFc7iYEiOkqRfSqiIlQeAmZERRMaGYQjsFLQsw601MXS5DjEl68yKbbJYTk6JNiBLeHHGzskJGQDLkNLnhrFKALvBoKQYoN/YX7G277JIFgAYpfmzcKqXsG/1nHDrFHUrXZcOC8jitEvEglm4GLQsw01s+vdhWjqvbjfTFbfMnOXtCA5tcxbONT+vAafTAES+VKurWHktCS/kNfsF6pi5svlQu40ahWGD3S0tNdWZZCeI9jRhRi03odGCpQg3Pm6nlVXCykqZgC7CVphUrmdjwftQymo0Zsugm1aOMRQtEZko3dRih/cnxeJiI+FeLhQs1KDFY0fbyMO3MABSUMeRv2156hcomcPkh9XhAddqWMaFfw9Pwi37VskWo9pyLzI96TzHpJSxFD9WtFEnruELy/DpiFrlvqB1NameD1c32Ak6IvFPkcsV9RIle8NwyzmXWBvixFgZgFVytKa5ayV0QvYjj0IKB4iby+e6FAywsTPCgQo7GrXklleslCY6pM9hkMH/ikkjE83OVJWWeMT6YLH5uATiUcLWaEZZQDn5RVi9S88wFUCaMSMnQlXEkosER52D6eV41GpZin0XtSkZUu8/PEHMKJqReHbVS3PFZNDpISv1Lo6rAvsZR+nkLOPJyUoYyZ+FAgoiX9M0O83cTEbtgj8B4U32EYi7ZZSJBwVthZoDA+bysU6uXDIaUJgjpTSixRfGHWBO+Oe2UDotDsh+Xz5vHQ+9uQGKzFQlLiWVi7RqkwVE6I5ozyQSNcIELQabRLODIvNbhrrEkjzcB313skADMxv2gTs88GDHEIGaOYwEzlGb7djUyfiNdMAeLPcg6So0gGwVWz7vXEl6MhzZ6mHnJJchJwf43xWaYuNmpJnWswG8RNk+qpbglDAGAdl6AEG0GHcDEYHTyBfwgJiFCjD0NV1mAFQsWnztKrvXygvzbMCABTgLEfhQanG5LFRV4GjsM5dUdM8qvjry3cyVeCinCud4f7cmki475Vhst1ELZG5I4CuFA2CiGoUwEDorljLS6nnm0gvmpNiRHfAJFtavrhUqp2ek3FU1gBStdefKWZBNuiR4Y1Va9Jr5fGsWthNrGWa2TlJdeYRRAjOZky73naiQEspv0DCE2wCs4ULYtsJq8tWmMGUdRr6oR4uwBMWXVg4pUHaAFrLh7WVqZLlZu7HU+ttv14Cw/Ajieh7pTYpJOFn+DjMAIs2oTbz/R+EUI3gQTqJqRI2Lwnf1XTJxEqMiX7umathNVDHIm/SyIDUKgQgFhmHcyX7QPYQaEU/HoIX29BDCanW7dMvN8eerwOytOkKhLjbXQJKsjnKz+bRZvz/CdOOEMMetQSV+hCWbvSfm1qSA10z2pFNgxrzYoiNLJWI3QzZyzZUuj+YGiqv2oO5POAwAWPtamwlYC1v2z6B5AvIudc1zt7g0//yZiXHMJmt8lQCFxjianpk68RrsEtqgMWNNwv09shUR7g4QnJoK+v63Zb/ayMq+50c4rXFjqwwxcvJJIqwAzoKSVdabdckaAWDVn244rWnr5N/lr1W171KBRTWhrDXEUYcr3wCgSfnLC+ljrBM6M9NYsFa9UtR3dRVuJT6HfQ4+78rXGIzkj0TjBjvWeJxiKWw6RuNAmEYqhH7HiipS1BsVmjr7ykYr4HnGlCoaBQGt2Y6EiWFsNxAv2wElVW4ARsPM0Rem6Ngk4oS5hpHa8WfL15i18JQk3ctRrxtZTy1RaeYAQs7Ngq76xmmtZHF7PvTQrcmPAp1/oBRZTrojO5OYCDKld57EbZI1UAMDCM3w1M0IFxjoZ1oXOt4KJzIjUc2fw+1HngNyT/izC6GQOpF/ecqRzLxPmxP6n/oqvtPGn3qmfltpli5pTwbtRqPoOwSiiEm1iEmuuwhklEUF3+7oVCTk3M08ZQgf6LdQNLjuHJ8Zy6cF69eEkx12ZBAWpUQN8u/6Qs6CprJWl0xhkk+EeOHn7WUmnNgnOMYWicsXgZki7B8Um90ytyuUvC7RMojWMSUXBinhXOsKUuWtSRbfTD2mxESJT70mHAoqJKlbdrcENjyPHLWRJDX+WQMJBHhVh+UjY6LtON2F/VzEkKwW8tnigoB7i6hhMdFgkCeChJsCvDnheBAA8YzVO5O8nEFyA+Hq147cGjVlHJHJXK2Wcp7ExPELJ25zc7Zk58gwfzrHpCilzjHL9hKoX76NDD5pgwF4gvCHhiy1KgNnFSnnWB7/0xzJZOcNWdL6gaa/ydxc9jJ3cdImwIouop/qcMdNvCAzOVzDBhhWPDdgkUt5eEA86sJpfYN5ITBMHBfZyk4ps0iV0IS7ZZ7EjlXlmyZ40YR5c4lOJ0lYG0aeFO6chJPg60P4gnCIpRA9X4tAKG6wDa0MN339AeGq8gu76lI+wTktNJAYMgSj/RgMEUqjg8AG5UQ4zRIUbCAUAMfhqnAIc+VmIDeoFV6FO4Lxy7qaq8KrsiHShAWfqqN39v2x/gxDkJFr+fhTcfDs3GFFSeIiIpok11MlI7MgCUuRXi3QumxZO7BMLzlsa+70LEEPAlnFtlQrMxpLT8DjdbWEl0P7HipSTynHo3yhHZRlzzD39PQYndcCMzyajvlBo5p25RltYLU2p6GKw5Dqt9q14L1pZoYFQA7PNMVoKesqHBgM43df1kpDtqAj8+ULPYUVm5EMFO3RtoFoErWdifULDJfQQgTUwqW2Fkx8QxCGTot323G0G0shw9zOqdFn/0lzNSg9pjOKRkRUEQ+v7hxzADQwNGmcwsstTpXWB9Cj1TzsHPHhTNuqyGSDcIXGqwNpEAzDWXQn2hbVTykDH0Wttnxir6S6WKZ5wSTckueDSW7z2s6pcIBIsMWbL/RvNcjrtxFHpAlPrgB4EcCjxMVNkCR77ODLrTZQgg5FlbKagSuIhpChnI2/UriUIhGTauEW8KHYmd1rwsnrBva3yNmvwiq83lheO63sYIjQc4RSg5ST7EdqlLQ09WR2MSp3qfBuSQRJrQkwPUh+yzCnYgnASzkPhftIurZHnvuqcEdRXw75sln+apiWcMTsXc5w9yYLv20WzTNlGCbhRH2nrmPUGBZOxyemL5++ZEHcHIuNC0rh8tELjgZFscMsVq97gorNidh8W78uHHREHBdrISP19/bHh7Ii64e9E5xdyh7CBOe6TGdROIXyx35jywKi8Vs/6wpk8TuWqZ+Foxt5zc8l4VgWcV8STtQSyLdjCcOZ+tFzLBW2dCaxxXDGurED0hHZM8aNSM1E5gQwCyirmd+5mvzdbVfeCRczbfyenTZzc1Kmdhs7z1O5HebAQZ5I84b4LBwKPUVG9j2HYMrfOrZ8ppYellqysb+S8nNkA7tIgcl+Di8wzyVm83fCiYVg53dmXstVT0p3UKbyFxydJP1muwUEW7cmzsTj4vQxyaXizBO1jUmGVvtIrFYcWSnPs19+4eF8l9OwXuZ7AjkVAajg1Vrqzg00S68Jx6kD7I3TGtIXrCXKfUwzZLtfUOJQIqdA9xoYzkV7uVyAZNaVRLnYsrjNrU09evwf8RMG5OPLK1060Tt7L5zLtDj86s6RTke35CVOe3zacDpuzhtgrAedjQ4Cf1H3K4xtSb0ED0blRsgxxdWPaW3HPG/r4dWGqmnZ1QW2JvspbD07vADFEHcvnLyuYhsjKijzIw84U1s+vUJnu7hxby6PQcfy1oGnlUBZ4Lg5lE0pcp3Cav0ApOrkzs37n8XSaV8e2oBADG6Y6eHEAqXQQZp6HjBnYKayOsVfSJxSS11y4q0lTkGS94z+HJQor3QlGgB7uXeiuvJlXWuCzjnVkuL5X8NNdTPMrtr43eVx+kf4jdIp8PtBFgSteu2wzbT9E4WiuQFuYi3BwJlQriRcY7WVJbr5iDTUNSc0TB1Yw73nwisqYn1tKzaiLVqlyfh9tcOUccww7ms5UuVtYBM2OuQHsGR9N2YVp5vlLyh0j9Tt/QFw8JitRjsv3A6dI7l7EI5VRjz3fMyG+gmLaVEHLOD3bzaC5GEcWpG/0wjfkDlqdICJR9bDgTaPiRgwipZAnm1rUdpVmEIAbQSWQItp6XuCkolrS+GWLwrnb8OvIwwa1sTHWdgShSzyIqe2d/asLO9KEOqEMtC1PctwQ6I8kJNclBhwk/tbDvmqrNnmiw64gWMf2rEEpPxQrc9V9GhnuiH2IBttu5qHGbaJsXArHFlkKPY+C5ea6TLlI4DwwlN+Ew0fOXlDg1ZCB1pPHJhaKTFmAKwVncvNxN7e9BWrMkjqyHIATJk6jpIjGUP8oD4WjMXIsd1irA/zyON2+247UnDMqFWs6/s54cTZsnbiMTSIjdroVMpsO81F4Ngsbc9Ew8FioV3GWin2+wW5wJZ0QLSA3hIgkX0Dq5zKA5cwMX4yRBb0qGtN1lyuwP1NIecpgpKdhXA/30J7GDiAMHUmWZUV1k5+z0lHGuMpL+B0U7HNUwBntL4PTEfxSDRBkyMEbuKE0sBs63AT0E7yOLUcVqlgXplU5lQdS019adrFfE6y4kti7j9IonODOFudDA5M9vBc+1D+8V9T9EpYiqHziEAdGNOlwQbGKN5j2WZRKN+QPYuZMoYPdOCAZVkWHpkzpGvgFgr1JhULz8OIkIqlqQYVDlo2d+bkW9oNJcKtr8KtAnYu+jlYCf2XuWrbOIFF50XYYvoANMzrYGAYXR0hlwJF1U43/nhcc+USIF9IjeCFUWi5QIkvpP4PDHEbKYTvIZwfA+nd52evSRAPpVf/641w0DzSXXz+FL6vCLCQz2MX44aQfnCTpCXyO8xC1GETnMpKTID1wMEq1DXO0DqproCJVPAgKzsJ++7l2K0OCsHor+nOvcczxlQYnIP2UJ+DO8rzkcdhrjUXsOIwtugRPw1VYgX6jkiAttIN/rZehYpI3VZs9dnVhHq03U5X2jYY8VgjftHZ3FptYsUKlACfOGWMr1A2OWr+MYAgYdOZ+we2WylXbl44DDLFkavuKqsb4AfkYMXH3lacR28TLXeaAgLzIB8wcZt1iCfCL5bDQTIkLFIHfKsOIwO8f39Ob7r3CtTp3KuCwXxqLZFFO/IsiHD5VFRbilqmAWKDmQOy1qAEoOnVVUn7zNWVOUUu7wv+inSmUTljfxyzIzn5aRk443j5aRzVsFxKqBp5EYhtrgMdVqvNZnM8pzsAZMXIC2N8jNKH+E4OT5J3LvAINUl1cRLu8FsSTs/FzM4ddEHyq90wU9rM9pV8RjhMjjPaBThSaxhiIu1Yaag4UkkaXtRyXNW0T6J0NbOf5TNlRFZs5Kc6FG+0L02EA8ZYIk3vQEQR4YZ2bE6uQORJFmXWWmLuzjX4uikb2xQ2Dk3//j4+ObMJTucGprQfbFLYvRT3ymFDZIjOu71ILAFLQe6jYdlHDvGvH5RAAyXVMeREZXUGldEuwiJxtmUboZZ1xwSAwzpP/VcIp80FV0blLT2qivTCT/iXUlc4lArl4tRTjbARyDuyzN1+b7WFHa33Nabel8n01SdNQfeIOBMFAjVkloAMaYhXTRjJ0LEAPFPu0X2IQTwpaJKk0+UjpiLh1+pZOE4Uy6+VqomSWKGrBHSgqr87q7jJA2Gh1qUVaNGbZi5sI6iqzu8L5fzKAQG5iuNGmNbTnq54aqfhRZbQErqUxvkHdgAtSFJQ7bXG1GD0HkXtuIiqIQcJP4xqr3zYYJ9GOh+Z2oCZ++Fh5+CFQUsXvzrLHk7NFGkQA/lR8HJkn2vDhh0xsTXWcMcGRTkuWN9P8gYxpokVg+kQgGmgKCsFjwixBiImeRIOwkfSaKPRN4FzoGxUo2fhtDMXcMLowifhNjQb5Fua8/NR5fj+NKVSeb1kX9U6Xc4wD2CcONqpcKFrVoRMPESRBqPgUFE4NqUiwB8SUGmI5rNhEsKVBWv8keHuJkH+0A6YqSGPT/gUwgKgXGTm3Qunp5HlgmcrSwihwSQUToHDhLYLE6+EYhrttmW0mSh2oqtIi8IN4pMqbPIqJQFHoiHs4ZdguWLgjZastHO8JcbpePaQ0qrUFcoG5sfshdvDbvhrF7p5nFwzi3+tuHueDWB6xFm9qrkfv5g0kgH4XZgmjkR3NVvy3UZRfBj9ljtH/BVKGQl5IPxgEJb5pJY6DcxNWcEoHEd0PR2ekfyBZpFN/7BzcBKOhaK5GgPALzT+k2KA+GgZxo60jAOLQRivSw1U0GIFBfe7cFtwxnxmVOHaOpxTQ4iSFORJ31O6gT07vlC1JF19GBFSwPNoEePAU/88I2RJLj3ggifhWHXxeaq8zQHqHN+GoY7eLOqfzv1PJ8lVW+XqA4AYx8UuT6QxwDLIzi2R0C6VsCLu8Nc6kF0EQGUYCZtQvPUG7eg5m1QNmoHLYvBk6HFfz4lvqXVJ7/xz3vk/bnqOPz36OXZHxxSoPmrlKmyOy4a31GA+XT1lekWaptqKD39fho2il6WmOTw8fRpqHw59uPNJKVKVkwCtXAYKB4vABwho8AFOkXl1BbL6nVd6IJvWzk9Rog7x8XPUe1RyYbqeqW3XiWUxRYxF0+DKPzWEmPJx02Upbr3cqYVBc37QroMxtj2GcAwqHC/M0qE3gQOFOLCIpINyhfBUh+SMT0uWCE5h6vi8b6BT4AsD+W6s2K1wpFaAfXt/WNktjslCRHgGnanUdcaoeOPFlKCFXtAIjYabReE5PMhZUSDGZsyJytsSEMcu6b1zTL13YJBCHDS9bygc/+kVzghpGlVqS3uE9kBBITx3i0WbuzALGRbQt8PtL5ZgfKIXKqdbZcMqETa7kI05r/vD8f3PZE/qsBdDSEhhh3zrlGYqikv+VJg6NBBN6NbJIV+tUULX++gAzrxHrZcl8TST/MCGjwG9TST6V/1zF5bEvy527Uxz4FRZ9HeTaDlijjgk4ZEhzY0yOs2KZz0ou03H5oFbyvnA2i7JCQucKUoypynaCi522Svyj30bGOssKZwD4SRjC1pjo07mVTRDZ60bpa6yS+1RuB0GGPIagdkurL+QW+zzm2xczkJD/g08Krlm4+RV5cBC88VINy2vyQNVnbCztlEP2bstLw7UoVdpEFalmQSyEE4vkoVqE9CBcFyF+4i6rHZcOoZ0OrGIcxGIwz0IFzgLA3hqNdsnrq3khBGup5WcIXTQsDYmhwQcmwFAhbbKtQjOcVjRCYic2usVVqQ66ZQeFE2hr5HvkTCAgOjKWjel1SdiAZEYGYt57Tj0AbWZA6kfaGKI7NrwacjY3cMj6PXmtpBj7nY2xY9DFabhajvkEZ4KgzYjqpxDnch3XRwYA++9VnMXF5vYSewgcRxwxQkf7EvWTvBJuDyO6YsFwgonroNkEDeu7oVb0Rxi5DXn9pCqcWtQgo5QQy5XhheEK5HNwNJKCPYxfRPIqV5zkWMX/AT6dETC4Zz3CfZuz22H8V34GkgwlCPX+bF4wZExW7bmcMAF+M+GgDvYU+XepUOtMEMTVdaYHDZmZzBNZvT95K8qg3wJLIdj/4JwBmMEcgZEmysFkRNWFFLmMPGxHc4jp+n1JWDpVohyRoqM531BujXDmMmN7W1i1/esd7sp6wsqHJu8LhyBEXUSa95VibB/WTAvYEJ5x5XT2UJRXGB3W3t6Ei5x4Eebs8JRYEcz7AHUstN5w5xcqKovyazeVlyGSieEK5hUFFccF3FTjWGYShRea5Sryqtv0v9lGqnLFuZS+0sG5y3D/A2mnijJwd1h+cozQ1nJ4ECvXpyHUsEgsDDQhmvunhEQ9qkHhNNKOAXXqv/9f0hoGG0jizNpfNvi7kv+XU5R7CScwjZUsTXzJx5UkJs4vARZAw4tQRT0pKZji5fdChcQdnLuwgNR0jzFZzroKun0iqmKARycZjVb9skqJ1LiMPzSUTHJlTwRbz7iwLzF41d5Mw0FKByHQ2obcglQadeBKYp5eggmD7CNOiLRtv1UfNTB9/f1OWW80KY9OAjzWBbwZCRNNcJQ4ZIOMgXZj5GlQQsKn9bQgpSfBnbbaQsFHMGjcBdtW2HXvGg7wC09A1zIY88LrMHSs9Vn8XMS4w9xy0Rhl5JRpUMSjrlF/ddUStQ/zENB3zwUdHisB84/Uw5Ng4ufOjUKifGQ5t17oBtLxHgSNla4hE4c5S8mtTigsbQz9v5rNCiiEBjvIJkvRtpBt0mo4PDcmAAk73ndgQQ1NBIqHA0lUNzr2ISg9TfDYV73kJh57Btgq4znZGvqJeYG7Xa8AYveE9mk3TVNW9mpjPj/9/Zf5CflZ4tknre1YDi6B3M+R3wDwCoyVtFWZ8Y9kV5cfIqeOdnLgQ7EKYAk6qq3tmpEseTp5zS1hWPb6/FqKbQ5y74+PQoNSzF1Nt6/sjxzWzrc92DKiUMiKc+lrsBPBSf2Unj05kS27KcbkIDDGV7wwRucB6ZUTLQjBxbkOiUPJ8IRCAN+jj7nLduKzVhFVyKrRDwLGq2pP3NzKJk/DLye45XpUZxYMChnesSXMAhLL/Rq2EdK8tvh/JMctn+oWR5mN4/TQViakMRx8vSgjfIsntJMAfxHCluziOx04BwoeBJK75kF5Dr/sgVxjKYpt2xb36BzD56AXdnXpYeh0YaYbtf/46vCiTcxHNb/SJjHDb0IWfc4BL3aEXmCgRdsDDotVFtRCBwP45x0BmsIawYKbxO4NbL/OLxGhFuLW+/YGScRyyWUteVdSyxlT3M6WYU26jjL5NAYZmDQCW3g+gs7B7SB2Y2twjNaDYpJ0ZZjkRqxms4N5/zhQm89wZ6MBXzOY80xDDwN9xF5gf8MaUA8hOxEOBpqDA3WQS8oJCB1A5eQqVsqoeNT9ntr21saCat2rmueOmDMDDVMJ0fY/T1jYBXadInQWFFlZYInmb3hkRUFhp0d+a85J7ujfzx1oaH/OCP0gES8UIa2cslP6BLK2eGP1eIMTacBCZPu1GgDY8f7fmql3nDkoK6hnML/+QXhtLcR+MdjzsQr8vTOLc69DOvQwKcO6dIWw9EZQGYxbXTXXIpqX0miV6H2pbcx8bF4PV7ZxSLNxFfS7VpsPwYWiI+OSncxY0BiEIxoYXqIHDcbs9RsjkmjdOCYYvhVM2XZtpfzWsPV9S68/oSgYes4fG2a9zdghYex1Maivv+1n5y68hIw26Cuy1r+h+5wTfBrFI6oK8BytI9E0FytZvXMw5XfetSpRYtCb/HJMWjrlBiritPOcvGfhUPko/MX7LUVP4DpztmFaFSsQHTDvOlLoRdkJGqyPMq7bb4Pt1y/OSoMAqaohBKjBoNgOFtjAEY42pLIO+lcrMJITDFMpVgn1BGQn9gLwI1rZz7JzFJcXRxvB5y6qBFW1ArGLWocP9G3BSZjELXEZEGvt1dtPRuEtRyq1EReVrfanI+rfvkpIXvjkBDqU1DrpGNa0crH27w4tTZ3bTIoNk/5K7jrVfgNy0crwytg5qiUZq41ApAQzINo9tWkHNY/M/7Tqzo4gAgOqW5waxMLB2kCIM1CcQEXESO306U8EoaexsqfknpYK4i6c6xVpKvggUY5OnjUsbcZQdlRuHHkJMn1qVcxy1/oM5gR7u+CjkFEtXR3ZzBhrVEHAWbiCTiGGwVENKij1aLR60+mCBsEklu9kRRQ8V1OxtmBI1DSBejO5dqehFYfFLqq//rfdT3yaZqmwc6Rz5GP5Lf/8lXCaWOrDgq5iU9L8eJQPL3MhU+Pn4YNGbCnA0aOWB2iiygbcMzNfHyQGMtwSxWLvLoM0rEEXDql7ZGHz8xeL4LJ2A5wYNUFxUm+Fw3sYR042tmwv+qbpt7r2BMEtRvo0uZj3dpcb38qNMXzN0BGYMrOgZdpXgOfbVCU1hH2mkg5m1Ti0oqjy2gtGTlyTg6mc7DehHsOcvHm6HUgASsmw5V7hSZQ5CPXqyq//jIGlGDVuFOAn5k+t7ySjFMymJDfCbeETU5DnvU2Mt7VwjloidXlu5ErdqZweq0Wdy4gQlRmW86+AQY6A3uW8PPPFG5IwzwNSGri2Y9hhxmK8jldOd/AYV7qKqYbhRT7nSpql8aD68h3XNhhr+D/ZlWacezcoEP29AaffeeVvzZc10KcWhFNusRCG5dTL6xEiNGM9DlJmXkwWaDjaAKdjA1SMThkx/5/ATICEBvmO29evACFg20GblCl9a2804YwjszjfNrreMQN6D0cYWDU0DHcFwk6vWkAVBozhm1nVN/MdHcZ8cFSG0JMus9uYRX6hGNjrVd5gXolC5KM/igxflOwuGzL/psuQNFKK/Wq+29+11cKn2AwWPpw9pQfbto082kUk/Z55Xr3HAv9iDYGbLTObTmwXY9zLxlbcjC69vFwVoFeyZbqIqIKpH+cTcbhULzyBaXOxg4xVRu/8V4e8vvYlFl0snVW8WGeJcZNmGhvxxrsqT/DlIm5x9QdHChl+hSXy6JQNNZjwvU4rRnTXCZ/rF0orEiM47GMJhYuDfmzFK4ceM+b0Znl9nIBoEt8KbzUXGpe6aKyHPjIZ9RJF4nSD9kQ33epk1CrDNOt0w3Z6GRDodmdsrmb2RNaKVCPpTy1klrpxjlOHFegk+EcO+mC7pzWU9CBL3qEoZAkzrzSoPPydVEfWSXPtQmdiUi6zTIdjcHs65FJ3rqxMesUTqBduDSB5vPFjvzYf9yEqeCnyGqW+AstRyOR6aiDM7U5gzSskTjMY18UehOC0YuQgVRCKV+8X+9l4VZ6GZbXE4yOEdalCu0gyHjJRroPgcC/wcjvpbLBO3IbcJR45kxVX+/JJh8gXUUAKMszMrZ64MbxP4MO2SfHzKaUxygfeqFDStw49LB8+e7AV69FDA3HNSGaLDBm01FOROxw8SxlB63P4KLC1KUhJ6BI5Oa2XXB+TD2ywkFQJE2D4xAxyw1JDqZAK1aQSLicbplYKBbp41IBPJduHh4Tfb3C5vuES42EOkwgcjwcQ5RU5Wn0hiFlTkq4ldohdBvS7ZcMA2pwSTfHj8sxC8QVmYZX/apy7tCFpNQ5mks79YxzLIOkgKsDJydgyrHfbg1oYryA4fW5O+ZL4wp0bBkvsCDhZLoIZH/mYHe0sUTqmC1XiRKsPHq9fxM29Hp3PW4jankRq0m3LaVp9RVbOIeoowuo/DoNCLMNIMGJAak3OjCFICovHf6+Cy1HREUv3HFKRoypPR1TKireHphmDThyGbXcCQ5JGkpKSGewF8nD692uqnRTOEFD+3IYGeqsA4XrOaBAL7WHsSRbm3fwAMKjFwXgB3vpc1svX73f+Ev3rJaV1euM0KKEqBaXhHLYE2Btkn5Q0PccDLxU1kk7npzxfrkhtRjgKlinN1QUrKagEI1jI8LpnUUc3mdYURrMONwIgTNIm07bq7WOCS36Qk/wl6//xbUavLCLT8sgJd3ZlPNqZkxE5e2u6uSYo1tz/folS6MWeJUpAPatXiDGSK2Qfai0RQJXIuoV15lTq6zxCZklq4khNDYEb//UfWmCwheFA98OhDEdP0iiiXbsAFRE37otiMV1H0pgEXVqGr4VjvOFUsei3gYpm+fZ3kxlaPoNidQ6zFhvpWW/jPJCImi9BwiXb6eJYCjJVyH86MXNYV0S6tXqaLrxO82FS4OVOf0CTq1KN/mqDmow9Qs5hMyUhjTzg/dADrzsRatxBAw4TgLjvdJEjXSrl5zNvXISqzimv/C+Vd2/wZXbRC+2npbN016Nsy4ZPOlo3MykWW7ZeO+5Sqe33WglWW9j5UzfvbZnAqTUGi7KxJ4nzmh669LlnmasBaNPCcA9Z06ZqnytWf/rhUvMo3T3fLRiP8XzlC17Fcny42USQemiYwFkun9TJ4LoXNNpDnfnBiJ002CpwEGGViflu2R9QGADKwfw6bHXFnWO02L78bF/C+Hg7hqbbJSoX8NmI072gfNLV7kisvValkxm0hZtkYr43hH1Q5BGcg3zO56oBNkvtQMd9A2OZSAhxGGoCGaJHYhMoIYBuhXSi9fnQnyLcIidWKLWei3rBhuxix25JvnA1UV+vQfqM86GxDNgcobSoEjYooxOp2qzYChO+OOESfnUfcdkX2/T0omya87TV55sRwryMvRvJhxa+Uh+Rf4hD61RVr9j5y1G7defWQv+gMIIS7hy3rUBpkpXWo43jWqho2kwERT3kKRLIhFd+cnOO+2AVwxv/dMS78PSyMALD9brvn9D4ZjdpWPnOsty2WEJsmJlu84qESsc6r13eol5reKfcD0rKg8RM8vY2ajDBUaa5qhdnxP5nNeDaJY3Ddz5SF/7J06M/goT+e3CaZGPUQQKNdUOs9+ODC53laQ+aWL3P2EKpQ5ZHSfBakNJ7keOVIaq6Hq5Qrvf5kol+axgptMJ0FYDuiwSQjh/gJWu6nTD2dsLl4JoTgyDsS5vCcI3mHRbt/auhVzOa9hVJkUXopwtQYO7S0v5VsekeykhH3gdexOW6O1T+m7/Tdv2LcLBYFW8hW3gVFnZr3VYL8Ph+PEYbtnQZXh4BsyXLitthcQtKi8t/pG9Fn4iwnFCOtGT1haXp5kcbyocTNbUdhvZqdE/qol8/uF5fdcrZXtqcv7yVNcNbiSxaZKN4eV+4yVGj3zttxbuM1oEtBsi9UTXuCy2f7+caR+ZCVFTffb1WX6yx+emskZNacrfw/q4+w7RvkW4kPo6UkO4Rs04X6iUfvm3l2H5abMJX3rViLNQT8PT2vxuajk206GQj/ufFhipYMgjWn3np8+VKZKDPizvOcy/v3BsyGo7EoasztsU8Zqyf+Ovq2Z/tcN+A+FIKKLHy126m8Ro28Pbbd7jUV39ccLhrhrZvHwLN4SL04AbkQ785tIh/S7r8AfuXECVRnGjYZoDqEdvs3rTXVtq+luVr02lfFPhppNXgXaufQCZ9noiETmFNzIrGw3cxKnvX513/vbCqUO3ShkaM3+n/Mvlj4unQ2QkaBPRumpX/mFqeev1JAnI86t0ZGSVP+KXaB15jyawXiei2R85ct8tnN5sWSWkQwfGsddabyz8TvUMP2mJolLogjn3+m8gHItc7NIlcJxuj2NIXbXl92zeYaWNhGUqdrCkt/6b7JzG8Yh0eecACXesg0eOCOJ4lq+PK8JpuVIE2FZM/yxvMlovf+jwmh87+weE+61k4+CMsmk9sTWqbzp82ulalpVe6NgpSvHDpukHhUsXwjZNg7Z33jlBPBzp+m5Xhq96QDrrBgcNGWo26LkNP252f1Q4RLpaudK7LB2r8LjGDjXRqvy6NEy8ZsdpuADSdqF/E9HeQLgbnyv2uyKWmvwDkeGvSKCBsuDY5n5fcdM2bxTJmf6NvoLeOs9U2ktOJP4d0TXO3vH1SfrhQwcnaYyIxoT8zYLUNxOOBe+1tl2zEucdmgPdePvEy4cWs5YirrgoQQIMh7d7ojcU7ppUAu+rAKvyGL0eQAUO8am0se74tk/zxsJBvJMaGJVQtrCz1VcBV6fw1knTmwuntn3EQsqmFQmr8KVI7qfj+nd4jt9FOMoXjh91B0P5xbj+8Ps8xO8lXJJwver/hl/mD/iMsP4PLNx/6J37m339K/wu3UELxW3cAAAAAElFTkSuQmCC";
+const DEFAULT_RECI_STAMP = "data:image/png;base64,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";
+
+    // 🗂️ [거래처별 기본 데이터] — 탭 전환 시 이 값으로 폼이 채워집니다.
+    // useSupplyBase: true면 "공급가액(부가세 별도)" 입력 방식, false면 "총액(부가세 포함)" 입력 방식
+    // reciStampImage: true면 직인을 이미지로 표시, false면 "(인)" 텍스트로 표시
+    const CLIENT_DEFAULTS = {
+        nuckscoltd: {
+            label: '넉스(주)',
+            year: 2026,
+            useSupplyBase: false,
+            totalAmt: 4500000,
+            prodNameJan: '임차료',
+            prodNameRest: '임차료',
+            provRegNo: '204-30-80210',
+            provName: '넉스빌딩',
+            provCEO: '윤상원',
+            provAddr: '서울 광진구 광나루로 46길 26 넉스빌딩 (구의동)',
+            provType: '부동산업',
+            provItem: '비거주용 건물임대업',
+            reciRegNo: '268-81-02656',
+            reciName: '넉스(주)',
+            reciCEO: '윤상원',
+            reciAddr: '서울 광진구 광나루로 46길 26 2층, 지하1층',
+            reciPhone: '010-2356-5574',
+            reciType: '건설업 서비스업',
+            reciItem: '실내건축 및 설계',
+            reciStampImage: true,
+            contractStart: '',
+            contractEnd: ''
+        },
+        kidsqua: {
+            label: '키즈쿠아',
+            year: 2026,
+            useSupplyBase: false,
+            totalAmt: 635134,
+            prodNameJan: '임차료',
+            prodNameRest: '임차료',
+            provRegNo: '206-27-88294',
+            provName: '',
+            provCEO: '윤상원',
+            provAddr: '서울 광진구 광나루로 46길 26 4층',
+            provType: '부동산업',
+            provItem: '임대',
+            reciRegNo: '202-02-74548',
+            reciName: '키즈쿠아',
+            reciCEO: '이영길',
+            reciAddr: '서울 광진구 아차산로 499',
+            reciPhone: '010-7162-3776',
+            reciType: '서비스',
+            reciItem: '수영장',
+            reciStampImage: false,
+            contractStart: '',
+            contractEnd: ''
+        },
+        hyunjin: {
+            label: '현진공인중개사사무소',
+            year: 2026,
+            useSupplyBase: false,
+            totalAmt: 500000,
+            prodNameJan: '임차료',
+            prodNameRest: '임차료',
+            provRegNo: '204-30-80210',
+            provName: '넉스빌딩',
+            provCEO: '윤상원',
+            provAddr: '서울 광진구 광나루로 46길 26 넉스빌딩 (구의동)',
+            provType: '부동산업',
+            provItem: '비거주용 건물임대업',
+            reciRegNo: '206-25-57860',
+            reciName: '현진공인중개사사무소',
+            reciCEO: '박선아',
+            reciAddr: '서울 광진구 광나루로 46길 26(구의동 1층,2호)',
+            reciPhone: '010-7456-0313',
+            reciType: '서비스',
+            reciItem: '부동산중개 및 컨설팅',
+            reciStampImage: false,
+            contractStart: '',
+            contractEnd: ''
+        },
+        hoa: {
+            label: '호아 오아시스',
+            year: 2026,
+            useSupplyBase: true,
+            totalAmt: 500000,
+            prodNameJan: '임차료',
+            prodNameRest: '임차료',
+            provRegNo: '204-30-80210',
+            provName: '넉스빌딩',
+            provCEO: '윤상원',
+            provAddr: '서울 광진구 광나루로 46길 26 넉스빌딩 (구의동)',
+            provType: '부동산업',
+            provItem: '비거주용 건물임대업',
+            reciRegNo: '747-50-00900',
+            reciName: '호아 오아시스 2호점',
+            reciCEO: '도현아',
+            reciAddr: '서울 광진구 광나루로 46길 26, 1층 3호 (구의동)',
+            reciPhone: '010-6616-0504',
+            reciType: '도매 및 소매업',
+            reciItem: '무인 카페',
+            reciStampImage: false,
+            contractStart: '',
+            contractEnd: ''
+        }
+    };
+
+    // 📌 [내장 초기 데이터] — 이 브라우저에 아직 저장된 데이터가 없을 때(처음 여는 경우) 자동으로 채워지는 기본값입니다.
+    // (세금계산서_데이터.json 저장 시각: 2026-07-24)
+    const EMBEDDED_SEED_DATA = {
+  "clientIdList": [
+    "nuckscoltd",
+    "kidsqua",
+    "hyunjin",
+    "hoa"
+  ],
+  "monthAmountOverridesByClient": {
+    "nuckscoltd": {
+      "1": { "value": 4500000, "locked": true },
+      "2": { "value": 4500000, "locked": true },
+      "3": { "value": 4500000, "locked": true },
+      "4": { "value": 4500000, "locked": true },
+      "5": { "value": 4500000, "locked": true },
+      "6": { "value": 4500000, "locked": true }
+    },
+    "kidsqua": {
+      "1": { "value": 610995, "locked": true },
+      "2": { "value": 635134, "locked": true },
+      "3": { "value": 635134, "locked": true },
+      "4": { "value": 635134, "locked": true },
+      "5": { "value": 635134, "locked": true },
+      "6": { "value": 635134, "locked": true }
+    },
+    "hyunjin": {
+      "1": { "value": 500000, "locked": true },
+      "2": { "value": 500000, "locked": true },
+      "3": { "value": 500000, "locked": true },
+      "4": { "value": 500000, "locked": true },
+      "5": { "value": 500000, "locked": true },
+      "6": { "value": 500000, "locked": true }
+    },
+    "hoa": {
+      "1": { "value": 500000, "locked": true },
+      "2": { "value": 500000, "locked": true },
+      "3": { "value": 500000, "locked": true },
+      "4": { "value": 500000, "locked": true },
+      "5": { "value": 500000, "locked": true },
+      "6": { "value": 500000, "locked": true }
+    },
+    "client_1781991149120": {}
+  },
+  "clientDataCache": {
+    "nuckscoltd": {
+      "label": "넉스(주)",
+      "year": 2026,
+      "useSupplyBase": false,
+      "totalAmt": 4500000,
+      "prodNameJan": "임차료",
+      "prodNameRest": "임차료",
+      "provRegNo": "204-30-80210",
+      "provName": "넉스빌딩",
+      "provCEO": "윤상원",
+      "provAddr": "서울 광진구 광나루로 46길 26 넉스빌딩 (구의동)",
+      "provType": "부동산업",
+      "provItem": "비거주용 건물임대업",
+      "reciRegNo": "268-81-02656",
+      "reciName": "넉스(주)",
+      "reciCEO": "윤상원",
+      "reciAddr": "서울 광진구 광나루로 46길 26 2층, 지하1층",
+      "reciPhone": "",
+      "reciType": "건설업 서비스업",
+      "reciItem": "실내건축 및 설계",
+      "reciStampImage": true,
+      "contractStart": "",
+      "contractEnd": ""
+    },
+    "hoa": {
+      "year": 2026,
+      "useSupplyBase": true,
+      "totalAmt": 500000,
+      "prodNameJan": "임차료",
+      "prodNameRest": "임차료",
+      "provRegNo": "204-30-80210",
+      "provName": "넉스빌딩",
+      "provCEO": "윤상원",
+      "provAddr": "서울 광진구 광나루로 46길 26 넉스빌딩 (구의동)",
+      "provType": "부동산업",
+      "provItem": "비거주용 건물임대업",
+      "reciRegNo": "747-50-00900",
+      "reciName": "호아 오아시스 2호점",
+      "reciCEO": "도현아",
+      "reciAddr": "서울 광진구 광나루로 46길 26, 1층 3호 (구의동)",
+      "reciType": "도매 및 소매업",
+      "reciItem": "무인 카페",
+      "reciStampImage": false
+    },
+    "hyunjin": {
+      "label": "현진공인중개사사무소",
+      "year": 2026,
+      "useSupplyBase": false,
+      "totalAmt": 500000,
+      "prodNameJan": "임차료",
+      "prodNameRest": "임차료",
+      "provRegNo": "204-30-80210",
+      "provName": "넉스빌딩",
+      "provCEO": "윤상원",
+      "provAddr": "서울 광진구 광나루로 46길 26 넉스빌딩 (구의동)",
+      "provType": "부동산업",
+      "provItem": "비거주용 건물임대업",
+      "reciRegNo": "206-25-57860",
+      "reciName": "현진공인중개사사무소",
+      "reciCEO": "박선아",
+      "reciAddr": "서울 광진구 광나루로 46길 26(구의동 1층,2호)",
+      "reciPhone": "",
+      "reciType": "서비스",
+      "reciItem": "부동산중개 및 컨설팅",
+      "reciStampImage": false,
+      "contractStart": "",
+      "contractEnd": ""
+    },
+    "kidsqua": {
+      "label": "키즈쿠아",
+      "year": 2026,
+      "useSupplyBase": false,
+      "totalAmt": 635134,
+      "prodNameJan": "임차료",
+      "prodNameRest": "임차료",
+      "provRegNo": "206-27-88294",
+      "provName": "",
+      "provCEO": "윤상원",
+      "provAddr": "서울 광진구 광나루로 46길 26 4층",
+      "provType": "부동산업",
+      "provItem": "임대",
+      "reciRegNo": "202-02-74548",
+      "reciName": "키즈쿠아",
+      "reciCEO": "이영길",
+      "reciAddr": "서울 광진구 아차산로 499",
+      "reciPhone": "",
+      "reciType": "서비스",
+      "reciItem": "수영장",
+      "reciStampImage": false,
+      "contractStart": "",
+      "contractEnd": ""
+    },
+    "client_1781991149120": {
+      "label": "이승자",
+      "year": 2026,
+      "useSupplyBase": false,
+      "totalAmt": 0,
+      "prodNameJan": "임차료",
+      "prodNameRest": "임차료",
+      "provRegNo": "204-30-80210",
+      "provName": "넉스빌딩",
+      "provCEO": "윤상원",
+      "provAddr": "서울 광진구 광나루로 46길 26 넉스빌딩 (구의동)",
+      "provType": "부동산업",
+      "provItem": "비거주용 건물임대업",
+      "reciRegNo": "",
+      "reciName": "이승자",
+      "reciCEO": "",
+      "reciAddr": "",
+      "reciPhone": "",
+      "reciType": "",
+      "reciItem": "",
+      "reciStampImage": false,
+      "contractStart": "",
+      "contractEnd": ""
+    }
+  },
+  "purchasesByBizRegNo": {
+    "204-30-80210": [
+      {
+        "id": "p178194869211369",
+        "date": "2026-05-22",
+        "partner": "넉스(주)",
+        "desc": "넉스빌딩 개보수 인테리어 공사",
+        "supply": 10000000,
+        "tax": 1000000
+      },
+      {
+        "id": "p1784857357637710",
+        "date": "2026-07-22",
+        "partner": "넉스(주)",
+        "desc": "넉스빌딩 개보수 인테리어 공사",
+        "supply": 10000000,
+        "tax": 1000000
+      }
+    ],
+    "206-27-88294": []
+  }
+    };
+
+    // 📋 [거래처 목록] — 현재 시스템에 존재하는 모든 거래처 ID를 순서대로 담는 배열.
+    // 처음엔 기본 4개로 시작하지만, "➕ 거래처 추가"로 새 ID를 계속 추가할 수 있고 localStorage에 저장됩니다.
+    const CLIENT_LIST_STORAGE_KEY = 'nucks_invoice_client_list_v1';
+    let clientIdList = ['nuckscoltd', 'kidsqua', 'hyunjin', 'hoa'];
+
+    function saveClientListToStorage() {
+        try {
+            localStorage.setItem(CLIENT_LIST_STORAGE_KEY, JSON.stringify(clientIdList));
+        } catch (e) {
+            console.warn('거래처 목록 저장 실패:', e);
+        }
+        syncAllData();
+    }
+
+    function loadClientListFromStorage() {
+        try {
+            const raw = localStorage.getItem(CLIENT_LIST_STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    clientIdList = parsed;
+                }
+            }
+        } catch (e) {
+            console.warn('거래처 목록 로드 실패:', e);
+        }
+    }
+
+    let currentClient = 'nuckscoltd';
+    let globalProvStampData = DEFAULT_PROV_STAMP;
+    let globalReciStampData = DEFAULT_RECI_STAMP;
+
+    // 📦 [거래처별 월별 개별금액 오버라이드 저장소] — key: clientId, value: {월: {value, locked}}
+    // locked:true(🔒 확정)면 그 달은 더 이상 화면에서 수정할 수 없고, 통합정산/세금계산서 생성에 그 값이 고정 반영됩니다.
+    const MONTH_OVERRIDE_STORAGE_KEY = 'nucks_invoice_month_overrides_v1';
+    let monthAmountOverridesByClient = {};
+
+    // 💾 [localStorage 저장] — 확정/해제, 금액 수정 시마다 호출. 같은 PC/브라우저에서는 파일을 새로 열어도 유지됩니다.
+    function saveOverridesToStorage() {
+        try {
+            localStorage.setItem(MONTH_OVERRIDE_STORAGE_KEY, JSON.stringify(monthAmountOverridesByClient));
+        } catch (e) {
+            console.warn('월별 확정금액 저장 실패(localStorage 비활성 또는 용량 초과):', e);
+        }
+        syncAllData();
+    }
+
+    // 💾 [localStorage 로드] — 페이지 시작 시 호출. 저장된 값이 없으면 빈 객체 그대로 둡니다.
+    function loadOverridesFromStorage() {
+        try {
+            const raw = localStorage.getItem(MONTH_OVERRIDE_STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                // 저장된 JSON에 들어있는 모든 거래처 ID를 그대로 복원합니다(목록 배열과 무관하게 데이터 자체를 보존).
+                Object.keys(parsed).forEach(clientId => {
+                    monthAmountOverridesByClient[clientId] = parsed[clientId];
+                });
+            }
+        } catch (e) {
+            console.warn('월별 확정금액 로드 실패:', e);
+        }
+    }
+
+    // 거래처별로 입력값을 직접 수정했을 경우를 저장해두는 캐시(탭을 오갈 때 입력값 유지, 새로고침 시에는 저장된 값으로 복원)
+    const CLIENT_DATA_STORAGE_KEY = 'nucks_invoice_client_data_v1';
+    let clientDataCache = {};
+    // localStorage에 한 번이라도 "저장" 버튼으로 저장된 적이 있는 거래처 ID 집합 (저장 상태 표시용)
+    let savedClientIds = new Set();
+
+    // 💾 [거래처 정보 저장] — "이 거래처 정보 저장" 버튼 클릭 시에만 호출됩니다(자동 저장 아님).
+    function saveClientDataToStorage() {
+        try {
+            localStorage.setItem(CLIENT_DATA_STORAGE_KEY, JSON.stringify(clientDataCache));
+        } catch (e) {
+            console.warn('거래처 정보 저장 실패(localStorage 비활성 또는 용량 초과):', e);
+        }
+        syncAllData();
+    }
+
+    // 💾 [거래처 정보 로드] — 페이지 시작 시 호출. 저장된 값이 있으면 clientDataCache에 채워둡니다.
+    function loadClientDataFromStorage() {
+        try {
+            const raw = localStorage.getItem(CLIENT_DATA_STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                Object.keys(parsed).forEach(clientId => {
+                    clientDataCache[clientId] = parsed[clientId];
+                    savedClientIds.add(clientId);
+                });
+            }
+        } catch (e) {
+            console.warn('거래처 정보 로드 실패:', e);
+        }
+    }
+
+    // 🧾 [사업자별 매입 기록 저장소] — key: 사업자등록번호(provRegNo), value: [{date, partner, desc, supply, tax}, ...]
+    // 사업자별로 따로 관리됩니다(예: 넉스빌딩 매입과 윤상원 매입은 서로 섞이지 않음).
+    const PURCHASE_STORAGE_KEY = 'nucks_invoice_purchases_v1';
+    let purchasesByBizRegNo = {};
+
+    function savePurchasesToStorage() {
+        try {
+            localStorage.setItem(PURCHASE_STORAGE_KEY, JSON.stringify(purchasesByBizRegNo));
+        } catch (e) {
+            console.warn('매입 기록 저장 실패(localStorage 비활성 또는 용량 초과):', e);
+        }
+        syncAllData();
+    }
+
+    function loadPurchasesFromStorage() {
+        try {
+            const raw = localStorage.getItem(PURCHASE_STORAGE_KEY);
+            if (raw) {
+                purchasesByBizRegNo = JSON.parse(raw);
+            }
+        } catch (e) {
+            console.warn('매입 기록 로드 실패:', e);
+        }
+    }
+
+    function getPurchasesFor(bizRegNo) {
+        if (!purchasesByBizRegNo[bizRegNo]) purchasesByBizRegNo[bizRegNo] = [];
+        return purchasesByBizRegNo[bizRegNo];
+    }
+
+    // 📌 [내장 데이터 자동 로드] — 이 브라우저에 저장된 데이터가 하나도 없을 때(처음 여는 경우)만
+    // EMBEDDED_SEED_DATA로 채워줍니다. 한 번이라도 이 브라우저에서 저장/수정한 적이 있다면
+    // 그 로컬 데이터를 그대로 우선하고, 내장 데이터로 덮어쓰지 않습니다.
+    function seedFromEmbeddedDataIfEmpty() {
+        try {
+            const alreadyHasLocalData = !!(localStorage.getItem(CLIENT_DATA_STORAGE_KEY) || localStorage.getItem(MONTH_OVERRIDE_STORAGE_KEY));
+            if (alreadyHasLocalData || !EMBEDDED_SEED_DATA) return;
+
+            if (Array.isArray(EMBEDDED_SEED_DATA.clientIdList) && EMBEDDED_SEED_DATA.clientIdList.length > 0) {
+                clientIdList = EMBEDDED_SEED_DATA.clientIdList.slice();
+            }
+            if (EMBEDDED_SEED_DATA.monthAmountOverridesByClient) {
+                monthAmountOverridesByClient = JSON.parse(JSON.stringify(EMBEDDED_SEED_DATA.monthAmountOverridesByClient));
+            }
+            if (EMBEDDED_SEED_DATA.clientDataCache) {
+                clientDataCache = JSON.parse(JSON.stringify(EMBEDDED_SEED_DATA.clientDataCache));
+                savedClientIds = new Set(Object.keys(clientDataCache));
+            }
+            if (EMBEDDED_SEED_DATA.purchasesByBizRegNo) {
+                purchasesByBizRegNo = JSON.parse(JSON.stringify(EMBEDDED_SEED_DATA.purchasesByBizRegNo));
+            }
+
+            // 이 브라우저에도 저장해서, 다음에 열 때는 로컬에 저장된 값을 그대로 이어서 씁니다.
+            try { localStorage.setItem(CLIENT_LIST_STORAGE_KEY, JSON.stringify(clientIdList)); } catch (e) {}
+            try { localStorage.setItem(MONTH_OVERRIDE_STORAGE_KEY, JSON.stringify(monthAmountOverridesByClient)); } catch (e) {}
+            try { localStorage.setItem(CLIENT_DATA_STORAGE_KEY, JSON.stringify(clientDataCache)); } catch (e) {}
+            try { localStorage.setItem(PURCHASE_STORAGE_KEY, JSON.stringify(purchasesByBizRegNo)); } catch (e) {}
+        } catch (e) {
+            console.warn('내장 데이터 자동 불러오기 실패:', e);
+        }
+    }
+
+    window.onload = function() {
+        seedFromEmbeddedDataIfEmpty();
+        loadClientListFromStorage();
+        loadOverridesFromStorage();
+        loadClientDataFromStorage();
+        loadPurchasesFromStorage();
+        buildMonthOverrideGrid();
+        renderClientTabs();
+        switchClient(clientIdList[0], true);
+        attachUnsavedChangeListener();
+        updateSyncUi();
+    };
+
+    // 🗂️ [거래처 탭 동적 렌더링] — clientIdList 순서대로 탭을 그립니다.
+    // 거래처가 1개뿐이면 닫기(✕) 버튼을 숨깁니다(최소 1개는 항상 있어야 함).
+    function renderClientTabs() {
+        const container = get('dynamicClientTabs');
+        const today = new Date().toISOString().slice(0, 10);
+
+        container.innerHTML = clientIdList.map(clientId => {
+            const data = clientDataCache[clientId] || CLIENT_DEFAULTS[clientId] || { label: clientId, reciCEO: '', contractEnd: '' };
+            const label = data.label || data.reciName || clientId;
+            const sub = data.reciCEO || '';
+            const isExpired = data.contractEnd && data.contractEnd < today;
+            const closeBtn = clientIdList.length > 1
+                ? `<span class="client-tab-close" onclick="event.stopPropagation(); removeClient('${clientId}')" title="이 거래처 탭 닫기">✕</span>`
+                : '';
+            return `<div class="client-tab${isExpired ? ' expired' : ''}" data-client="${clientId}" onclick="switchClient('${clientId}')">${closeBtn}${escapeHtml(label)}<span class="sub">${escapeHtml(sub)}</span></div>`;
+        }).join('');
+
+        document.querySelectorAll('.client-tab[data-client]').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.client === currentClient);
+        });
+    }
+
+    // 📝 [좌측 폼 변경 감지] — cfg/chk로 시작하는 입력칸(상호, 등록번호, 주소, 매월청구액 등)이 바뀌면 "미저장" 상태로 표시.
+    // 월별 개별금액 입력칸(moInput)은 별도의 확정 시스템으로 처리되므로 여기서 제외합니다.
+    function attachUnsavedChangeListener() {
+        const card = document.querySelector('.grid-layout .card');
+        if (!card) return;
+        card.addEventListener('input', function(e) {
+            const id = e.target.id || '';
+            if (id.startsWith('cfg') || id.startsWith('chkSupplyBase') || id.startsWith('chkReciStampImage')) {
+                markUnsaved();
+            }
+        });
+        card.addEventListener('change', function(e) {
+            const id = e.target.id || '';
+            if (id.startsWith('cfg') || id.startsWith('chkSupplyBase') || id.startsWith('chkReciStampImage')) {
+                markUnsaved();
+            }
+        });
+    }
+
+    function get(id) { return document.getElementById(id); }
+
+    // 🗂️ [거래처 전환] — 탭 클릭 시 호출. 캐시된 값이 있으면 그걸, 없으면 기본값을 폼에 채웁니다.
+    // 새 거래처(아직 기본값도 없는 경우)를 위한 빈 폼 데이터 틀
+    function blankClientData(label) {
+        return {
+            label: label || '새 거래처',
+            year: parseInt(get('cfgYear') ? get('cfgYear').value : 2026) || 2026,
+            useSupplyBase: false,
+            totalAmt: 0,
+            prodNameJan: '임차료',
+            prodNameRest: '임차료',
+            provRegNo: CLIENT_DEFAULTS.nuckscoltd.provRegNo,
+            provName: CLIENT_DEFAULTS.nuckscoltd.provName,
+            provCEO: CLIENT_DEFAULTS.nuckscoltd.provCEO,
+            provAddr: CLIENT_DEFAULTS.nuckscoltd.provAddr,
+            provType: CLIENT_DEFAULTS.nuckscoltd.provType,
+            provItem: CLIENT_DEFAULTS.nuckscoltd.provItem,
+            reciRegNo: '',
+            reciName: label || '',
+            reciCEO: '',
+            reciAddr: '',
+            reciPhone: '',
+            reciType: '',
+            reciItem: '',
+            reciStampImage: false,
+            contractStart: '',
+            contractEnd: ''
+        };
+    }
+
+    function switchClient(clientId, isInitial) {
+        if (!isInitial) {
+            saveCurrentClientToCache();
+        }
+        currentClient = clientId;
+
+        // 통합정산 화면에서 거래처 탭으로 돌아올 때 원래 화면 복원
+        get('summaryPanel').style.display = 'none';
+        document.querySelector('.grid-layout').style.display = 'grid';
+
+        renderClientTabs();
+
+        const data = clientDataCache[clientId] || CLIENT_DEFAULTS[clientId] || blankClientData();
+
+        get('cfgYear').value = data.year;
+        get('chkSupplyBase').checked = data.useSupplyBase;
+        get('cfgTotalAmt').value = data.totalAmt;
+        get('cfgProdNameJan').value = data.prodNameJan;
+        get('cfgProdNameRest').value = data.prodNameRest;
+        get('cfgProvRegNo').value = data.provRegNo;
+        get('cfgProvName').value = data.provName;
+        get('cfgProvCEO').value = data.provCEO;
+        get('cfgProvAddr').value = data.provAddr;
+        get('cfgProvType').value = data.provType;
+        get('cfgProvItem').value = data.provItem;
+        get('cfgReciRegNo').value = data.reciRegNo;
+        get('cfgReciName').value = data.reciName;
+        get('cfgReciCEO').value = data.reciCEO;
+        get('cfgReciAddr').value = data.reciAddr;
+        get('cfgReciPhone').value = data.reciPhone || '';
+        get('cfgReciType').value = data.reciType;
+        get('cfgReciItem').value = data.reciItem;
+        get('chkReciStampImage').checked = data.reciStampImage;
+        get('cfgContractStart').value = data.contractStart || '';
+        get('cfgContractEnd').value = data.contractEnd || '';
+
+        updateTotalAmtLabel();
+        calculateTax();
+        updateDayOptions();
+
+        // 월별 오버라이드 패널도 거래처별로 분리 표시
+        if (!monthAmountOverridesByClient[clientId]) monthAmountOverridesByClient[clientId] = {};
+        const hasOverrides = Object.keys(monthAmountOverridesByClient[clientId]).length > 0;
+        get('chkMonthOverride').checked = hasOverrides;
+        toggleMonthOverridePanel();
+
+        applyData();
+
+        // 거래처를 막 불러온 직후이므로 "저장됨" 상태로 표시 (실제 저장된 값과 화면이 일치하는 시점)
+        markSaved(savedClientIds.has(clientId));
+    }
+
+    // 현재 화면의 입력값을 캐시에 저장 (탭을 떠나기 전에 호출) — 메모리에만 반영, localStorage 저장은 별도
+    function saveCurrentClientToCache() {
+        clientDataCache[currentClient] = collectClientFormValues();
+    }
+
+    // 좌측 폼의 현재 입력값을 객체로 수집
+    function collectClientFormValues() {
+        return {
+            label: get('cfgReciName').value || '거래처',
+            year: parseInt(get('cfgYear').value) || 2026,
+            useSupplyBase: get('chkSupplyBase').checked,
+            totalAmt: parseInt(get('cfgTotalAmt').value) || 0,
+            prodNameJan: get('cfgProdNameJan').value,
+            prodNameRest: get('cfgProdNameRest').value,
+            provRegNo: get('cfgProvRegNo').value,
+            provName: get('cfgProvName').value,
+            provCEO: get('cfgProvCEO').value,
+            provAddr: get('cfgProvAddr').value,
+            provType: get('cfgProvType').value,
+            provItem: get('cfgProvItem').value,
+            reciRegNo: get('cfgReciRegNo').value,
+            reciName: get('cfgReciName').value,
+            reciCEO: get('cfgReciCEO').value,
+            reciAddr: get('cfgReciAddr').value,
+            reciPhone: get('cfgReciPhone').value,
+            reciType: get('cfgReciType').value,
+            reciItem: get('cfgReciItem').value,
+            reciStampImage: get('chkReciStampImage').checked,
+            contractStart: get('cfgContractStart').value,
+            contractEnd: get('cfgContractEnd').value
+        };
+    }
+
+    // 💾 [거래처 정보 저장 버튼] — 클릭해야만 영구 저장됩니다(자동 저장 아님, 실수 방지).
+    function saveClientToStorage() {
+        const clientBeingSaved = currentClient;
+        clientDataCache[clientBeingSaved] = collectClientFormValues();
+        saveClientDataToStorage();
+        savedClientIds.add(clientBeingSaved);
+
+        // 🔍 [저장 검증] — localStorage에 실제로 기록됐는지 즉시 다시 읽어 확인합니다.
+        // 혹시 브라우저의 저장공간 제한, 시크릿 모드 등으로 저장이 실패했다면 사용자에게 알립니다.
+        let verifyOk = false;
+        try {
+            const raw = localStorage.getItem(CLIENT_DATA_STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : {};
+            verifyOk = !!(parsed[clientBeingSaved] && parsed[clientBeingSaved].reciName === clientDataCache[clientBeingSaved].reciName);
+        } catch (e) {
+            verifyOk = false;
+        }
+
+        if (!verifyOk) {
+            alert('저장에 실패했을 수 있습니다. 브라우저의 시크릿 모드이거나 저장공간이 가득 찬 경우 발생할 수 있습니다.\n다시 한 번 "저장" 버튼을 눌러주세요.');
+            markSaved(false);
+            return;
+        }
+
+        markSaved(true);
+        renderClientTabs();
+    }
+
+    // ➕ [거래처 추가] — 새 탭을 만들고 그 탭으로 즉시 전환합니다. 상세 정보는 좌측 폼에서 입력 후 저장하면 됩니다.
+    function addNewClient() {
+        const name = prompt('새로 입주하는 업장의 상호(거래처명)를 입력해주세요.\n(나머지 상세 정보는 다음 화면에서 입력합니다)');
+        if (!name || !name.trim()) return;
+
+        const newId = 'client_' + Date.now();
+        clientIdList.push(newId);
+        saveClientListToStorage();
+
+        const blank = blankClientData(name.trim());
+        clientDataCache[newId] = blank;
+        saveClientDataToStorage();
+        savedClientIds.add(newId);
+
+        monthAmountOverridesByClient[newId] = {};
+        saveOverridesToStorage();
+
+        switchClient(newId, true);
+        alert('"' + name.trim() + '" 거래처가 추가되었습니다.\n등록번호·주소·계약기간 등 상세 정보를 입력하신 뒤 "이 거래처 정보 저장"을 꼭 눌러주세요.');
+    }
+
+    // ✕ [거래처 탭 닫기] — 화면에서 탭만 숨깁니다. localStorage의 데이터 자체는 지우지 않으므로
+    // 나중에 다시 같은 자리에 들어와야 하면 데이터 복구가 가능합니다(완전 삭제가 아님).
+    function removeClient(clientId) {
+        if (clientIdList.length <= 1) {
+            alert('최소 1개의 거래처 탭은 남아있어야 합니다.');
+            return;
+        }
+        const data = clientDataCache[clientId] || CLIENT_DEFAULTS[clientId];
+        const label = data ? (data.label || data.reciName || clientId) : clientId;
+        if (!confirm('"' + label + '" 탭을 닫으시겠습니까?\n(저장된 정보는 삭제되지 않고 보관되며, 필요하면 나중에 복구할 수 있습니다)')) {
+            return;
+        }
+
+        clientIdList = clientIdList.filter(id => id !== clientId);
+        saveClientListToStorage();
+
+        if (currentClient === clientId) {
+            switchClient(clientIdList[0], true);
+        } else {
+            renderClientTabs();
+        }
+    }
+
+    // 저장완료/미저장 상태 표시를 갱신
+    function markSaved(isSaved) {
+        const btn = get('btnSaveClient');
+        const statusText = get('saveStatusText');
+        if (isSaved) {
+            btn.classList.remove('unsaved');
+            statusText.textContent = '✅ 저장된 정보가 표시되고 있습니다.';
+            statusText.classList.remove('unsaved-text');
+        } else {
+            btn.classList.add('unsaved');
+            const everSaved = savedClientIds.has(currentClient);
+            statusText.textContent = everSaved
+                ? '⚠️ 저장하지 않은 변경사항이 있습니다. 새로고침하면 사라집니다.'
+                : '아직 저장된 적 없는 거래처입니다(기본값 표시 중). 수정 후 저장해 두세요.';
+            statusText.classList.add('unsaved-text');
+        }
+    }
+
+    function markUnsaved() {
+        markSaved(false);
+    }
+
+    function resetClientToDefault() {
+        const fallbackData = clientDataCache[currentClient] || CLIENT_DEFAULTS[currentClient];
+        const label = fallbackData ? (fallbackData.label || fallbackData.reciName || currentClient) : currentClient;
+        const isNewClient = !CLIENT_DEFAULTS[currentClient];
+        const confirmMsg = isNewClient
+            ? '이 거래처(' + label + ')는 기본값이 없는 새 거래처입니다.\n초기화하면 입력했던 모든 정보가 빈 값으로 돌아갑니다. 계속하시겠습니까?'
+            : '이 거래처(' + label + ')의 입력값을 기본값으로 되돌리시겠습니까?\n확정(저장)된 월별 금액도 함께 초기화됩니다.\n(저장된 거래처 정보도 함께 초기화됩니다)';
+
+        if (confirm(confirmMsg)) {
+            delete clientDataCache[currentClient];
+            savedClientIds.delete(currentClient);
+            monthAmountOverridesByClient[currentClient] = {};
+            saveOverridesToStorage();
+            saveClientDataToStorage();
+            switchClient(currentClient, true);
+        }
+    }
+
+    // 📱 [문자 앱 열기] — 입력된 전화번호로 문자 앱을 띄워줍니다. 실제 발송이나 PDF 첨부는 이 시스템이 할 수 없고,
+    // 사람이 직접 PDF를 다운로드해서 문자/카카오톡 등에 첨부해야 합니다. 이 버튼은 "문자 앱을 여는 것"까지만 도와줍니다.
+    function openSmsApp() {
+        const phoneRaw = get('cfgReciPhone').value.trim();
+        if (!phoneRaw) {
+            alert('연락처(휴대폰 번호)를 먼저 입력해주세요.');
+            return;
+        }
+        const phone = phoneRaw.replace(/[^0-9+]/g, '');
+        if (phone.length < 9) {
+            alert('전화번호 형식을 확인해주세요. (예: 010-1234-5678)');
+            return;
+        }
+        const reciName = get('cfgReciName').value || '거래처';
+        const month = get('selectMonth').value;
+        const message = `[넉스빌딩] ${reciName} ${month}월 세금계산서를 보내드립니다. PDF 파일을 첨부로 보내드릴게요.`;
+        // sms: 스킴은 PC Chrome에서는 기본적으로 동작하지 않을 수 있습니다(연결된 문자 앱이 없으면 무반응).
+        // 모바일(Android/iOS)에서 열면 기본 문자 앱이 수신번호와 내용을 미리 채운 채로 열립니다.
+        const smsUrl = `sms:${phone}?body=${encodeURIComponent(message)}`;
+        window.location.href = smsUrl;
+    }
+
+    function updateTotalAmtLabel() {
+        const isSupplyBase = get('chkSupplyBase').checked;
+        get('lblTotalAmt').textContent = isSupplyBase
+            ? '매월 공급가액 (부가세 별도) — 기본값'
+            : '매월 청구 총액 (부가세 포함) — 기본값';
+    }
+
+    // 📅 [월별 금액 데이터 저장소] — 현재 거래처 기준 단축 접근자
+    function getCurrentOverrides() {
+        return monthAmountOverridesByClient[currentClient];
+    }
+
+    function buildMonthOverrideGrid() {
+        const grid = get('monthOverrideGrid');
+        let html = '';
+        for (let m = 1; m <= 12; m++) {
+            html += `
+            <div class="month-override-item" id="moItem${m}">
+                <label>${m}월</label>
+                <input type="number" id="moInput${m}" step="10000" placeholder="기본값 사용" oninput="onMonthOverrideInput(${m})">
+                <button type="button" class="mo-lock-btn" id="moLockBtn${m}" onclick="toggleMonthLock(${m})">확정</button>
+            </div>`;
+        }
+        grid.innerHTML = html;
+    }
+
+    function toggleMonthOverridePanel() {
+        const isOn = get('chkMonthOverride').checked;
+        get('monthOverrideGrid').style.display = isOn ? 'grid' : 'none';
+        if (isOn) {
+            syncBaseToOverrides();
+            refreshMonthOverrideUI();
+        }
+    }
+
+    // 화면의 12개 입력칸 + 확정버튼을 현재 거래처의 저장된 상태(overrides)와 동기화
+    function refreshMonthOverrideUI() {
+        const overrides = getCurrentOverrides();
+        for (let m = 1; m <= 12; m++) {
+            const input = get('moInput' + m);
+            const item = get('moItem' + m);
+            const lockBtn = get('moLockBtn' + m);
+            const entry = overrides[m];
+
+            if (entry && typeof entry === 'object') {
+                input.value = entry.value;
+                item.classList.add('is-custom');
+                if (entry.locked) {
+                    input.readOnly = true;
+                    item.classList.add('is-locked');
+                    lockBtn.textContent = '🔒 확정됨';
+                    lockBtn.classList.add('locked');
+                } else {
+                    input.readOnly = false;
+                    item.classList.remove('is-locked');
+                    lockBtn.textContent = '확정';
+                    lockBtn.classList.remove('locked');
+                }
+            } else {
+                input.value = '';
+                input.readOnly = false;
+                item.classList.remove('is-custom');
+                item.classList.remove('is-locked');
+                lockBtn.textContent = '확정';
+                lockBtn.classList.remove('locked');
+            }
+        }
+    }
+
+    // 기본값(cfgTotalAmt)을 아직 개별 수정하지 않은 달들의 placeholder/참고값으로 동기화
+    function syncBaseToOverrides() {
+        const baseAmt = parseInt(get('cfgTotalAmt').value) || 0;
+        for (let m = 1; m <= 12; m++) {
+            const input = get('moInput' + m);
+            if (!input) continue;
+            input.placeholder = baseAmt.toLocaleString() + ' (기본)';
+        }
+    }
+
+    function onMonthOverrideInput(m) {
+        const input = get('moInput' + m);
+        const item = get('moItem' + m);
+        const val = parseInt(input.value);
+        const overrides = getCurrentOverrides();
+        if (input.value === '' || isNaN(val)) {
+            delete overrides[m];
+            item.classList.remove('is-custom');
+        } else {
+            // 기존에 locked 상태였다면 유지(보통 readonly라 여기 안 타지만 방어적으로 처리)
+            const wasLocked = overrides[m] && overrides[m].locked;
+            overrides[m] = { value: val, locked: !!wasLocked };
+            item.classList.add('is-custom');
+        }
+        saveOverridesToStorage();
+    }
+
+    // 🔒 [한 달 금액 확정/해제] — 버튼 클릭 시 호출. 확정되면 입력칸이 잠기고, 다시 누르면 잠금 해제됩니다.
+    function toggleMonthLock(m) {
+        const input = get('moInput' + m);
+        const overrides = getCurrentOverrides();
+        const entry = overrides[m];
+
+        if (!entry) {
+            // 아직 금액을 입력하지 않은 상태에서 확정을 누르면, 현재 입력칸 값(또는 기본값)을 그대로 확정
+            const val = parseInt(input.value);
+            const baseAmt = parseInt(get('cfgTotalAmt').value) || 0;
+            overrides[m] = { value: isNaN(val) ? baseAmt : val, locked: true };
+        } else {
+            entry.locked = !entry.locked;
+        }
+
+        saveOverridesToStorage();
+        refreshMonthOverrideUI();
+    }
+
+    // 특정 월의 최종 금액(거래처 입력 기준 모드의 금액, 부가세 포함 전 단계 금액일 수도 공급가액일 수도 있음)
+    function getMonthAmount(month) {
+        const m = parseInt(month);
+        const overrideOn = get('chkMonthOverride').checked;
+        const overrides = getCurrentOverrides();
+        const entry = overrides[m];
+        if (overrideOn && entry) {
+            return entry.value;
+        }
+        return parseInt(get('cfgTotalAmt').value) || 0;
+    }
+
+    function loadStamp(input, role) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                if (role === 'prov') {
+                    globalProvStampData = e.target.result;
+                } else if (role === 'reci') {
+                    globalReciStampData = e.target.result;
+                    get('chkReciStampImage').checked = true;
+                }
+                applyData();
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function clearStamps() {
+        if (confirm('인감과 직인을 기본 등록된 도장으로 되돌리시겠습니까?')) {
+            globalProvStampData = DEFAULT_PROV_STAMP;
+            globalReciStampData = DEFAULT_RECI_STAMP;
+            applyData();
+        }
+    }
+
+    // 💰 [부가세 계산] — 입력 모드에 따라 두 가지 방식 지원
+    //  · 총액(부가세 포함) 입력: 공급가액 = round(총액 / 1.1), 세액 = 총액 - 공급가액
+    //  · 공급가액(부가세 별도) 입력: 세액 = round(공급가액 * 0.1), 총액 = 공급가액 + 세액
+    function calculateTax() {
+        updateTotalAmtLabel();
+        const inputAmt = parseInt(get('cfgTotalAmt').value) || 0;
+        const isSupplyBase = get('chkSupplyBase').checked;
+        let supplyAmt, taxAmt;
+        if (isSupplyBase) {
+            supplyAmt = inputAmt;
+            taxAmt = Math.round(supplyAmt * 0.1);
+        } else {
+            supplyAmt = Math.round(inputAmt / 1.1);
+            taxAmt = inputAmt - supplyAmt;
+        }
+        get('cfgSupplyAmt').value = supplyAmt.toLocaleString() + " 원";
+        get('cfgTaxAmt').value = taxAmt.toLocaleString() + " 원";
+    }
+
+    // 특정 입력금액(월 금액)을 현재 모드 기준으로 공급가액/세액/총액으로 환산
+    function computeAmounts(inputAmt) {
+        const isSupplyBase = get('chkSupplyBase').checked;
+        let supplyAmt, taxAmt, totalAmt;
+        if (isSupplyBase) {
+            supplyAmt = inputAmt;
+            taxAmt = Math.round(supplyAmt * 0.1);
+            totalAmt = supplyAmt + taxAmt;
+        } else {
+            supplyAmt = Math.round(inputAmt / 1.1);
+            taxAmt = inputAmt - supplyAmt;
+            totalAmt = inputAmt;
+        }
+        return { supplyAmt, taxAmt, totalAmt };
+    }
+
+    // 💰 [화면 상태에 의존하지 않는 순수 버전] — 통합정산 계산용. useSupplyBase를 직접 받아 처리합니다.
+    function computeAmountsPure(inputAmt, useSupplyBase) {
+        let supplyAmt, taxAmt, totalAmt;
+        if (useSupplyBase) {
+            supplyAmt = inputAmt;
+            taxAmt = Math.round(supplyAmt * 0.1);
+            totalAmt = supplyAmt + taxAmt;
+        } else {
+            supplyAmt = Math.round(inputAmt / 1.1);
+            taxAmt = inputAmt - supplyAmt;
+            totalAmt = inputAmt;
+        }
+        return { supplyAmt, taxAmt, totalAmt };
+    }
+
+    // 📊 [거래처별 1~12월 합계 계산] — 화면 상태와 무관하게 캐시/기본값 + 월별 오버라이드(확정값 포함)를 직접 참조
+    // 계약기간 밖의 달은 매출 합계에서 제외합니다(예: 계약종료 5월이면 6~12월은 0으로 처리).
+    function computeClientAnnualTotals(clientId) {
+        const data = clientDataCache[clientId] || CLIENT_DEFAULTS[clientId];
+        const overrides = monthAmountOverridesByClient[clientId] || {};
+        const contractStart = data.contractStart || '';
+        const contractEnd = data.contractEnd || '';
+        const year = parseInt(data.year);
+
+        let supplySum = 0, taxSum = 0, totalSum = 0;
+        let includedMonths = 0;
+        for (let m = 1; m <= 12; m++) {
+            // 그 달이 계약기간과 겹치는지: 월의 말일 >= 계약시작일, 월의 1일 <= 계약종료일
+            const monthFirstDay = `${year}-${m.toString().padStart(2, '0')}-01`;
+            const monthLastDay = `${year}-${m.toString().padStart(2, '0')}-${getLastDayOfMonth(year, m).toString().padStart(2, '0')}`;
+            if (contractStart && monthLastDay < contractStart) continue;
+            if (contractEnd && monthFirstDay > contractEnd) continue;
+
+            const entry = overrides[m];
+            const inputAmt = entry ? entry.value : data.totalAmt;
+            const { supplyAmt, taxAmt, totalAmt } = computeAmountsPure(inputAmt, data.useSupplyBase);
+            supplySum += supplyAmt;
+            taxSum += taxAmt;
+            totalSum += totalAmt;
+            includedMonths++;
+        }
+        return { supplySum, taxSum, totalSum, includedMonths };
+    }
+
+    // 📊 [통합정산 페이지 표시] — 거래처 탭 영역을 통합정산 표로 교체합니다.
+    function showSummary() {
+        saveCurrentClientToCache();
+
+        document.querySelectorAll('.client-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.client === 'summary');
+        });
+
+        document.querySelector('.grid-layout').style.display = 'none';
+        get('summaryPanel').style.display = 'block';
+
+        // 🏢 [공급자(사업자) 등록번호 기준으로 그룹 묶기] — provRegNo가 다르면 별도 사업자이므로 합산하지 않습니다.
+        const groups = {}; // key: provRegNo, value: { provName, items: [clientId...] }
+        clientIdList.forEach(clientId => {
+            const data = clientDataCache[clientId] || CLIENT_DEFAULTS[clientId] || blankClientData();
+            const key = data.provRegNo || '(등록번호 미입력)';
+            if (!groups[key]) {
+                groups[key] = { provRegNo: key, provName: data.provName, provCEO: data.provCEO, items: [] };
+            }
+            groups[key].items.push(clientId);
+        });
+
+        let groupsHtml = '';
+
+        Object.values(groups).forEach(group => {
+            let groupSupply = 0, groupTax = 0, groupTotal = 0;
+            let rowsHtml = '';
+
+            group.items.forEach(clientId => {
+                const data = clientDataCache[clientId] || CLIENT_DEFAULTS[clientId] || blankClientData();
+                const label = data.label || data.reciName || clientId;
+                const { supplySum, taxSum, totalSum, includedMonths } = computeClientAnnualTotals(clientId);
+                groupSupply += supplySum;
+                groupTax += taxSum;
+                groupTotal += totalSum;
+
+                const periodNote = (data.contractStart || data.contractEnd)
+                    ? ` · 계약 ${data.contractStart || '~'} ~ ${data.contractEnd || '무기한'} (${includedMonths}개월 반영)`
+                    : '';
+
+                rowsHtml += `
+                <tr>
+                    <td class="label-cell">${escapeHtml(label)}<span class="sub">${escapeHtml(data.reciName)} · ${escapeHtml(data.reciCEO)}${periodNote}</span></td>
+                    <td>${supplySum.toLocaleString()} 원</td>
+                    <td>${taxSum.toLocaleString()} 원</td>
+                    <td>${totalSum.toLocaleString()} 원</td>
+                </tr>`;
+            });
+
+            // 거래처가 2개 이상인 그룹만 소계 행 표시 (1개뿐이면 소계가 곧 그 행과 같아 중복)
+            const subtotalRow = group.items.length > 1 ? `
+                <tr class="subtotal-row">
+                    <td class="label-cell">소계<span class="sub">${group.items.length}개 거래처</span></td>
+                    <td>${groupSupply.toLocaleString()} 원</td>
+                    <td>${groupTax.toLocaleString()} 원</td>
+                    <td>${groupTotal.toLocaleString()} 원</td>
+                </tr>` : '';
+
+            groupsHtml += `
+            <div class="summary-group-heading">
+                <span class="biz-name">🏢 ${group.provName || (group.provCEO + ' (개인/상호 미등록)')}</span>
+                <span class="biz-regno">사업자등록번호 ${group.provRegNo}</span>
+            </div>
+            <table class="summary-table">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;">거래처</th>
+                        <th>공급가액 합계</th>
+                        <th>세액 합계</th>
+                        <th>합계금액 (연간)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rowsHtml}
+                    ${subtotalRow}
+                </tbody>
+            </table>
+            ${renderPurchaseSectionHtml(group.provRegNo, groupTax)}`;
+        });
+
+        get('summaryGroupsContainer').innerHTML = groupsHtml;
+    }
+
+    // 🧾 [사업자별 매입 섹션 HTML 생성] — 입력 폼 + 매입 목록 + 연간 합산 + 부가세 납부예상액 카드
+    function renderPurchaseSectionHtml(bizRegNo, salesTaxSum) {
+        const purchases = getPurchasesFor(bizRegNo);
+
+        let purchaseRowsHtml = '';
+        let purchaseSupplySum = 0, purchaseTaxSum = 0, purchaseTotalSum = 0;
+
+        if (purchases.length === 0) {
+            purchaseRowsHtml = `
+                <tr class="purchase-empty-row">
+                    <td colspan="6">등록된 매입 내역이 없습니다.</td>
+                </tr>`;
+        } else {
+            // 거래일자 오름차순 정렬
+            const sorted = purchases.slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+            sorted.forEach(p => {
+                const total = p.supply + p.tax;
+                purchaseSupplySum += p.supply;
+                purchaseTaxSum += p.tax;
+                purchaseTotalSum += total;
+                purchaseRowsHtml += `
+                <tr>
+                    <td class="pt-left">${p.date || ''}</td>
+                    <td class="pt-left">${escapeHtml(p.partner || '')}</td>
+                    <td class="pt-left">${escapeHtml(p.desc || '')}</td>
+                    <td>${p.supply.toLocaleString()} 원</td>
+                    <td>${p.tax.toLocaleString()} 원</td>
+                    <td><button type="button" class="purchase-del-btn" onclick="deletePurchaseItem('${bizRegNo}', '${p.id}')" title="삭제">✕</button></td>
+                </tr>`;
+            });
+        }
+
+        const totalRow = purchases.length > 0 ? `
+                <tr class="purchase-total-row">
+                    <td class="pt-left" colspan="3">매입 합계 (${purchases.length}건)</td>
+                    <td>${purchaseSupplySum.toLocaleString()} 원</td>
+                    <td>${purchaseTaxSum.toLocaleString()} 원</td>
+                    <td></td>
+                </tr>` : '';
+
+        // 🧮 [부가세 납부예상액] = 매출세액 - 매입세액 (음수면 환급 예상)
+        const vatPayable = salesTaxSum - purchaseTaxSum;
+        const vatLabel = vatPayable >= 0 ? '부가세 납부예상액' : '부가세 환급예상액';
+        const vatDisplay = Math.abs(vatPayable).toLocaleString() + ' 원';
+        const vatClass = vatPayable < 0 ? 'negative' : '';
+
+        const safeRegNo = bizRegNo.replace(/[^0-9a-zA-Z]/g, '') || 'unknown';
+
+        return `
+        <div class="purchase-section">
+            <h3>🧾 매입 기록 (이 사업자 단위로 관리)</h3>
+            <div class="purchase-form-row">
+                <div>
+                    <label>거래일자</label>
+                    <input type="date" id="pInDate_${safeRegNo}">
+                </div>
+                <div>
+                    <label>거래처(상호)</label>
+                    <input type="text" id="pInPartner_${safeRegNo}" placeholder="예: OO자재상사">
+                </div>
+                <div>
+                    <label>거래내역</label>
+                    <input type="text" id="pInDesc_${safeRegNo}" placeholder="예: 인테리어 자재 구입">
+                </div>
+                <div>
+                    <label>공급가액</label>
+                    <input type="number" id="pInSupply_${safeRegNo}" placeholder="0" step="1000" oninput="autoFillPurchaseTax('${safeRegNo}')">
+                </div>
+                <div>
+                    <label>세액</label>
+                    <input type="number" id="pInTax_${safeRegNo}" placeholder="0" step="100" oninput="markPurchaseTaxEdited('${safeRegNo}')">
+                </div>
+                <button type="button" class="purchase-add-btn" onclick="addPurchaseItem('${bizRegNo}')">+ 추가</button>
+            </div>
+            <table class="purchase-table">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;">거래일자</th>
+                        <th style="text-align:left;">거래처</th>
+                        <th style="text-align:left;">거래내역</th>
+                        <th>공급가액</th>
+                        <th>세액</th>
+                        <th>삭제</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${purchaseRowsHtml}
+                    ${totalRow}
+                </tbody>
+            </table>
+            <div class="vat-result-card">
+                <div class="vat-item">
+                    <div class="vat-label">매출세액 (연간)</div>
+                    <div class="vat-value">${salesTaxSum.toLocaleString()} 원</div>
+                </div>
+                <div class="vat-item">
+                    <div class="vat-label">매입세액 (${purchases.length}건)</div>
+                    <div class="vat-value">${purchaseTaxSum.toLocaleString()} 원</div>
+                </div>
+                <div class="vat-item vat-final">
+                    <div class="vat-label">${vatLabel}</div>
+                    <div class="vat-value ${vatClass}">${vatDisplay}</div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // 🧮 [매입 세액 자동계산] — 공급가액을 입력하면 세액(10%)을 자동으로 채워줍니다.
+    // 세액을 직접 수정한 적이 있는 입력칸은 자동계산을 덮어쓰지 않습니다(사용자가 다른 세율을 직접 넣은 경우 보존).
+    let purchaseTaxManuallyEdited = new Set();
+
+    function autoFillPurchaseTax(safeRegNo) {
+        if (purchaseTaxManuallyEdited.has(safeRegNo)) return;
+        const supplyInput = get('pInSupply_' + safeRegNo);
+        const taxInput = get('pInTax_' + safeRegNo);
+        const supply = parseInt(supplyInput.value) || 0;
+        taxInput.value = supply === 0 ? '' : Math.round(supply * 0.1);
+    }
+
+    function markPurchaseTaxEdited(safeRegNo) {
+        purchaseTaxManuallyEdited.add(safeRegNo);
+    }
+
+    // 입력칸 4개 값을 모아 매입 1건을 추가하고 저장 + 화면 갱신
+    function addPurchaseItem(bizRegNo) {
+        const safeRegNo = bizRegNo.replace(/[^0-9a-zA-Z]/g, '') || 'unknown';
+        const date = get('pInDate_' + safeRegNo).value;
+        const partner = get('pInPartner_' + safeRegNo).value.trim();
+        const desc = get('pInDesc_' + safeRegNo).value.trim();
+        const supply = parseInt(get('pInSupply_' + safeRegNo).value) || 0;
+        const tax = parseInt(get('pInTax_' + safeRegNo).value) || 0;
+
+        if (!date) { alert('거래일자를 입력해주세요.'); return; }
+        if (!partner) { alert('거래처(상호)를 입력해주세요.'); return; }
+        if (supply === 0 && tax === 0) { alert('공급가액 또는 세액을 입력해주세요.'); return; }
+
+        const purchases = getPurchasesFor(bizRegNo);
+        purchases.push({
+            id: 'p' + Date.now() + Math.floor(Math.random() * 1000),
+            date, partner, desc, supply, tax
+        });
+        savePurchasesToStorage();
+        purchaseTaxManuallyEdited.delete(safeRegNo); // 다음 입력을 위해 자동계산 상태로 복귀
+        showSummary();
+    }
+
+    function deletePurchaseItem(bizRegNo, purchaseId) {
+        if (!confirm('이 매입 내역을 삭제하시겠습니까?')) return;
+        const purchases = getPurchasesFor(bizRegNo);
+        const idx = purchases.findIndex(p => p.id === purchaseId);
+        if (idx !== -1) purchases.splice(idx, 1);
+        savePurchasesToStorage();
+        showSummary();
+    }
+
+    // 간단한 HTML 이스케이프 (사용자 입력값을 표에 그대로 넣을 때 사용)
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function formatNumberToGrid(num, length) {
+        let str = num.toString().replace(/[^0-9]/g, '');
+        while (str.length < length) { str = ' ' + str; }
+        return str.split('');
+    }
+
+    function getProdName(month) {
+        const m = parseInt(month);
+        return (m === 1) ? get('cfgProdNameJan').value : get('cfgProdNameRest').value;
+    }
+
+    // 📆 [기간별 생성] — startMonth~endMonth 범위로 월별 (공급자용 → 공급받는자용) 세금계산서를 만들어 화면+인쇄 대상에 채움
+    // label: 모드뱃지에 표시할 기간 설명 (예: "1~12월 전체", "1~6월(상반기)", "7~12월(하반기)")
+    // 📅 [계약기간 판단] — year/month/day로 만든 날짜가 계약 시작일~종료일 범위 안에 있는지 확인합니다.
+    // contractStart/contractEnd가 비어있으면 그 방향은 제한 없음으로 취급합니다.
+    function isWithinContractPeriod(year, month, day, contractStart, contractEnd) {
+        const dateStr = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+        if (contractStart && dateStr < contractStart) return false;
+        if (contractEnd && dateStr > contractEnd) return false;
+        return true;
+    }
+
+    function generatePeriod(startMonth, endMonth, label) {
+        exitAnnualModeInternal();
+
+        const year = get('cfgYear').value;
+        const selectedDay = parseInt(get('selectDay').value);
+        const ctx = collectContext();
+        const contractStart = get('cfgContractStart').value;
+        const contractEnd = get('cfgContractEnd').value;
+
+        let pagesHtml = '';
+        let skippedMonths = [];
+
+        for (let m = startMonth; m <= endMonth; m++) {
+            // 📅 선택한 일자가 해당 월의 말일을 넘으면 그 달의 말일로 자동 보정 (예: 31일 선택 시 2월→28/29일, 4월→30일)
+            const lastDay = getLastDayOfMonth(parseInt(year), m);
+            const day = Math.min(selectedDay, lastDay).toString();
+
+            // 🚫 [계약기간 밖 자동 제외] — 이 달의 발행일자가 계약기간을 벗어나면 세금계산서를 생성하지 않습니다.
+            if (!isWithinContractPeriod(year, m, day, contractStart, contractEnd)) {
+                skippedMonths.push(m);
+                continue;
+            }
+
+            const inputAmt = getMonthAmount(m);
+            const { supplyAmt, taxAmt, totalAmt } = computeAmounts(inputAmt);
+            const prodName = getProdName(m);
+            const supplyArr = formatNumberToGrid(supplyAmt, 11);
+            const taxArr = formatNumberToGrid(taxAmt, 10);
+
+            const redHtml = buildInvoiceHTML('공급자용', year, m.toString(), day, ctx, prodName, supplyAmt, taxAmt, totalAmt, supplyArr, taxArr, false);
+            const blueHtml = buildInvoiceHTML('공급받는자 보관용', year, m.toString(), day, ctx, prodName, supplyAmt, taxAmt, totalAmt, supplyArr, taxArr, true);
+
+            pagesHtml += `
+            <div class="annual-month-label">📅 ${year}년 ${m}월분 — 공급가액 ${supplyAmt.toLocaleString()}원 / 세액 ${taxAmt.toLocaleString()}원 / 합계 ${totalAmt.toLocaleString()}원</div>
+            <div class="invoice-print-wrapper">
+                <div class="tax-invoice-box">${redHtml}</div>
+                <div class="cut-line">이 하 절 취 선</div>
+                <div class="tax-invoice-box blue-version">${blueHtml}</div>
+            </div>`;
+        }
+
+        if (pagesHtml === '') {
+            alert('계약기간(' + (contractStart || '제한없음') + ' ~ ' + (contractEnd || '제한없음') + ')에 해당하는 달이 선택한 기간(' + startMonth + '~' + endMonth + '월) 안에 없어 생성할 세금계산서가 없습니다.');
+            return;
+        }
+
+        const generatedCount = (endMonth - startMonth + 1) - skippedMonths.length;
+        get('annualContainer').innerHTML = pagesHtml;
+        get('annualContainer').style.display = 'block';
+        get('singleMonthContainer').style.display = 'none';
+        const skipNote = skippedMonths.length > 0
+            ? ` · 계약기간 밖 ${skippedMonths.length}개월 제외(${skippedMonths.join(',')}월)`
+            : '';
+        get('annualModeBadge').innerHTML = `📆 ${label} 보기 중 (총 ${generatedCount}개월 / ${generatedCount * 2}장${skipNote})
+                    <button onclick="exitAnnualMode()" style="margin-left:8px; font-size:11px; background:#fff; border:1px solid #16a34a; color:#16a34a; border-radius:4px; padding:2px 8px; cursor:pointer;">단일월로 돌아가기</button>`;
+        get('annualModeBadge').style.display = 'inline-flex';
+        get('annualModeBadge').style.alignItems = 'center';
+
+        window.scrollTo({top: 0, behavior: 'smooth'});
+    }
+
+    // 기존 호출부(버튼 onclick="generateAnnual()") 호환을 위한 래퍼들
+    function generateAnnual() {
+        generatePeriod(1, 12, '1~12월 전체');
+    }
+    function generateFirstHalf() {
+        generatePeriod(1, 6, '1~6월(상반기)');
+    }
+    function generateSecondHalf() {
+        generatePeriod(7, 12, '7~12월(하반기)');
+    }
+
+    function exitAnnualModeInternal() {
+        const annualContainer = get('annualContainer');
+        const singleContainer = get('singleMonthContainer');
+        const badge = get('annualModeBadge');
+        if (!annualContainer || !singleContainer || !badge) return;
+        annualContainer.style.display = 'none';
+        singleContainer.style.display = 'block';
+        badge.style.display = 'none';
+    }
+
+    function exitAnnualMode() {
+        exitAnnualModeInternal();
+    }
+
+    // 폼에서 공급자/공급받는자 정보를 모아 컨텍스트 객체로 반환
+    function collectContext() {
+        return {
+            provRegNo: get('cfgProvRegNo').value,
+            provName: get('cfgProvName').value,
+            provCEO: get('cfgProvCEO').value,
+            provAddr: get('cfgProvAddr').value,
+            provType: get('cfgProvType').value,
+            provItem: get('cfgProvItem').value,
+            reciRegNo: get('cfgReciRegNo').value,
+            reciName: get('cfgReciName').value,
+            reciCEO: get('cfgReciCEO').value,
+            reciAddr: get('cfgReciAddr').value,
+            reciType: get('cfgReciType').value,
+            reciItem: get('cfgReciItem').value,
+            useReciStampImage: get('chkReciStampImage').checked
+        };
+    }
+
+    // 📅 [월별 마지막 날짜 계산] — 윤년(2월 29일)까지 고려
+    function getLastDayOfMonth(year, month) {
+        return new Date(year, month, 0).getDate();
+    }
+
+    // 🛠️ [월/연도 변경 시 일자 옵션 자동 보정] — 4월31일처럼 존재하지 않는 날짜를 만들지 않도록
+    // 현재 선택된 일자가 그 달의 마지막 날을 넘으면 자동으로 마지막 날로 보정합니다.
+    function updateDayOptions() {
+        const year = parseInt(get('cfgYear').value) || 2026;
+        const month = parseInt(get('selectMonth').value);
+        const lastDay = getLastDayOfMonth(year, month);
+        const daySelect = get('selectDay');
+        const currentDay = parseInt(daySelect.value) || 1;
+
+        Array.from(daySelect.options).forEach(opt => {
+            const d = parseInt(opt.value);
+            opt.disabled = d > lastDay;
+        });
+
+        if (currentDay > lastDay) {
+            daySelect.value = lastDay.toString();
+        }
+    }
+
+    function onMonthOrYearChange() {
+        updateDayOptions();
+        applyData();
+    }
+
+    function applyData() {
+        exitAnnualModeInternal();
+
+        const year = get('cfgYear').value;
+        const month = get('selectMonth').value;
+        const day = get('selectDay').value;
+        const inputAmt = getMonthAmount(month);
+        const { supplyAmt, taxAmt, totalAmt } = computeAmounts(inputAmt);
+
+        const ctx = collectContext();
+        const prodName = getProdName(month);
+        const supplyArr = formatNumberToGrid(supplyAmt, 11);
+        const taxArr = formatNumberToGrid(taxAmt, 10);
+
+        renderInvoice('invoiceRed', '공급자용', year, month, day, ctx, prodName, supplyAmt, taxAmt, totalAmt, supplyArr, taxArr);
+        renderInvoice('invoiceBlue', '공급받는자 보관용', year, month, day, ctx, prodName, supplyAmt, taxAmt, totalAmt, supplyArr, taxArr);
+
+        // 🚫 [계약기간 밖 안내] — 화면에 보이는 달이 계약기간 밖이면 경고 배너를 띄웁니다(생성을 막진 않고 알려만 줌).
+        const contractStart = get('cfgContractStart').value;
+        const contractEnd = get('cfgContractEnd').value;
+        const banner = get('contractWarningBanner');
+        if (!isWithinContractPeriod(year, parseInt(month), parseInt(day), contractStart, contractEnd)) {
+            banner.style.display = 'block';
+            banner.textContent = `⚠️ ${year}년 ${month}월 ${day}일은 계약기간(${contractStart || '제한없음'} ~ ${contractEnd || '제한없음'}) 밖입니다. 1~12월/상반기/하반기 생성 시 이 달은 자동으로 제외됩니다.`;
+        } else {
+            banner.style.display = 'none';
+        }
+    }
+
+    function renderInvoice(targetId, typeTitle, year, month, day, ctx, prodName, supplyAmt, taxAmt, totalAmt, supplyArr, taxArr) {
+        const target = get(targetId);
+        const isBlue = targetId.includes('Blue');
+        target.innerHTML = buildInvoiceHTML(typeTitle, year, month, day, ctx, prodName, supplyAmt, taxAmt, totalAmt, supplyArr, taxArr, isBlue);
+    }
+
+    // 🧾 [공통 세금계산서 테이블 HTML 생성기] — 단일월/1년치 양쪽에서 재사용
+    function buildInvoiceHTML(typeTitle, year, month, day, ctx, prodName, supplyAmt, taxAmt, totalAmt, supplyArr, taxArr, isBlue) {
+        const displayMonth = month.toString().padStart(2, '0');
+        const displayDay = day.toString().padStart(2, '0');
+        const reciStampHtml = ctx.useReciStampImage
+            ? `${ctx.reciCEO} <img class="stamp-image" src="${globalReciStampData}" alt="공급받는자 직인">`
+            : `${ctx.reciCEO} (인)`;
+
+        let html = `
+        <table class="tax-invoice-table">
+            <colgroup>
+                ${Array(30).fill(0).map(() => `<col style="width: 3.333%;">`).join('')}
+            </colgroup>
+
+            <tr>
+                <td colspan="15" style="height:44px; border-bottom:none; border-right:none; padding:0;">
+                    <div class="middle-align-container" style="font-size:19px; font-weight:bold; letter-spacing:12px; padding-left:40px;">세금계산서</div>
+                </td>
+                <td colspan="4" style="font-size:10px; border-bottom:none; border-left:none; text-align:left; vertical-align:bottom; padding-bottom:7px; color:${isBlue ? '#1e427b' : '#9e2a2b'};">(${typeTitle})</td>
+                <td colspan="2" class="bg-label" style="font-size:10px;">책번호</td>
+                <td colspan="3"></td>
+                <td colspan="2" class="bg-label" style="font-size:10px;">호</td>
+                <td colspan="4"></td>
+            </tr>
+            <tr>
+                <td colspan="19" style="height:18px; border-top:none; border-right:none;"></td>
+                <td colspan="2" class="bg-label" style="font-size:10px; border-top:none;">일련번호</td>
+                <td class="amt-cell" style="border-top:none;">2</td>
+                <td class="amt-cell" style="border-top:none;">0</td>
+                <td class="amt-cell" style="border-top:none;">2</td>
+                <td class="amt-cell" style="border-top:none;">6</td>
+                <td class="amt-cell" style="border-top:none; font-weight:normal; color:#ccc;">-</td>
+                <td class="amt-cell" style="border-top:none;">0</td>
+                <td class="amt-cell" style="border-top:none;">0</td>
+                <td class="amt-cell" style="border-top:none;">${displayMonth.charAt(0)}</td>
+                <td class="amt-cell" style="border-top:none;">${displayMonth.charAt(1)}</td>
+            </tr>
+
+            <tr>
+                <td rowspan="4" class="bg-label" style="font-weight:bold; letter-spacing:2px; line-height:1.3;">공<br>급<br>자</td>
+                <td colspan="3" class="bg-label">등록번호</td>
+                <td colspan="11" class="font-bold" style="font-size:12px; letter-spacing:1.5px;">${ctx.provRegNo}</td>
+
+                <td rowspan="4" class="bg-label" style="font-weight:bold; letter-spacing:1px; line-height:1.3;">공급<br>받는<br>자</td>
+                <td colspan="3" class="bg-label">등록번호</td>
+                <td colspan="11" class="font-bold" style="font-size:12px; letter-spacing:1.5px;">${ctx.reciRegNo}</td>
+            </tr>
+            <tr>
+                <td colspan="3" class="bg-label">상호<br>(법인명)</td>
+                <td colspan="5" class="text-left font-bold" style="font-size:11px;">${ctx.provName}</td>
+                <td colspan="2" class="bg-label">대표자</td>
+                <td colspan="4" style="padding:0; height:100%; overflow:visible; position:relative;">
+                    <div class="stamp-container">
+                        ${ctx.provCEO} <img class="stamp-image" src="${globalProvStampData}" alt="공급자 인감">
+                    </div>
+                </td>
+
+                <td colspan="3" class="bg-label">상호(법인명)</td>
+                <td colspan="5" class="text-left font-bold" style="font-size:11px;">${ctx.reciName}</td>
+                <td colspan="2" class="bg-label">대표자</td>
+                <td colspan="4" style="padding:0; height:100%; overflow:visible; position:relative;">
+                    <div class="stamp-container">
+                        ${reciStampHtml}
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="3" class="bg-label">주소</td>
+                <td colspan="11" class="text-left" style="font-size:10px;">${ctx.provAddr}</td>
+                <td colspan="3" class="bg-label">주소</td>
+                <td colspan="11" class="text-left" style="font-size:10px;">${ctx.reciAddr}</td>
+            </tr>
+            <tr>
+                <td colspan="3" class="bg-label">업태</td>
+                <td colspan="5" class="text-left">${ctx.provType}</td>
+                <td colspan="2" class="bg-label">종목</td>
+                <td colspan="4" class="text-left" style="font-size:10px;">${ctx.provItem}</td>
+
+                <td colspan="3" class="bg-label">업태</td>
+                <td colspan="5" class="text-left">${ctx.reciType}</td>
+                <td colspan="2" class="bg-label">종목</td>
+                <td colspan="4" class="text-left" style="font-size:10px;">${ctx.reciItem}</td>
+            </tr>
+
+            <tr class="bg-label" style="height:20px;">
+                <td colspan="4">작성</td>
+                <td colspan="11">공 급 가 액</td>
+                <td colspan="10">세 액</td>
+                <td colspan="5">비고</td>
+            </tr>
+            <tr style="height:16px; font-size:9px;" class="bg-label">
+                <td colspan="2">년</td>
+                <td>월</td>
+                <td>일</td>
+                <td>공</td><td>십억</td><td>억</td><td>천</td><td>백</td><td>십</td><td>만</td><td>천</td><td>백</td><td>십</td><td>일</td>
+                <td>십억</td><td>억</td><td>천</td><td>백</td><td>십</td><td>만</td><td>천</td><td>백</td><td>십</td><td>일</td>
+                <td colspan="5" rowspan="2" style="background:#fff;"></td>
+            </tr>
+            <tr style="height:24px;">
+                <td colspan="2" class="font-bold">${year.toString().substring(2)}</td>
+                <td class="font-bold">${month}</td>
+                <td class="font-bold">${day}</td>
+                ${supplyArr.map(char => `<td class="amt-cell">${char}</td>`).join('')}
+                ${taxArr.map(char => `<td class="amt-cell">${char}</td>`).join('')}
+            </tr>
+
+            <tr class="bg-label" style="height:18px;">
+                <td colspan="2">월/일</td>
+                <td colspan="6">품목</td>
+                <td colspan="2">규격</td>
+                <td colspan="2">수량</td>
+                <td colspan="4">단가</td>
+                <td colspan="6">공급가액</td>
+                <td colspan="5">세액</td>
+                <td colspan="3">비고</td>
+            </tr>
+            <tr style="height:22px;">
+                <td colspan="2" style="font-size:10px;">${displayMonth} / ${displayDay}</td>
+                <td colspan="6" class="text-left font-bold" style="font-size:11px;">${prodName}</td>
+                <td colspan="2"></td>
+                <td colspan="2"></td>
+                <td colspan="4"></td>
+                <td colspan="6" class="text-right font-bold" style="font-size:11px;">${supplyAmt.toLocaleString()}</td>
+                <td colspan="5" class="text-right font-bold" style="font-size:11px;">${taxAmt.toLocaleString()}</td>
+                <td colspan="3"></td>
+            </tr>
+            ${[1, 2, 3, 4].map(() => `
+            <tr style="height:22px;">
+                <td colspan="2"></td><td colspan="6"></td><td colspan="2"></td><td colspan="2"></td><td colspan="4"></td><td colspan="6"></td><td colspan="5"></td><td colspan="3"></td>
+            </tr>`).join('')}
+
+            <tr class="bg-label" style="height:18px;">
+                <td colspan="6">합계금액</td>
+                <td colspan="5">현금</td>
+                <td colspan="5">수표</td>
+                <td colspan="5">어음</td>
+                <td colspan="4">외상미수금</td>
+                <td colspan="5" rowspan="2" style="font-size:11px; font-weight:bold; background-color:#fff; line-height:1.3; padding:2px; color:${isBlue ? '#1e427b' : '#9e2a2b'};">위 금액을 영수 함</td>
+            </tr>
+            <tr style="height:24px;">
+                <td colspan="6" class="font-bold text-right" style="font-size:12px; padding-right:8px;">${totalAmt.toLocaleString()}</td>
+                <td colspan="5" class="text-right" style="padding-right:5px;">${totalAmt.toLocaleString()}</td>
+                <td colspan="5"></td>
+                <td colspan="5"></td>
+                <td colspan="4"></td>
+            </tr>
+        </table>`;
+
+        return html;
+    }
+</script>
+
+</body>
+</html>
