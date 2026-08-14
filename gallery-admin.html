@@ -174,7 +174,7 @@
           <option value="unit">Unit / 주거</option>
           <option value="menual">Menual / 상업</option>
           <option value="mh">M.H / 공용홀</option>
-          <option value="대안설계">View / 대안설계</option>
+          <option value="대안설계">View / 수주설계</option>
         </select>
       </div>
     </div>
@@ -854,7 +854,7 @@
         <option value="unit" ${d.category === 'unit' ? 'selected' : ''}>Unit / 주거</option>
         <option value="menual" ${d.category === 'menual' ? 'selected' : ''}>Menual / 상업</option>
         <option value="mh" ${d.category === 'mh' ? 'selected' : ''}>M.H / 공용홀</option>
-        <option value="대안설계" ${d.category === '대안설계' ? 'selected' : ''}>View / 대안설계</option>
+        <option value="대안설계" ${d.category === '대안설계' ? 'selected' : ''}>View / 수주설계</option>
       </select>
     `;
 
@@ -898,7 +898,7 @@
   }
 
   function categoryLabel(cat) {
-    return { unit: 'Unit/주거', menual: 'Menual/상업', mh: 'M.H/공용홀', '대안설계': 'View/대안설계' }[cat] || cat || '-';
+    return { unit: 'Unit/주거', menual: 'Menual/상업', mh: 'M.H/공용홀', '대안설계': 'View/수주설계' }[cat] || cat || '-';
   }
 
   // 기존(마이그레이션) 프로젝트는 url이 인코딩 안 된 상대경로 파일명이라 encodeURI가 필요하지만,
