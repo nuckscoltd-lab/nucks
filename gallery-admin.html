@@ -183,8 +183,8 @@
       <input type="text" id="f-subtitle" placeholder="예: 대치동 비취타운 | 2026년">
     </div>
     <div class="field">
-      <label for="f-builder">시공사 (Enter로 줄바꿈 가능)</label>
-      <textarea id="f-builder" rows="2" placeholder="예: (주)OO건설"></textarea>
+      <label for="f-builder">발주처 (Enter로 줄바꿈 가능)</label>
+      <textarea id="f-builder" rows="2" placeholder="예: (주)OO종합건설"></textarea>
     </div>
 
     <div class="field">
@@ -781,7 +781,7 @@
         <div class="info" data-info="${doc.id}">
           <div class="t">${d.title || '(제목 없음)'}</div>
           <div class="s">${d.subtitle || ''}</div>
-          <div class="m">${(d.images || []).length}장 · ${categoryLabel(d.category)}${d.builder ? ' · 시공: ' + d.builder : ''}</div>
+          <div class="m">${(d.images || []).length}장 · ${categoryLabel(d.category)}${d.builder ? ' · 발주처: ' + d.builder : ''}</div>
         </div>
         <div class="actions">
           <button data-edit="${doc.id}">수정</button>
@@ -849,7 +849,7 @@
     infoEl.innerHTML = `
       <input type="text" class="edit-input" data-field="title" value="${esc(d.title)}" placeholder="제목 (예: HWASUNG)">
       <input type="text" class="edit-input" data-field="subtitle" value="${esc(d.subtitle)}" placeholder="부제 (예: 대치동 비취타운 | 2026년)">
-      <textarea class="edit-input" data-field="builder" rows="2" placeholder="시공사 (Enter로 줄바꿈 가능)">${esc(d.builder)}</textarea>
+      <textarea class="edit-input" data-field="builder" rows="2" placeholder="발주처 (Enter로 줄바꿈 가능)">${esc(d.builder)}</textarea>
       <select class="edit-input" data-field="category" style="margin-bottom:0;">
         <option value="unit" ${d.category === 'unit' ? 'selected' : ''}>Unit / 주거</option>
         <option value="menual" ${d.category === 'menual' ? 'selected' : ''}>Menual / 상업</option>
