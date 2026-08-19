@@ -66,6 +66,27 @@ if ('serviceWorker' in navigator) {
   .esg-link-btn:hover{ opacity:.85; }
   .esg-link-btn.disabled{ opacity:.4; pointer-events:none; cursor:default; }
 
+  .link-dropdown{ position:relative; display:inline-block; }
+  .link-dropdown-btn{
+    padding:8px 16px; background:var(--ink); color:var(--paper); border:none;
+    border-radius:4px; font-size:12.5px; font-family:inherit; cursor:pointer;
+    display:inline-flex; align-items:center; gap:6px;
+  }
+  .link-dropdown-btn:hover{ opacity:.85; }
+  .link-dropdown-btn .caret{ font-size:9px; transition:transform .15s; }
+  .link-dropdown.open .link-dropdown-btn .caret{ transform:rotate(180deg); }
+  .link-dropdown-menu{
+    display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:20;
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    box-shadow:0 6px 20px rgba(20,20,20,.08); padding:6px; min-width:190px;
+  }
+  .link-dropdown.open .link-dropdown-menu{ display:block; }
+  .link-dropdown-menu a{
+    display:block; padding:9px 12px; font-size:13px; color:var(--ink);
+    text-decoration:none; border-radius:4px; white-space:nowrap;
+  }
+  .link-dropdown-menu a:hover{ background:var(--paper); }
+
   .upload-panel .panel-title{
     font-size:11px; letter-spacing:.16em; text-transform:uppercase;
     color:var(--muted); margin-bottom:18px;
@@ -263,13 +284,18 @@ if ('serviceWorker' in navigator) {
   <!-- 현금출납부 / 연간업무 / 보험료 / 투자현황 바로가기 (관리자 전용) -->
   <div class="esg-link-bar" id="cashbookLinkBar" style="display:none;">
     <span class="esg-link-label">회계/관리</span>
-    <a href="cashbook.html" class="esg-link-btn" target="_blank" rel="noopener">현금출납부</a>
-    <a href="annual-tasks.html" class="esg-link-btn" target="_blank" rel="noopener">연간 주요직무</a>
-    <a href="insurance-premium.html" class="esg-link-btn" target="_blank" rel="noopener">보험료신고서</a>
-    <a href="investment-status.html" class="esg-link-btn" target="_blank" rel="noopener">투자·가수금현황</a>
-    <a href="세금계산서_통합본.html" class="esg-link-btn" target="_blank" rel="noopener">세금계산서</a>
-    <a href="project-billing.html" class="esg-link-btn" target="_blank" rel="noopener">기성청구현황</a>
-    <a href="nucks_dashboard_updated_260723.html" class="esg-link-btn" target="_blank" rel="noopener">회계현황 대시보드</a>
+    <div class="link-dropdown" id="accountingDropdown">
+      <button type="button" class="link-dropdown-btn" id="accountingDropdownBtn">도구 선택 <span class="caret">▾</span></button>
+      <div class="link-dropdown-menu">
+        <a href="cashbook.html" target="_blank" rel="noopener">현금출납부</a>
+        <a href="annual-tasks.html" target="_blank" rel="noopener">연간 주요직무</a>
+        <a href="insurance-premium.html" target="_blank" rel="noopener">보험료신고서</a>
+        <a href="investment-status.html" target="_blank" rel="noopener">투자·가수금현황</a>
+        <a href="세금계산서_통합본.html" target="_blank" rel="noopener">세금계산서</a>
+        <a href="project-billing.html" target="_blank" rel="noopener">기성청구현황</a>
+        <a href="nucks_dashboard_updated_260723.html" target="_blank" rel="noopener">회계현황 대시보드</a>
+      </div>
+    </div>
   </div>
 
   <div class="tabs" id="tabs"></div>
@@ -1202,6 +1228,18 @@ if ('serviceWorker' in navigator) {
       });
     });
   }
+
+  // 회계/관리 드롭다운
+  const accountingDropdown = document.getElementById('accountingDropdown');
+  document.getElementById('accountingDropdownBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    accountingDropdown.classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    if (accountingDropdown && !accountingDropdown.contains(e.target)) {
+      accountingDropdown.classList.remove('open');
+    }
+  });
 
   document.getElementById('logoutBtn').addEventListener('click', async (e) => {
     e.preventDefault();

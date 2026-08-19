@@ -217,8 +217,8 @@ if ('serviceWorker' in navigator) {
   let editingProjectId = null;
   let activeStatus = '전체';
   let activeCategory = '전체';
-  let activeYear = '전체';
-  let activeMonth = '전체';
+  let startMonth = '';
+  let endMonth = '';
   let searchText = '';
 
   function fmtWon(n){ return (Math.round(n) || 0).toLocaleString() + '원'; }
@@ -272,12 +272,12 @@ if ('serviceWorker' in navigator) {
             <option value="공사">공사</option>
             <option value="설계">설계</option>
           </select>
-          <select id="yearFilter">
-            <option value="전체">전체 연도</option>
-          </select>
-          <select id="monthFilter">
-            <option value="전체">전체 월</option>
-          </select>
+          <span style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted);">
+            <input type="month" id="startMonthFilter" style="padding:7px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px;">
+            ~
+            <input type="month" id="endMonthFilter" style="padding:7px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px;">
+            <button type="button" class="row-btn" id="clearMonthRangeBtn" style="margin-left:2px;">초기화</button>
+          </span>
           <input type="text" id="searchInput" placeholder="계약명 · 거래처명 검색">
           <button class="add-btn" id="newProjectBtn">+ 새 프로젝트</button>
         </div>
@@ -292,22 +292,20 @@ if ('serviceWorker' in navigator) {
       '<option value="전체">전체 상태</option>' + statuses.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
     document.getElementById('statusFilter').value = activeStatus;
     document.getElementById('categoryFilter').value = activeCategory;
-
-    // 연도 옵션 동적 채우기 (계약일자 기준)
-    const years = [...new Set(allProjects.map(p => (p.contractDate || '').slice(0, 4)).filter(Boolean))].sort().reverse();
-    document.getElementById('yearFilter').innerHTML =
-      '<option value="전체">전체 연도</option>' + years.map(y => `<option value="${y}">${y}년</option>`).join('');
-    document.getElementById('yearFilter').value = activeYear;
-    document.getElementById('monthFilter').innerHTML =
-      '<option value="전체">전체 월</option>' + Array.from({length:12}, (_,i) => i+1).map(m => `<option value="${m}">${m}월</option>`).join('');
-    document.getElementById('monthFilter').value = activeMonth;
-
+    document.getElementById('startMonthFilter').value = startMonth;
+    document.getElementById('endMonthFilter').value = endMonth;
     document.getElementById('searchInput').value = searchText;
 
     document.getElementById('statusFilter').addEventListener('change', (e) => { activeStatus = e.target.value; renderList(); });
     document.getElementById('categoryFilter').addEventListener('change', (e) => { activeCategory = e.target.value; renderList(); });
-    document.getElementById('yearFilter').addEventListener('change', (e) => { activeYear = e.target.value; renderList(); });
-    document.getElementById('monthFilter').addEventListener('change', (e) => { activeMonth = e.target.value; renderList(); });
+    document.getElementById('startMonthFilter').addEventListener('change', (e) => { startMonth = e.target.value; renderList(); });
+    document.getElementById('endMonthFilter').addEventListener('change', (e) => { endMonth = e.target.value; renderList(); });
+    document.getElementById('clearMonthRangeBtn').addEventListener('click', () => {
+      startMonth = ''; endMonth = '';
+      document.getElementById('startMonthFilter').value = '';
+      document.getElementById('endMonthFilter').value = '';
+      renderList();
+    });
     document.getElementById('searchInput').addEventListener('input', (e) => { searchText = e.target.value.trim(); renderList(); });
     document.getElementById('newProjectBtn').addEventListener('click', createBlankProject);
 
@@ -318,8 +316,8 @@ if ('serviceWorker' in navigator) {
     let rows = allProjects;
     if (activeStatus !== '전체') rows = rows.filter(p => p.status === activeStatus);
     if (activeCategory !== '전체') rows = rows.filter(p => (p.category || '').includes(activeCategory));
-    if (activeYear !== '전체') rows = rows.filter(p => (p.contractDate || '').slice(0, 4) === activeYear);
-    if (activeMonth !== '전체') rows = rows.filter(p => Number((p.contractDate || '').slice(5, 7)) === Number(activeMonth));
+    if (startMonth) rows = rows.filter(p => (p.contractDate || '').slice(0, 7) >= startMonth);
+    if (endMonth) rows = rows.filter(p => (p.contractDate || '').slice(0, 7) <= endMonth);
     if (searchText) {
       const q = searchText.toLowerCase();
       rows = rows.filter(p => (p.name || '').toLowerCase().includes(q) || (p.client || '').toLowerCase().includes(q));
