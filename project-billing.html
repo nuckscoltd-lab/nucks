@@ -93,6 +93,13 @@ if ('serviceWorker' in navigator) {
   }
   .status-badge.done{ background:#dfe9e2; color:var(--green); }
   .status-badge.review{ background:#fbe4e2; color:var(--red); }
+
+  .status-btn-group{ display:flex; gap:6px; flex-wrap:wrap; }
+  .status-btn{
+    padding:6px 12px; border:1px solid var(--line); border-radius:14px; background:#fff;
+    font-family:inherit; font-size:12px; color:var(--muted); cursor:pointer;
+  }
+  .status-btn.active{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
   .source-tag{
     font-size:10px; padding:2px 7px; border-radius:10px; background:#f1eee6; color:var(--muted);
     margin-left:8px;
@@ -206,12 +213,16 @@ if ('serviceWorker' in navigator) {
   const projectsRef = db.collection('billingProjects');
   let allProjects = [];
   let openIds = new Set();
+  let showDatesFor = new Set();
   let editingProjectId = null;
   let activeStatus = '전체';
   let activeCategory = '전체';
+  let activeYear = '전체';
+  let activeMonth = '전체';
   let searchText = '';
 
   function fmtWon(n){ return (Math.round(n) || 0).toLocaleString() + '원'; }
+  const STATUS_OPTIONS = ['미청구', '진행중', '완료', '지급완료', '사업연기'];
   function num(v){ return Number(v) || 0; }
   function esc(s){ return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
 
@@ -261,6 +272,12 @@ if ('serviceWorker' in navigator) {
             <option value="공사">공사</option>
             <option value="설계">설계</option>
           </select>
+          <select id="yearFilter">
+            <option value="전체">전체 연도</option>
+          </select>
+          <select id="monthFilter">
+            <option value="전체">전체 월</option>
+          </select>
           <input type="text" id="searchInput" placeholder="계약명 · 거래처명 검색">
           <button class="add-btn" id="newProjectBtn">+ 새 프로젝트</button>
         </div>
@@ -275,10 +292,22 @@ if ('serviceWorker' in navigator) {
       '<option value="전체">전체 상태</option>' + statuses.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
     document.getElementById('statusFilter').value = activeStatus;
     document.getElementById('categoryFilter').value = activeCategory;
+
+    // 연도 옵션 동적 채우기 (계약일자 기준)
+    const years = [...new Set(allProjects.map(p => (p.contractDate || '').slice(0, 4)).filter(Boolean))].sort().reverse();
+    document.getElementById('yearFilter').innerHTML =
+      '<option value="전체">전체 연도</option>' + years.map(y => `<option value="${y}">${y}년</option>`).join('');
+    document.getElementById('yearFilter').value = activeYear;
+    document.getElementById('monthFilter').innerHTML =
+      '<option value="전체">전체 월</option>' + Array.from({length:12}, (_,i) => i+1).map(m => `<option value="${m}">${m}월</option>`).join('');
+    document.getElementById('monthFilter').value = activeMonth;
+
     document.getElementById('searchInput').value = searchText;
 
     document.getElementById('statusFilter').addEventListener('change', (e) => { activeStatus = e.target.value; renderList(); });
     document.getElementById('categoryFilter').addEventListener('change', (e) => { activeCategory = e.target.value; renderList(); });
+    document.getElementById('yearFilter').addEventListener('change', (e) => { activeYear = e.target.value; renderList(); });
+    document.getElementById('monthFilter').addEventListener('change', (e) => { activeMonth = e.target.value; renderList(); });
     document.getElementById('searchInput').addEventListener('input', (e) => { searchText = e.target.value.trim(); renderList(); });
     document.getElementById('newProjectBtn').addEventListener('click', createBlankProject);
 
@@ -315,6 +344,8 @@ if ('serviceWorker' in navigator) {
     let rows = allProjects;
     if (activeStatus !== '전체') rows = rows.filter(p => p.status === activeStatus);
     if (activeCategory !== '전체') rows = rows.filter(p => (p.category || '').includes(activeCategory));
+    if (activeYear !== '전체') rows = rows.filter(p => (p.contractDate || '').slice(0, 4) === activeYear);
+    if (activeMonth !== '전체') rows = rows.filter(p => Number((p.contractDate || '').slice(5, 7)) === Number(activeMonth));
     if (searchText) {
       const q = searchText.toLowerCase();
       rows = rows.filter(p => (p.name || '').toLowerCase().includes(q) || (p.client || '').toLowerCase().includes(q));
@@ -373,16 +404,26 @@ if ('serviceWorker' in navigator) {
   }
 
   function renderProjectBody(p){
+    const showDates = showDatesFor.has(p.id);
+    const dateHeaders = showDates ? '<th>청구일자</th><th>수금일자</th>' : '';
+    const dateAddFields = showDates ? `
+        <div class="field"><label>청구일자</label><input type="date" id="nr-claimdate-${p.id}"></div>
+        <div class="field"><label>수금일자</label><input type="date" id="nr-collectdate-${p.id}"></div>` : '';
+
     const roundsHtml = (p.rounds || []).length ? `
-      <div class="subsection-title">회차별 청구 / 수금</div>
+      <div class="subsection-title" style="display:flex; align-items:center; justify-content:space-between;">
+        <span>회차별 청구 / 수금</span>
+        <button class="row-btn" data-round-date-toggle="${p.id}" style="text-transform:none; letter-spacing:normal;">${showDates ? '날짜 숨기기' : '청구·수금일자 표시'}</button>
+      </div>
       <table class="mini">
-        <thead><tr><th>회차</th><th>청구금액</th><th>수금금액</th><th>관리</th></tr></thead>
+        <thead><tr><th>회차</th><th>청구금액</th><th>수금금액</th>${dateHeaders}<th>관리</th></tr></thead>
         <tbody id="rounds-${p.id}">
           ${p.rounds.map((r, i) => `
             <tr>
               <td>${r.round}차</td>
               <td>${fmtWon(r.claimAmount)}</td>
               <td>${fmtWon(r.collectAmount)}</td>
+              ${showDates ? `<td>${esc(r.claimDate || '-')}</td><td>${esc(r.collectDate || '-')}</td>` : ''}
               <td>
                 <button class="row-btn" data-round-edit="${p.id}:${i}">수정</button>
                 <button class="row-btn danger" data-round-del="${p.id}:${i}">삭제</button>
@@ -395,14 +436,19 @@ if ('serviceWorker' in navigator) {
         <div class="field"><label>회차</label><input type="number" id="nr-round-${p.id}" style="width:60px;" value="${(p.rounds.length || 0) + 1}"></div>
         <div class="field"><label>청구금액</label><input type="text" inputmode="numeric" id="nr-claim-${p.id}" class="money-in" style="width:120px;" placeholder="0"></div>
         <div class="field"><label>수금금액</label><input type="text" inputmode="numeric" id="nr-collect-${p.id}" class="money-in" style="width:120px;" placeholder="0"></div>
+        ${dateAddFields}
         <button data-round-add="${p.id}">회차 추가</button>
       </div>
     ` : `
-      <div class="subsection-title">회차별 청구 / 수금 (없음 — 은행 거래내역만 이관된 건)</div>
+      <div class="subsection-title" style="display:flex; align-items:center; justify-content:space-between;">
+        <span>회차별 청구 / 수금 (없음)</span>
+        <button class="row-btn" data-round-date-toggle="${p.id}" style="text-transform:none; letter-spacing:normal;">${showDates ? '날짜 숨기기' : '청구·수금일자 표시'}</button>
+      </div>
       <div class="inline-add">
         <div class="field"><label>회차</label><input type="number" id="nr-round-${p.id}" style="width:60px;" value="1"></div>
         <div class="field"><label>청구금액</label><input type="text" inputmode="numeric" id="nr-claim-${p.id}" class="money-in" style="width:120px;" placeholder="0"></div>
         <div class="field"><label>수금금액</label><input type="text" inputmode="numeric" id="nr-collect-${p.id}" class="money-in" style="width:120px;" placeholder="0"></div>
+        ${dateAddFields}
         <button data-round-add="${p.id}">회차 추가</button>
       </div>
     `;
@@ -434,6 +480,12 @@ if ('serviceWorker' in navigator) {
   }
 
   function bindCardEvents(p){
+    const dateToggleBtn = document.querySelector(`[data-round-date-toggle="${p.id}"]`);
+    if (dateToggleBtn) dateToggleBtn.addEventListener('click', () => {
+      if (showDatesFor.has(p.id)) showDatesFor.delete(p.id); else showDatesFor.add(p.id);
+      renderList();
+    });
+
     const addRoundBtn = document.querySelector(`[data-round-add="${p.id}"]`);
     if (addRoundBtn) addRoundBtn.addEventListener('click', () => addRound(p.id));
 
@@ -466,7 +518,12 @@ if ('serviceWorker' in navigator) {
     const round = Number(document.getElementById(`nr-round-${id}`).value) || (p.rounds.length + 1);
     const claimAmount = parseMoney(document.getElementById(`nr-claim-${id}`));
     const collectAmount = parseMoney(document.getElementById(`nr-collect-${id}`));
-    const rounds = [...(p.rounds || []), { round, claimAmount, collectAmount }];
+    const claimDateEl = document.getElementById(`nr-claimdate-${id}`);
+    const collectDateEl = document.getElementById(`nr-collectdate-${id}`);
+    const newRound = { round, claimAmount, collectAmount };
+    if (claimDateEl && claimDateEl.value) newRound.claimDate = claimDateEl.value;
+    if (collectDateEl && collectDateEl.value) newRound.collectDate = collectDateEl.value;
+    const rounds = [...(p.rounds || []), newRound];
     await projectsRef.doc(id).update({ rounds });
     await loadProjects();
   }
@@ -486,8 +543,18 @@ if ('serviceWorker' in navigator) {
     if (newClaim === null) return;
     const newCollect = prompt('수금금액', r.collectAmount);
     if (newCollect === null) return;
+    const newClaimDate = prompt('청구일자 (YYYY-MM-DD, 없으면 비워두기)', r.claimDate || '');
+    if (newClaimDate === null) return;
+    const newCollectDate = prompt('수금일자 (YYYY-MM-DD, 없으면 비워두기)', r.collectDate || '');
+    if (newCollectDate === null) return;
     const rounds = [...p.rounds];
-    rounds[idx] = { round: r.round, claimAmount: Number(newClaim) || 0, collectAmount: Number(newCollect) || 0 };
+    rounds[idx] = {
+      round: r.round,
+      claimAmount: Number(newClaim) || 0,
+      collectAmount: Number(newCollect) || 0,
+      claimDate: newClaimDate.trim() || null,
+      collectDate: newCollectDate.trim() || null
+    };
     await projectsRef.doc(id).update({ rounds });
     await loadProjects();
   }
@@ -506,7 +573,12 @@ if ('serviceWorker' in navigator) {
               <option value="설계" ${p.category === '설계' ? 'selected' : ''}>설계</option>
             </select>
           </div>
-          <div class="field"><label>상태</label><input type="text" id="ep-status-${id}" value="${esc(p.status)}" placeholder="완료/진행중 등"></div>
+          <div class="field"><label>상태</label>
+            <div class="status-btn-group" id="ep-status-group-${id}">
+              ${STATUS_OPTIONS.map(s => `<button type="button" class="status-btn ${p.status === s ? 'active' : ''}" data-status-value="${esc(s)}">${esc(s)}</button>`).join('')}
+            </div>
+            <input type="hidden" id="ep-status-${id}" value="${esc(p.status)}">
+          </div>
         </div>
         <div class="form-row">
           <div class="field"><label>계약일자</label><input type="date" id="ep-contractDate-${id}" value="${p.contractDate || ''}"></div>
@@ -522,6 +594,13 @@ if ('serviceWorker' in navigator) {
     `;
     document.getElementById(`ep-save-${id}`).addEventListener('click', () => saveProjectEdit(id));
     document.getElementById(`ep-cancel-${id}`).addEventListener('click', () => { container.innerHTML = ''; });
+    document.querySelectorAll(`#ep-status-group-${id} .status-btn`).forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.getElementById(`ep-status-${id}`).value = btn.dataset.statusValue;
+        document.querySelectorAll(`#ep-status-group-${id} .status-btn`).forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
   }
 
   async function saveProjectEdit(id){
