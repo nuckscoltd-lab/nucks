@@ -139,7 +139,7 @@
     <p>새 프로젝트 사진을 여기서 업로드하면 홈페이지 갤러리에 자동으로 추가됩니다.</p>
   </div>
   <div style="display:flex; gap:16px; align-items:center;">
-    <a href="admin.html">Admin</a>
+    <a href="admin.html" id="adminNavLink" style="display:none;">Admin</a>
     <a href="index.html">Home</a>
   </div>
 </header>
@@ -230,7 +230,12 @@
     if (role !== 'admin' && displayName !== '윤성원') {
       alert('접근 권한이 없습니다.');
       window.location.href = 'index.html';
+      return;
     }
+
+    // "전체 관리자 모드(admin.html)"로 가는 링크는 실제 admin 권한자에게만 노출.
+    // 윤성원은 갤러리 담당자로서 이 페이지에는 들어올 수 있지만, 회원관리 등 전체 관리자 기능과는 분리되어야 함.
+    document.getElementById('adminNavLink').style.display = (role === 'admin') ? 'inline-block' : 'none';
   });
 
   const storage = firebase.storage();
