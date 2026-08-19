@@ -311,19 +311,33 @@ if ('serviceWorker' in navigator) {
     document.getElementById('searchInput').addEventListener('input', (e) => { searchText = e.target.value.trim(); renderList(); });
     document.getElementById('newProjectBtn').addEventListener('click', createBlankProject);
 
-    renderSummary();
     renderList();
+  }
+
+  function getFilteredProjects(){
+    let rows = allProjects;
+    if (activeStatus !== '전체') rows = rows.filter(p => p.status === activeStatus);
+    if (activeCategory !== '전체') rows = rows.filter(p => (p.category || '').includes(activeCategory));
+    if (activeYear !== '전체') rows = rows.filter(p => (p.contractDate || '').slice(0, 4) === activeYear);
+    if (activeMonth !== '전체') rows = rows.filter(p => Number((p.contractDate || '').slice(5, 7)) === Number(activeMonth));
+    if (searchText) {
+      const q = searchText.toLowerCase();
+      rows = rows.filter(p => (p.name || '').toLowerCase().includes(q) || (p.client || '').toLowerCase().includes(q));
+    }
+    return rows;
   }
 
   function renderSummary(){
     const bar = document.getElementById('summaryBar');
-    const totalContract = allProjects.reduce((s, p) => s + num(p.contractAmount), 0);
-    const totalCol = allProjects.reduce((s, p) => s + totalCollect(p), 0);
-    const totalOut = allProjects.reduce((s, p) => s + outstanding(p), 0);
-    const inProgress = allProjects.filter(p => p.status && !['완료', '지급완료'].includes(p.status)).length;
+    const rows = getFilteredProjects();
+    const isFiltered = rows.length !== allProjects.length;
+    const totalContract = rows.reduce((s, p) => s + num(p.contractAmount), 0);
+    const totalCol = rows.reduce((s, p) => s + totalCollect(p), 0);
+    const totalOut = rows.reduce((s, p) => s + outstanding(p), 0);
+    const inProgress = rows.filter(p => p.status && !['완료', '지급완료'].includes(p.status)).length;
 
     bar.innerHTML = `
-      <div class="summary-chip">프로젝트 수<b>${allProjects.length}건</b></div>
+      <div class="summary-chip">${isFiltered ? '필터된 ' : ''}프로젝트 수<b>${rows.length}건${isFiltered ? ` <span style="font-size:11px; color:var(--muted);">/ 전체 ${allProjects.length}건</span>` : ''}</b></div>
       <div class="summary-chip">총계약금 합계<b>${fmtWon(totalContract)}</b></div>
       <div class="summary-chip">총수금 합계<b>${fmtWon(totalCol)}</b></div>
       <div class="summary-chip ${totalOut > 0 ? 'warn' : ''}">청구미수금 합계<b>${fmtWon(totalOut)}</b></div>
@@ -341,15 +355,9 @@ if ('serviceWorker' in navigator) {
     const listEl = document.getElementById('projectList');
     const emptyMsg = document.getElementById('emptyMsg');
 
-    let rows = allProjects;
-    if (activeStatus !== '전체') rows = rows.filter(p => p.status === activeStatus);
-    if (activeCategory !== '전체') rows = rows.filter(p => (p.category || '').includes(activeCategory));
-    if (activeYear !== '전체') rows = rows.filter(p => (p.contractDate || '').slice(0, 4) === activeYear);
-    if (activeMonth !== '전체') rows = rows.filter(p => Number((p.contractDate || '').slice(5, 7)) === Number(activeMonth));
-    if (searchText) {
-      const q = searchText.toLowerCase();
-      rows = rows.filter(p => (p.name || '').toLowerCase().includes(q) || (p.client || '').toLowerCase().includes(q));
-    }
+    renderSummary();
+
+    const rows = getFilteredProjects();
 
     if (rows.length === 0) {
       listEl.innerHTML = '';
