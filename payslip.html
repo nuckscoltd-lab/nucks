@@ -272,10 +272,10 @@ if ('serviceWorker' in navigator) {
   <div class="toolbar">
     <select id="listEmployeeFilter"><option value="전체">전체 사원</option></select>
     <span style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted);">
-      <input type="month" id="startMonthFilter">
+      <input type="month" id="startMonthFilter" style="padding:7px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff;">
       ~
-      <input type="month" id="endMonthFilter">
-      <button type="button" class="print-btn" id="clearMonthRangeBtn" style="margin-left:2px;">초기화</button>
+      <input type="month" id="endMonthFilter" style="padding:7px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff;">
+      <button type="button" class="row-btn" id="clearMonthRangeBtn" style="margin-left:2px;">초기화</button>
     </span>
     <button type="button" class="submit-btn" id="bulkPrintFilteredBtn" style="margin:0; padding:8px 16px;">현재 목록 일괄 인쇄</button>
     <button type="button" class="submit-btn" id="bulkPrintSelectedBtn" style="margin:0; padding:8px 16px; display:none;">선택 항목 일괄 인쇄</button>

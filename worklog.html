@@ -354,12 +354,10 @@ if ('serviceWorker' in navigator) {
       <button class="view-toggle-btn" id="viewCalendarBtn">달력보기</button>
     </div>
     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-      <select id="monthFilter"><option value="전체">전체 월</option></select>
-      <span style="font-size:12px; color:var(--muted);">일자</span>
-      <input type="date" id="startDateFilter" title="시작일">
-      <span style="font-size:12px; color:var(--muted);">~</span>
-      <input type="date" id="endDateFilter" title="종료일">
-      <button class="row-btn" id="dateFilterResetBtn" style="text-decoration:underline; font-size:12px;">초기화</button>
+      <button class="cal-nav-btn" id="listPrevBtn" style="font-size:16px;">◀</button>
+      <span id="activeMonthLabel" style="font-size:13.5px; font-weight:600; min-width:88px; text-align:center;"></span>
+      <button class="cal-nav-btn" id="listNextBtn" style="font-size:16px;">▶</button>
+      <button class="row-btn" id="toggleAllRangeBtn" style="text-decoration:underline; font-size:12px; margin-left:6px;">전체 기간 보기</button>
       <select id="employeeFilter" style="display:none;">
         <option value="전체">전체 사원</option>
       </select>
@@ -723,24 +721,60 @@ if ('serviceWorker' in navigator) {
 
   document.getElementById('refreshBtn').addEventListener('click', loadLogs);
   document.getElementById('employeeFilter').addEventListener('change', () => { renderTable(); renderCalendar(); });
-  document.getElementById('monthFilter').addEventListener('change', () => { renderTable(); });
-  document.getElementById('startDateFilter').addEventListener('change', () => { renderTable(); });
-  document.getElementById('endDateFilter').addEventListener('change', () => { renderTable(); });
-  document.getElementById('dateFilterResetBtn').addEventListener('click', () => {
-    document.getElementById('startDateFilter').value = '';
-    document.getElementById('endDateFilter').value = '';
-    renderTable();
-  });
 
   // 목록/달력 전환
   let viewMode = 'list';
-  let calMonth = new Date(); // 달력에 표시 중인 월 (1일 기준으로 다룸)
-  calMonth.setDate(1);
+
+  // 목록/달력이 함께 쓰는 "현재 보고 있는 달" 상태.
+  // 기본적으로 이 달의 데이터만 Firestore에서 가져와서(서버단 필터링) 로딩을 가볍게 유지한다.
+  let activeMonth = new Date();
+  activeMonth.setDate(1);
+  let showAllRange = false; // true면 전체 기간을 한 번에 불러옴 (필요할 때만 명시적으로 켬)
+
+  function monthBounds(d) {
+    const y = d.getFullYear(), m = d.getMonth();
+    const start = `${y}-${String(m + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    const end = `${y}-${String(m + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    return { start, end };
+  }
+
+  function updateMonthLabel() {
+    document.getElementById('activeMonthLabel').textContent =
+      showAllRange ? '전체 기간' : `${activeMonth.getFullYear()}년 ${activeMonth.getMonth() + 1}월`;
+    document.getElementById('listPrevBtn').disabled = showAllRange;
+    document.getElementById('listNextBtn').disabled = showAllRange;
+    document.getElementById('toggleAllRangeBtn').textContent = showAllRange ? '이번 달만 보기' : '전체 기간 보기';
+  }
+
+  document.getElementById('listPrevBtn').addEventListener('click', () => {
+    showAllRange = false;
+    activeMonth.setMonth(activeMonth.getMonth() - 1);
+    loadLogs();
+  });
+  document.getElementById('listNextBtn').addEventListener('click', () => {
+    showAllRange = false;
+    activeMonth.setMonth(activeMonth.getMonth() + 1);
+    loadLogs();
+  });
+  document.getElementById('toggleAllRangeBtn').addEventListener('click', () => {
+    showAllRange = !showAllRange;
+    loadLogs();
+  });
 
   document.getElementById('viewListBtn').addEventListener('click', () => switchView('list'));
   document.getElementById('viewCalendarBtn').addEventListener('click', () => switchView('calendar'));
-  document.getElementById('calPrevBtn').addEventListener('click', () => { calMonth.setMonth(calMonth.getMonth() - 1); renderCalendar(); });
-  document.getElementById('calNextBtn').addEventListener('click', () => { calMonth.setMonth(calMonth.getMonth() + 1); renderCalendar(); });
+  document.getElementById('calPrevBtn').addEventListener('click', () => {
+    showAllRange = false;
+    activeMonth.setMonth(activeMonth.getMonth() - 1);
+    loadLogs();
+  });
+  document.getElementById('calNextBtn').addEventListener('click', () => {
+    showAllRange = false;
+    activeMonth.setMonth(activeMonth.getMonth() + 1);
+    loadLogs();
+  });
+
 
   function switchView(mode) {
     viewMode = mode;
@@ -753,8 +787,8 @@ if ('serviceWorker' in navigator) {
   }
 
   function renderCalendar() {
-    const year = calMonth.getFullYear();
-    const month = calMonth.getMonth();
+    const year = activeMonth.getFullYear();
+    const month = activeMonth.getMonth();
     document.getElementById('calMonthLabel').textContent = `${year}년 ${month + 1}월`;
 
     const filterVal = document.getElementById('employeeFilter').value;
@@ -850,25 +884,39 @@ if ('serviceWorker' in navigator) {
     emptyMsg.textContent = '불러오는 중...';
     emptyMsg.style.display = 'block';
     table.style.display = 'none';
+    updateMonthLabel();
 
     try {
       let query, leaveQuery;
-      if (currentRole === 'admin') {
-        query = db.collection('workLogs').orderBy('날짜', 'desc');
-        leaveQuery = db.collection('leaves');
+
+      if (showAllRange) {
+        if (currentRole === 'admin') {
+          query = db.collection('workLogs').orderBy('날짜', 'desc');
+          leaveQuery = db.collection('leaves');
+        } else {
+          query = db.collection('workLogs').where('uid', '==', currentUser.uid);
+          leaveQuery = db.collection('leaves').where('uid', '==', currentUser.uid);
+        }
       } else {
-        query = db.collection('workLogs').where('uid', '==', currentUser.uid);
-        leaveQuery = db.collection('leaves').where('uid', '==', currentUser.uid);
+        // 기본값: 이번 달(또는 이동한 달)만 서버에서 걸러서 가져온다 - 데이터가 쌓여도 매번 가볍게 로딩됨
+        const { start, end } = monthBounds(activeMonth);
+        if (currentRole === 'admin') {
+          query = db.collection('workLogs').where('날짜', '>=', start).where('날짜', '<=', end).orderBy('날짜', 'desc');
+          leaveQuery = db.collection('leaves').where('날짜', '>=', start).where('날짜', '<=', end);
+        } else {
+          query = db.collection('workLogs').where('uid', '==', currentUser.uid).where('날짜', '>=', start).where('날짜', '<=', end);
+          leaveQuery = db.collection('leaves').where('uid', '==', currentUser.uid).where('날짜', '>=', start).where('날짜', '<=', end);
+        }
       }
+
       const [snapshot, leaveSnapshot] = await Promise.all([query.get(), leaveQuery.get()]);
       allRows = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       allLeaveRows = leaveSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-      // 근로자 본인 목록은 별도 정렬(최신순) - where 절 사용 시 orderBy 인덱스 이슈 회피를 위해 클라이언트에서 정렬
+      // 근로자 본인 목록/월별 스코핑 쿼리는 별도 정렬(최신순) - where 절 조합 시 orderBy 인덱스 이슈 회피를 위해 클라이언트에서 정렬
       allRows.sort((a, b) => (b['날짜'] || '').localeCompare(a['날짜'] || ''));
 
       if (currentRole === 'admin') populateEmployeeFilter();
-      populateMonthFilter();
       updateProjectDatalist();
       renderTable();
       renderCalendar();
@@ -890,37 +938,16 @@ if ('serviceWorker' in navigator) {
     if (names.includes(current)) select.value = current;
   }
 
-  function populateMonthFilter() {
-    const select = document.getElementById('monthFilter');
-    const current = select.value;
-    const months = [...new Set(allRows.map(r => (r['날짜'] || '').slice(0, 7)).filter(Boolean))]
-      .sort((a, b) => b.localeCompare(a)); // 최신월부터
-    select.innerHTML = '<option value="전체">전체 월</option>' +
-      months.map(m => `<option value="${m}">${m.replace('-', '년 ')}월</option>`).join('');
-    if (months.includes(current)) select.value = current;
-  }
-
   function renderTable() {
     const table = document.getElementById('logTable');
     const emptyMsg = document.getElementById('emptyMsg');
     const tbody = document.getElementById('tableBody');
 
     const filterVal = document.getElementById('employeeFilter').value;
-    const monthVal = document.getElementById('monthFilter').value;
-    const startDate = document.getElementById('startDateFilter').value;
-    const endDate = document.getElementById('endDateFilter').value;
+    // 날짜 범위는 이미 loadLogs()에서 서버단으로 걸러져 allRows에 담겨있으므로, 여기선 사원 필터만 적용
     let rows = (currentRole === 'admin' && filterVal !== '전체')
       ? allRows.filter(r => r['사원명'] === filterVal)
       : allRows;
-    if (monthVal !== '전체') {
-      rows = rows.filter(r => (r['날짜'] || '').slice(0, 7) === monthVal);
-    }
-    if (startDate) {
-      rows = rows.filter(r => (r['날짜'] || '') >= startDate);
-    }
-    if (endDate) {
-      rows = rows.filter(r => (r['날짜'] || '') <= endDate);
-    }
 
     if (rows.length === 0) {
       table.style.display = 'none';
