@@ -264,6 +264,7 @@ if ('serviceWorker' in navigator) {
             <a href="payslip.html" id="payslipNavLink" style="display: inline-block;">Payslip</a>
             <a href="worklog.html" id="worklogNavLink" style="display: inline-block;">Worklog</a>
             <a href="board.html" id="boardNavLink" style="display: inline-block; position: relative;">Board<span id="boardBadge" style="display:none; position:absolute; top:-4px; right:-10px; width:8px; height:8px; border-radius:50%; background:#a4453c;"></span></a>
+            <a href="gallery-admin.html" id="galleryNavLink" style="display: none;">Gallery</a>
 
             <div class="nav-item-dropdown" id="filesNavLink" style="display: inline-block;">
                 <a href="files.html" class="nav-dropdown-toggle">Files <span class="caret" onclick="return toggleNavDropdown(event, this)">▾</span></a>
@@ -280,7 +281,6 @@ if ('serviceWorker' in navigator) {
                 <a href="admin.html" class="nav-dropdown-toggle">Admin <span class="caret" onclick="return toggleNavDropdown(event, this)">▾</span></a>
                 <div class="nav-dropdown-menu"><div class="nav-dropdown-menu-inner">
                     <a href="admin.html">회원 관리</a>
-                    <a href="gallery-admin.html">Gallery</a>
                     <a href="cashbook.html">Cashbook</a>
                     <a href="annual-tasks.html">Tasks</a>
                     <a href="insurance-premium.html">Insurance</a>
@@ -592,6 +592,19 @@ if ('serviceWorker' in navigator) {
                 const boardLink = document.getElementById('boardNavLink');
                 boardLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
 
+                // 갤러리 관리: 관리자는 항상 노출, 그 외에는 담당자(윤성원)인 경우에만 노출
+                const galleryLink = document.getElementById('galleryNavLink');
+                if (role === 'admin') {
+                    galleryLink.style.display = 'inline-block';
+                } else {
+                    galleryLink.style.display = 'none';
+                    db.collection('users').doc(user.uid).get().then(doc => {
+                        if (doc.data()?.displayName === '윤성원') {
+                            galleryLink.style.display = 'inline-block';
+                        }
+                    }).catch(() => {});
+                }
+
                 if (role === 'worker' || role === 'admin') {
                     checkNotifications(user, role);
                 }
@@ -622,6 +635,9 @@ if ('serviceWorker' in navigator) {
 
                 const boardLink = document.getElementById('boardNavLink');
                 boardLink.style.display = 'none';
+
+                const galleryLink = document.getElementById('galleryNavLink');
+                galleryLink.style.display = 'none';
             }
         );
 

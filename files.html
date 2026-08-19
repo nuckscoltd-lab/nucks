@@ -298,11 +298,6 @@ if ('serviceWorker' in navigator) {
     </div>
   </div>
 
-  <!-- 갤러리 관리 바로가기 (관리자 + 담당자(윤성원) 전용) -->
-  <div class="esg-link-bar" id="galleryLinkBar" style="display:none;">
-    <span class="esg-link-label">갤러리 관리</span>
-    <a href="gallery-admin.html" class="esg-link-btn" target="_blank" rel="noopener">갤러리 편집</a>
-  </div>
 
   <div class="tabs" id="tabs"></div>
 
@@ -414,7 +409,7 @@ if ('serviceWorker' in navigator) {
       staffName = user.displayName || '';
     }
 
-    document.getElementById('galleryLinkBar').style.display = (isAdmin || staffName === '윤성원') ? 'flex' : 'none';
+
 
     const officerLink = document.getElementById('esgOfficerLink');
     const staffLink = document.getElementById('esgStaffLink');
