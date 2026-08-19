@@ -265,6 +265,7 @@ if ('serviceWorker' in navigator) {
             <a href="worklog.html" id="worklogNavLink" style="display: inline-block;">Worklog</a>
             <a href="board.html" id="boardNavLink" style="display: inline-block; position: relative;">Board<span id="boardBadge" style="display:none; position:absolute; top:-4px; right:-10px; width:8px; height:8px; border-radius:50%; background:#a4453c;"></span></a>
             <a href="gallery-admin.html" id="galleryNavLink" style="display: none;">Gallery</a>
+            <a href="project-settlement.html" id="settlementNavLink" style="display: none;">Settlement</a>
 
             <div class="nav-item-dropdown" id="filesNavLink" style="display: inline-block;">
                 <a href="files.html" class="nav-dropdown-toggle">Files <span class="caret" onclick="return toggleNavDropdown(event, this)">▾</span></a>
@@ -592,16 +593,19 @@ if ('serviceWorker' in navigator) {
                 const boardLink = document.getElementById('boardNavLink');
                 boardLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
 
-                // 갤러리 관리: 관리자는 항상 노출, 그 외에는 담당자(윤성원)인 경우에만 노출
+                // 갤러리 관리(윤성원) / 프로젝트 결산(손영화): 관리자는 항상 노출, 그 외에는 해당 담당자인 경우에만 노출
                 const galleryLink = document.getElementById('galleryNavLink');
+                const settlementLink = document.getElementById('settlementNavLink');
                 if (role === 'admin') {
                     galleryLink.style.display = 'inline-block';
+                    settlementLink.style.display = 'inline-block';
                 } else {
                     galleryLink.style.display = 'none';
+                    settlementLink.style.display = 'none';
                     db.collection('users').doc(user.uid).get().then(doc => {
-                        if (doc.data()?.displayName === '윤성원') {
-                            galleryLink.style.display = 'inline-block';
-                        }
+                        const name = doc.data()?.displayName;
+                        if (name === '윤성원') galleryLink.style.display = 'inline-block';
+                        if (name === '손영화') settlementLink.style.display = 'inline-block';
                     }).catch(() => {});
                 }
 
@@ -638,6 +642,9 @@ if ('serviceWorker' in navigator) {
 
                 const galleryLink = document.getElementById('galleryNavLink');
                 galleryLink.style.display = 'none';
+
+                const settlementLink = document.getElementById('settlementNavLink');
+                settlementLink.style.display = 'none';
             }
         );
 
