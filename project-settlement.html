@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#141414">
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+</script>
+<title>프로젝트 결산 | NUCKS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
+
+  :root{
+    --ink:#141414;
+    --paper:#f7f6f3;
+    --line:#d8d5cd;
+    --muted:#8a8578;
+    --green:#3f6b52;
+    --red:#a4453c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background:var(--paper);
+    font-family:'Pretendard', -apple-system, sans-serif; color:var(--ink);
+  }
+  header{
+    padding:28px 48px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .eyebrow{
+    font-size:11px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:6px;
+  }
+  h1{
+    font-family:'Cormorant Garamond', serif; font-weight:500;
+    font-size:32px; margin:0; letter-spacing:.01em;
+  }
+  .header-right{ display:flex; align-items:center; gap:24px; }
+  .header-right a{
+    font-size:13px; color:var(--muted); text-decoration:none;
+    border-bottom:1px solid var(--muted); cursor:pointer;
+  }
+  main{ max-width:1280px; margin:0 auto; padding:40px 48px; }
+
+  .panel{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:24px; margin-bottom:24px;
+  }
+  .panel-title{
+    font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:16px;
+  }
+
+  .summary-bar{ display:flex; gap:16px; flex-wrap:wrap; margin-bottom:24px; }
+  .summary-chip{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:14px 20px; font-size:13px; color:var(--muted); flex:1; min-width:150px;
+  }
+  .summary-chip b{ color:var(--ink); font-size:18px; display:block; margin-top:4px; }
+
+  .toolbar{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; align-items:center; }
+  .toolbar select, .toolbar input{
+    padding:8px 10px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13px; background:#fff;
+  }
+  .toolbar input[type="text"]{ flex:1; min-width:180px; }
+  .add-btn{
+    padding:8px 16px; background:var(--ink); color:var(--paper);
+    border:none; font-size:12.5px; letter-spacing:.05em; cursor:pointer; border-radius:4px;
+  }
+  .row-btn{
+    font-size:11.5px; background:none; border:none; cursor:pointer;
+    text-decoration:underline; color:var(--muted); margin-right:8px; padding:0;
+  }
+  .row-btn.danger{ color:var(--red); }
+
+  .proj-card{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    margin-bottom:12px; overflow:hidden;
+  }
+  .proj-head{
+    display:flex; align-items:center; gap:14px; padding:16px 18px; cursor:pointer; flex-wrap:wrap;
+  }
+  .proj-head:hover{ background:#fafaf8; }
+  .proj-name{ font-size:14.5px; font-weight:500; }
+  .proj-sub{ font-size:12px; color:var(--muted); margin-top:3px; }
+  .proj-meta{ margin-left:auto; display:flex; gap:22px; align-items:center; flex-wrap:wrap; }
+  .proj-meta .m-item{ text-align:right; font-size:11.5px; color:var(--muted); min-width:90px; }
+  .proj-meta .m-item b{ display:block; font-size:13px; color:var(--ink); font-weight:500; margin-top:2px; }
+  .tag{
+    display:inline-block; font-size:11px; padding:3px 10px; border-radius:12px;
+    background:#ece9e2; color:#7a766c; white-space:nowrap;
+  }
+
+  .proj-body{ display:none; border-top:1px solid var(--line); padding:20px; background:#fcfbf9; }
+  .proj-body.open{ display:block; }
+  .subsection-title{ font-size:11.5px; color:var(--muted); margin:18px 0 10px; letter-spacing:.06em; text-transform:uppercase; }
+  .subsection-title:first-child{ margin-top:0; }
+
+  table.mini{ width:100%; border-collapse:collapse; margin-bottom:8px; }
+  table.mini th{
+    text-align:left; font-size:11px; color:var(--muted); font-weight:500;
+    padding:7px 8px; border-bottom:1px solid var(--line);
+  }
+  table.mini td{ padding:8px; font-size:13px; border-bottom:1px solid var(--line); vertical-align:top; }
+  table.mini tr:last-child td{ border-bottom:none; }
+
+  .partner-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px; }
+  .partner-box{ background:#fff; border:1px solid var(--line); border-radius:6px; padding:12px 14px; }
+  .partner-box .p-label{ font-size:11px; color:var(--muted); margin-bottom:4px; }
+  .partner-box .p-company{ font-size:13.5px; font-weight:500; }
+  .partner-box .p-contacts{ font-size:12px; color:var(--muted); margin-top:2px; }
+
+  ul.plain-list{ margin:0; padding-left:18px; font-size:13px; line-height:1.7; }
+  ul.plain-list li{ margin-bottom:2px; }
+
+  .form-row{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; align-items:flex-end; }
+  .field{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .field.wide{ flex:1; min-width:200px; }
+  .field label{ font-size:11px; color:var(--muted); }
+  .field input, .field select, .field textarea{
+    padding:8px 9px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13px; background:#fff;
+  }
+
+  .list-editor{ background:#fff; border:1px solid var(--line); border-radius:6px; padding:12px 14px; margin-bottom:14px; }
+  .list-editor .li-row{ display:flex; gap:8px; margin-bottom:8px; align-items:flex-start; }
+  .list-editor .li-row input{ flex:1; padding:7px 9px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:12.5px; }
+  .list-editor .li-row .li-name{ flex:0 0 160px; }
+  .list-editor .li-remove{ background:none; border:none; color:var(--red); cursor:pointer; font-size:12px; text-decoration:underline; padding:7px 0; }
+  .list-editor .li-add{ background:#fff; border:1px dashed var(--line); border-radius:4px; padding:6px 12px; font-size:12px; color:var(--muted); cursor:pointer; }
+  .list-editor .li-add:hover{ border-color:var(--ink); color:var(--ink); }
+
+  .status-line{ font-size:12.5px; margin-top:8px; min-height:16px; }
+  .empty{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:36px; text-align:center; color:var(--muted); font-size:13.5px;
+  }
+
+  @media (max-width: 720px) {
+    header{ padding:20px !important; flex-wrap:wrap; gap:10px; }
+    .header-right{ flex-wrap:wrap; gap:12px !important; }
+    main{ padding:24px 16px !important; }
+    h1{ font-size:24px !important; }
+    input, select, textarea{ font-size:16px !important; }
+    .proj-head{ flex-wrap:wrap; }
+    .proj-meta{ margin-left:0; width:100%; justify-content:space-between; }
+    table.mini{ min-width:0 !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">NUCKS</div>
+    <h1>프로젝트 결산</h1>
+  </div>
+  <div class="header-right">
+    <a href="index.html">Home</a>
+    <a href="#" id="logoutBtn">Logout</a>
+  </div>
+</header>
+
+<main id="mainArea">
+  <div class="empty">불러오는 중...</div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+  requireRole(['admin']);
+
+  // 📌 [내장 초기 데이터] — Firestore projectSettlements 컬렉션이 비어있을 때(처음 실행 시)만 자동으로 채워지는 마이그레이션 데이터.
+  // 출처: 프로젝트_결산-의석.xlsx (2019~2024년 결산서 27건, 표지/목차 시트는 제외)
+  const EMBEDDED_SETTLEMENTS = [{"projNo": "2019-02-01", "name": "현대건설 힐스테이트 청량리역", "startDate": "2019-12-06", "endDate": "2020-10-16", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "현대건설", "contacts": ""}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "현대건설", "contacts": "차승화 과장"}, "architect": {"company": "국전건축", "contacts": "한용목 소장"}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["21.20A (건립) / 오피스텔/ 1RM/ 홈오피스로 활용 가능한 실용적 공간 구성", "44.77E (건립) / 오피스텔/ 1.5RM", "20.91B/ 20.91B-1/ 41.92C/ 41.92C-1/ 34.39D (미건립) / 견본주택/커뮤니티/기타 프로젝트"], "people": [{"name": "성현정 (CJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "고행관 (JI)", "role": "인테리어도면 작업, 디자인 제안서 작업"}], "notes": ["2020-10-16 준공 최종 납품"]}, {"projNo": "2020-02-01", "name": "현대엔지니어링 힐스테이트 청량리 더 퍼스트", "startDate": "2020-01-17", "endDate": "2020-10-19", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "현대엔지니어링", "contacts": ""}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "현대엔지니어링", "contacts": "장민석 과장"}, "architect": {"company": "기안건축", "contacts": "서상혁 팀장"}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["38OE (건립) / 오피스텔/ 2RM", "53OC (건립) / 오피스텔/ 3 Bay/ 2RM", "84OC (건립) / 오피스텔/ 4 Bay/ 3RM", "38OF/ 37OG/ 59OA/ 56OB/ 53OD/ 84OA/ 84OB/ 84OD/ 84OE/ 84OF/ 71OG (미건립)"], "people": [{"name": "성현정 (CJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "이정은 (DR)", "role": "인테리어도면 작업, 디자인 제안서 작업"}], "notes": ["2020-10-19 준공 최종 납품"]}, {"projNo": "2020-02-02", "name": "양산 더 샵 엔 데시앙", "startDate": "2020-02-20", "endDate": "2020-10-28", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "", "contacts": ""}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "태영건설/ 포스코건설", "contacts": ""}, "architect": {"company": "", "contacts": ""}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["74A (건립) / 4 Bay/ 3RM", "84A (건립) / 4 Bay/ 3RM", "84B (건립) / 4.5 Bay/ 4RM (알파룸 포함)"], "people": [{"name": "성현정 (CJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "고행관 (JI)", "role": "인테리어도면 작업, 디자인 제안서 작업"}], "notes": ["2020-10-28 준공 최종 납품"]}, {"projNo": "2020-01-03", "name": "건영 세종 라포르테", "startDate": "2020-04-08", "endDate": "2021-02-02", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "건영", "contacts": "김민홍 대표"}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "건영", "contacts": ""}, "architect": {"company": "유선건축", "contacts": "조영권 이사 / 원명희 차장"}, "salesAgency": {"company": "미드미디앤디", "contacts": "이창용 부사장"}}, "progressItems": ["84A (건립) / 단독형/ B1F, 1, 2, 루프층/ 3RM", "84T1 (미건립) / 테라스형/ B1F, 1F/ 3RM", "84T2 (건립) / 테라스형/ B1F, 1, 2F/ 3RM", "84T3 (미건립) / 테라스형/ 3F, 루프층/ 3RM", "견본주택 / 모델하우스 설계 및 시공 감리", "커뮤니티"], "people": [{"name": "김래정 (GJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "고행관 (JI)", "role": "인테리어도면 작업, 디자인 제안서, 현장 상주 및 검수"}], "notes": ["2021-02-02 준공 최종 납품", "발주처 협력업체 미정으로 프로젝트 진행 시 다소 어려움"]}, {"projNo": "2020-01-04", "name": "현대엔지니어링 힐스테이트 도봉역 웰가", "startDate": "2020-08-05", "endDate": "2021-05-24", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "삼우에이블", "contacts": "이준석 차장"}, "developer": {"company": "삼우에이블", "contacts": ""}, "constructor": {"company": "현대엔지니어링", "contacts": "강여울 차장"}, "architect": {"company": "리얼디자인랩건축", "contacts": "윤재영 이사 / 원동솔 실장"}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["59A2 (건립)", "84A1 (건립)", "59A1/ 59B1/ 74A1~2/ 74B1~2/ 74C1/ 74P1/ 75A3/ 75B3/ 76C3/\n  84A2/ 84B1~3/ 84C1/ 84D1/ 84P1/ 84PTA/ 84PTB/ 84PTC (미건립)", "견본주택 / 모델하우스 설계 및 시공 감리", "커뮤니티"], "people": [{"name": "김래정 (GJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "이정은 (DR)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서 작업"}], "notes": ["2021-05-24 준공 최종 납품"]}, {"projNo": "2021-01-02", "name": "이테크건설 구리역 더리브 드웰", "startDate": "2020-09-10", "endDate": "2021-09-28", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "지안이앤디, 광동 D&C", "contacts": "고정수 대표\n(지안이앤디) / 홍순철 이사\n(광동 D&C)"}, "developer": {"company": "지안이앤디, 광동 D&C", "contacts": ""}, "constructor": {"company": "이테크건설", "contacts": "조혜은 과장 / 서지화 대리"}, "architect": {"company": "에이디알건축사사무소", "contacts": "이완철 대표"}, "salesAgency": {"company": "와이낫플래닝", "contacts": "손상기 본부장"}}, "progressItems": ["40A (건립) / 생활형숙박시설/ 2RM", "57A (건립) / 생활형숙박시설/ 판상형/ 3RM", "84B (건립) / 오피스텔/ 타워형/ 3RM", "43A/ 57B/ 63A/ 84A (미건립)", "견본주택 / 모델하우스 설계 및 시공 감리", "커뮤니티"], "people": [{"name": "김래정 (GJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "오지은 (JI)", "role": "인테리어도면 작업, 디자인 제안서 작업, 현장 검수"}, {"name": "윤두현 (SW)", "role": "견본주택 및 공용부 인테리어도면 작업, 현장 검수"}], "notes": ["2021-09-28 준공 최종 납품"]}, {"projNo": "2020-02-06", "name": "극동건설 대구 신기역 극동스타클래스", "startDate": "2020-12-15", "endDate": "2021-00-00", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "극동건설", "contacts": "송제현 팀장 / 김준수 차장"}, "developer": {"company": "상동HDS", "contacts": "우동균 대표 / 김현수 상무"}, "constructor": {"company": "극동건설", "contacts": ""}, "architect": {"company": "그룹환경", "contacts": "김현빈 차장"}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["84A (건립) / 4 Bay 판상형 구조/ 4RM (알파룸 포함)", "84B (건립) / 타워형 구조/ 3RM", "64/ 84OT (미건립)"], "people": [{"name": "조은주 (CJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "송혜린 (SW)", "role": "인테리어도면 작업, 디자인 제안서 작업, 현장 검수"}], "notes": ["2021-00-00 준공 최종 납품"]}, {"projNo": "2021-02-01", "name": "현대건설 힐스테이트 장안 센트럴", "startDate": "2021-01-11", "endDate": "2021-11-22", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "", "contacts": ""}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "현대건설", "contacts": "홍나나 책임"}, "architect": {"company": "국전건축", "contacts": ""}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["38A (건립) / 오피스텔/ 복층형 구조/ 2RM/ 홈오피스로 활용 가능한 실용적 공간 구성", "59D (건립) / 오피스텔/ 복층형 구조/ 3 Bay/ 2RM", "78A (건립) / 오피스텔/ 4 Bay/ 3RM", "38C/ 38B/ 57A/ 57B/ 59A/ 59B/ 59C/ 59E/ 59F/ 78B (미건립)"], "people": [{"name": "김내형 (SJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "여은선 (JI)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서 작업"}], "notes": ["2021-11-22 준공 최종 납품"]}, {"projNo": "2021-02-03", "name": "현대산업개발 대전 도안 센트럴 아이파크", "startDate": "2021-07-15", "endDate": "2022-03-18", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "현대산업개발", "contacts": "김소영 매니저"}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "현대산업개발", "contacts": ""}, "architect": {"company": "동일건축", "contacts": "이관용 부장 / 양초롱 과장"}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["84A (건립) / 오피스텔/ 4 Bay 판상형 구조/ 3RM", "84B (건립) / 오피스텔/ 4 Bay 판상형 구조/ 3RM", "84C, D, E, G (미건립)", "견본주택 / 모델하우스 설계 및 시공 감리"], "people": [{"name": "김래정 (GJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "윤두현 (SW)", "role": "인테리어도면 작업, 디자인 제안서 작업, 현장 검수"}], "notes": ["2022-03-18 준공 최종 납품"]}, {"projNo": "2022-00-02", "name": "현대건설 힐스테이트 장안 라보니타", "startDate": "2021-08-03", "endDate": "2022-07-29", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "국전건축", "contacts": "정희근 부장 / 안영찬 팀장"}, "developer": {"company": "주식회사더보니타", "contacts": ""}, "constructor": {"company": "현대건설", "contacts": "홍나나 책임매니저"}, "architect": {"company": "국전건축", "contacts": ""}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["74A (건립) / 오피스텔/ 4 Bay 복층형 구조/ 3RM", "74B (미건립) / 오피스텔/ 4 Bay 단층형 구조/ 3RM", "견본주택 / 모델하우스 설계 및 시공 감리"], "people": [{"name": "김래정 (GJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "오지은 (JI)", "role": "인테리어도면 작업, 디자인 제안서 작업, 현장 검수"}], "notes": ["2022-07-29 준공 최종 납품", "건설사 담당자와 커뮤니케이션 다소 어려움"]}, {"projNo": "2021-02-03", "name": "극동건설 천안 극동스타클래스 더 퍼스트", "startDate": "2021-08-20", "endDate": "2022-04-08", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "극동건설", "contacts": "송제현 팀장 / 김준수 차장"}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "극동건설", "contacts": ""}, "architect": {"company": "희림건축", "contacts": "전인한 수석"}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["59A (건립) / 3 Bay 판상형 구조/ 3RM", "74A (건립) / 4 Bay 판상형 구조/ 4RM (알파룸 포함)", "74B (건립) / 타워형 구조/ 3RM", "59B, 84A, 84B (미건립)"], "people": [{"name": "김래정 (GJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "오지은 (JI)", "role": "인테리어도면 작업, 디자인 제안서 작업, 현장 검수"}], "notes": ["2022-04-08 준공 최종 납품"]}, {"projNo": "2022-00-03", "name": "극동건설 진주 백년문화공원 극동스타클래스", "startDate": "2021-09-27", "endDate": "2023-03-10", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "극동건설", "contacts": "송제현 팀장 / 김준수 차장"}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "극동건설", "contacts": ""}, "architect": {"company": "부민건축", "contacts": "서동한 부장"}, "salesAgency": {"company": "위드알앤씨", "contacts": "한정식 부장"}}, "progressItems": ["84B (건립) / 4 Bay 판상형 구조/ 3RM", "119 (건립) / 타워형 구조/ 4RM (알파룸 포함)", "84A, 84C (미건립)"], "people": [{"name": "한정식 (GJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "박시연 (DL)", "role": "인테리어도면 작업, 디자인 제안서 작업, 현장 검수"}], "notes": ["2022-01-00 준공 최종 납품"]}, {"projNo": "2022-00-06", "name": "현대산업개발 경산 2차 아이파크", "startDate": "2022-03-15", "endDate": "2022-12-23", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "현대산업개발", "contacts": "김소영 매니저"}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "현대산업개발", "contacts": ""}, "architect": {"company": "이루건축", "contacts": ""}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["84A (건립) / Cozy 스타일 적용/ 4 Bay 판상형 구조/ 4RM (알파룸 포함)", "112A (건립) / Noble 스타일 적용/ 5 Bay 판상형 구조/ 5RM (알파룸 포함)", "84B, 84C, 112B, 125, 134A, 134B (미건립)", "견본주택 / 모델하우스 설계 및 시공 감리"], "people": [{"name": "김래정 (GJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "윤두현 (SW)", "role": "인테리어도면 작업, 디자인 제안서 작업, 현장 검수"}], "notes": ["2022-12-23 준공 최종 납품", "스타일 선택제 옵션 적용 (Cozy/ Noble/ Urban)"]}, {"projNo": "2022-01-02", "name": "현대엔지니어링 속초 금호동 힐스테이트", "startDate": "2022-06-02", "endDate": "2023-06-12", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "화승디앤씨", "contacts": ""}, "developer": {"company": "화승디앤씨", "contacts": "김민석 대표"}, "constructor": {"company": "현대엔지니어링", "contacts": "강여울 차장 / 조단규 매니저"}, "architect": {"company": "ANU디자인그룹 건축사사무소", "contacts": ""}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["84A (건립) / 어두운 VER.적용/ 4 Bay 판상형 구조/ 3RM", "84B (건립) / 밝은 VER.적용/ 타워형 구조/ 3RM", "84C, 84D, 104A (미건립)", "견본주택 / 모델하우스 설계 및 시공 감리"], "people": [{"name": "김래정 (GJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "윤두현 (SW)", "role": "인테리어도면 작업, 디자인 제안서 작업, 현장 검수"}], "notes": ["2023-06-12 준공 최종 납품", "스타일 선택제 옵션 적용"]}, {"projNo": "2023-11-1", "name": "서서울생활과학고 학교관리실 환경개선공사", "startDate": "2023-02-06", "endDate": "2023-02-25", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "서서울생활과학고등학교", "contacts": ""}, "developer": {"company": "서서울생활과학고등학교", "contacts": "남경태 / 이상동부장"}, "constructor": {"company": "", "contacts": ""}, "architect": {"company": "강희선 건축사", "contacts": ""}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["서서울 생활과학고등학교 환경 개선공사", "교무실/이사장실/행정실 마감 공사"], "people": [{"name": "김래정 (GJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "박시연 (DL)", "role": "인테리어도면 작업, 디자인 제안서 작업, 현장 검수"}], "notes": ["2023-02-25 준공 최종 납품"]}, {"projNo": "2023-01-02", "name": "현대산업개발 보문 센트럴", "startDate": "2023-03-20", "endDate": "2024-03-19", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "현대산업개발", "contacts": ""}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "현대산업개발", "contacts": "김소영 매니저"}, "architect": {"company": "(미정)", "contacts": ""}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["76 (건립) / 4 Bay 판상형 구조/ 3RM", "81, 84 (미건립)", "견본주택 / 모델하우스 설계 및 시공 감리"], "people": [{"name": "한정식 (GJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "박시연 (DL)", "role": "인테리어도면 작업, 디자인 제안서 작업, 현장 검수"}], "notes": ["2023-03-19 준공 최종 납품"]}, {"projNo": "2023-00-03", "name": "대우건설 광주 운남 재개발정비사업 대안설계", "startDate": "2023-05-03", "endDate": "2024-08-24", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "하우드건축설계사무소", "contacts": "김수현과장"}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "대우건설", "contacts": "차현경과장"}, "architect": {"company": "", "contacts": ""}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["광주운남 재개발 정비사업 단위세대 대안설계", "타입- 39/44/59/84A/84B/84C/104/114A/114B/134/108/160", "단위세대 평면 개발 및 세대 컨셉및 제안서 작업"], "people": [{"name": "한정식 (GJ)", "role": "인테리어도면 작업, 칼라링, 컨셉및 제안서 작업"}], "notes": ["2023-08-24 제안서 최종 납품"]}, {"projNo": "2023-11-04", "name": "서초 르니드 홍보관 인테리어 공사", "startDate": "2023-09-07", "endDate": "2024-03-29", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "에스앤에이치씨", "contacts": "한상만대표"}, "developer": {"company": "에스앤에이치씨", "contacts": "한상만대표"}, "constructor": {"company": "롯데건설", "contacts": ""}, "architect": {"company": "", "contacts": ""}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["건립타입- 50A/ 64B", "홍보관 설계 및 시공/ 감리"], "people": [{"name": "한정식 (GJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "조성채 (SW)", "role": "투시도 작업, 칼라링, 제안서 작업"}], "notes": ["2024-03-29 준공 최종 납품"]}, {"projNo": "2023-00-05", "name": "A1 현장 단위세대 마감 트랜드업", "startDate": "2023-10-18", "endDate": "2024-06-28", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "현대산업개발", "contacts": ""}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "현대산업개발", "contacts": "김소영매니저"}, "architect": {"company": "", "contacts": ""}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["단위세대 기 분양 타입 마감재 트랜드 업", "트랜드 및 타사사례조사, 제안서 작업", "타입- 79/84/148M2"], "people": [{"name": "한정식 (GJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "조성채 (SW)", "role": "투시도 작업, 칼라링, 제안서 작업"}], "notes": ["2024-00-00  준공 최종 납품예정"]}, {"projNo": "2023-01-06", "name": "현대산업개발 익산부송 아이파크 단위세대및 MH 설계", "startDate": "2023-12-27", "endDate": "2024-07-29", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "현대산업개발", "contacts": ""}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "현대산업개발", "contacts": "김소영 매니저"}, "architect": {"company": "(미정)", "contacts": ""}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["건립세대 / 84A / 104M2", "미건립세대 / 84B / 123M2", "견본주택 / 모델하우스 설계 및 시공 감리"], "people": [{"name": "한정식 (GJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "조성채 (SW)", "role": "인테리어도면 작업, 디자인 제안서 작업, 현장 검수"}], "notes": ["2024-07-29 준공 최종 납품"]}, {"projNo": "2024-00-01", "name": "롯데건설 전농8 재정비 촉진구역 주택재개발 정비사업 대안설계", "startDate": "2024-01-10", "endDate": "2024-06-26", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "고우건축", "contacts": ""}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "롯데건설", "contacts": "석희탁수석"}, "architect": {"company": "고우건축", "contacts": "박종혁부장"}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["전농8구역 주택재개발 정비사업 단위세대 대안설계", "타입- 39A/45A/49A/59A/59B/84A/84B/84C/84C1/84C2/84C3/84D/84E/107A/104P/110P/137P", "단위세대 평면 개발 및 세대 컨셉 및 제안서 작업"], "people": [{"name": "한정식 (GJ)", "role": "인테리어도면 작업, 칼라링, 컨셉및 제안서 작업"}, {"name": "조성채 (SW)", "role": "평면 CG , 칼라링, 제안서 작업"}], "notes": ["2024-06-26 제안서 최종 납품"]}, {"projNo": "2024-11-02", "name": "밥장인 부산 중앙역점", "startDate": "2024-01-30", "endDate": "2024-04-19", "pm": "윤상원 (CEO)", "partners": {"orderer": {"company": "밥장인(본사)", "contacts": "배대웅대표"}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "", "contacts": ""}, "architect": {"company": "", "contacts": ""}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["위치 / 부산 중구 해관로 72-1", "면적 / 122M2(37평)", "범위 / 한식당 내외부 설계 및 공사"], "people": [{"name": "윤상원(CEO)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "조성채 (SW)", "role": "인테리어도면 작업, 디자인 제안서 작업, 현장 검수"}, {"name": "김경원 (SJ)", "role": "현장 공사 및 견적 진행"}], "notes": ["2024-04-19 준공"]}, {"projNo": "2024-02-03", "name": "홍천 대상 웰라움 단위세대 설계", "startDate": "2024-03-01", "endDate": "2024-07-30", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "야킨과 보아스", "contacts": "유병문대표"}, "developer": {"company": "대신자산신탁", "contacts": "유광철본부장"}, "constructor": {"company": "대상건설", "contacts": "이택현과장"}, "architect": {"company": "진양엔지니어링", "contacts": "유은주본부장"}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["건립세대 / 84B / 108M2", "미건립세대 / 84A"], "people": [{"name": "한정식 (GJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "조성채(SW)", "role": "인테리어도면 작업, 디자인 제안서 작업, 현장 검수"}], "notes": ["2023-07-30 준공 최종 납품"]}, {"projNo": "2024-02-04", "name": "몽천토성역세권 장기전세주택 단위세대 설계", "startDate": "2024-03-01", "endDate": "2024-07-30", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "", "contacts": ""}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "SK건설", "contacts": "홍연선프로"}, "architect": {"company": "동일건축", "contacts": "손병기이사"}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["건립세대", "미건립세대"], "people": [{"name": "한정식 (GJ)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "조성채(SW)", "role": "인테리어도면 작업, 디자인 제안서 작업, 현장 검수"}, {"name": "", "role": "YY"}], "notes": ["2023-07-30 준공 최종 납품"]}, {"projNo": "2024-00-05", "name": "롯데건설 용산 산호아파트 재건축정비사업 대안설계", "startDate": "2024-06-14", "endDate": "2024-09-30", "pm": "김의석 (SJ)", "partners": {"orderer": {"company": "고우건축", "contacts": ""}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "롯데건설", "contacts": "석희탁수석"}, "architect": {"company": "고우건축", "contacts": "박종혁부장"}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["용산 산호아파트 재건축정비사업 단위세대 대안설계", "타입- 59A/59B/59C/84A/84B/84C/99/112", "단위세대 평면 개발 및 세대 컨셉 및 제안서 작업"], "people": [{"name": "한정식 (GJ)", "role": "인테리어도면 작업, 칼라링, 컨셉및 제안서 작업"}, {"name": "조성채 (SW)", "role": "평면 CG , 칼라링, 제안서 작업"}], "notes": ["2024-09-30 제안서 최종 납품"]}, {"projNo": "2024-11-06", "name": "밥장인 홍대점", "startDate": "2024-06-20", "endDate": "2024-07-30", "pm": "윤상원 (CEO)", "partners": {"orderer": {"company": "밥장인(본사)", "contacts": "배대웅대표"}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "", "contacts": ""}, "architect": {"company": "", "contacts": ""}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["위치 / 서울 마포구 양화로 18안길 16 1층", "면적 / 113 M2(35평)", "범위 / 한식당 내/외부 설계 및 공사"], "people": [{"name": "윤상원(CEO)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "조성채 (SW)", "role": "인테리어도면 작업, 디자인 제안서 작업, 현장 검수"}, {"name": "김경원 (SJ)", "role": "현장 공사 및 견적 진행"}], "notes": ["2024-07-30 준공"]}, {"projNo": "2024-11-07", "name": "밥장인 부산경성부경대점", "startDate": "2024-06-21", "endDate": "2024-07-18", "pm": "윤상원 (CEO)", "partners": {"orderer": {"company": "밥장인(본사)", "contacts": "배대웅대표"}, "developer": {"company": "", "contacts": ""}, "constructor": {"company": "", "contacts": ""}, "architect": {"company": "", "contacts": ""}, "salesAgency": {"company": "", "contacts": ""}}, "progressItems": ["위치 / 부산 남구 수영로 298번지 40 1층", "면적 / 95 M2(28평)", "범위 / 한식당 내외부 설계 및 공사"], "people": [{"name": "윤상원(CEO)", "role": "인테리어도면 작업, 업체도면 검토 및 디자인 제안서, 현장 검수 및 실무 업무"}, {"name": "조성채 (SW)", "role": "인테리어도면 작업, 디자인 제안서 작업, 현장 검수"}, {"name": "김경원 (SJ)", "role": "현장 공사 및 견적 진행"}], "notes": ["2024-07-18 준공"]}];
+</script>
+<script>
+  document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await logOut();
+    window.location.href = 'login.html';
+  });
+</script>
+<script>
+  const settlementsRef = db.collection('projectSettlements');
+  let allSettlements = [];
+  let openIds = new Set();
+  let editingId = null;
+
+  let activeOrderer = '전체';
+  let searchText = '';
+  let startMonth = '';
+  let endMonth = '';
+
+  const PARTNER_FIELDS = [
+    { key: 'orderer', label: '발주처' },
+    { key: 'developer', label: '시행사' },
+    { key: 'constructor', label: '건설사' },
+    { key: 'architect', label: '건축사' },
+    { key: 'salesAgency', label: '분양대행사' }
+  ];
+
+  function esc(s){ return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+
+  async function seedIfEmpty(){
+    const snap = await settlementsRef.limit(1).get();
+    if (!snap.empty) return;
+    const batch = db.batch();
+    EMBEDDED_SETTLEMENTS.forEach((p, i) => {
+      const docRef = settlementsRef.doc();
+      batch.set(docRef, Object.assign({}, p, { order: i, createdAt: firebase.firestore.FieldValue.serverTimestamp() }));
+    });
+    await batch.commit();
+  }
+
+  async function loadSettlements(){
+    await seedIfEmpty();
+    const snap = await settlementsRef.orderBy('order', 'asc').get();
+    allSettlements = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  }
+
+  function getFilteredSettlements(){
+    let rows = allSettlements;
+    if (activeOrderer !== '전체') rows = rows.filter(p => (p.partners?.orderer?.company || '(미지정)') === activeOrderer);
+    if (startMonth) rows = rows.filter(p => (p.startDate || '').slice(0, 7) >= startMonth);
+    if (endMonth) rows = rows.filter(p => (p.startDate || '').slice(0, 7) <= endMonth);
+    if (searchText) {
+      const q = searchText.toLowerCase();
+      rows = rows.filter(p => (p.name || '').toLowerCase().includes(q) || (p.projNo || '').toLowerCase().includes(q));
+    }
+    return rows;
+  }
+
+  function renderAll(){
+    const main = document.getElementById('mainArea');
+    main.innerHTML = `
+      <div class="summary-bar" id="summaryBar"></div>
+      <div class="panel" style="padding:16px 18px;">
+        <div class="toolbar">
+          <select id="ordererFilter"><option value="전체">전체 발주처</option></select>
+          <span style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted);">
+            <input type="month" id="startMonthFilter" style="padding:7px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff;">
+            ~
+            <input type="month" id="endMonthFilter" style="padding:7px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff;">
+            <button type="button" class="row-btn" id="clearMonthRangeBtn" style="margin-left:2px;">초기화</button>
+          </span>
+          <input type="text" id="searchInput" placeholder="프로젝트명 · PROJ.NO 검색">
+          <button class="add-btn" id="newSettlementBtn">+ 새 결산서</button>
+        </div>
+      </div>
+      <div id="settlementList"></div>
+      <div class="empty" id="emptyMsg" style="display:none;">조건에 맞는 결산서가 없습니다.</div>
+    `;
+
+    const orderers = [...new Set(allSettlements.map(p => p.partners?.orderer?.company || '(미지정)').filter(Boolean))].sort();
+    document.getElementById('ordererFilter').innerHTML =
+      '<option value="전체">전체 발주처</option>' + orderers.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+    document.getElementById('ordererFilter').value = activeOrderer;
+    document.getElementById('startMonthFilter').value = startMonth;
+    document.getElementById('endMonthFilter').value = endMonth;
+    document.getElementById('searchInput').value = searchText;
+
+    document.getElementById('ordererFilter').addEventListener('change', (e) => { activeOrderer = e.target.value; renderList(); });
+    document.getElementById('startMonthFilter').addEventListener('change', (e) => { startMonth = e.target.value; renderList(); });
+    document.getElementById('endMonthFilter').addEventListener('change', (e) => { endMonth = e.target.value; renderList(); });
+    document.getElementById('clearMonthRangeBtn').addEventListener('click', () => {
+      startMonth = ''; endMonth = '';
+      document.getElementById('startMonthFilter').value = '';
+      document.getElementById('endMonthFilter').value = '';
+      renderList();
+    });
+    document.getElementById('searchInput').addEventListener('input', (e) => { searchText = e.target.value.trim(); renderList(); });
+    document.getElementById('newSettlementBtn').addEventListener('click', createBlankSettlement);
+
+    renderList();
+  }
+
+  function renderSummary(){
+    const bar = document.getElementById('summaryBar');
+    const rows = getFilteredSettlements();
+    const isFiltered = rows.length !== allSettlements.length;
+    const ordererCount = new Set(rows.map(p => p.partners?.orderer?.company).filter(Boolean)).size;
+    const inProgress = rows.filter(p => (p.notes || []).some(n => n.includes('예정'))).length;
+
+    bar.innerHTML = `
+      <div class="summary-chip">${isFiltered ? '필터된 ' : ''}결산서 건수<b>${rows.length}건${isFiltered ? ` <span style="font-size:11px; color:var(--muted);">/ 전체 ${allSettlements.length}건</span>` : ''}</b></div>
+      <div class="summary-chip">참여 발주처 수<b>${ordererCount}곳</b></div>
+      <div class="summary-chip">진행중(추정)<b>${inProgress}건</b></div>
+    `;
+  }
+
+  function renderList(){
+    const listEl = document.getElementById('settlementList');
+    const emptyMsg = document.getElementById('emptyMsg');
+
+    renderSummary();
+    const rows = getFilteredSettlements();
+
+    if (rows.length === 0) {
+      listEl.innerHTML = '';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+
+    listEl.innerHTML = rows.map(p => renderCard(p)).join('');
+
+    rows.forEach(p => {
+      const head = document.querySelector(`[data-head="${p.id}"]`);
+      if (head) head.addEventListener('click', () => toggleOpen(p.id));
+    });
+    rows.forEach(p => {
+      if (openIds.has(p.id)) bindCardEvents(p);
+    });
+  }
+
+  function toggleOpen(id){
+    if (openIds.has(id)) openIds.delete(id); else openIds.add(id);
+    editingId = null;
+    renderList();
+  }
+
+  function renderCard(p){
+    const isOpen = openIds.has(p.id);
+    return `
+      <div class="proj-card">
+        <div class="proj-head" data-head="${p.id}">
+          <div>
+            <div class="proj-name">${esc(p.name)}</div>
+            <div class="proj-sub">${esc(p.projNo)} · PM ${esc(p.pm || '-')}</div>
+          </div>
+          <div class="proj-meta">
+            <div class="m-item">기간<b>${p.startDate || '-'} ~ ${p.endDate || '-'}</b></div>
+            <div class="m-item">발주처<b>${esc(p.partners?.orderer?.company || '-')}</b></div>
+            <span class="tag">${esc(p.partners?.constructor?.company || p.partners?.orderer?.company || '-')}</span>
+          </div>
+        </div>
+        <div class="proj-body ${isOpen ? 'open' : ''}" data-body="${p.id}">
+          ${isOpen ? renderBody(p) : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderBody(p){
+    if (editingId === p.id) return renderEditForm(p);
+
+    const partnerHtml = `
+      <div class="subsection-title">대외업체</div>
+      <div class="partner-grid">
+        ${PARTNER_FIELDS.map(f => `
+          <div class="partner-box">
+            <div class="p-label">${f.label}</div>
+            <div class="p-company">${esc(p.partners?.[f.key]?.company) || '-'}</div>
+            ${p.partners?.[f.key]?.contacts ? `<div class="p-contacts">${esc(p.partners[f.key].contacts)}</div>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    `;
+
+    const progressHtml = `
+      <div class="subsection-title">프로젝트 진행 내용</div>
+      ${(p.progressItems || []).length ? `<ul class="plain-list">${p.progressItems.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : '<div style="font-size:12.5px; color:var(--muted);">등록된 내용이 없습니다.</div>'}
+    `;
+
+    const peopleHtml = `
+      <div class="subsection-title">투입인원</div>
+      ${(p.people || []).length ? `
+        <table class="mini">
+          <thead><tr><th style="width:160px;">이름</th><th>업무 내용</th></tr></thead>
+          <tbody>${p.people.map(person => `<tr><td>${esc(person.name)}</td><td>${esc(person.role)}</td></tr>`).join('')}</tbody>
+        </table>
+      ` : '<div style="font-size:12.5px; color:var(--muted);">등록된 인원이 없습니다.</div>'}
+    `;
+
+    const notesHtml = `
+      <div class="subsection-title">특이사항</div>
+      ${(p.notes || []).length ? `<ul class="plain-list">${p.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : '<div style="font-size:12.5px; color:var(--muted);">등록된 특이사항이 없습니다.</div>'}
+    `;
+
+    return `
+      ${partnerHtml}
+      ${progressHtml}
+      ${peopleHtml}
+      ${notesHtml}
+      <div style="margin-top:18px;">
+        <button class="row-btn" data-edit="${p.id}">수정</button>
+        <button class="row-btn danger" data-del="${p.id}">삭제</button>
+      </div>
+      <div class="status-line" id="status-${p.id}"></div>
+    `;
+  }
+
+  function bindCardEvents(p){
+    const editBtn = document.querySelector(`[data-edit="${p.id}"]`);
+    if (editBtn) editBtn.addEventListener('click', () => { editingId = p.id; renderList(); });
+
+    const delBtn = document.querySelector(`[data-del="${p.id}"]`);
+    if (delBtn) delBtn.addEventListener('click', () => deleteSettlement(p.id));
+
+    if (editingId === p.id) bindEditFormEvents(p.id);
+  }
+
+  async function deleteSettlement(id){
+    const p = allSettlements.find(x => x.id === id);
+    if (!confirm(`"${p.name}" 결산서를 삭제할까요?`)) return;
+    await settlementsRef.doc(id).delete();
+    openIds.delete(id);
+    await loadSettlements();
+  }
+
+  // ---------- 목록형(진행내용/특이사항) + 인원(이름+역할) 편집기 ----------
+  function renderSimpleListEditor(containerId, items){
+    return `
+      <div class="list-editor" id="${containerId}">
+        ${items.map((v, i) => `
+          <div class="li-row" data-idx="${i}">
+            <input type="text" class="li-text" value="${esc(v)}">
+            <button type="button" class="li-remove" data-remove="${i}">삭제</button>
+          </div>
+        `).join('')}
+        <button type="button" class="li-add" data-add="1">+ 항목 추가</button>
+      </div>
+    `;
+  }
+
+  function renderPeopleListEditor(containerId, people){
+    return `
+      <div class="list-editor" id="${containerId}">
+        ${people.map((person, i) => `
+          <div class="li-row" data-idx="${i}">
+            <input type="text" class="li-name" placeholder="이름" value="${esc(person.name)}">
+            <input type="text" class="li-role" placeholder="업무 내용" value="${esc(person.role)}">
+            <button type="button" class="li-remove" data-remove="${i}">삭제</button>
+          </div>
+        `).join('')}
+        <button type="button" class="li-add" data-add="1">+ 인원 추가</button>
+      </div>
+    `;
+  }
+
+  function wireSimpleListEditor(containerId){
+    const container = document.getElementById(containerId);
+    container.querySelector('.li-add').addEventListener('click', () => {
+      const row = document.createElement('div');
+      row.className = 'li-row';
+      row.innerHTML = `<input type="text" class="li-text" value=""><button type="button" class="li-remove">삭제</button>`;
+      row.querySelector('.li-remove').addEventListener('click', () => row.remove());
+      container.insertBefore(row, container.querySelector('.li-add'));
+    });
+    container.querySelectorAll('.li-remove').forEach(btn => {
+      btn.addEventListener('click', () => btn.closest('.li-row').remove());
+    });
+  }
+
+  function wirePeopleListEditor(containerId){
+    const container = document.getElementById(containerId);
+    container.querySelector('.li-add').addEventListener('click', () => {
+      const row = document.createElement('div');
+      row.className = 'li-row';
+      row.innerHTML = `<input type="text" class="li-name" placeholder="이름" value=""><input type="text" class="li-role" placeholder="업무 내용" value=""><button type="button" class="li-remove">삭제</button>`;
+      row.querySelector('.li-remove').addEventListener('click', () => row.remove());
+      container.insertBefore(row, container.querySelector('.li-add'));
+    });
+    container.querySelectorAll('.li-remove').forEach(btn => {
+      btn.addEventListener('click', () => btn.closest('.li-row').remove());
+    });
+  }
+
+  function readSimpleList(containerId){
+    const container = document.getElementById(containerId);
+    return Array.from(container.querySelectorAll('.li-row .li-text'))
+      .map(el => el.value.trim())
+      .filter(Boolean);
+  }
+
+  function readPeopleList(containerId){
+    const container = document.getElementById(containerId);
+    return Array.from(container.querySelectorAll('.li-row')).map(row => ({
+      name: row.querySelector('.li-name').value.trim(),
+      role: row.querySelector('.li-role').value.trim()
+    })).filter(p => p.name || p.role);
+  }
+
+  function renderEditForm(p){
+    return `
+      <div class="form-row">
+        <div class="field"><label>PROJ. NO.</label><input type="text" id="ef-projNo" value="${esc(p.projNo)}"></div>
+        <div class="field wide"><label>프로젝트명</label><input type="text" id="ef-name" value="${esc(p.name)}"></div>
+        <div class="field"><label>PM</label><input type="text" id="ef-pm" value="${esc(p.pm)}"></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>시작일</label><input type="date" id="ef-startDate" value="${p.startDate || ''}"></div>
+        <div class="field"><label>종료일</label><input type="date" id="ef-endDate" value="${p.endDate || ''}"></div>
+      </div>
+
+      <div class="subsection-title">대외업체</div>
+      <div class="form-row" style="align-items:flex-start;">
+        ${PARTNER_FIELDS.map(f => `
+          <div class="field">
+            <label>${f.label} - 회사명</label>
+            <input type="text" id="ef-${f.key}-company" value="${esc(p.partners?.[f.key]?.company)}" style="margin-bottom:6px;">
+            <label>${f.label} - 담당자</label>
+            <input type="text" id="ef-${f.key}-contacts" value="${esc(p.partners?.[f.key]?.contacts)}">
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="subsection-title">프로젝트 진행 내용</div>
+      ${renderSimpleListEditor(`ef-progress-${p.id}`, p.progressItems || [])}
+
+      <div class="subsection-title">투입인원</div>
+      ${renderPeopleListEditor(`ef-people-${p.id}`, p.people || [])}
+
+      <div class="subsection-title">특이사항</div>
+      ${renderSimpleListEditor(`ef-notes-${p.id}`, p.notes || [])}
+
+      <button class="add-btn" id="ef-save-${p.id}">저장</button>
+      <button class="row-btn" id="ef-cancel-${p.id}" style="margin-left:10px;">취소</button>
+      <div class="status-line" id="status-${p.id}"></div>
+    `;
+  }
+
+  function bindEditFormEvents(id){
+    wireSimpleListEditor(`ef-progress-${id}`);
+    wirePeopleListEditor(`ef-people-${id}`);
+    wireSimpleListEditor(`ef-notes-${id}`);
+
+    document.getElementById(`ef-save-${id}`).addEventListener('click', () => saveSettlement(id));
+    document.getElementById(`ef-cancel-${id}`).addEventListener('click', () => { editingId = null; renderList(); });
+  }
+
+  async function saveSettlement(id){
+    const statusEl = document.getElementById(`status-${id}`);
+    const partners = {};
+    PARTNER_FIELDS.forEach(f => {
+      partners[f.key] = {
+        company: document.getElementById(`ef-${f.key}-company`).value.trim(),
+        contacts: document.getElementById(`ef-${f.key}-contacts`).value.trim()
+      };
+    });
+
+    const updateData = {
+      projNo: document.getElementById('ef-projNo').value.trim(),
+      name: document.getElementById('ef-name').value.trim(),
+      pm: document.getElementById('ef-pm').value.trim(),
+      startDate: document.getElementById('ef-startDate').value || null,
+      endDate: document.getElementById('ef-endDate').value || null,
+      partners,
+      progressItems: readSimpleList(`ef-progress-${id}`),
+      people: readPeopleList(`ef-people-${id}`),
+      notes: readSimpleList(`ef-notes-${id}`)
+    };
+
+    if (!updateData.name) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '프로젝트명을 입력해주세요.';
+      return;
+    }
+
+    try {
+      await settlementsRef.doc(id).update(updateData);
+      editingId = null;
+      await loadSettlements();
+      openIds.add(id);
+      renderList();
+    } catch (err) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '저장 실패: ' + err.message;
+    }
+  }
+
+  async function createBlankSettlement(){
+    const name = prompt('새 결산서의 프로젝트명을 입력하세요');
+    if (!name) return;
+    const emptyPartners = {};
+    PARTNER_FIELDS.forEach(f => { emptyPartners[f.key] = { company: '', contacts: '' }; });
+
+    const docRef = await settlementsRef.add({
+      projNo: '', name, pm: '', startDate: null, endDate: null,
+      partners: emptyPartners, progressItems: [], people: [], notes: [],
+      order: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await loadSettlements();
+    openIds.add(docRef.id);
+    editingId = docRef.id;
+    renderList();
+  }
+
+  auth.onAuthStateChanged((user) => {
+    if (user) loadSettlements();
+  });
+</script>
+</body>
+</html>
