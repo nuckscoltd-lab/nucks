@@ -124,6 +124,7 @@ if ('serviceWorker' in navigator) {
     @page{ size:A4; margin:12mm 16mm; }
   }
   .print-slip{ font-family:'Pretendard', -apple-system, sans-serif; color:#141414; }
+  .print-slip + .print-slip{ page-break-before:always; }
   .print-slip .p-header{ text-align:center; margin-bottom:14px; }
   .print-slip .p-docnum{ text-align:right; font-size:10.5px; color:#888; margin-bottom:4px; }
   .print-slip .p-company{ font-size:11.5px; color:#666; margin-bottom:6px; }
@@ -270,7 +271,14 @@ if ('serviceWorker' in navigator) {
 
   <div class="toolbar">
     <select id="listEmployeeFilter"><option value="전체">전체 사원</option></select>
-    <select id="listMonthFilter"><option value="전체">전체 기간</option></select>
+    <span style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted);">
+      <input type="month" id="startMonthFilter">
+      ~
+      <input type="month" id="endMonthFilter">
+      <button type="button" class="print-btn" id="clearMonthRangeBtn" style="margin-left:2px;">초기화</button>
+    </span>
+    <button type="button" class="submit-btn" id="bulkPrintFilteredBtn" style="margin:0; padding:8px 16px;">현재 목록 일괄 인쇄</button>
+    <button type="button" class="submit-btn" id="bulkPrintSelectedBtn" style="margin:0; padding:8px 16px; display:none;">선택 항목 일괄 인쇄</button>
   </div>
 
   <div class="summary-bar" id="paySummaryBar"></div>
@@ -391,13 +399,22 @@ if ('serviceWorker' in navigator) {
     renderAndPrint(buildPrintHtml(s), 'printArea');
   }
 
-  // 인쇄 영역에 직인 이미지가 있으면, 이미지 로딩이 끝난 뒤에 인쇄를 실행한다.
+  // 여러 건을 한 번에 인쇄 - 각 명세서 사이에 페이지 나눔을 넣어서 한 번의 인쇄 작업으로 여러 장이 출력되게 함
+  function printMultipleSlips(docIds) {
+    if (!docIds.length) return;
+    const slips = docIds.map(id => allSlips.find(x => x.id === id)).filter(Boolean);
+    if (!slips.length) return;
+    const html = slips.map(s => buildPrintHtml(s)).join('');
+    renderAndPrint(html, 'printArea');
+  }
+
+  // 인쇄 영역에 직인 이미지가 있으면, 모든 이미지 로딩이 끝난 뒤에 인쇄를 실행한다.
   // (innerHTML 세팅 직후 바로 print()를 부르면 이미지가 아직 안 그려진 채로 인쇄되는 경우가 있음)
   function renderAndPrint(html, areaId) {
     const area = document.getElementById(areaId);
     area.innerHTML = html;
 
-    const img = area.querySelector('img.p-stamp');
+    const imgs = Array.from(area.querySelectorAll('img.p-stamp'));
     let printed = false;
     const doPrint = () => {
       if (printed) return;
@@ -405,14 +422,18 @@ if ('serviceWorker' in navigator) {
       window.print();
     };
 
-    if (img) {
-      if (img.complete && img.naturalWidth > 0) {
-        doPrint();
-      } else {
-        img.addEventListener('load', doPrint);
-        img.addEventListener('error', doPrint);
-        setTimeout(doPrint, 1500); // 안전장치: 로딩이 오래 걸려도 결국은 인쇄되게
-      }
+    if (imgs.length) {
+      let remaining = imgs.length;
+      const onOneDone = () => { remaining -= 1; if (remaining <= 0) doPrint(); };
+      imgs.forEach(img => {
+        if (img.complete && img.naturalWidth > 0) {
+          onOneDone();
+        } else {
+          img.addEventListener('load', onOneDone);
+          img.addEventListener('error', onOneDone);
+        }
+      });
+      setTimeout(doPrint, 2000); // 안전장치: 로딩이 오래 걸려도 결국은 인쇄되게
     } else {
       doPrint();
     }
@@ -429,13 +450,22 @@ if ('serviceWorker' in navigator) {
   let editingSlipId = null; // 1건만 선택됐을 때, 그 문서 id (수정 모드)
   let currentUser = null;
   let currentRole = null;
+  let startMonth = '';
+  let endMonth = '';
 
   auth.onAuthStateChanged(async (user) => {
     if (!user) return;
     currentUser = user;
     currentRole = await getCurrentUserRole();
 
-    document.getElementById('listMonthFilter').addEventListener('change', renderList);
+    document.getElementById('startMonthFilter').addEventListener('change', () => { startMonth = document.getElementById('startMonthFilter').value; renderList(); });
+    document.getElementById('endMonthFilter').addEventListener('change', () => { endMonth = document.getElementById('endMonthFilter').value; renderList(); });
+    document.getElementById('clearMonthRangeBtn').addEventListener('click', () => {
+      startMonth = ''; endMonth = '';
+      document.getElementById('startMonthFilter').value = '';
+      document.getElementById('endMonthFilter').value = '';
+      renderList();
+    });
 
     if (currentRole === 'admin') {
       document.getElementById('adminOnlyPanel').style.display = 'block';
@@ -555,6 +585,7 @@ if ('serviceWorker' in navigator) {
     document.getElementById('f-position').value = '';
     prefillEmployeeInfo();
     updateSums();
+    updateBulkPrintButtons();
   });
 
   document.getElementById('submitBtn').addEventListener('click', async () => {
@@ -632,14 +663,21 @@ if ('serviceWorker' in navigator) {
       if (names.includes(current)) filterSelect.value = current;
     }
 
-    // 지급일(YYYY-MM-DD)에서 연-월(YYYY-MM)만 뽑아 월 필터 옵션 구성
-    const monthFilterSelect = document.getElementById('listMonthFilter');
-    const months = [...new Set(allSlips.map(s => (s['지급일'] || '').slice(0, 7)).filter(Boolean))].sort().reverse();
-    const currentMonth = monthFilterSelect.value;
-    monthFilterSelect.innerHTML = '<option value="전체">전체 기간</option>' + months.map(m => `<option value="${m}">${m}</option>`).join('');
-    if (months.includes(currentMonth)) monthFilterSelect.value = currentMonth;
-
     renderList();
+  }
+
+  function getFilteredSlips() {
+    const filterVal = currentRole === 'admin' ? document.getElementById('listEmployeeFilter').value : '전체';
+    let rows = filterVal === '전체' ? allSlips : allSlips.filter(s => s['사원명'] === filterVal);
+    if (startMonth) rows = rows.filter(s => (s['지급일'] || '').slice(0, 7) >= startMonth);
+    if (endMonth) rows = rows.filter(s => (s['지급일'] || '').slice(0, 7) <= endMonth);
+    return rows;
+  }
+
+  function updateBulkPrintButtons() {
+    const selBtn = document.getElementById('bulkPrintSelectedBtn');
+    selBtn.style.display = selectedSlipIds.size > 0 ? 'inline-block' : 'none';
+    selBtn.textContent = `선택 항목 일괄 인쇄 (${selectedSlipIds.size}건)`;
   }
 
   function renderList() {
@@ -648,26 +686,25 @@ if ('serviceWorker' in navigator) {
     const tbody = document.getElementById('listBody');
     const summaryBar = document.getElementById('paySummaryBar');
     const filterVal = currentRole === 'admin' ? document.getElementById('listEmployeeFilter').value : '전체';
-    const monthVal = document.getElementById('listMonthFilter').value;
 
-    let rows = filterVal === '전체' ? allSlips : allSlips.filter(s => s['사원명'] === filterVal);
-    if (monthVal !== '전체') {
-      rows = rows.filter(s => (s['지급일'] || '').slice(0, 7) === monthVal);
-    }
+    const rows = getFilteredSlips();
 
     // 필터링된 범위의 합계 자동 집계
     const payTotalSum = rows.reduce((sum, s) => sum + (s['지급액계'] || 0), 0);
     const dedTotalSum = rows.reduce((sum, s) => sum + (s['공제액계'] || 0), 0);
     const netTotalSum = rows.reduce((sum, s) => sum + (s['차인지급액'] || 0), 0);
-    const monthLabel = monthVal === '전체' ? '전체 기간' : monthVal;
+    const periodLabel = (startMonth || endMonth) ? `${startMonth || '처음'} ~ ${endMonth || '지금'}` : '전체 기간';
     const empLabel = filterVal === '전체' ? '전체 사원' : filterVal;
 
     summaryBar.innerHTML = `
-      <div class="summary-chip">${monthLabel} · ${empLabel} 지급액계<b>${payTotalSum.toLocaleString()}</b></div>
+      <div class="summary-chip">${periodLabel} · ${empLabel} 지급액계<b>${payTotalSum.toLocaleString()}</b></div>
       <div class="summary-chip">공제액계<b>${dedTotalSum.toLocaleString()}</b></div>
       <div class="summary-chip">차인지급액<b>${netTotalSum.toLocaleString()}</b></div>
       <div class="summary-chip">건수<b>${rows.length}건</b></div>
     `;
+
+    document.getElementById('bulkPrintFilteredBtn').textContent = `현재 목록 일괄 인쇄 (${rows.length}건)`;
+    updateBulkPrintButtons();
 
     if (rows.length === 0) {
       table.style.display = 'none';
@@ -712,6 +749,7 @@ if ('serviceWorker' in navigator) {
           if (cb.checked) selectedSlipIds.add(cb.dataset.id);
           else selectedSlipIds.delete(cb.dataset.id);
           updateDetailPreview();
+          updateBulkPrintButtons();
           if (cb.checked) scrollToFormTop();
         });
       });
@@ -726,6 +764,7 @@ if ('serviceWorker' in navigator) {
           if (cb.checked) selectedSlipIds.add(id);
           else selectedSlipIds.delete(id);
           updateDetailPreview();
+          updateBulkPrintButtons();
           if (cb.checked) scrollToFormTop();
         });
       });
@@ -901,6 +940,20 @@ if ('serviceWorker' in navigator) {
       btn.disabled = false;
       btn.textContent = '가져오기 실행';
     }
+  });
+
+  document.getElementById('bulkPrintFilteredBtn').addEventListener('click', () => {
+    const rows = getFilteredSlips();
+    if (rows.length === 0) { alert('인쇄할 항목이 없습니다.'); return; }
+    if (rows.length > 30 && !confirm(`${rows.length}건을 한 번에 인쇄합니다. 계속할까요?`)) return;
+    printMultipleSlips(rows.map(s => s.id));
+  });
+
+  document.getElementById('bulkPrintSelectedBtn').addEventListener('click', () => {
+    if (selectedSlipIds.size === 0) return;
+    // 화면에 보이는 순서(지급일 최신순)를 그대로 따라가도록 allSlips 기준으로 정렬
+    const ids = allSlips.filter(s => selectedSlipIds.has(s.id)).map(s => s.id);
+    printMultipleSlips(ids);
   });
 
   document.getElementById('logoutBtn').addEventListener('click', async (e) => {
