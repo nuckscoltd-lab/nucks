@@ -123,11 +123,12 @@ if ('serviceWorker' in navigator) {
     }
     @page{ size:A4; margin:12mm 16mm; }
   }
-  .print-slip{ font-family:'Pretendard', -apple-system, sans-serif; color:#141414; }
+  .print-slip{ font-family:'Pretendard', -apple-system, sans-serif; color:#141414; min-height:250mm; box-sizing:border-box; display:flex; flex-direction:column; }
   .print-slip + .print-slip{ page-break-before:always; }
+  .print-slip .p-footer{ margin-top:auto; padding-top:14px; border-top:1px solid #ccc; text-align:center; }
   .print-slip .p-header{ text-align:center; margin-bottom:14px; }
   .print-slip .p-docnum{ text-align:right; font-size:10.5px; color:#888; margin-bottom:4px; }
-  .print-slip .p-company{ font-size:11.5px; color:#666; margin-bottom:6px; }
+  .print-slip .p-company{ font-size:10.5px; color:#888; }
   .print-slip .p-title{ font-size:20px; font-weight:700; letter-spacing:.2em; }
   .print-slip .p-info-table{ width:100%; border-collapse:collapse; margin-bottom:12px; }
   .print-slip .p-info-table th, .print-slip .p-info-table td{
@@ -366,7 +367,6 @@ if ('serviceWorker' in navigator) {
       <div class="print-slip">
         <div class="p-header">
           ${s.docNumber ? `<div class="p-docnum">문서번호: ${s.docNumber}</div>` : ''}
-          <div class="p-company">${COMPANY_NAME} · ${COMPANY_ADDRESS} · ${COMPANY_TEL}</div>
           <div class="p-title">급 여 명 세 서</div>
         </div>
         <table class="p-info-table">
@@ -388,6 +388,9 @@ if ('serviceWorker' in navigator) {
         <div class="p-sign">
           <span>${COMPANY_NAME} ${CEO_TITLE}</span>
           <img class="p-stamp" src="${COMPANY_STAMP_URL}">
+        </div>
+        <div class="p-footer">
+          <div class="p-company">${COMPANY_NAME} · ${COMPANY_ADDRESS} · ${COMPANY_TEL}</div>
         </div>
       </div>
     `;
