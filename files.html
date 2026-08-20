@@ -198,7 +198,7 @@ if ('serviceWorker' in navigator) {
   }
   .print-slip{
     font-family:'Pretendard', -apple-system, sans-serif; color:#141414;
-    border:3px double #141414; padding:14mm 14mm 10mm; min-height:250mm; box-sizing:border-box;
+    padding:14mm 14mm 10mm; min-height:250mm; box-sizing:border-box;
     display:flex; flex-direction:column;
   }
   .print-slip .p-header{ text-align:center; margin-bottom:20px; padding-top:8mm; }
@@ -902,47 +902,59 @@ if ('serviceWorker' in navigator) {
           ? `${formatDateKR(f.hireDate)} ~ ${formatDateKR(f.resignDate)} (${calcDuration(f.hireDate, f.resignDate)})`
           : `${formatDateKR(f.hireDate)} ~ 현재`;
         return `
-          <table class="p-info-table">
-            <tr><th>성명</th><td>${name}</td><th>주민등록번호</th><td>${f.rrn || ''}</td></tr>
-            <tr><th>주소</th><td colspan="3">${f.address || ''}</td></tr>
-            <tr><th>소속</th><td>${doc.department || ''}</td><th>직급</th><td>${position}</td></tr>
+          <table class="p-info-table boxed">
+            <tr>
+              <th class="side-label" rowspan="5">인적<br>사항</th>
+              <th>성 명</th><td>${name}</td><th>주민등록번호</th><td>${f.rrn || ''}</td>
+            </tr>
+            <tr><th>주 소</th><td colspan="3">${f.address || ''}</td></tr>
+            <tr><th>소 속</th><td>${doc.department || ''}</td><th>직 급</th><td>${position}</td></tr>
             <tr><th>담당업무</th><td colspan="3">${f.duty || ''}</td></tr>
             <tr><th>재직기간</th><td colspan="3">${period}</td></tr>
-            <tr><th>용도</th><td colspan="3">${f.purpose || ''}</td></tr>
+            <tr><th class="side-label">용 도</th><td colspan="4">${f.purpose || ''}</td></tr>
           </table>
           <p class="cert-body">위와 같이 본 ${COMPANY_NAME_KR}에 재직(근무)하였음을 증명합니다.</p>
         `;
       }
       case '퇴직증명서':
         return `
-          <table class="p-info-table">
-            <tr><th>성명</th><td>${name}</td><th>주민등록번호</th><td>${f.rrn || ''}</td></tr>
-            <tr><th>주소</th><td colspan="3">${f.address || ''}</td></tr>
-            <tr><th>소속</th><td>${doc.department || ''}</td><th>직급</th><td>${position}</td></tr>
+          <table class="p-info-table boxed">
+            <tr>
+              <th class="side-label" rowspan="5">인적<br>사항</th>
+              <th>성 명</th><td>${name}</td><th>주민등록번호</th><td>${f.rrn || ''}</td>
+            </tr>
+            <tr><th>주 소</th><td colspan="3">${f.address || ''}</td></tr>
+            <tr><th>소 속</th><td>${doc.department || ''}</td><th>직 급</th><td>${position}</td></tr>
             <tr><th>재직기간</th><td colspan="3">${formatDateKR(f.hireDate)} ~ ${formatDateKR(f.resignDate)} (${calcDuration(f.hireDate, f.resignDate)})</td></tr>
             <tr><th>퇴직사유</th><td colspan="3">${f.resignReason || ''}</td></tr>
-            <tr><th>용도</th><td colspan="3">${f.purpose || ''}</td></tr>
+            <tr><th class="side-label">용 도</th><td colspan="4">${f.purpose || ''}</td></tr>
           </table>
           <p class="cert-body">위와 같이 본 ${COMPANY_NAME_KR}에 입사하여 근무하다가 위와 같은 사유로 퇴직하였음을 증명합니다.</p>
         `;
       case '해촉증명서':
         return `
-          <table class="p-info-table">
-            <tr><th>성명</th><td>${name}</td><th>주민등록번호</th><td>${f.rrn || ''}</td></tr>
-            <tr><th>소속</th><td colspan="3">${doc.department || ''}</td></tr>
+          <table class="p-info-table boxed">
+            <tr>
+              <th class="side-label" rowspan="4">인적<br>사항</th>
+              <th>성 명</th><td>${name}</td><th>주민등록번호</th><td>${f.rrn || ''}</td>
+            </tr>
+            <tr><th>소 속</th><td colspan="3">${doc.department || ''}</td></tr>
             <tr><th>근무일자</th><td colspan="3">${formatDateKR(f.workStart)} ~ ${formatDateKR(f.workEnd)}</td></tr>
-            <tr><th>주소</th><td colspan="3">${f.address || ''}</td></tr>
-            <tr><th>용도</th><td>${f.purpose || ''}</td><th>제출처</th><td>${f.submitTo || ''}</td></tr>
+            <tr><th>주 소</th><td colspan="3">${f.address || ''}</td></tr>
+            <tr><th class="side-label">용 도</th><td>${f.purpose || ''}</td><th>제출처</th><td colspan="2">${f.submitTo || ''}</td></tr>
           </table>
           <p class="cert-body">위 사실을 증명합니다.</p>
         `;
       case '사직서':
         return `
-          <table class="p-info-table">
-            <tr><th>소속</th><td>${doc.department || ''}</td><th>직위</th><td>${position}</td></tr>
-            <tr><th>성명</th><td>${name}</td><th>생년월일</th><td>${formatDateKR(f.birthDate)}</td></tr>
+          <table class="p-info-table boxed">
+            <tr>
+              <th class="side-label" rowspan="4">인적<br>사항</th>
+              <th>소 속</th><td>${doc.department || ''}</td><th>직 위</th><td>${position}</td>
+            </tr>
+            <tr><th>성 명</th><td>${name}</td><th>생년월일</th><td>${formatDateKR(f.birthDate)}</td></tr>
             <tr><th>입사년월일</th><td>${formatDateKR(f.hireDate)}</td><th>주민등록번호</th><td>${f.rrn || ''}</td></tr>
-            <tr><th>주소</th><td colspan="3">${f.address || ''}</td></tr>
+            <tr><th>주 소</th><td colspan="3">${f.address || ''}</td></tr>
           </table>
           <p class="cert-body">상기 본인은 ${formatDateKR(f.resignDate)}자로 ${f.resignReason || ''} 사유로 사직하고자 하오니<br>조치하여 주시기 바랍니다.</p>
         `;
