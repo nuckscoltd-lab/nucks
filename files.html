@@ -197,18 +197,25 @@ if ('serviceWorker' in navigator) {
     @page{ size:A4; margin:14mm 16mm; }
   }
   .print-slip{ font-family:'Pretendard', -apple-system, sans-serif; color:#141414; }
-  .print-slip .p-header{ text-align:center; margin-bottom:20px; }
+  .print-slip .p-header{ text-align:center; margin-bottom:20px; padding-top:18mm; }
   .print-slip .p-docnum{ text-align:right; font-size:11px; color:#888; margin-bottom:4px; }
   .print-slip .p-company{ font-size:11.5px; color:#666; margin-bottom:8px; }
-  .print-slip .p-title{ font-size:22px; font-weight:700; letter-spacing:.25em; }
-  .print-slip .p-info-table{ width:100%; border-collapse:collapse; margin-bottom:16px; page-break-inside:avoid; }
+  .print-slip .p-title{ font-size:24px; font-weight:700; letter-spacing:.3em; margin-top:6px; }
+  .print-slip .p-info-table{ width:100%; border-collapse:collapse; margin:32px 0 24px; page-break-inside:avoid; }
   .print-slip .p-info-table th, .print-slip .p-info-table td{
-    border:1px solid #333; padding:7px 12px; font-size:13px;
+    border:1px solid #333; padding:10px 12px; font-size:13px;
   }
   .print-slip .p-info-table th{ background:#f2f0eb; width:110px; text-align:center; }
-  .print-slip .cert-body{ font-size:13.5px; line-height:1.8; margin:20px 0; text-align:center; }
+  /* 박스형 레이아웃: 좌측에 "인적사항"을 여러 행에 걸쳐 병합한 라벨을 두고, 바깥 테두리를 굵게 둘러서
+     공문서/증명서 특유의 격식 있는 표 느낌을 살린다. */
+  .print-slip .p-info-table.boxed{ border:2px solid #141414; }
+  .print-slip .p-info-table.boxed th, .print-slip .p-info-table.boxed td{ border-color:#888; }
+  .print-slip .p-info-table.boxed .side-label{
+    width:64px; background:#f2f0eb; font-weight:600; letter-spacing:.15em; text-align:center; border-color:#141414;
+  }
+  .print-slip .cert-body{ font-size:13.5px; line-height:1.8; margin:32px 0; text-align:center; }
   .print-slip .cert-purpose{ font-size:12.5px; color:#444; margin-bottom:28px; text-align:center; }
-  .print-slip .cert-sign{ text-align:right; font-size:13px; line-height:1.8; }
+  .print-slip .cert-sign{ text-align:right; font-size:13px; line-height:1.8; margin-top:24px; }
   .print-slip .stamp-row{ display:flex; justify-content:flex-end; align-items:center; gap:4px; margin-top:6px; }
   .print-slip .p-stamp{ width:62px; height:62px; margin-left:-8px; opacity:.92; }
   @media (max-width: 640px) {
@@ -703,6 +710,7 @@ if ('serviceWorker' in navigator) {
 
   // ---------- 증명서 발급 (재직/경력/퇴직/해촉증명서, 사직서) ----------
   const COMPANY_NAME = 'NUCKS Co.,Ltd';
+  const COMPANY_NAME_KR = '넉스주식회사'; // 증명서 본문 문구("본 ~~에 재직 함을...")에는 이 국문 회사명을 사용
   const COMPANY_ADDRESS = '05033 서울특별시 광진구 광나루로46길 26, Nucks Building 2F';
   const COMPANY_TEL = '02-6463-1773';
   const COMPANY_STAMP_URL = 'company-stamp.png'; // 서버 루트에 이 파일명으로 업로드해주세요
@@ -867,14 +875,17 @@ if ('serviceWorker' in navigator) {
           ? `${formatDateKR(f.hireDate)} 부터 ${formatDateKR(doc.issueDate)} 까지 (${calcDuration(f.hireDate, doc.issueDate)})`
           : '';
         return `
-          <table class="p-info-table">
-            <tr><th>성명</th><td>${name}</td><th>주민등록번호</th><td>${f.rrn || ''}</td></tr>
-            <tr><th>주소</th><td colspan="3">${f.address || ''}</td></tr>
-            <tr><th>소속</th><td>${doc.department || ''}</td><th>직급</th><td>${position}</td></tr>
-            <tr><th>기간</th><td colspan="3">${period}</td></tr>
-            <tr><th>용도</th><td colspan="3">${f.purpose || ''}</td></tr>
+          <table class="p-info-table boxed">
+            <tr>
+              <th class="side-label" rowspan="4">인적<br>사항</th>
+              <th>성 명</th><td>${name}</td><th>주민등록번호</th><td>${f.rrn || ''}</td>
+            </tr>
+            <tr><th>주 소</th><td colspan="3">${f.address || ''}</td></tr>
+            <tr><th>소 속</th><td>${doc.department || ''}</td><th>직 급</th><td>${position}</td></tr>
+            <tr><th>기 간</th><td colspan="3">${period}</td></tr>
+            <tr><th class="side-label">용 도</th><td colspan="4">${f.purpose || ''}</td></tr>
           </table>
-          <p class="cert-body">위와 같이 본 ${COMPANY_NAME}에 재직 함을 증명(확인)합니다.</p>
+          <p class="cert-body">위와 같이 본 ${COMPANY_NAME_KR}에 재직 함을 증명(확인)합니다.</p>
         `;
       }
       case '경력증명서': {
@@ -890,7 +901,7 @@ if ('serviceWorker' in navigator) {
             <tr><th>재직기간</th><td colspan="3">${period}</td></tr>
             <tr><th>용도</th><td colspan="3">${f.purpose || ''}</td></tr>
           </table>
-          <p class="cert-body">위와 같이 본 ${COMPANY_NAME}에 재직(근무)하였음을 증명합니다.</p>
+          <p class="cert-body">위와 같이 본 ${COMPANY_NAME_KR}에 재직(근무)하였음을 증명합니다.</p>
         `;
       }
       case '퇴직증명서':
@@ -903,7 +914,7 @@ if ('serviceWorker' in navigator) {
             <tr><th>퇴직사유</th><td colspan="3">${f.resignReason || ''}</td></tr>
             <tr><th>용도</th><td colspan="3">${f.purpose || ''}</td></tr>
           </table>
-          <p class="cert-body">위와 같이 본 ${COMPANY_NAME}에 입사하여 근무하다가 위와 같은 사유로 퇴직하였음을 증명합니다.</p>
+          <p class="cert-body">위와 같이 본 ${COMPANY_NAME_KR}에 입사하여 근무하다가 위와 같은 사유로 퇴직하였음을 증명합니다.</p>
         `;
       case '해촉증명서':
         return `
