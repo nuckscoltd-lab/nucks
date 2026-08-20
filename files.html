@@ -196,10 +196,14 @@ if ('serviceWorker' in navigator) {
     }
     @page{ size:A4; margin:14mm 16mm; }
   }
-  .print-slip{ font-family:'Pretendard', -apple-system, sans-serif; color:#141414; }
-  .print-slip .p-header{ text-align:center; margin-bottom:20px; padding-top:18mm; }
+  .print-slip{
+    font-family:'Pretendard', -apple-system, sans-serif; color:#141414;
+    border:3px double #141414; padding:14mm 14mm 10mm; min-height:250mm; box-sizing:border-box;
+    display:flex; flex-direction:column;
+  }
+  .print-slip .p-header{ text-align:center; margin-bottom:20px; padding-top:8mm; }
   .print-slip .p-docnum{ text-align:right; font-size:11px; color:#888; margin-bottom:4px; }
-  .print-slip .p-company{ font-size:11.5px; color:#666; margin-bottom:8px; }
+  .print-slip .p-company{ font-size:10.5px; color:#888; }
   .print-slip .p-title{ font-size:24px; font-weight:700; letter-spacing:.3em; margin-top:6px; }
   .print-slip .p-info-table{ width:100%; border-collapse:collapse; margin:32px 0 24px; page-break-inside:avoid; }
   .print-slip .p-info-table th, .print-slip .p-info-table td{
@@ -218,6 +222,11 @@ if ('serviceWorker' in navigator) {
   .print-slip .cert-sign{ text-align:right; font-size:13px; line-height:1.8; margin-top:24px; }
   .print-slip .stamp-row{ display:flex; justify-content:flex-end; align-items:center; gap:4px; margin-top:6px; }
   .print-slip .p-stamp{ width:62px; height:62px; margin-left:-8px; opacity:.92; }
+  /* 하단 레터헤드(문서번호/회사 주소) - 문서 맨 아래, 본문과는 여유 있게 띄우고 얇은 상단 구분선만 */
+  .print-slip .p-footer{
+    margin-top:auto; padding-top:14px; border-top:1px solid #ccc;
+    text-align:center;
+  }
   @media (max-width: 640px) {
     header{ padding:20px !important; flex-wrap:wrap; gap:10px; }
     .header-right{ flex-wrap:wrap; gap:12px !important; }
@@ -710,7 +719,7 @@ if ('serviceWorker' in navigator) {
 
   // ---------- 증명서 발급 (재직/경력/퇴직/해촉증명서, 사직서) ----------
   const COMPANY_NAME = 'NUCKS Co.,Ltd';
-  const COMPANY_NAME_KR = '넉스주식회사'; // 증명서 본문 문구("본 ~~에 재직 함을...")에는 이 국문 회사명을 사용
+  const COMPANY_NAME_KR = '넉스 주식회사'; // 증명서 본문 문구("본 ~~에 재직 함을...")에는 이 국문 회사명을 사용
   const COMPANY_ADDRESS = '05033 서울특별시 광진구 광나루로46길 26, Nucks Building 2F';
   const COMPANY_TEL = '02-6463-1773';
   const COMPANY_STAMP_URL = 'company-stamp.png'; // 서버 루트에 이 파일명으로 업로드해주세요
@@ -966,11 +975,13 @@ if ('serviceWorker' in navigator) {
       <div class="print-slip">
         <div class="p-header">
           ${doc.docNumber ? `<div class="p-docnum">문서번호: ${doc.docNumber}</div>` : ''}
-          <div class="p-company">${COMPANY_NAME} · ${COMPANY_ADDRESS} · ${COMPANY_TEL}</div>
           <div class="p-title">${titleSpaced}</div>
         </div>
         ${certBodyText(doc)}
         ${signArea}
+        <div class="p-footer">
+          <div class="p-company">${COMPANY_NAME} · ${COMPANY_ADDRESS} · ${COMPANY_TEL}</div>
+        </div>
       </div>
     `, 'certPrintArea');
   }
