@@ -121,6 +121,13 @@ if ('serviceWorker' in navigator) {
   .edit-btn:hover{ border-color:var(--ink); }
   .delete-btn{ color:#a4453c; border-color:#f0c9c4; }
   .delete-btn:hover{ background:#fdf1f0; }
+  .order-controls{ display:flex; flex-direction:column; gap:3px; }
+  .order-btn{
+    width:26px; height:22px; padding:0; background:#fff; color:var(--ink); border:1px solid var(--line);
+    font-size:11px; cursor:pointer; border-radius:4px; line-height:1;
+  }
+  .order-btn:hover{ border-color:var(--ink); }
+  .order-btn:disabled{ opacity:.3; cursor:default; }
   .hr-edit-input{
     display:block; width:100%; max-width:220px; padding:6px 8px; margin-bottom:6px;
     border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:12.5px; background:#fff;
@@ -174,6 +181,7 @@ if ('serviceWorker' in navigator) {
   <table>
     <thead>
       <tr>
+        <th>순서</th>
         <th>이름</th>
         <th>이메일</th>
         <th>인사정보</th>
@@ -206,6 +214,16 @@ if ('serviceWorker' in navigator) {
   const roleLabel = { guest: '게스트', worker: '근로자', admin: '관리자' };
   let usersCache = {};
 
+  async function swapOrder(a, b) {
+    const orderA = a.data.order ?? 0;
+    const orderB = b.data.order ?? 0;
+    const batch = db.batch();
+    batch.update(db.collection('users').doc(a.uid), { order: orderB });
+    batch.update(db.collection('users').doc(b.uid), { order: orderA });
+    await batch.commit();
+    await loadUsers();
+  }
+
   async function loadUsers() {
     const snapshot = await db.collection('users').get();
     tableBody.innerHTML = '';
@@ -217,13 +235,34 @@ if ('serviceWorker' in navigator) {
     }
     emptyMsg.style.display = 'none';
 
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      const uid = doc.id;
+    let entries = snapshot.docs.map(doc => ({ uid: doc.id, data: doc.data() }));
+
+    // order 필드가 없는(기존) 회원은 현재 목록 순서를 기준으로 한 번만 채워준다 (최초 1회 마이그레이션)
+    const missingOrder = entries.filter(e => e.data.order === undefined || e.data.order === null);
+    if (missingOrder.length > 0) {
+      const batch = db.batch();
+      entries.forEach((e, i) => {
+        if (e.data.order === undefined || e.data.order === null) {
+          e.data.order = i;
+          batch.update(db.collection('users').doc(e.uid), { order: i });
+        }
+      });
+      await batch.commit();
+    }
+
+    entries.sort((a, b) => (a.data.order ?? 0) - (b.data.order ?? 0));
+
+    entries.forEach(({ uid, data }, idx) => {
       usersCache[uid] = data;
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
+        <td data-label="순서">
+          <div class="order-controls">
+            <button class="order-btn" data-move-up="${uid}" ${idx === 0 ? 'disabled' : ''}>▲</button>
+            <button class="order-btn" data-move-down="${uid}" ${idx === entries.length - 1 ? 'disabled' : ''}>▼</button>
+          </div>
+        </td>
         <td data-label="이름">
           <div class="name-cell">
             <label class="avatar-wrap" data-avatar-wrap="${uid}">
@@ -255,6 +294,24 @@ if ('serviceWorker' in navigator) {
         </td>
       `;
       tableBody.appendChild(tr);
+    });
+
+    // 순서 이동 버튼 (바로 위/아래 회원과 order 값을 서로 맞바꿈)
+    document.querySelectorAll('[data-move-up]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const uid = btn.dataset.moveUp;
+        const idx = entries.findIndex(e => e.uid === uid);
+        if (idx <= 0) return;
+        await swapOrder(entries[idx], entries[idx - 1]);
+      });
+    });
+    document.querySelectorAll('[data-move-down]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const uid = btn.dataset.moveDown;
+        const idx = entries.findIndex(e => e.uid === uid);
+        if (idx < 0 || idx >= entries.length - 1) return;
+        await swapOrder(entries[idx], entries[idx + 1]);
+      });
     });
 
     // 인사정보 수정 버튼
