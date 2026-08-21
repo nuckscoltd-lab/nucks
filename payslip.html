@@ -978,8 +978,13 @@ if ('serviceWorker' in navigator) {
     previewEl.textContent = '분석 중...';
 
     try {
+      // 최신 저장 현황 기준으로 중복 여부를 판단하기 위해 먼저 새로고침
+      await loadSlips();
+      const existingKeys = new Set(allSlips.map(s => `${s['사원명']}__${s['지급일']}`));
+
       const rows = await readFileAsRows(file);
       const mapped = [];
+      let duplicateCount = 0;
 
       rows.forEach((row) => {
         const name = String(row['사원명'] || '').trim();
@@ -988,6 +993,11 @@ if ('serviceWorker' in navigator) {
         const payDate = parseDateFlexible(row['지급일']);
         const minDate = IMPORT_MIN_DATE_BY_NAME[name] || IMPORT_MIN_DATE_DEFAULT;
         if (!payDate || payDate < minDate) return;
+
+        // 같은 사원 + 같은 지급일 조합이 이미 저장돼 있으면 중복으로 보고 건너뜀
+        // (파일을 여러 번 업로드해도 겹치는 달은 다시 안 들어가게)
+        const key = `${name}__${payDate}`;
+        if (existingKeys.has(key)) { duplicateCount += 1; return; }
 
         const pay = {};
         PAY_KEYS.forEach(k => { pay[k] = toNumber(row[k]); });
@@ -1011,7 +1021,7 @@ if ('serviceWorker' in navigator) {
       });
 
       parsedPayslipRows = mapped;
-      previewEl.textContent = `조건에 맞는 ${mapped.length}건을 가져올 준비가 되었습니다. (전체 ${rows.length}행 중)`;
+      previewEl.textContent = `조건에 맞는 ${mapped.length}건을 가져올 준비가 되었습니다. (전체 ${rows.length}행 중, 이미 저장된 ${duplicateCount}건은 자동 제외)`;
       document.getElementById('importRunBtn').style.display = mapped.length ? 'inline-block' : 'none';
     } catch (err) {
       previewEl.textContent = '파일 분석 실패: ' + err.message;
