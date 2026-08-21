@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#141414">
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+</script>
+<title>세금 관리 | NUCKS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
+  :root{ --ink:#141414; --paper:#f7f6f3; --line:#d8d5cd; --muted:#8a8578; --green:#3f6b52; --red:#a4453c; }
+  *{box-sizing:border-box;}
+  body{ margin:0; min-height:100vh; background:var(--paper); font-family:'Pretendard', -apple-system, sans-serif; color:var(--ink); }
+  header{ padding:28px 48px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+  .eyebrow{ font-size:11px; letter-spacing:.28em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  h1{ font-family:'Cormorant Garamond', serif; font-weight:500; font-size:32px; margin:0; letter-spacing:.01em; }
+  .header-right{ display:flex; align-items:center; gap:24px; }
+  .header-right a{ font-size:13px; color:var(--muted); text-decoration:none; border-bottom:1px solid var(--muted); cursor:pointer; }
+  main{ max-width:1200px; margin:0 auto; padding:40px 48px; }
+
+  .summary-bar{ display:flex; gap:16px; flex-wrap:wrap; margin-bottom:24px; }
+  .summary-chip{ background:#fff; border:1px solid var(--line); border-radius:6px; padding:14px 20px; font-size:13px; color:var(--muted); flex:1; min-width:150px; }
+  .summary-chip b{ color:var(--ink); font-size:18px; display:block; margin-top:4px; }
+
+  .panel{ background:#fff; border:1px solid var(--line); border-radius:6px; padding:16px 18px; margin-bottom:24px; }
+  .toolbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .toolbar select, .toolbar input{ padding:8px 10px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff; }
+  .add-btn{ padding:8px 16px; background:var(--ink); color:var(--paper); border:none; font-size:12.5px; letter-spacing:.05em; cursor:pointer; border-radius:4px; }
+  .row-btn{ font-size:11.5px; background:none; border:none; cursor:pointer; text-decoration:underline; color:var(--muted); margin-right:8px; padding:0; }
+  .row-btn.danger{ color:var(--red); }
+
+  .card-item{ background:#fff; border:1px solid var(--line); border-radius:6px; margin-bottom:12px; overflow:hidden; }
+  .card-head{ display:flex; align-items:center; gap:14px; padding:16px 18px; cursor:pointer; flex-wrap:wrap; }
+  .card-head:hover{ background:#fafaf8; }
+  .card-name{ font-size:14.5px; font-weight:500; }
+  .card-sub{ font-size:12px; color:var(--muted); margin-top:3px; }
+  .card-meta{ margin-left:auto; display:flex; gap:22px; align-items:center; }
+  .card-meta .m-item{ text-align:right; font-size:11.5px; color:var(--muted); min-width:110px; }
+  .card-meta .m-item b{ display:block; font-size:14px; color:var(--ink); font-weight:500; margin-top:2px; }
+
+  .card-body{ display:none; border-top:1px solid var(--line); padding:18px; background:#fcfbf9; }
+  .card-body.open{ display:block; }
+  .subsection-title{ font-size:11.5px; color:var(--muted); margin:0 0 10px; letter-spacing:.06em; text-transform:uppercase; }
+
+  table.mini{ width:100%; border-collapse:collapse; margin-bottom:12px; }
+  table.mini th{ text-align:left; font-size:11px; color:var(--muted); font-weight:500; padding:7px 8px; border-bottom:1px solid var(--line); }
+  table.mini td{ padding:8px; font-size:13px; border-bottom:1px solid var(--line); }
+  table.mini tr:last-child td{ border-bottom:none; }
+
+  .inline-add{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; align-items:flex-end; }
+  .inline-add .field{ display:flex; flex-direction:column; gap:4px; }
+  .inline-add label{ font-size:10.5px; color:var(--muted); }
+  .inline-add input, .inline-add select{ padding:6px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:12.5px; }
+  .inline-add button{ padding:7px 14px; background:var(--ink); color:var(--paper); border:none; font-size:11.5px; cursor:pointer; border-radius:4px; height:31px; }
+
+  .card-edit-form .form-row{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+  .card-edit-form .field{ display:flex; flex-direction:column; gap:4px; }
+  .card-edit-form label{ font-size:10.5px; color:var(--muted); }
+  .card-edit-form input{ padding:7px 9px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:12.5px; min-width:160px; }
+
+  .status-line{ font-size:12.5px; margin-top:8px; min-height:16px; }
+  .empty{ background:#fff; border:1px solid var(--line); border-radius:6px; padding:36px; text-align:center; color:var(--muted); font-size:13.5px; }
+
+  @media (max-width: 720px) {
+    header{ padding:20px !important; flex-wrap:wrap; gap:10px; }
+    .header-right{ flex-wrap:wrap; gap:12px !important; }
+    main{ padding:24px 16px !important; }
+    h1{ font-size:24px !important; }
+    input, select{ font-size:16px !important; }
+    .card-head{ flex-wrap:wrap; }
+    .card-meta{ margin-left:0; width:100%; justify-content:space-between; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">NUCKS</div>
+    <h1>세금 관리</h1>
+  </div>
+  <div class="header-right">
+    <a href="index.html">Home</a>
+    <a href="#" id="logoutBtn">Logout</a>
+  </div>
+</header>
+
+<main id="mainArea">
+  <div class="empty">불러오는 중...</div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+  requireRole(['admin']);
+
+  // 📌 [내장 초기 데이터] taxItems 컬렉션이 비어있을 때(처음 실행 시)만 자동으로 채워지는 마이그레이션 데이터.
+  // 출처: nuckscoltd_2026년운영.xlsx '세금' 시트 (2025~2026년 항목별 월별 납부액 - 법인세/부가세 계열 4건, 각종세금(원천세) 계열 5건).
+  const EMBEDDED_TAX = [{"category": "법인세/부가세", "label": "법인세", "refundRate": null, "monthly": {"2025-03": 107080}}, {"category": "법인세/부가세", "label": "법인지방소득세", "refundRate": null, "monthly": {"2025-03": 904440}}, {"category": "법인세/부가세", "label": "부가가치세", "refundRate": null, "monthly": {"2025-04": 676310, "2025-07": 8017280, "2025-10": 30888270, "2026-01": 4483460}}, {"category": "법인세/부가세", "label": "건설면허등록세", "refundRate": null, "monthly": {"2025-01": 27000, "2026-01": 27000}}, {"category": "각종세금(원천세 등)", "label": "사업소득세", "refundRate": null, "monthly": {"2025-01": 52020, "2025-05": 202020, "2025-06": 267160, "2025-07": 202020, "2025-08": 247530, "2025-09": 221220, "2025-10": 322400, "2025-11": 322400, "2025-12": 174020, "2026-01": 82020, "2026-02": 171000, "2026-06": 21000, "2026-07": 21000}}, {"category": "각종세금(원천세 등)", "label": "지방소득세", "refundRate": null, "monthly": {"2025-01": 79780, "2025-04": 223200, "2025-05": 94780, "2025-06": 101290, "2025-07": 95100, "2025-08": 112400, "2025-09": 103640, "2025-10": 150270, "2025-11": 150270, "2025-12": 92760, "2026-01": 93660, "2026-02": 80370, "2026-06": 65370, "2026-07": 65370}}, {"category": "각종세금(원천세 등)", "label": "근로소득세(갑)", "refundRate": null, "monthly": {"2025-01": 746010, "2025-05": 746010, "2025-06": 746010, "2025-07": 749220, "2025-08": 877270, "2025-09": 815440, "2025-10": 1181270, "2025-11": 1181270, "2025-12": 753820, "2026-01": 854980, "2026-02": 632920, "2026-06": 632920, "2026-07": 632920}}, {"category": "각종세금(원천세 등)", "label": "주민세", "refundRate": null, "monthly": {"2025-08": 62500}}, {"category": "각종세금(원천세 등)", "label": "배당소득세", "refundRate": null, "monthly": {"2025-04": 2227940}}];
+</script>
+<script>
+  document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await logOut();
+    window.location.href = 'login.html';
+  });
+</script>
+<script>
+  const cardsRef = db.collection('taxItems');
+  let allCards = [];
+  let openIds = new Set();
+  let activeYear = '전체';
+
+  function esc(s){ return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+  function fmtWon(n){ return (Math.round(n) || 0).toLocaleString() + '원'; }
+  function parseMoney(el){ return Number(String(el.value || '').replace(/[^\d]/g, '')) || 0; }
+
+  function cardTotal(c){ return Object.values(c.monthly || {}).reduce((s, v) => s + (Number(v) || 0), 0); }
+  function cardTotalForYear(c, year){
+    return Object.entries(c.monthly || {}).filter(([ym]) => ym.startsWith(year)).reduce((s, [,v]) => s + (Number(v) || 0), 0);
+  }
+  function thisMonthKey(){
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  async function seedIfEmpty(){
+    const snap = await cardsRef.limit(1).get();
+    if (!snap.empty) return;
+    const batch = db.batch();
+    EMBEDDED_TAX.forEach((c, i) => {
+      const docRef = cardsRef.doc();
+      batch.set(docRef, Object.assign({}, c, { order: i, createdAt: firebase.firestore.FieldValue.serverTimestamp() }));
+    });
+    await batch.commit();
+  }
+
+  async function loadCards(){
+    await seedIfEmpty();
+    const snap = await cardsRef.orderBy('order', 'asc').get();
+    allCards = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  }
+
+  function getFilteredCards(){
+    if (activeYear === '전체') return allCards;
+    return allCards.filter(c => Object.keys(c.monthly || {}).some(ym => ym.startsWith(activeYear)));
+  }
+
+  function renderAll(){
+    const main = document.getElementById('mainArea');
+    main.innerHTML = `
+      <div class="summary-bar" id="summaryBar"></div>
+      <div class="panel">
+        <div class="toolbar">
+          <select id="yearFilter"><option value="전체">전체 연도</option></select>
+          <button class="add-btn" id="newItemBtn">+ 새 항목 등록</button>
+        </div>
+      </div>
+      <div id="cardList"></div>
+      <div class="empty" id="emptyMsg" style="display:none;">등록된 항목이 없습니다.</div>
+    `;
+
+    const years = [...new Set(allCards.flatMap(c => Object.keys(c.monthly || {}).map(ym => ym.slice(0, 4))))].sort().reverse();
+    document.getElementById('yearFilter').innerHTML = '<option value="전체">전체 연도</option>' + years.map(y => `<option value="${y}">${y}년</option>`).join('');
+    document.getElementById('yearFilter').value = activeYear;
+    document.getElementById('yearFilter').addEventListener('change', (e) => { activeYear = e.target.value; renderList(); });
+    document.getElementById('newItemBtn').addEventListener('click', createBlankCard);
+
+    renderList();
+  }
+
+  function renderSummary(){
+    const bar = document.getElementById('summaryBar');
+    const rows = getFilteredCards();
+    const total = activeYear === '전체'
+      ? rows.reduce((s, c) => s + cardTotal(c), 0)
+      : rows.reduce((s, c) => s + cardTotalForYear(c, activeYear), 0);
+    const thisMonth = thisMonthKey();
+    const thisMonthTotal = allCards.reduce((s, c) => s + (Number((c.monthly || {})[thisMonth]) || 0), 0);
+
+    bar.innerHTML = `
+      <div class="summary-chip">${activeYear === '전체' ? '전체' : activeYear + '년'} 항목 수<b>${rows.length}건</b></div>
+      <div class="summary-chip">${activeYear === '전체' ? '전체 누적' : activeYear + '년'} 사용액<b>${fmtWon(total)}</b></div>
+      <div class="summary-chip">이번달(${thisMonth}) 전체 사용액<b>${fmtWon(thisMonthTotal)}</b></div>
+    `;
+  }
+
+  function renderList(){
+    const listEl = document.getElementById('cardList');
+    const emptyMsg = document.getElementById('emptyMsg');
+    renderSummary();
+    const rows = getFilteredCards();
+
+    if (rows.length === 0) {
+      listEl.innerHTML = '';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+    listEl.innerHTML = rows.map(c => renderCard(c)).join('');
+
+    rows.forEach(c => {
+      const head = document.querySelector(`[data-head="${c.id}"]`);
+      if (head) head.addEventListener('click', () => toggleOpen(c.id));
+    });
+    rows.forEach(c => { if (openIds.has(c.id)) bindCardEvents(c); });
+  }
+
+  function toggleOpen(id){
+    if (openIds.has(id)) openIds.delete(id); else openIds.add(id);
+    renderList();
+  }
+
+  function renderCard(c){
+    const isOpen = openIds.has(c.id);
+    const total = activeYear === '전체' ? cardTotal(c) : cardTotalForYear(c, activeYear);
+    const monthCount = Object.keys(c.monthly || {}).filter(ym => activeYear === '전체' || ym.startsWith(activeYear)).length;
+    return `
+      <div class="card-item">
+        <div class="card-head" data-head="${c.id}">
+          <div>
+            <div class="card-name">${esc(c.label)}</div>
+            <div class="card-sub">${esc(c.category)}${c.refundRate ? ' · 환급율 ' + c.refundRate + '%' : ''}</div>
+          </div>
+          <div class="card-meta">
+            <div class="m-item">기록된 개월수<b>${monthCount}개월</b></div>
+            <div class="m-item">${activeYear === '전체' ? '누적' : activeYear + '년'} 사용액<b>${fmtWon(total)}</b></div>
+          </div>
+        </div>
+        <div class="card-body ${isOpen ? 'open' : ''}" data-body="${c.id}">
+          ${isOpen ? renderBody(c) : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderBody(c){
+    const months = Object.entries(c.monthly || {}).sort((a, b) => b[0].localeCompare(a[0]));
+    return `
+      ${c.note ? `<div class="subsection-title">비고</div><div style="font-size:12.5px; color:#54514a; margin-bottom:16px;">${esc(c.note)}</div>` : ''}
+      <div class="subsection-title">월별 사용액</div>
+      ${months.length ? `
+        <table class="mini">
+          <thead><tr><th>연-월</th><th>사용액</th><th>관리</th></tr></thead>
+          <tbody>
+            ${months.map(([ym, amt]) => `
+              <tr>
+                <td>${ym}</td>
+                <td>${fmtWon(amt)}</td>
+                <td>
+                  <button class="row-btn" data-month-edit="${c.id}:${ym}">수정</button>
+                  <button class="row-btn danger" data-month-del="${c.id}:${ym}">삭제</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      ` : '<div style="font-size:12.5px; color:var(--muted); margin-bottom:10px;">등록된 월별 내역이 없습니다.</div>'}
+      <div class="inline-add">
+        <div class="field"><label>연-월</label><input type="month" id="nm-month-${c.id}" value="${thisMonthKey()}"></div>
+        <div class="field"><label>사용액</label><input type="text" inputmode="numeric" class="money-in" id="nm-amount-${c.id}" style="width:130px;" placeholder="0"></div>
+        <button data-month-add="${c.id}">월 사용액 추가</button>
+      </div>
+
+      <div class="subsection-title" style="margin-top:20px;">항목 정보 수정</div>
+      <div class="card-edit-form">
+        <div class="form-row">
+          <div class="field"><label>항목명</label><input type="text" id="ec-name-${c.id}" value="${esc(c.label)}"></div>
+          <div class="field"><label>구분 (법인세/부가세, 각종세금(원천세) 등)</label><input type="text" id="ec-number-${c.id}" value="${esc(c.category)}"></div>
+          <div class="field" style="flex:1;"><label>비고</label><input type="text" id="ec-note-${c.id}" value="${esc(c.note)}"></div>
+        </div>
+        <button class="add-btn" id="ec-save-${c.id}">저장</button>
+      </div>
+      <button class="row-btn danger" data-card-del="${c.id}" style="margin-top:14px;">항목 삭제</button>
+      <div class="status-line" id="status-${c.id}"></div>
+    `;
+  }
+
+  function bindCardEvents(c){
+    const addBtn = document.querySelector(`[data-month-add="${c.id}"]`);
+    if (addBtn) addBtn.addEventListener('click', () => addMonth(c.id));
+
+    document.querySelectorAll(`[data-month-del^="${c.id}:"]`).forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ym = btn.dataset.monthDel.split(':').slice(1).join(':');
+        deleteMonth(c.id, ym);
+      });
+    });
+    document.querySelectorAll(`[data-month-edit^="${c.id}:"]`).forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ym = btn.dataset.monthEdit.split(':').slice(1).join(':');
+        editMonth(c.id, ym);
+      });
+    });
+
+    const saveBtn = document.getElementById(`ec-save-${c.id}`);
+    if (saveBtn) saveBtn.addEventListener('click', () => saveCardInfo(c.id));
+
+    const delBtn = document.querySelector(`[data-card-del="${c.id}"]`);
+    if (delBtn) delBtn.addEventListener('click', () => deleteCard(c.id));
+  }
+
+  async function addMonth(id){
+    const c = allCards.find(x => x.id === id);
+    const ym = document.getElementById(`nm-month-${id}`).value;
+    const amt = parseMoney(document.getElementById(`nm-amount-${id}`));
+    if (!ym) { alert('연-월을 선택해주세요.'); return; }
+    const monthly = Object.assign({}, c.monthly, { [ym]: amt });
+    await cardsRef.doc(id).update({ monthly });
+    await loadCards();
+    openIds.add(id);
+    renderList();
+  }
+
+  async function editMonth(id, ym){
+    const c = allCards.find(x => x.id === id);
+    const newVal = prompt(`${ym} 사용액`, c.monthly[ym]);
+    if (newVal === null) return;
+    const monthly = Object.assign({}, c.monthly, { [ym]: Number(newVal) || 0 });
+    await cardsRef.doc(id).update({ monthly });
+    await loadCards();
+    openIds.add(id);
+    renderList();
+  }
+
+  async function deleteMonth(id, ym){
+    if (!confirm(`${ym} 사용액 기록을 삭제할까요?`)) return;
+    const c = allCards.find(x => x.id === id);
+    const monthly = Object.assign({}, c.monthly);
+    delete monthly[ym];
+    await cardsRef.doc(id).update({ monthly });
+    await loadCards();
+    openIds.add(id);
+    renderList();
+  }
+
+  async function saveCardInfo(id){
+    const statusEl = document.getElementById(`status-${id}`);
+    const updateData = {
+      label: document.getElementById(`ec-name-${id}`).value.trim(),
+      category: document.getElementById(`ec-number-${id}`).value.trim(),
+      note: document.getElementById(`ec-note-${id}`).value.trim()
+    };
+    if (!updateData.label) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '항목명을 입력해주세요.'; return; }
+    try {
+      await cardsRef.doc(id).update(updateData);
+      await loadCards();
+      openIds.add(id);
+      renderList();
+    } catch (err) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '저장 실패: ' + err.message;
+    }
+  }
+
+  async function deleteCard(id){
+    const c = allCards.find(x => x.id === id);
+    if (!confirm(`"${c.label}" 항목을 삭제할까요? 월별 사용액 기록이 모두 함께 삭제됩니다.`)) return;
+    await cardsRef.doc(id).delete();
+    openIds.delete(id);
+    await loadCards();
+  }
+
+  async function createBlankCard(){
+    const label = prompt('항목명을 입력하세요 (예: 부가가치세)');
+    if (!name) return;
+    const docRef = await cardsRef.add({
+      label, category: '', refundRate: null, monthly: {},
+      order: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await loadCards();
+    openIds.add(docRef.id);
+    renderList();
+  }
+
+  // 금액 입력칸 실시간 콤마 포맷팅
+  document.addEventListener('input', (e) => {
+    if (!e.target.classList || !e.target.classList.contains('money-in')) return;
+    const el = e.target;
+    const cursorFromEnd = el.value.length - el.selectionStart;
+    const digits = el.value.replace(/[^\d]/g, '');
+    el.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
+    const pos = Math.max(0, el.value.length - cursorFromEnd);
+    el.setSelectionRange(pos, pos);
+  });
+
+  auth.onAuthStateChanged((user) => {
+    if (user) loadCards();
+  });
+</script>
+</body>
+</html>

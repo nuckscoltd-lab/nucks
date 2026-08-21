@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#141414">
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+</script>
+<title>법인 분기별매출매입현황 | NUCKS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
+  :root{ --ink:#141414; --paper:#f7f6f3; --line:#d8d5cd; --muted:#8a8578; --green:#3f6b52; --red:#a4453c; }
+  *{box-sizing:border-box;}
+  body{ margin:0; min-height:100vh; background:var(--paper); font-family:'Pretendard', -apple-system, sans-serif; color:var(--ink); }
+  header{ padding:28px 48px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+  .eyebrow{ font-size:11px; letter-spacing:.28em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  h1{ font-family:'Cormorant Garamond', serif; font-weight:500; font-size:32px; margin:0; letter-spacing:.01em; }
+  .header-right{ display:flex; align-items:center; gap:24px; }
+  .header-right a{ font-size:13px; color:var(--muted); text-decoration:none; border-bottom:1px solid var(--muted); cursor:pointer; }
+  main{ max-width:1280px; margin:0 auto; padding:40px 48px; }
+
+  .panel{ background:#fff; border:1px solid var(--line); border-radius:6px; padding:20px 22px; margin-bottom:24px; }
+  .panel-title{ font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); margin-bottom:16px; }
+  .import-help{ font-size:12.5px; color:var(--muted); line-height:1.6; margin-bottom:16px; }
+
+  .toolbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:20px; }
+  .toolbar select{ padding:8px 10px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff; }
+
+  .summary-bar{ display:flex; gap:16px; flex-wrap:wrap; margin-bottom:24px; }
+  .summary-chip{ background:#fff; border:1px solid var(--line); border-radius:6px; padding:14px 20px; font-size:13px; color:var(--muted); flex:1; min-width:160px; }
+  .summary-chip b{ color:var(--ink); font-size:19px; display:block; margin-top:4px; }
+  .summary-chip.profit b{ color:var(--green); }
+  .summary-chip.loss b{ color:var(--red); }
+
+  .quarter-block{ background:#fff; border:1px solid var(--line); border-radius:6px; margin-bottom:16px; overflow:hidden; }
+  .quarter-head{ padding:14px 18px; background:#faf9f6; border-bottom:1px solid var(--line); font-size:13.5px; font-weight:500; display:flex; justify-content:space-between; align-items:center; }
+  .quarter-head .q-profit{ font-size:13px; }
+  .quarter-head .q-profit.profit{ color:var(--green); }
+  .quarter-head .q-profit.loss{ color:var(--red); }
+
+  table.month-table{ width:100%; border-collapse:collapse; }
+  table.month-table th{ text-align:right; font-size:11px; color:var(--muted); font-weight:500; padding:8px 12px; border-bottom:1px solid var(--line); }
+  table.month-table th:first-child{ text-align:left; }
+  table.month-table td{ text-align:right; padding:8px 12px; font-size:13px; border-bottom:1px solid var(--line); }
+  table.month-table td:first-child{ text-align:left; font-weight:500; }
+  table.month-table tr:last-child td{ border-bottom:none; }
+  table.month-table tr.total-row td{ font-weight:600; background:#faf9f6; }
+  .neg{ color:var(--red); }
+  .edit-link{ font-size:11px; color:var(--muted); text-decoration:underline; cursor:pointer; background:none; border:none; padding:0; }
+
+  .edit-form{ padding:16px 18px; background:#fcfbf9; border-top:1px solid var(--line); }
+  .edit-form .form-row{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; align-items:flex-end; }
+  .edit-form .field{ display:flex; flex-direction:column; gap:4px; }
+  .edit-form label{ font-size:10.5px; color:var(--muted); }
+  .edit-form input{ padding:7px 9px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:12.5px; width:130px; }
+  .edit-form button{ padding:7px 16px; background:var(--ink); color:var(--paper); border:none; font-size:12px; cursor:pointer; border-radius:4px; }
+  .status-line{ font-size:12px; margin-top:6px; min-height:14px; }
+
+  .breakdown-toggle{ font-size:11.5px; color:var(--muted); text-decoration:underline; cursor:pointer; background:none; border:none; padding:0; margin-top:6px; }
+  .breakdown-list{ display:none; margin-top:10px; font-size:12px; color:#54514a; }
+  .breakdown-list.open{ display:block; }
+  .breakdown-list .b-row{ display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dashed var(--line); }
+
+  .empty{ background:#fff; border:1px solid var(--line); border-radius:6px; padding:36px; text-align:center; color:var(--muted); font-size:13.5px; }
+
+  @media (max-width: 720px) {
+    header{ padding:20px !important; flex-wrap:wrap; gap:10px; }
+    .header-right{ flex-wrap:wrap; gap:12px !important; }
+    main{ padding:24px 16px !important; }
+    h1{ font-size:24px !important; }
+    input, select{ font-size:16px !important; }
+    table.month-table{ font-size:11.5px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">NUCKS</div>
+    <h1>법인 분기별매출매입현황</h1>
+  </div>
+  <div class="header-right">
+    <a href="index.html">Home</a>
+    <a href="#" id="logoutBtn">Logout</a>
+  </div>
+</header>
+
+<main id="mainArea">
+  <div class="empty">불러오는 중...</div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+  requireRole(['admin']);
+</script>
+<script>
+  document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await logOut();
+    window.location.href = 'login.html';
+  });
+</script>
+<script>
+  const salesPurchaseRef = db.collection('quarterlySalesPurchase'); // 문서id = 'YYYY-MM', 매출/매입 수동 입력분
+
+  const SOURCE_COLLECTIONS = [
+    { key: 'corporateCards', label: '법인카드' },
+    { key: 'utilityItems', label: '공과금' },
+    { key: 'insuranceItems', label: '보험' },
+    { key: 'taxItems', label: '세금' },
+    { key: 'stockItems', label: '주식·배당' },
+    { key: 'loanRepaymentItems', label: '이자상환' }
+  ];
+
+  let expenseByMonth = {};       // { 'YYYY-MM': 합계 }
+  let expenseBreakdown = {};     // { 'YYYY-MM': [{source, name, amount}] }
+  let salesPurchaseByMonth = {}; // { 'YYYY-MM': {salesTotal, salesSupply, salesTax, purchaseTotal, purchaseSupply, purchaseTax} }
+  let activeYear = String(new Date().getFullYear());
+  let openBreakdown = new Set();
+
+  function fmtWon(n){ return (Math.round(n) || 0).toLocaleString() + '원'; }
+  function esc(s){ return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+  function parseMoney(el){ return Number(String(el.value || '').replace(/[^\d]/g, '')) || 0; }
+
+  function quarterOfMonth(m){ return Math.floor((m - 1) / 3) + 1; } // 1~3월->1, 4~6월->2 ...
+
+  async function loadExpenses(){
+    expenseByMonth = {};
+    expenseBreakdown = {};
+
+    for (const src of SOURCE_COLLECTIONS) {
+      const snap = await db.collection(src.key).get();
+      snap.docs.forEach(doc => {
+        const d = doc.data();
+        const name = d.name || d.label || d.category || '(이름없음)';
+        Object.entries(d.monthly || {}).forEach(([ym, amt]) => {
+          const v = Number(amt) || 0;
+          if (!v) return;
+          expenseByMonth[ym] = (expenseByMonth[ym] || 0) + v;
+          if (!expenseBreakdown[ym]) expenseBreakdown[ym] = [];
+          expenseBreakdown[ym].push({ source: src.label, name, amount: v });
+        });
+      });
+    }
+  }
+
+  async function loadSalesPurchase(){
+    salesPurchaseByMonth = {};
+    const snap = await salesPurchaseRef.get();
+    snap.docs.forEach(doc => { salesPurchaseByMonth[doc.id] = doc.data(); });
+  }
+
+  function spFor(ym){
+    return salesPurchaseByMonth[ym] || { salesTotal: 0, salesSupply: 0, salesTax: 0, purchaseTotal: 0, purchaseSupply: 0, purchaseTax: 0 };
+  }
+
+  async function loadAll(){
+    await Promise.all([loadExpenses(), loadSalesPurchase()]);
+    renderAll();
+  }
+
+  function getAllYears(){
+    const years = new Set();
+    Object.keys(expenseByMonth).forEach(ym => years.add(ym.slice(0, 4)));
+    Object.keys(salesPurchaseByMonth).forEach(ym => years.add(ym.slice(0, 4)));
+    years.add(String(new Date().getFullYear()));
+    return [...years].sort().reverse();
+  }
+
+  function renderAll(){
+    const main = document.getElementById('mainArea');
+    const years = getAllYears();
+
+    main.innerHTML = `
+      <div class="panel" style="padding:14px 18px;">
+        <div class="import-help" style="margin-bottom:0;">
+          "일반지출"은 법인카드·공과금·보험·세금·주식·이자상환 6개 관리 도구에 입력된 데이터를 매달 자동으로 합산한 값이에요 (직접 입력할 필요 없음).
+          "매출/매입"(세금계산서 발행 기준)은 부가세 신고 자료를 바탕으로 각 월 항목의 "입력" 버튼을 눌러 직접 채워주세요.
+        </div>
+      </div>
+      <div class="summary-bar" id="summaryBar"></div>
+      <div class="panel" style="padding:14px 18px;">
+        <div class="toolbar" style="margin-bottom:0;">
+          <select id="yearFilter">${years.map(y => `<option value="${y}" ${y === activeYear ? 'selected' : ''}>${y}년</option>`).join('')}</select>
+        </div>
+      </div>
+      <div id="quarterList"></div>
+    `;
+
+    document.getElementById('yearFilter').addEventListener('change', (e) => { activeYear = e.target.value; renderAll(); });
+
+    renderSummary();
+    renderQuarters();
+  }
+
+  function yearTotals(year){
+    let sales = 0, purchase = 0, expense = 0;
+    for (let m = 1; m <= 12; m++) {
+      const ym = `${year}-${String(m).padStart(2, '0')}`;
+      sales += spFor(ym).salesTotal || 0;
+      purchase += spFor(ym).purchaseTotal || 0;
+      expense += expenseByMonth[ym] || 0;
+    }
+    return { sales, purchase, expense, profit: sales - purchase - expense };
+  }
+
+  function renderSummary(){
+    const bar = document.getElementById('summaryBar');
+    const t = yearTotals(activeYear);
+    const profitClass = t.profit >= 0 ? 'profit' : 'loss';
+
+    bar.innerHTML = `
+      <div class="summary-chip">${activeYear}년 총매출<b>${fmtWon(t.sales)}</b></div>
+      <div class="summary-chip">${activeYear}년 총매입<b>${fmtWon(t.purchase)}</b></div>
+      <div class="summary-chip">${activeYear}년 일반지출 (자동집계)<b>${fmtWon(t.expense)}</b></div>
+      <div class="summary-chip ${profitClass}">${activeYear}년 예상손익<b>${fmtWon(t.profit)}</b></div>
+    `;
+  }
+
+  function renderQuarters(){
+    const listEl = document.getElementById('quarterList');
+    let html = '';
+    for (let q = 1; q <= 4; q++) {
+      const months = [(q - 1) * 3 + 1, (q - 1) * 3 + 2, (q - 1) * 3 + 3];
+      let qSales = 0, qPurchase = 0, qExpense = 0;
+      const rows = months.map(m => {
+        const ym = `${activeYear}-${String(m).padStart(2, '0')}`;
+        const sp = spFor(ym);
+        const exp = expenseByMonth[ym] || 0;
+        qSales += sp.salesTotal || 0;
+        qPurchase += sp.purchaseTotal || 0;
+        qExpense += exp;
+        const monthProfit = (sp.salesTotal || 0) - (sp.purchaseTotal || 0) - exp;
+        return { ym, m, sp, exp, monthProfit };
+      });
+      const qProfit = qSales - qPurchase - qExpense;
+
+      html += `
+        <div class="quarter-block">
+          <div class="quarter-head">
+            <span>${activeYear}년 ${q}분기 (${months[0]}~${months[2]}월)</span>
+            <span class="q-profit ${qProfit >= 0 ? 'profit' : 'loss'}">예상손익 ${fmtWon(qProfit)}</span>
+          </div>
+          <table class="month-table">
+            <thead><tr><th>월</th><th>매출</th><th>매입</th><th>일반지출(자동)</th><th>월손익</th><th></th></tr></thead>
+            <tbody>
+              ${rows.map(r => `
+                <tr>
+                  <td>${r.m}월</td>
+                  <td>${fmtWon(r.sp.salesTotal)}</td>
+                  <td>${fmtWon(r.sp.purchaseTotal)}</td>
+                  <td>
+                    ${fmtWon(r.exp)}
+                    ${expenseBreakdown[r.ym] ? `<button class="breakdown-toggle" data-toggle-breakdown="${r.ym}">${openBreakdown.has(r.ym) ? '숨기기' : '내역보기'}</button>` : ''}
+                  </td>
+                  <td class="${r.monthProfit < 0 ? 'neg' : ''}">${fmtWon(r.monthProfit)}</td>
+                  <td><button class="edit-link" data-edit-month="${r.ym}">입력</button></td>
+                </tr>
+                ${expenseBreakdown[r.ym] ? `
+                  <tr style="display:${openBreakdown.has(r.ym) ? 'table-row' : 'none'};" data-breakdown-row="${r.ym}">
+                    <td colspan="6">
+                      <div class="breakdown-list open">
+                        ${expenseBreakdown[r.ym].map(b => `<div class="b-row"><span>${esc(b.source)} · ${esc(b.name)}</span><span>${fmtWon(b.amount)}</span></div>`).join('')}
+                      </div>
+                    </td>
+                  </tr>
+                ` : ''}
+                <tr style="display:none;" data-edit-row="${r.ym}"></tr>
+              `).join('')}
+              <tr class="total-row">
+                <td>분기 합계</td>
+                <td>${fmtWon(qSales)}</td>
+                <td>${fmtWon(qPurchase)}</td>
+                <td>${fmtWon(qExpense)}</td>
+                <td class="${qProfit < 0 ? 'neg' : ''}">${fmtWon(qProfit)}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+    listEl.innerHTML = html;
+
+    document.querySelectorAll('[data-toggle-breakdown]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ym = btn.dataset.toggleBreakdown;
+        if (openBreakdown.has(ym)) openBreakdown.delete(ym); else openBreakdown.add(ym);
+        renderQuarters();
+      });
+    });
+    document.querySelectorAll('[data-edit-month]').forEach(btn => {
+      btn.addEventListener('click', () => openEditForm(btn.dataset.editMonth));
+    });
+  }
+
+  function openEditForm(ym){
+    const row = document.querySelector(`[data-edit-row="${ym}"]`);
+    if (!row) return;
+    const sp = spFor(ym);
+    row.style.display = 'table-row';
+    row.innerHTML = `
+      <td colspan="6">
+        <div class="edit-form" style="margin:0; border:none; background:none; padding:10px 0;">
+          <div class="form-row">
+            <div class="field"><label>매출 총합계(VAT포함)</label><input type="text" inputmode="numeric" class="money-in" id="sp-salesTotal-${ym}" value="${sp.salesTotal ? sp.salesTotal.toLocaleString('ko-KR') : ''}"></div>
+            <div class="field"><label>매출 공급가액</label><input type="text" inputmode="numeric" class="money-in" id="sp-salesSupply-${ym}" value="${sp.salesSupply ? sp.salesSupply.toLocaleString('ko-KR') : ''}"></div>
+            <div class="field"><label>매출 세액</label><input type="text" inputmode="numeric" class="money-in" id="sp-salesTax-${ym}" value="${sp.salesTax ? sp.salesTax.toLocaleString('ko-KR') : ''}"></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>매입 총합계(VAT포함)</label><input type="text" inputmode="numeric" class="money-in" id="sp-purchaseTotal-${ym}" value="${sp.purchaseTotal ? sp.purchaseTotal.toLocaleString('ko-KR') : ''}"></div>
+            <div class="field"><label>매입 공급가액</label><input type="text" inputmode="numeric" class="money-in" id="sp-purchaseSupply-${ym}" value="${sp.purchaseSupply ? sp.purchaseSupply.toLocaleString('ko-KR') : ''}"></div>
+            <div class="field"><label>매입 세액</label><input type="text" inputmode="numeric" class="money-in" id="sp-purchaseTax-${ym}" value="${sp.purchaseTax ? sp.purchaseTax.toLocaleString('ko-KR') : ''}"></div>
+            <button id="sp-save-${ym}">저장</button>
+            <button id="sp-cancel-${ym}" style="background:#fff; color:var(--ink); border:1px solid var(--line);">취소</button>
+          </div>
+          <div class="status-line" id="sp-status-${ym}"></div>
+        </div>
+      </td>
+    `;
+    document.getElementById(`sp-save-${ym}`).addEventListener('click', () => saveSalesPurchase(ym));
+    document.getElementById(`sp-cancel-${ym}`).addEventListener('click', () => { row.style.display = 'none'; row.innerHTML = ''; });
+  }
+
+  async function saveSalesPurchase(ym){
+    const statusEl = document.getElementById(`sp-status-${ym}`);
+    const data = {
+      salesTotal: parseMoney(document.getElementById(`sp-salesTotal-${ym}`)),
+      salesSupply: parseMoney(document.getElementById(`sp-salesSupply-${ym}`)),
+      salesTax: parseMoney(document.getElementById(`sp-salesTax-${ym}`)),
+      purchaseTotal: parseMoney(document.getElementById(`sp-purchaseTotal-${ym}`)),
+      purchaseSupply: parseMoney(document.getElementById(`sp-purchaseSupply-${ym}`)),
+      purchaseTax: parseMoney(document.getElementById(`sp-purchaseTax-${ym}`))
+    };
+    try {
+      await salesPurchaseRef.doc(ym).set(data);
+      await loadAll();
+    } catch (err) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '저장 실패: ' + err.message;
+    }
+  }
+
+  // 금액 입력칸 실시간 콤마 포맷팅
+  document.addEventListener('input', (e) => {
+    if (!e.target.classList || !e.target.classList.contains('money-in')) return;
+    const el = e.target;
+    const cursorFromEnd = el.value.length - el.selectionStart;
+    const digits = el.value.replace(/[^\d]/g, '');
+    el.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
+    const pos = Math.max(0, el.value.length - cursorFromEnd);
+    el.setSelectionRange(pos, pos);
+  });
+
+  auth.onAuthStateChanged((user) => {
+    if (user) loadAll();
+  });
+</script>
+</body>
+</html>
