@@ -142,8 +142,9 @@ if ('serviceWorker' in navigator) {
   .print-slip .p-pay-table th{ background:#f2f0eb; text-align:left; }
   .print-slip .p-pay-table td{ text-align:right; }
   .print-slip .p-item-detail th, .print-slip .p-item-detail td{
-    padding:3px 6px; font-size:10px; white-space:nowrap;
+    padding:3px 6px; font-size:10.5px; white-space:nowrap;
   }
+  .print-slip .p-item-detail + .p-item-detail{ margin-top:20px; }
   .print-slip .p-net-box{
     text-align:right; font-size:14.5px; font-weight:700; margin:10px 0 6px;
   }
@@ -432,16 +433,28 @@ if ('serviceWorker' in navigator) {
         return `<tr><th style="text-align:left;">${key}</th>${cells}<td style="text-align:right; font-weight:700;">${rowTotal.toLocaleString()}</td></tr>`;
       }).join('');
       return `
-        <table class="p-pay-table p-item-detail" style="margin-top:16px;">
+        <table class="p-pay-table p-item-detail">
           <thead><tr><th style="text-align:left;">${title}</th>${monthHeaders}<th style="text-align:right;">합계</th></tr></thead>
           <tbody>${itemRows}</tbody>
         </table>
       `;
     }
 
-    const detailHtml = includeDetail ? `
-      ${itemDetailTable('지급 항목', PAY_KEYS, 'pay')}
-      ${itemDetailTable('공제 항목', DED_KEYS, 'deductions')}
+    const detailPage = includeDetail ? `
+      <div class="print-slip">
+        <div class="p-header">
+          <div class="p-title">급 여 명 세 서 (항목별 상세)</div>
+        </div>
+        <table class="p-info-table">
+          <tr><th>성명</th><td>${first['사원명'] || ''}</td><th>부서</th><td>${first['부서명'] || ''}</td></tr>
+          <tr><th>직급</th><td>${cleanPosition(first['직급'])}</td><th>대상 기간</th><td>${(sorted[0]['지급일'] || '').slice(0,7)} ~ ${(sorted[sorted.length-1]['지급일'] || '').slice(0,7)}</td></tr>
+        </table>
+        ${itemDetailTable('지급 항목', PAY_KEYS, 'pay')}
+        ${itemDetailTable('공제 항목', DED_KEYS, 'deductions')}
+        <div class="p-footer">
+          <div class="p-company">${COMPANY_NAME} · ${COMPANY_ADDRESS} · ${COMPANY_TEL}</div>
+        </div>
+      </div>
     ` : '';
 
     return `
@@ -465,7 +478,6 @@ if ('serviceWorker' in navigator) {
             </tr>
           </tfoot>
         </table>
-        ${detailHtml}
         <div class="p-date">발행일: ${today}</div>
         <div class="p-sign">
           <span>${COMPANY_NAME} ${CEO_TITLE}</span>
@@ -475,6 +487,7 @@ if ('serviceWorker' in navigator) {
           <div class="p-company">${COMPANY_NAME} · ${COMPANY_ADDRESS} · ${COMPANY_TEL}</div>
         </div>
       </div>
+      ${detailPage}
     `;
   }
 
