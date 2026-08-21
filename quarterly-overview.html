@@ -29,6 +29,12 @@ if ('serviceWorker' in navigator) {
 
   .toolbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:20px; }
   .toolbar select{ padding:8px 10px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff; }
+  .toolbar{ justify-content:space-between; }
+  .view-toggle-btn{
+    padding:8px 14px; border:1px solid var(--line); background:#fff; color:var(--muted);
+    font-family:inherit; font-size:12.5px; cursor:pointer; border-radius:4px;
+  }
+  .view-toggle-btn.active{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
 
   .summary-bar{ display:flex; gap:16px; flex-wrap:wrap; margin-bottom:24px; }
   .summary-chip{ background:#fff; border:1px solid var(--line); border-radius:6px; padding:14px 20px; font-size:13px; color:var(--muted); flex:1; min-width:160px; }
@@ -97,6 +103,7 @@ if ('serviceWorker' in navigator) {
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <script src="firebase-config.js"></script>
 <script src="auth.js"></script>
 <script>
@@ -121,11 +128,14 @@ if ('serviceWorker' in navigator) {
     { key: 'loanRepaymentItems', label: '이자상환' }
   ];
 
-  let expenseByMonth = {};       // { 'YYYY-MM': 합계 }
+  let expenseByMonth = {};       // { 'YYYY-MM': 합계 } - 순수 지출만
   let expenseBreakdown = {};     // { 'YYYY-MM': [{source, name, amount}] }
+  let otherIncomeByMonth = {};   // { 'YYYY-MM': 합계 } - flowType이 '수입'인 항목(예: 전문건설배당)
+  let otherIncomeBreakdown = {}; // { 'YYYY-MM': [{source, name, amount}] }
   let salesPurchaseByMonth = {}; // { 'YYYY-MM': {salesTotal, salesSupply, salesTax, purchaseTotal, purchaseSupply, purchaseTax} }
   let activeYear = String(new Date().getFullYear());
   let openBreakdown = new Set();
+  let viewMode = 'quarter'; // 'quarter' | 'month'
 
   function fmtWon(n){ return (Math.round(n) || 0).toLocaleString() + '원'; }
   function esc(s){ return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
@@ -136,18 +146,28 @@ if ('serviceWorker' in navigator) {
   async function loadExpenses(){
     expenseByMonth = {};
     expenseBreakdown = {};
+    otherIncomeByMonth = {};
+    otherIncomeBreakdown = {};
 
     for (const src of SOURCE_COLLECTIONS) {
       const snap = await db.collection(src.key).get();
       snap.docs.forEach(doc => {
         const d = doc.data();
         const name = d.name || d.label || d.category || '(이름없음)';
+        // flowType이 '수입'인 항목(예: 주식·배당의 전문건설배당)은 우리가 받는 돈이라 지출이 아니라 별도 수입으로 집계
+        const isIncome = d.flowType === '수입';
         Object.entries(d.monthly || {}).forEach(([ym, amt]) => {
           const v = Number(amt) || 0;
           if (!v) return;
-          expenseByMonth[ym] = (expenseByMonth[ym] || 0) + v;
-          if (!expenseBreakdown[ym]) expenseBreakdown[ym] = [];
-          expenseBreakdown[ym].push({ source: src.label, name, amount: v });
+          if (isIncome) {
+            otherIncomeByMonth[ym] = (otherIncomeByMonth[ym] || 0) + v;
+            if (!otherIncomeBreakdown[ym]) otherIncomeBreakdown[ym] = [];
+            otherIncomeBreakdown[ym].push({ source: src.label, name, amount: v });
+          } else {
+            expenseByMonth[ym] = (expenseByMonth[ym] || 0) + v;
+            if (!expenseBreakdown[ym]) expenseBreakdown[ym] = [];
+            expenseBreakdown[ym].push({ source: src.label, name, amount: v });
+          }
         });
       });
     }
@@ -184,6 +204,7 @@ if ('serviceWorker' in navigator) {
       <div class="panel" style="padding:14px 18px;">
         <div class="import-help" style="margin-bottom:0;">
           "일반지출"은 법인카드·공과금·보험·세금·주식·이자상환 6개 관리 도구에 입력된 데이터를 매달 자동으로 합산한 값이에요 (직접 입력할 필요 없음).
+          그중 주식·배당의 전문건설배당처럼 "수입"으로 분류된 항목은 지출이 아니라 "기타수입"으로 따로 집계돼요.
           "매출/매입"(세금계산서 발행 기준)은 부가세 신고 자료를 바탕으로 각 월 항목의 "입력" 버튼을 눌러 직접 채워주세요.
         </div>
       </div>
@@ -191,26 +212,38 @@ if ('serviceWorker' in navigator) {
       <div class="panel" style="padding:14px 18px;">
         <div class="toolbar" style="margin-bottom:0;">
           <select id="yearFilter">${years.map(y => `<option value="${y}" ${y === activeYear ? 'selected' : ''}>${y}년</option>`).join('')}</select>
+          <div style="display:flex; gap:6px;">
+            <button type="button" class="view-toggle-btn ${viewMode === 'quarter' ? 'active' : ''}" id="viewQuarterBtn">분기별</button>
+            <button type="button" class="view-toggle-btn ${viewMode === 'month' ? 'active' : ''}" id="viewMonthBtn">월별</button>
+          </div>
         </div>
+      </div>
+      <div class="panel" style="padding:18px;">
+        <div class="panel-title">매출·매입·일반지출 추이</div>
+        <canvas id="overviewChart" height="90"></canvas>
       </div>
       <div id="quarterList"></div>
     `;
 
     document.getElementById('yearFilter').addEventListener('change', (e) => { activeYear = e.target.value; renderAll(); });
+    document.getElementById('viewQuarterBtn').addEventListener('click', () => { viewMode = 'quarter'; renderAll(); });
+    document.getElementById('viewMonthBtn').addEventListener('click', () => { viewMode = 'month'; renderAll(); });
 
     renderSummary();
-    renderQuarters();
+    renderChart();
+    if (viewMode === 'quarter') renderQuarters(); else renderMonthsFlat();
   }
 
   function yearTotals(year){
-    let sales = 0, purchase = 0, expense = 0;
+    let sales = 0, purchase = 0, expense = 0, otherIncome = 0;
     for (let m = 1; m <= 12; m++) {
       const ym = `${year}-${String(m).padStart(2, '0')}`;
       sales += spFor(ym).salesTotal || 0;
       purchase += spFor(ym).purchaseTotal || 0;
       expense += expenseByMonth[ym] || 0;
+      otherIncome += otherIncomeByMonth[ym] || 0;
     }
-    return { sales, purchase, expense, profit: sales - purchase - expense };
+    return { sales, purchase, expense, otherIncome, profit: sales - purchase - expense + otherIncome };
   }
 
   function renderSummary(){
@@ -222,8 +255,75 @@ if ('serviceWorker' in navigator) {
       <div class="summary-chip">${activeYear}년 총매출<b>${fmtWon(t.sales)}</b></div>
       <div class="summary-chip">${activeYear}년 총매입<b>${fmtWon(t.purchase)}</b></div>
       <div class="summary-chip">${activeYear}년 일반지출 (자동집계)<b>${fmtWon(t.expense)}</b></div>
+      <div class="summary-chip">${activeYear}년 기타수입 (자동집계)<b>${fmtWon(t.otherIncome)}</b></div>
       <div class="summary-chip ${profitClass}">${activeYear}년 예상손익<b>${fmtWon(t.profit)}</b></div>
     `;
+  }
+
+  function buildMonthRow(ym, label){
+    const sp = spFor(ym);
+    const exp = expenseByMonth[ym] || 0;
+    const inc = otherIncomeByMonth[ym] || 0;
+    const monthProfit = (sp.salesTotal || 0) - (sp.purchaseTotal || 0) - exp + inc;
+
+    const expBreakdown = expenseBreakdown[ym];
+    const incBreakdown = otherIncomeBreakdown[ym];
+
+    return `
+      <tr>
+        <td>${label}</td>
+        <td>${fmtWon(sp.salesTotal)}</td>
+        <td>${fmtWon(sp.purchaseTotal)}</td>
+        <td>
+          ${fmtWon(exp)}
+          ${expBreakdown ? `<button class="breakdown-toggle" data-toggle-breakdown="exp-${ym}">${openBreakdown.has('exp-' + ym) ? '숨기기' : '내역보기'}</button>` : ''}
+        </td>
+        <td>
+          ${fmtWon(inc)}
+          ${incBreakdown ? `<button class="breakdown-toggle" data-toggle-breakdown="inc-${ym}">${openBreakdown.has('inc-' + ym) ? '숨기기' : '내역보기'}</button>` : ''}
+        </td>
+        <td class="${monthProfit < 0 ? 'neg' : ''}">${fmtWon(monthProfit)}</td>
+        <td><button class="edit-link" data-edit-month="${ym}">입력</button></td>
+      </tr>
+      ${expBreakdown ? `
+        <tr style="display:${openBreakdown.has('exp-' + ym) ? 'table-row' : 'none'};" data-breakdown-row="exp-${ym}">
+          <td colspan="7">
+            <div class="breakdown-list open">
+              <div style="font-weight:600; margin-bottom:4px;">일반지출 내역</div>
+              ${expBreakdown.map(b => `<div class="b-row"><span>${esc(b.source)} · ${esc(b.name)}</span><span>${fmtWon(b.amount)}</span></div>`).join('')}
+            </div>
+          </td>
+        </tr>
+      ` : ''}
+      ${incBreakdown ? `
+        <tr style="display:${openBreakdown.has('inc-' + ym) ? 'table-row' : 'none'};" data-breakdown-row="inc-${ym}">
+          <td colspan="7">
+            <div class="breakdown-list open">
+              <div style="font-weight:600; margin-bottom:4px;">기타수입 내역</div>
+              ${incBreakdown.map(b => `<div class="b-row"><span>${esc(b.source)} · ${esc(b.name)}</span><span>${fmtWon(b.amount)}</span></div>`).join('')}
+            </div>
+          </td>
+        </tr>
+      ` : ''}
+      <tr style="display:none;" data-edit-row="${ym}"></tr>
+    `;
+  }
+
+  function tableHead(){
+    return `<thead><tr><th>월</th><th>매출</th><th>매입</th><th>일반지출(자동)</th><th>기타수입(자동)</th><th>월손익</th><th></th></tr></thead>`;
+  }
+
+  function bindRowEvents(){
+    document.querySelectorAll('[data-toggle-breakdown]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.toggleBreakdown;
+        if (openBreakdown.has(key)) openBreakdown.delete(key); else openBreakdown.add(key);
+        if (viewMode === 'quarter') renderQuarters(); else renderMonthsFlat();
+      });
+    });
+    document.querySelectorAll('[data-edit-month]').forEach(btn => {
+      btn.addEventListener('click', () => openEditForm(btn.dataset.editMonth));
+    });
   }
 
   function renderQuarters(){
@@ -231,18 +331,17 @@ if ('serviceWorker' in navigator) {
     let html = '';
     for (let q = 1; q <= 4; q++) {
       const months = [(q - 1) * 3 + 1, (q - 1) * 3 + 2, (q - 1) * 3 + 3];
-      let qSales = 0, qPurchase = 0, qExpense = 0;
-      const rows = months.map(m => {
+      let qSales = 0, qPurchase = 0, qExpense = 0, qIncome = 0;
+      const rowsHtml = months.map(m => {
         const ym = `${activeYear}-${String(m).padStart(2, '0')}`;
         const sp = spFor(ym);
-        const exp = expenseByMonth[ym] || 0;
         qSales += sp.salesTotal || 0;
         qPurchase += sp.purchaseTotal || 0;
-        qExpense += exp;
-        const monthProfit = (sp.salesTotal || 0) - (sp.purchaseTotal || 0) - exp;
-        return { ym, m, sp, exp, monthProfit };
-      });
-      const qProfit = qSales - qPurchase - qExpense;
+        qExpense += expenseByMonth[ym] || 0;
+        qIncome += otherIncomeByMonth[ym] || 0;
+        return buildMonthRow(ym, `${m}월`);
+      }).join('');
+      const qProfit = qSales - qPurchase - qExpense + qIncome;
 
       html += `
         <div class="quarter-block">
@@ -251,36 +350,15 @@ if ('serviceWorker' in navigator) {
             <span class="q-profit ${qProfit >= 0 ? 'profit' : 'loss'}">예상손익 ${fmtWon(qProfit)}</span>
           </div>
           <table class="month-table">
-            <thead><tr><th>월</th><th>매출</th><th>매입</th><th>일반지출(자동)</th><th>월손익</th><th></th></tr></thead>
+            ${tableHead()}
             <tbody>
-              ${rows.map(r => `
-                <tr>
-                  <td>${r.m}월</td>
-                  <td>${fmtWon(r.sp.salesTotal)}</td>
-                  <td>${fmtWon(r.sp.purchaseTotal)}</td>
-                  <td>
-                    ${fmtWon(r.exp)}
-                    ${expenseBreakdown[r.ym] ? `<button class="breakdown-toggle" data-toggle-breakdown="${r.ym}">${openBreakdown.has(r.ym) ? '숨기기' : '내역보기'}</button>` : ''}
-                  </td>
-                  <td class="${r.monthProfit < 0 ? 'neg' : ''}">${fmtWon(r.monthProfit)}</td>
-                  <td><button class="edit-link" data-edit-month="${r.ym}">입력</button></td>
-                </tr>
-                ${expenseBreakdown[r.ym] ? `
-                  <tr style="display:${openBreakdown.has(r.ym) ? 'table-row' : 'none'};" data-breakdown-row="${r.ym}">
-                    <td colspan="6">
-                      <div class="breakdown-list open">
-                        ${expenseBreakdown[r.ym].map(b => `<div class="b-row"><span>${esc(b.source)} · ${esc(b.name)}</span><span>${fmtWon(b.amount)}</span></div>`).join('')}
-                      </div>
-                    </td>
-                  </tr>
-                ` : ''}
-                <tr style="display:none;" data-edit-row="${r.ym}"></tr>
-              `).join('')}
+              ${rowsHtml}
               <tr class="total-row">
                 <td>분기 합계</td>
                 <td>${fmtWon(qSales)}</td>
                 <td>${fmtWon(qPurchase)}</td>
                 <td>${fmtWon(qExpense)}</td>
+                <td>${fmtWon(qIncome)}</td>
                 <td class="${qProfit < 0 ? 'neg' : ''}">${fmtWon(qProfit)}</td>
                 <td></td>
               </tr>
@@ -290,16 +368,95 @@ if ('serviceWorker' in navigator) {
       `;
     }
     listEl.innerHTML = html;
+    bindRowEvents();
+  }
 
-    document.querySelectorAll('[data-toggle-breakdown]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const ym = btn.dataset.toggleBreakdown;
-        if (openBreakdown.has(ym)) openBreakdown.delete(ym); else openBreakdown.add(ym);
-        renderQuarters();
-      });
-    });
-    document.querySelectorAll('[data-edit-month]').forEach(btn => {
-      btn.addEventListener('click', () => openEditForm(btn.dataset.editMonth));
+  function renderMonthsFlat(){
+    const listEl = document.getElementById('quarterList');
+    const t = yearTotals(activeYear);
+    const rowsHtml = Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+      const ym = `${activeYear}-${String(m).padStart(2, '0')}`;
+      return buildMonthRow(ym, `${activeYear}-${String(m).padStart(2, '0')}`);
+    }).join('');
+
+    listEl.innerHTML = `
+      <div class="quarter-block">
+        <div class="quarter-head">
+          <span>${activeYear}년 전체 (월별)</span>
+          <span class="q-profit ${t.profit >= 0 ? 'profit' : 'loss'}">연간 예상손익 ${fmtWon(t.profit)}</span>
+        </div>
+        <table class="month-table">
+          ${tableHead()}
+          <tbody>
+            ${rowsHtml}
+            <tr class="total-row">
+              <td>연간 합계</td>
+              <td>${fmtWon(t.sales)}</td>
+              <td>${fmtWon(t.purchase)}</td>
+              <td>${fmtWon(t.expense)}</td>
+              <td>${fmtWon(t.otherIncome)}</td>
+              <td class="${t.profit < 0 ? 'neg' : ''}">${fmtWon(t.profit)}</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+    bindRowEvents();
+  }
+
+  let overviewChartInstance = null;
+  function renderChart(){
+    const canvas = document.getElementById('overviewChart');
+    if (!canvas || typeof Chart === 'undefined') return;
+
+    let labels, salesData, purchaseData, expenseData, incomeData;
+    if (viewMode === 'quarter') {
+      labels = ['1분기', '2분기', '3분기', '4분기'];
+      salesData = []; purchaseData = []; expenseData = []; incomeData = [];
+      for (let q = 1; q <= 4; q++) {
+        let s = 0, p = 0, e = 0, inc = 0;
+        for (let i = 0; i < 3; i++) {
+          const m = (q - 1) * 3 + i + 1;
+          const ym = `${activeYear}-${String(m).padStart(2, '0')}`;
+          s += spFor(ym).salesTotal || 0;
+          p += spFor(ym).purchaseTotal || 0;
+          e += expenseByMonth[ym] || 0;
+          inc += otherIncomeByMonth[ym] || 0;
+        }
+        salesData.push(s); purchaseData.push(p); expenseData.push(e); incomeData.push(inc);
+      }
+    } else {
+      labels = Array.from({ length: 12 }, (_, i) => `${i + 1}월`);
+      salesData = []; purchaseData = []; expenseData = []; incomeData = [];
+      for (let m = 1; m <= 12; m++) {
+        const ym = `${activeYear}-${String(m).padStart(2, '0')}`;
+        salesData.push(spFor(ym).salesTotal || 0);
+        purchaseData.push(spFor(ym).purchaseTotal || 0);
+        expenseData.push(expenseByMonth[ym] || 0);
+        incomeData.push(otherIncomeByMonth[ym] || 0);
+      }
+    }
+
+    if (overviewChartInstance) overviewChartInstance.destroy();
+    overviewChartInstance = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: '매출', data: salesData, backgroundColor: '#3f6b52' },
+          { label: '매입', data: purchaseData, backgroundColor: '#a4453c' },
+          { label: '일반지출', data: expenseData, backgroundColor: '#8a8578' },
+          { label: '기타수입', data: incomeData, backgroundColor: '#c9a24b' }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom', labels: { font: { family: 'Pretendard' } } } },
+        scales: {
+          y: { ticks: { callback: (v) => (v / 10000).toLocaleString() + '만' } }
+        }
+      }
     });
   }
 
@@ -309,7 +466,7 @@ if ('serviceWorker' in navigator) {
     const sp = spFor(ym);
     row.style.display = 'table-row';
     row.innerHTML = `
-      <td colspan="6">
+      <td colspan="7">
         <div class="edit-form" style="margin:0; border:none; background:none; padding:10px 0;">
           <div class="form-row">
             <div class="field"><label>매출 총합계(VAT포함)</label><input type="text" inputmode="numeric" class="money-in" id="sp-salesTotal-${ym}" value="${sp.salesTotal ? sp.salesTotal.toLocaleString('ko-KR') : ''}"></div>

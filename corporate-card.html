@@ -118,6 +118,9 @@ if ('serviceWorker' in navigator) {
   let allCards = [];
   let openIds = new Set();
   let activeYear = '전체';
+  let activeCardName = '전체';
+  let startMonth = '';
+  let endMonth = '';
 
   function esc(s){ return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
   function fmtWon(n){ return (Math.round(n) || 0).toLocaleString() + '원'; }
@@ -126,6 +129,11 @@ if ('serviceWorker' in navigator) {
   function cardTotal(c){ return Object.values(c.monthly || {}).reduce((s, v) => s + (Number(v) || 0), 0); }
   function cardTotalForYear(c, year){
     return Object.entries(c.monthly || {}).filter(([ym]) => ym.startsWith(year)).reduce((s, [,v]) => s + (Number(v) || 0), 0);
+  }
+  function cardTotalFiltered(c){
+    return filteredMonthlyEntries(c)
+      .filter(([ym]) => activeYear === '전체' || ym.startsWith(activeYear))
+      .reduce((s, [,v]) => s + (Number(v) || 0), 0);
   }
   function thisMonthKey(){
     const d = new Date();
@@ -151,8 +159,18 @@ if ('serviceWorker' in navigator) {
   }
 
   function getFilteredCards(){
-    if (activeYear === '전체') return allCards;
-    return allCards.filter(c => Object.keys(c.monthly || {}).some(ym => ym.startsWith(activeYear)));
+    let rows = allCards;
+    if (activeYear !== '전체') rows = rows.filter(c => Object.keys(c.monthly || {}).some(ym => ym.startsWith(activeYear)));
+    if (activeCardName !== '전체') rows = rows.filter(c => c.name === activeCardName);
+    if (startMonth) rows = rows.filter(c => Object.keys(c.monthly || {}).some(ym => ym >= startMonth));
+    if (endMonth) rows = rows.filter(c => Object.keys(c.monthly || {}).some(ym => ym <= endMonth));
+    return rows;
+  }
+
+  function filteredMonthlyEntries(c){
+    return Object.entries(c.monthly || {})
+      .filter(([ym]) => (!startMonth || ym >= startMonth) && (!endMonth || ym <= endMonth))
+      .sort((a, b) => b[0].localeCompare(a[0]));
   }
 
   function renderAll(){
@@ -162,6 +180,13 @@ if ('serviceWorker' in navigator) {
       <div class="panel">
         <div class="toolbar">
           <select id="yearFilter"><option value="전체">전체 연도</option></select>
+          <select id="cardNameFilter"><option value="전체">전체 카드</option></select>
+          <span style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted);">
+            <input type="month" id="startMonthFilter" style="padding:7px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff;">
+            ~
+            <input type="month" id="endMonthFilter" style="padding:7px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff;">
+            <button type="button" class="row-btn" id="clearMonthRangeBtn" style="margin-left:2px;">초기화</button>
+          </span>
           <button class="add-btn" id="newCardBtn">+ 새 카드 등록</button>
         </div>
       </div>
@@ -173,6 +198,23 @@ if ('serviceWorker' in navigator) {
     document.getElementById('yearFilter').innerHTML = '<option value="전체">전체 연도</option>' + years.map(y => `<option value="${y}">${y}년</option>`).join('');
     document.getElementById('yearFilter').value = activeYear;
     document.getElementById('yearFilter').addEventListener('change', (e) => { activeYear = e.target.value; renderList(); });
+
+    const cardNames = [...new Set(allCards.map(c => c.name).filter(Boolean))].sort();
+    document.getElementById('cardNameFilter').innerHTML = '<option value="전체">전체 카드</option>' + cardNames.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    document.getElementById('cardNameFilter').value = activeCardName;
+    document.getElementById('cardNameFilter').addEventListener('change', (e) => { activeCardName = e.target.value; renderList(); });
+
+    document.getElementById('startMonthFilter').value = startMonth;
+    document.getElementById('endMonthFilter').value = endMonth;
+    document.getElementById('startMonthFilter').addEventListener('change', (e) => { startMonth = e.target.value; renderList(); });
+    document.getElementById('endMonthFilter').addEventListener('change', (e) => { endMonth = e.target.value; renderList(); });
+    document.getElementById('clearMonthRangeBtn').addEventListener('click', () => {
+      startMonth = ''; endMonth = '';
+      document.getElementById('startMonthFilter').value = '';
+      document.getElementById('endMonthFilter').value = '';
+      renderList();
+    });
+
     document.getElementById('newCardBtn').addEventListener('click', createBlankCard);
 
     renderList();
@@ -181,15 +223,14 @@ if ('serviceWorker' in navigator) {
   function renderSummary(){
     const bar = document.getElementById('summaryBar');
     const rows = getFilteredCards();
-    const total = activeYear === '전체'
-      ? rows.reduce((s, c) => s + cardTotal(c), 0)
-      : rows.reduce((s, c) => s + cardTotalForYear(c, activeYear), 0);
+    const total = rows.reduce((s, c) => s + cardTotalFiltered(c), 0);
     const thisMonth = thisMonthKey();
     const thisMonthTotal = allCards.reduce((s, c) => s + (Number((c.monthly || {})[thisMonth]) || 0), 0);
+    const periodLabel = (startMonth || endMonth) ? `${startMonth || '처음'}~${endMonth || '지금'}` : (activeYear === '전체' ? '전체' : activeYear + '년');
 
     bar.innerHTML = `
-      <div class="summary-chip">${activeYear === '전체' ? '전체' : activeYear + '년'} 카드 수<b>${rows.length}장</b></div>
-      <div class="summary-chip">${activeYear === '전체' ? '전체 누적' : activeYear + '년'} 사용액<b>${fmtWon(total)}</b></div>
+      <div class="summary-chip">${periodLabel} 카드 수<b>${rows.length}장</b></div>
+      <div class="summary-chip">${periodLabel} 사용액<b>${fmtWon(total)}</b></div>
       <div class="summary-chip">이번달(${thisMonth}) 전체 사용액<b>${fmtWon(thisMonthTotal)}</b></div>
     `;
   }
@@ -222,8 +263,9 @@ if ('serviceWorker' in navigator) {
 
   function renderCard(c){
     const isOpen = openIds.has(c.id);
-    const total = activeYear === '전체' ? cardTotal(c) : cardTotalForYear(c, activeYear);
-    const monthCount = Object.keys(c.monthly || {}).filter(ym => activeYear === '전체' || ym.startsWith(activeYear)).length;
+    const total = cardTotalFiltered(c);
+    const monthCount = filteredMonthlyEntries(c).filter(([ym]) => activeYear === '전체' || ym.startsWith(activeYear)).length;
+    const periodLabel = (startMonth || endMonth) ? '기간내' : (activeYear === '전체' ? '누적' : activeYear + '년');
     return `
       <div class="card-item">
         <div class="card-head" data-head="${c.id}">
@@ -233,7 +275,7 @@ if ('serviceWorker' in navigator) {
           </div>
           <div class="card-meta">
             <div class="m-item">기록된 개월수<b>${monthCount}개월</b></div>
-            <div class="m-item">${activeYear === '전체' ? '누적' : activeYear + '년'} 사용액<b>${fmtWon(total)}</b></div>
+            <div class="m-item">${periodLabel} 사용액<b>${fmtWon(total)}</b></div>
           </div>
         </div>
         <div class="card-body ${isOpen ? 'open' : ''}" data-body="${c.id}">
@@ -244,10 +286,12 @@ if ('serviceWorker' in navigator) {
   }
 
   function renderBody(c){
-    const months = Object.entries(c.monthly || {}).sort((a, b) => b[0].localeCompare(a[0]));
+    const months = filteredMonthlyEntries(c);
+    const filterNote = (startMonth || endMonth) ? `<div style="font-size:11.5px; color:var(--muted); margin-bottom:8px;">* 현재 기간 필터(${startMonth || '처음'}~${endMonth || '지금'})에 맞는 달만 표시 중</div>` : '';
     return `
       ${c.note ? `<div class="subsection-title">비고</div><div style="font-size:12.5px; color:#54514a; margin-bottom:16px;">${esc(c.note)}</div>` : ''}
       <div class="subsection-title">월별 사용액</div>
+      ${filterNote}
       ${months.length ? `
         <table class="mini">
           <thead><tr><th>연-월</th><th>사용액</th><th>관리</th></tr></thead>

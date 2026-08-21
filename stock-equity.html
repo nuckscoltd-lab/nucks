@@ -33,6 +33,7 @@ if ('serviceWorker' in navigator) {
   .add-btn{ padding:8px 16px; background:var(--ink); color:var(--paper); border:none; font-size:12.5px; letter-spacing:.05em; cursor:pointer; border-radius:4px; }
   .row-btn{ font-size:11.5px; background:none; border:none; cursor:pointer; text-decoration:underline; color:var(--muted); margin-right:8px; padding:0; }
   .row-btn.danger{ color:var(--red); }
+  .tag{ display:inline-block; font-size:11px; padding:2px 9px; border-radius:12px; vertical-align:middle; margin-left:4px; }
 
   .card-item{ background:#fff; border:1px solid var(--line); border-radius:6px; margin-bottom:12px; overflow:hidden; }
   .card-head{ display:flex; align-items:center; gap:14px; padding:16px 18px; cursor:pointer; flex-wrap:wrap; }
@@ -104,7 +105,7 @@ if ('serviceWorker' in navigator) {
 
   // 📌 [내장 초기 데이터] stockItems 컬렉션이 비어있을 때(처음 실행 시)만 자동으로 채워지는 마이그레이션 데이터.
   // 출처: nuckscoltd_2026년운영.xlsx '주식' 시트 (2024~2026년 주주 3인의 지분율·배당금 + 전문건설공제조합 외부투자 배당).
-  const EMBEDDED_STOCK = [{"name": "전문건설배당", "category": "외부투자배당", "ownershipPct": 2.35, "shares": null, "faceValue": null, "evalValue": null, "monthly": {"2024-03": 1188987, "2025-04": 1080000, "2026-04": 810000}}, {"name": "윤 상 원", "category": "주주배당", "ownershipPct": 34.0, "shares": 10200, "faceValue": 5000, "evalValue": 9931, "monthly": {"2024-04": 16074000, "2025-04": 16074000, "2026-04": 16074000}}, {"name": "김 의 석", "category": "주주배당", "ownershipPct": 33.33, "shares": 10000, "faceValue": 5000, "evalValue": 9931, "monthly": {"2024-04": 15750024, "2025-04": 15758831, "2026-04": 15758824}}, {"name": "김 경 은", "category": "주주배당", "ownershipPct": 32.67, "shares": 9800, "faceValue": 5000, "evalValue": 9931, "monthly": {"2024-04": 15443647, "2025-04": 15443662, "2026-04": 15443647}}];
+  const EMBEDDED_STOCK = [{"name": "전문건설배당", "category": "외부투자배당", "ownershipPct": 2.35, "shares": null, "faceValue": null, "evalValue": null, "monthly": {"2024-03": 1188987, "2025-04": 1080000, "2026-04": 810000}, "flowType": "수입"}, {"name": "윤 상 원", "category": "주주배당", "ownershipPct": 34.0, "shares": 10200, "faceValue": 5000, "evalValue": 9931, "monthly": {"2024-04": 16074000, "2025-04": 16074000, "2026-04": 16074000}, "flowType": "지출"}, {"name": "김 의 석", "category": "주주배당", "ownershipPct": 33.33, "shares": 10000, "faceValue": 5000, "evalValue": 9931, "monthly": {"2024-04": 15750024, "2025-04": 15758831, "2026-04": 15758824}, "flowType": "지출"}, {"name": "김 경 은", "category": "주주배당", "ownershipPct": 32.67, "shares": 9800, "faceValue": 5000, "evalValue": 9931, "monthly": {"2024-04": 15443647, "2025-04": 15443662, "2026-04": 15443647}, "flowType": "지출"}];
 </script>
 <script>
   document.getElementById('logoutBtn').addEventListener('click', async (e) => {
@@ -118,6 +119,8 @@ if ('serviceWorker' in navigator) {
   let allCards = [];
   let openIds = new Set();
   let activeYear = '전체';
+  let startMonth = '';
+  let endMonth = '';
 
   function esc(s){ return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
   function fmtWon(n){ return (Math.round(n) || 0).toLocaleString() + '원'; }
@@ -126,6 +129,16 @@ if ('serviceWorker' in navigator) {
   function cardTotal(c){ return Object.values(c.monthly || {}).reduce((s, v) => s + (Number(v) || 0), 0); }
   function cardTotalForYear(c, year){
     return Object.entries(c.monthly || {}).filter(([ym]) => ym.startsWith(year)).reduce((s, [,v]) => s + (Number(v) || 0), 0);
+  }
+  function cardTotalFiltered(c){
+    return filteredMonthlyEntries(c)
+      .filter(([ym]) => activeYear === '전체' || ym.startsWith(activeYear))
+      .reduce((s, [,v]) => s + (Number(v) || 0), 0);
+  }
+  function filteredMonthlyEntries(c){
+    return Object.entries(c.monthly || {})
+      .filter(([ym]) => (!startMonth || ym >= startMonth) && (!endMonth || ym <= endMonth))
+      .sort((a, b) => b[0].localeCompare(a[0]));
   }
   function thisMonthKey(){
     const d = new Date();
@@ -147,12 +160,29 @@ if ('serviceWorker' in navigator) {
     await seedIfEmpty();
     const snap = await cardsRef.orderBy('order', 'asc').get();
     allCards = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // flowType이 없는 기존 문서는 구분(category) 기준으로 한 번만 채워준다
+    // (외부투자배당 = 우리가 받는 수입, 주주배당 = 우리가 지급하는 지출)
+    const missing = allCards.filter(c => !c.flowType);
+    if (missing.length) {
+      const batch = db.batch();
+      missing.forEach(c => {
+        const flowType = c.category === '외부투자배당' ? '수입' : '지출';
+        c.flowType = flowType;
+        batch.update(cardsRef.doc(c.id), { flowType });
+      });
+      await batch.commit();
+    }
+
     renderAll();
   }
 
   function getFilteredCards(){
-    if (activeYear === '전체') return allCards;
-    return allCards.filter(c => Object.keys(c.monthly || {}).some(ym => ym.startsWith(activeYear)));
+    let rows = allCards;
+    if (activeYear !== '전체') rows = rows.filter(c => Object.keys(c.monthly || {}).some(ym => ym.startsWith(activeYear)));
+    if (startMonth) rows = rows.filter(c => Object.keys(c.monthly || {}).some(ym => ym >= startMonth));
+    if (endMonth) rows = rows.filter(c => Object.keys(c.monthly || {}).some(ym => ym <= endMonth));
+    return rows;
   }
 
   function renderAll(){
@@ -162,6 +192,12 @@ if ('serviceWorker' in navigator) {
       <div class="panel">
         <div class="toolbar">
           <select id="yearFilter"><option value="전체">전체 연도</option></select>
+          <span style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted);">
+            <input type="month" id="startMonthFilter" style="padding:7px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff;">
+            ~
+            <input type="month" id="endMonthFilter" style="padding:7px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff;">
+            <button type="button" class="row-btn" id="clearMonthRangeBtn" style="margin-left:2px;">초기화</button>
+          </span>
           <button class="add-btn" id="newItemBtn">+ 새 항목 등록</button>
         </div>
       </div>
@@ -173,6 +209,18 @@ if ('serviceWorker' in navigator) {
     document.getElementById('yearFilter').innerHTML = '<option value="전체">전체 연도</option>' + years.map(y => `<option value="${y}">${y}년</option>`).join('');
     document.getElementById('yearFilter').value = activeYear;
     document.getElementById('yearFilter').addEventListener('change', (e) => { activeYear = e.target.value; renderList(); });
+
+    document.getElementById('startMonthFilter').value = startMonth;
+    document.getElementById('endMonthFilter').value = endMonth;
+    document.getElementById('startMonthFilter').addEventListener('change', (e) => { startMonth = e.target.value; renderList(); });
+    document.getElementById('endMonthFilter').addEventListener('change', (e) => { endMonth = e.target.value; renderList(); });
+    document.getElementById('clearMonthRangeBtn').addEventListener('click', () => {
+      startMonth = ''; endMonth = '';
+      document.getElementById('startMonthFilter').value = '';
+      document.getElementById('endMonthFilter').value = '';
+      renderList();
+    });
+
     document.getElementById('newItemBtn').addEventListener('click', createBlankCard);
 
     renderList();
@@ -181,15 +229,14 @@ if ('serviceWorker' in navigator) {
   function renderSummary(){
     const bar = document.getElementById('summaryBar');
     const rows = getFilteredCards();
-    const total = activeYear === '전체'
-      ? rows.reduce((s, c) => s + cardTotal(c), 0)
-      : rows.reduce((s, c) => s + cardTotalForYear(c, activeYear), 0);
+    const total = rows.reduce((s, c) => s + cardTotalFiltered(c), 0);
     const thisMonth = thisMonthKey();
     const thisMonthTotal = allCards.reduce((s, c) => s + (Number((c.monthly || {})[thisMonth]) || 0), 0);
+    const periodLabel = (startMonth || endMonth) ? `${startMonth || '처음'}~${endMonth || '지금'}` : (activeYear === '전체' ? '전체' : activeYear + '년');
 
     bar.innerHTML = `
-      <div class="summary-chip">${activeYear === '전체' ? '전체' : activeYear + '년'} 항목 수<b>${rows.length}건</b></div>
-      <div class="summary-chip">${activeYear === '전체' ? '전체 누적' : activeYear + '년'} 사용액<b>${fmtWon(total)}</b></div>
+      <div class="summary-chip">${periodLabel} 항목 수<b>${rows.length}건</b></div>
+      <div class="summary-chip">${periodLabel} 사용액<b>${fmtWon(total)}</b></div>
       <div class="summary-chip">이번달(${thisMonth}) 전체 사용액<b>${fmtWon(thisMonthTotal)}</b></div>
     `;
   }
@@ -222,18 +269,21 @@ if ('serviceWorker' in navigator) {
 
   function renderCard(c){
     const isOpen = openIds.has(c.id);
-    const total = activeYear === '전체' ? cardTotal(c) : cardTotalForYear(c, activeYear);
-    const monthCount = Object.keys(c.monthly || {}).filter(ym => activeYear === '전체' || ym.startsWith(activeYear)).length;
+    const total = cardTotalFiltered(c);
+    const monthCount = filteredMonthlyEntries(c).filter(([ym]) => activeYear === '전체' || ym.startsWith(activeYear)).length;
+    const periodLabel = (startMonth || endMonth) ? '기간내' : (activeYear === '전체' ? '누적' : activeYear + '년');
+    const flowType = c.flowType || (c.category === '외부투자배당' ? '수입' : '지출');
+    const flowBadge = `<span class="tag" style="${flowType === '수입' ? 'background:#dfe9e2; color:var(--green);' : 'background:#fbe4e2; color:var(--red);'}">${flowType}</span>`;
     return `
       <div class="card-item">
         <div class="card-head" data-head="${c.id}">
           <div>
-            <div class="card-name">${esc(c.name)}</div>
+            <div class="card-name">${esc(c.name)} ${flowBadge}</div>
             <div class="card-sub">${esc(c.category)}${c.ownershipPct ? ' · 지분율 ' + c.ownershipPct + '%' : ''}${c.shares ? ' · ' + c.shares.toLocaleString() + '주' : ''}</div>
           </div>
           <div class="card-meta">
             <div class="m-item">기록된 개월수<b>${monthCount}개월</b></div>
-            <div class="m-item">${activeYear === '전체' ? '누적' : activeYear + '년'} 사용액<b>${fmtWon(total)}</b></div>
+            <div class="m-item">${periodLabel} ${flowType === '수입' ? '수령액' : '지급액'}<b>${fmtWon(total)}</b></div>
           </div>
         </div>
         <div class="card-body ${isOpen ? 'open' : ''}" data-body="${c.id}">
@@ -244,10 +294,12 @@ if ('serviceWorker' in navigator) {
   }
 
   function renderBody(c){
-    const months = Object.entries(c.monthly || {}).sort((a, b) => b[0].localeCompare(a[0]));
+    const months = filteredMonthlyEntries(c);
+    const filterNote = (startMonth || endMonth) ? `<div style="font-size:11.5px; color:var(--muted); margin-bottom:8px;">* 현재 기간 필터(${startMonth || '처음'}~${endMonth || '지금'})에 맞는 달만 표시 중</div>` : '';
     return `
       ${c.note ? `<div class="subsection-title">비고</div><div style="font-size:12.5px; color:#54514a; margin-bottom:16px;">${esc(c.note)}</div>` : ''}
       <div class="subsection-title">월별 사용액</div>
+      ${filterNote}
       ${months.length ? `
         <table class="mini">
           <thead><tr><th>연-월</th><th>사용액</th><th>관리</th></tr></thead>
@@ -278,6 +330,12 @@ if ('serviceWorker' in navigator) {
           <div class="field"><label>구분 (주주배당/외부투자배당)</label><input type="text" id="ec-number-${c.id}" value="${esc(c.category)}"></div>
           <div class="field"><label>지분율(%)</label><input type="text" inputmode="numeric" id="ec-pct-${c.id}" value="${c.ownershipPct ?? ''}" style="width:90px;"></div>
           <div class="field"><label>보유주수</label><input type="text" inputmode="numeric" class="money-in" id="ec-shares-${c.id}" value="${c.shares ? c.shares.toLocaleString('ko-KR') : ''}" style="width:100px;"></div>
+          <div class="field"><label>수입/지출</label>
+            <select id="ec-flow-${c.id}" style="padding:7px 9px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:12.5px;">
+              <option value="지출" ${(c.flowType || (c.category === '외부투자배당' ? '수입' : '지출')) === '지출' ? 'selected' : ''}>지출 (우리가 지급)</option>
+              <option value="수입" ${(c.flowType || (c.category === '외부투자배당' ? '수입' : '지출')) === '수입' ? 'selected' : ''}>수입 (우리가 수령)</option>
+            </select>
+          </div>
         </div>
         <button class="add-btn" id="ec-save-${c.id}">저장</button>
       </div>
@@ -351,7 +409,7 @@ if ('serviceWorker' in navigator) {
       category: document.getElementById(`ec-number-${id}`).value.trim(),
       ownershipPct: Number(document.getElementById(`ec-pct-${id}`).value) || null,
       shares: parseMoney(document.getElementById(`ec-shares-${id}`)) || null,
-      note: document.getElementById(`ec-note-${id}`).value.trim()
+      flowType: document.getElementById(`ec-flow-${id}`).value
     };
     if (!updateData.name) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '이름/항목명을 입력해주세요.'; return; }
     try {
