@@ -141,6 +141,9 @@ if ('serviceWorker' in navigator) {
   }
   .print-slip .p-pay-table th{ background:#f2f0eb; text-align:left; }
   .print-slip .p-pay-table td{ text-align:right; }
+  .print-slip .p-item-detail th, .print-slip .p-item-detail td{
+    padding:3px 6px; font-size:10px; white-space:nowrap;
+  }
   .print-slip .p-net-box{
     text-align:right; font-size:14.5px; font-weight:700; margin:10px 0 6px;
   }
@@ -280,6 +283,9 @@ if ('serviceWorker' in navigator) {
     </span>
     <button type="button" class="submit-btn" id="bulkPrintFilteredBtn" style="margin:0; padding:8px 16px;">현재 목록 일괄 인쇄</button>
     <button type="button" class="submit-btn" id="bulkPrintSelectedBtn" style="margin:0; padding:8px 16px; display:none;">선택 항목 일괄 인쇄</button>
+    <label style="display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--muted); cursor:pointer;">
+      <input type="checkbox" id="includeItemDetailChk"> 요약 인쇄 시 항목별 상세 포함
+    </label>
   </div>
 
   <div class="summary-bar" id="paySummaryBar"></div>
@@ -401,6 +407,7 @@ if ('serviceWorker' in navigator) {
     const sorted = [...slips].sort((a, b) => (a['지급일'] || '').localeCompare(b['지급일'] || ''));
     const first = sorted[0];
     const today = formatDateKR(new Date().toISOString().slice(0, 10));
+    const includeDetail = document.getElementById('includeItemDetailChk')?.checked;
 
     const rows = sorted.map(s => `
       <tr>
@@ -414,6 +421,28 @@ if ('serviceWorker' in navigator) {
     const totalPay = sorted.reduce((sum, s) => sum + (s['지급액계'] || 0), 0);
     const totalDed = sorted.reduce((sum, s) => sum + (s['공제액계'] || 0), 0);
     const totalNet = sorted.reduce((sum, s) => sum + (s['차인지급액'] || 0), 0);
+
+    // 항목(지급/공제)을 행으로, 월을 열로 배치한 상세표. 항목이 많아 표가 넓어질 수 있어
+    // 체크박스로 켰을 때만 추가로 붙인다.
+    function itemDetailTable(title, keys, dataKey){
+      const monthHeaders = sorted.map(s => `<th style="text-align:right;">${(s['지급일'] || '').slice(0, 7)}</th>`).join('');
+      const itemRows = keys.map(key => {
+        const cells = sorted.map(s => `<td style="text-align:right;">${((s[dataKey]?.[key]) || 0).toLocaleString()}</td>`).join('');
+        const rowTotal = sorted.reduce((sum, s) => sum + (s[dataKey]?.[key] || 0), 0);
+        return `<tr><th style="text-align:left;">${key}</th>${cells}<td style="text-align:right; font-weight:700;">${rowTotal.toLocaleString()}</td></tr>`;
+      }).join('');
+      return `
+        <table class="p-pay-table p-item-detail" style="margin-top:16px;">
+          <thead><tr><th style="text-align:left;">${title}</th>${monthHeaders}<th style="text-align:right;">합계</th></tr></thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+      `;
+    }
+
+    const detailHtml = includeDetail ? `
+      ${itemDetailTable('지급 항목', PAY_KEYS, 'pay')}
+      ${itemDetailTable('공제 항목', DED_KEYS, 'deductions')}
+    ` : '';
 
     return `
       <div class="print-slip">
@@ -436,6 +465,7 @@ if ('serviceWorker' in navigator) {
             </tr>
           </tfoot>
         </table>
+        ${detailHtml}
         <div class="p-date">발행일: ${today}</div>
         <div class="p-sign">
           <span>${COMPANY_NAME} ${CEO_TITLE}</span>
