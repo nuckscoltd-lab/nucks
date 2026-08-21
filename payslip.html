@@ -396,18 +396,75 @@ if ('serviceWorker' in navigator) {
     `;
   }
 
+  // 같은 사원의 여러 달치를 한 장에 월별로 정리해서 보여주는 요약 인쇄용 HTML
+  function buildYearlySummaryHtml(slips){
+    const sorted = [...slips].sort((a, b) => (a['지급일'] || '').localeCompare(b['지급일'] || ''));
+    const first = sorted[0];
+    const today = formatDateKR(new Date().toISOString().slice(0, 10));
+
+    const rows = sorted.map(s => `
+      <tr>
+        <td>${(s['지급일'] || '').slice(0, 7)}</td>
+        <td style="text-align:right;">${(s['지급액계'] || 0).toLocaleString()}원</td>
+        <td style="text-align:right;">${(s['공제액계'] || 0).toLocaleString()}원</td>
+        <td style="text-align:right; font-weight:700;">${(s['차인지급액'] || 0).toLocaleString()}원</td>
+      </tr>
+    `).join('');
+
+    const totalPay = sorted.reduce((sum, s) => sum + (s['지급액계'] || 0), 0);
+    const totalDed = sorted.reduce((sum, s) => sum + (s['공제액계'] || 0), 0);
+    const totalNet = sorted.reduce((sum, s) => sum + (s['차인지급액'] || 0), 0);
+
+    return `
+      <div class="print-slip">
+        <div class="p-header">
+          <div class="p-title">급 여 명 세 서 (연간 요약)</div>
+        </div>
+        <table class="p-info-table">
+          <tr><th>성명</th><td>${first['사원명'] || ''}</td><th>부서</th><td>${first['부서명'] || ''}</td></tr>
+          <tr><th>직급</th><td>${cleanPosition(first['직급'])}</td><th>대상 기간</th><td>${(sorted[0]['지급일'] || '').slice(0,7)} ~ ${(sorted[sorted.length-1]['지급일'] || '').slice(0,7)}</td></tr>
+        </table>
+        <table class="p-pay-table">
+          <thead><tr><th>월</th><th style="text-align:right;">지급액계</th><th style="text-align:right;">공제액계</th><th style="text-align:right;">차인지급액</th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr>
+              <th>합계</th>
+              <td style="text-align:right; font-weight:700;">${totalPay.toLocaleString()}원</td>
+              <td style="text-align:right; font-weight:700;">${totalDed.toLocaleString()}원</td>
+              <td style="text-align:right; font-weight:700;">${totalNet.toLocaleString()}원</td>
+            </tr>
+          </tfoot>
+        </table>
+        <div class="p-date">발행일: ${today}</div>
+        <div class="p-sign">
+          <span>${COMPANY_NAME} ${CEO_TITLE}</span>
+          <img class="p-stamp" src="${COMPANY_STAMP_URL}">
+        </div>
+        <div class="p-footer">
+          <div class="p-company">${COMPANY_NAME} · ${COMPANY_ADDRESS} · ${COMPANY_TEL}</div>
+        </div>
+      </div>
+    `;
+  }
+
   function printSlip(docId) {
     const s = allSlips.find(x => x.id === docId);
     if (!s) return;
     renderAndPrint(buildPrintHtml(s), 'printArea');
   }
 
-  // 여러 건을 한 번에 인쇄 - 각 명세서 사이에 페이지 나눔을 넣어서 한 번의 인쇄 작업으로 여러 장이 출력되게 함
+  // 여러 건을 한 번에 인쇄 - 전부 같은 사원이면 한 장짜리 월별 요약표로, 여러 사원이 섞여있으면
+  // 기존처럼 각 명세서마다 페이지를 나눠서 출력한다.
   function printMultipleSlips(docIds) {
     if (!docIds.length) return;
     const slips = docIds.map(id => allSlips.find(x => x.id === id)).filter(Boolean);
     if (!slips.length) return;
-    const html = slips.map(s => buildPrintHtml(s)).join('');
+
+    const names = new Set(slips.map(s => s['사원명']));
+    const html = names.size === 1
+      ? buildYearlySummaryHtml(slips)
+      : slips.map(s => buildPrintHtml(s)).join('');
     renderAndPrint(html, 'printArea');
   }
 
