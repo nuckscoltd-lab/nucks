@@ -265,6 +265,18 @@ if ('serviceWorker' in navigator) {
 
     <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
 
+    <div class="panel-title" style="color:#a4453c;">가져온 데이터 초기화 (재가져오기 전 정리용)</div>
+    <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
+      예전 버전으로 가져오기를 실행해서 프로젝트명이 콤마로 뒤섞여 들어간 데이터가 남아있을 때 쓰는 도구입니다.
+      위 가져오기 대상자(이연경·손영화·윤성원)의, 각자 가져오기 기준일 이후 근무일지를 통째로 지웁니다.
+      지운 뒤 위에서 원본 파일로 "파일 분석 → 가져오기 실행"을 다시 하면 깨끗하게(중복·뒤섞인 이름 없이) 다시 채워집니다.
+      <b>이 기간에 직접 작성하신 근무일지가 있다면 그것도 함께 지워지니, 실행 전에 꼭 확인해 주세요.</b>
+    </div>
+    <button class="submit-btn" id="resetImportedBtn" style="background:#a4453c;">가져온 데이터 전체 삭제</button>
+    <div id="resetImportedResult" style="margin-top:10px; font-size:13px;"></div>
+
+    <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
+
     <div class="panel-title">예전 구조 데이터 변환 (1회성)</div>
     <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
       단일 프로젝트 구조로 저장된 예전 근무일지를, 지금의 "프로젝트별 내역" 구조로 변환합니다.
@@ -394,7 +406,8 @@ if ('serviceWorker' in navigator) {
     <div class="panel-title" style="margin-bottom:6px;">프로젝트별 인건비 집계 (관리자 전용)</div>
     <div style="font-size:12px; color:var(--muted); margin-bottom:16px; line-height:1.6;">
       투입시간 × (해당 월 기본급 ÷ 209시간 기준 통상시급)으로 계산한 참고용 추정치입니다.
-      해당 월 급여명세서가 없는 경우, 등록된 급여명세서 중 가장 최근(이전) 달 기본급을 대신 사용합니다.
+      해당 월 급여명세서가 없는 경우, 등록된 급여명세서 중 가장 최근(이전) 달 기본급을 대신 사용합니다.<br>
+      ※ 위 목록의 "이번 달 / 전체 기간" 필터와 상관없이, 이 집계는 항상 전체 기간 데이터를 기준으로 계산됩니다.
     </div>
     <div class="toolbar" style="margin-bottom:14px;">
       <select id="costProjectFilter"><option value="전체">전체 프로젝트</option></select>
@@ -455,17 +468,28 @@ if ('serviceWorker' in navigator) {
     '지명원 업데이트'
   ];
 
-  function updateProjectDatalist() {
-    const usedProjects = allRows.flatMap(r => (r.projects || []).map(p => p['프로젝트'])).filter(Boolean);
+  async function updateProjectDatalist() {
+    // 자동완성 목록/정리 목록은 목록 화면의 월별 필터(allRows)와 무관하게 항상 전체 기간 기준으로 보여준다.
+    // (그렇지 않으면 "이번 달"만 보고 있을 때 다른 달에만 있는 프로젝트명/중복은 안 보여서 놓칠 수 있음)
+    let sourceRows = allRows;
+    if (currentRole === 'admin') {
+      try {
+        const snap = await db.collection('workLogs').get();
+        sourceRows = snap.docs.map(d => d.data());
+      } catch (err) {
+        sourceRows = allRows; // 실패 시에만 현재 로드된 범위로 대체
+      }
+    }
+    const usedProjects = sourceRows.flatMap(r => (r.projects || []).map(p => p['프로젝트'])).filter(Boolean);
     const merged = [...new Set([...DEFAULT_PROJECTS, ...usedProjects])].sort();
     document.getElementById('projectList').innerHTML = merged.map(p => `<option value="${p}">`).join('');
-    if (currentRole === 'admin') renderProjectCleanupList();
+    if (currentRole === 'admin') renderProjectCleanupList(getProjectNameCounts(sourceRows));
   }
 
   // 실제 근무일지에 쓰인 프로젝트명별 사용 건수 집계 (표기가 다른 중복 확인용)
-  function getProjectNameCounts() {
+  function getProjectNameCounts(sourceRows) {
     const counts = {};
-    allRows.forEach(row => {
+    (sourceRows || allRows).forEach(row => {
       (row.projects || []).forEach(p => {
         const name = (p['프로젝트'] || '').trim();
         if (!name) return;
@@ -475,8 +499,8 @@ if ('serviceWorker' in navigator) {
     return counts;
   }
 
-  function renderProjectCleanupList() {
-    const counts = getProjectNameCounts();
+  function renderProjectCleanupList(counts) {
+    counts = counts || getProjectNameCounts();
     const names = Object.keys(counts).sort();
     const container = document.getElementById('projectCleanupList');
     if (names.length === 0) {
@@ -1475,6 +1499,57 @@ if ('serviceWorker' in navigator) {
     }
   });
 
+  // ---------- 가져온 데이터 초기화 (재가져오기 전 정리용) ----------
+  // 예전 버전 가져오기로 만들어진, 프로젝트명이 콤마로 뒤섞인 데이터를 깨끗하게 지우고
+  // 최신 파일로 다시 가져올 수 있도록, 가져오기 대상자/기간에 해당하는 근무일지를 통째로 삭제한다.
+  document.getElementById('resetImportedBtn')?.addEventListener('click', async () => {
+    const resultEl = document.getElementById('resetImportedResult');
+    resultEl.style.color = 'var(--muted)';
+    resultEl.textContent = '대상 확인 중...';
+
+    try {
+      const snapshot = await db.collection('workLogs').get();
+      const targets = snapshot.docs.filter(d => {
+        const data = d.data();
+        const name = data['사원명'];
+        if (!IMPORT_ALLOWED_NAMES.includes(name)) return false;
+        const minDate = IMPORT_MIN_DATE_BY_NAME[name] || IMPORT_MIN_DATE_DEFAULT;
+        return (data['날짜'] || '') >= minDate;
+      });
+
+      if (targets.length === 0) {
+        resultEl.style.color = 'var(--muted)';
+        resultEl.textContent = '삭제할 대상이 없습니다.';
+        return;
+      }
+
+      if (!confirm(
+        `이연경·손영화·윤성원의 가져오기 대상 기간(각자 기준일 이후) 근무일지 ${targets.length}건을 모두 삭제합니다.\n` +
+        `이 기간에 직접 작성하신 근무일지도 함께 삭제되니 주의해 주세요.\n` +
+        `삭제 후 위에서 원본 파일로 "파일 분석 → 가져오기 실행"을 다시 진행해 주세요.\n\n` +
+        `정말 삭제하시겠습니까?`
+      )) {
+        resultEl.textContent = '';
+        return;
+      }
+
+      resultEl.textContent = '삭제 중...';
+      for (let i = 0; i < targets.length; i += 400) {
+        const chunk = targets.slice(i, i + 400);
+        const batch = db.batch();
+        chunk.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+      }
+
+      resultEl.style.color = '#3f6b52';
+      resultEl.textContent = `${targets.length}건 삭제 완료했습니다. 이제 원본 파일로 "파일 분석 → 가져오기 실행"을 다시 해주세요.`;
+      await loadLogs();
+    } catch (err) {
+      resultEl.style.color = '#a4453c';
+      resultEl.textContent = '삭제 실패: ' + err.message;
+    }
+  });
+
   // ---------- 예전 구조(단일 프로젝트) 데이터를 새 구조(projects 배열)로 변환 ----------
   document.getElementById('migrateBtn')?.addEventListener('click', async () => {
     if (!confirm('예전 구조의 근무일지 데이터를 새 구조로 변환합니다. 계속할까요?')) return;
@@ -1509,11 +1584,22 @@ if ('serviceWorker' in navigator) {
         chunk.forEach(doc => {
           const data = doc.data();
           const totalHours = data['총근무시간'] ?? calcHoursDiff(data['출근시간'], data['퇴근시간']);
-          const projects = [{
-            '프로젝트': data['프로젝트'] || '',
-            '투입시간': totalHours,
+
+          // 예전 구조도 "프로젝트" 한 칸에 콤마로 여러 개가 같이 들어있을 수 있어서,
+          // 가져오기와 동일하게 1/n로 균등 분할해서 변환한다.
+          const projectNames = String(data['프로젝트'] || '').split(',').map(s => s.trim()).filter(Boolean);
+          const nameList = projectNames.length ? projectNames : [''];
+          const rawShare = totalHours / nameList.length;
+          const shares = nameList.map(() => Math.round(rawShare * 100) / 100);
+          const shareSum = shares.reduce((a, b) => a + b, 0);
+          const roundingDiff = Math.round((totalHours - shareSum) * 100) / 100;
+          shares[shares.length - 1] = Math.round((shares[shares.length - 1] + roundingDiff) * 100) / 100;
+
+          const projects = nameList.map((pname, i) => ({
+            '프로젝트': pname,
+            '투입시간': shares[i],
             tasks: data.tasks || {}
-          }];
+          }));
           batch.update(doc.ref, {
             '총근무시간': totalHours,
             projects: projects,
@@ -1542,8 +1628,14 @@ if ('serviceWorker' in navigator) {
 
   async function loadCostAnalysis() {
     try {
-      const payslipSnap = await db.collection('payslips').get();
+      // 목록 화면은 기본적으로 "이번 달"만 불러오지만(가벼운 로딩을 위해), 인건비 집계는
+      // 그 필터와 무관하게 항상 전체 기간을 기준으로 계산하도록 workLogs를 별도로 새로 불러온다.
+      const [payslipSnap, workLogSnap] = await Promise.all([
+        db.collection('payslips').get(),
+        db.collection('workLogs').get()
+      ]);
       const allPayslips = payslipSnap.docs.map(d => d.data());
+      const costSourceRows = workLogSnap.docs.map(d => d.data());
 
       // uid별, 연-월별 기본급 매핑
       const wageMap = {};
@@ -1557,7 +1649,7 @@ if ('serviceWorker' in navigator) {
       const projectCost = {}; // { 프로젝트명: { hours, cost, people:Set, byEmployee:{사원명:{hours,cost}} } }
       let skippedNoWage = 0;
 
-      allRows.forEach(row => {
+      costSourceRows.forEach(row => {
         const ym = (row['날짜'] || '').slice(0, 7);
         const uidWages = wageMap[row.uid] || {};
         let baseSalary = uidWages[ym];
