@@ -254,7 +254,8 @@ if ('serviceWorker' in navigator) {
   <div class="write-panel" id="importPanel" style="display:none;">
     <div class="panel-title">노션 CSV/엑셀 가져오기 (관리자)</div>
     <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
-      대상: 이연경, 손영화, 윤성원 · 기간: 2025-11-01 이후만 자동 필터링됩니다.
+      대상: 이연경(2025-01 이후), 손영화·윤성원(2025-11 이후) · 그 외 인원 및 기간 이전 데이터는 자동으로 제외됩니다.<br>
+      하루에 프로젝트가 여러 개(콤마로 구분) 기재된 경우, 총 근무시간을 프로젝트 개수만큼 균등 분할(1/n)해서 각각 별도 항목으로 저장합니다.
     </div>
     <input type="file" id="importFile" accept=".csv,.xlsx,.xls">
     <button class="submit-btn" id="importParseBtn" style="margin-left:8px;">파일 분석</button>
@@ -1199,7 +1200,14 @@ if ('serviceWorker' in navigator) {
 
   // ---------- 노션 CSV 가져오기 (관리자 전용) ----------
   const IMPORT_ALLOWED_NAMES = ['이연경', '손영화', '윤성원'];
-  const IMPORT_MIN_DATE = '2025-11-01';
+  // 사원별로 언제부터의 데이터를 가져올지 다르게 설정 (이연경은 2025년 1월부터, 나머지는 11월부터)
+  // - 급여명세서(payslips) 쪽 가져오기 기준과 맞춰야 프로젝트별 인건비 집계에서 해당 월 기본급을 찾을 수 있습니다.
+  const IMPORT_MIN_DATE_BY_NAME = {
+    '이연경': '2025-01-01',
+    '손영화': '2025-11-01',
+    '윤성원': '2025-11-01'
+  };
+  const IMPORT_MIN_DATE_DEFAULT = '2025-11-01';
   const TASK_COLUMN_MAP = {
     '도면작성': '도면작성',
     '스케치업': '스케치업',
@@ -1258,6 +1266,19 @@ if ('serviceWorker' in navigator) {
     return '';
   }
 
+  // 출근/퇴근시간 값에서 "날짜까지 포함한" 실제 시각을 복원 ("2025/08/28 10:30 (GMT+9)" -> Date).
+  // 노션 원본 데이터 중 퇴근 체크를 며칠 누락했다가 나중에 다시 찍은 행을 가려내기 위해,
+  // 시:분만 보는 extractTimeHHMM과 달리 날짜 차이까지 그대로 계산할 수 있게 별도로 둔다.
+  function parseFullDateTime(value) {
+    if (!value) return null;
+    if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+    const cleaned = String(value).replace(/\s*\(GMT[^)]*\)\s*$/i, '').trim();
+    const m = cleaned.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})[^\d]+(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    const [y, mo, d, h, mi] = m.slice(1).map(Number);
+    return new Date(y, mo - 1, d, h, mi);
+  }
+
   function parseCheckboxValue(value) {
     if (value === true) return true;
     const v = String(value || '').trim().toLowerCase();
@@ -1310,42 +1331,105 @@ if ('serviceWorker' in navigator) {
 
     try {
       const rows = await readFileAsRows(file);
-      const mapped = [];
+
+      // 퇴근 체크를 며칠 누락했다가 나중에 다시 찍어서, 날짜까지 포함해 계산하면
+      // 15시간을 훌쩍 넘는 "하루"로 잡히는 행이 원본에 섞여 있다. 그런 행은 총근무시간을
+      // 그대로 못 믿으므로, 같은 사원의 "정상적인 날"들의 평균 근무시간으로 대체한다.
+      const ANOMALY_THRESHOLD_HOURS = 15;
+
+      // ---- 1차: 사원/날짜 필터링 + 상태 판정(정상/이상치/시간정보불완전) + 정상일 시간 수집 ----
+      const prepared = [];
+      const normalHoursByName = {};
 
       rows.forEach((row) => {
         const name = String(row['사원명'] || '').trim();
         if (!IMPORT_ALLOWED_NAMES.includes(name)) return;
 
         const dateStr = parseDateFlexible(row['날짜']);
-        if (!dateStr || dateStr < IMPORT_MIN_DATE) return;
+        const minDate = IMPORT_MIN_DATE_BY_NAME[name] || IMPORT_MIN_DATE_DEFAULT;
+        if (!dateStr || dateStr < minDate) return;
 
         const checkin = extractTimeHHMM(row['출근시간']);
         const checkout = extractTimeHHMM(row['퇴근시간']);
-        const totalHours = calcHoursDiff(checkin, checkout);
+        const inDt = parseFullDateTime(row['출근시간']);
+        const outDt = parseFullDateTime(row['퇴근시간']);
+
+        let status, rawHours;
+        if (inDt && outDt) {
+          rawHours = Math.round(((outDt - inDt) / 3600000) * 100) / 100;
+          status = (rawHours > 0 && rawHours <= ANOMALY_THRESHOLD_HOURS) ? 'normal' : 'anomaly';
+        } else if (checkin && checkout) {
+          rawHours = calcHoursDiff(checkin, checkout);
+          status = 'normal';
+        } else {
+          rawHours = 0;
+          status = 'incomplete';
+        }
+
+        if (status === 'normal' && rawHours > 0) {
+          (normalHoursByName[name] = normalHoursByName[name] || []).push(rawHours);
+        }
 
         const tasks = {};
         Object.entries(TASK_COLUMN_MAP).forEach(([csvKey, ourKey]) => {
           tasks[ourKey] = parseCheckboxValue(row[csvKey]);
         });
 
-        // 노션 데이터는 하루에 프로젝트 1개 구조라, 전체 근무시간을 그 프로젝트에 그대로 배정
-        mapped.push({
-          '사원명': name,
-          '날짜': dateStr,
-          '출근시간': checkin,
-          '퇴근시간': checkout,
-          '총근무시간': totalHours,
-          '상세내용': String(row['상세내용'] || '').trim(),
-          projects: [{
-            '프로젝트': String(row['프로젝트'] || '').trim(),
-            '투입시간': totalHours,
-            tasks
-          }]
+        prepared.push({
+          name, dateStr, checkin, checkout, status, rawHours, tasks,
+          detail: String(row['상세내용'] || '').trim(),
+          projText: String(row['프로젝트'] || '').trim()
         });
       });
 
+      const avgHoursByName = {};
+      Object.entries(normalHoursByName).forEach(([name, arr]) => {
+        avgHoursByName[name] = Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 100) / 100;
+      });
+
+      // ---- 2차: 이상치는 사원 평균으로 대체한 뒤, 프로젝트 개수(n)로 균등 분할(1/n) ----
+      let anomalyCount = 0;
+      let incompleteCount = 0;
+      const mapped = prepared.map((r) => {
+        let totalHours = r.rawHours;
+        if (r.status === 'anomaly') {
+          totalHours = avgHoursByName[r.name] || 0;
+          anomalyCount++;
+        } else if (r.status === 'incomplete') {
+          incompleteCount++;
+        }
+
+        // 노션 데이터는 하루에 프로젝트가 여러 개면 콤마로 구분되어 한 칸에 같이 들어있다.
+        // 이 경우 그 날의 총 근무시간을 프로젝트 개수(n)로 균등 분할(1/n)해서 각각 별도 항목으로 배정한다.
+        // (마지막 항목에서 반올림 오차를 흡수해, 항목별 투입시간 합계가 총근무시간과 정확히 일치하도록 함)
+        const projectNames = r.projText.split(',').map(s => s.trim()).filter(Boolean);
+        const nameList = projectNames.length ? projectNames : [''];
+        const rawShare = totalHours / nameList.length;
+        const shares = nameList.map(() => Math.round(rawShare * 100) / 100);
+        const shareSum = shares.reduce((a, b) => a + b, 0);
+        const roundingDiff = Math.round((totalHours - shareSum) * 100) / 100;
+        shares[shares.length - 1] = Math.round((shares[shares.length - 1] + roundingDiff) * 100) / 100;
+
+        return {
+          '사원명': r.name,
+          '날짜': r.dateStr,
+          '출근시간': r.checkin,
+          '퇴근시간': r.checkout,
+          '총근무시간': totalHours,
+          '상세내용': r.detail,
+          projects: nameList.map((pname, i) => ({
+            '프로젝트': pname,
+            '투입시간': shares[i],
+            tasks: r.tasks
+          }))
+        };
+      });
+
       parsedImportRows = mapped;
-      previewEl.textContent = `조건에 맞는 ${mapped.length}건을 가져올 준비가 되었습니다. (전체 ${rows.length}행 중)`;
+      previewEl.textContent =
+        `조건에 맞는 ${mapped.length}건을 가져올 준비가 되었습니다. (전체 ${rows.length}행 중)`
+        + (anomalyCount ? ` · 퇴근체크 누락 등으로 ${ANOMALY_THRESHOLD_HOURS}시간을 초과한 ${anomalyCount}건은 해당 사원의 정상 근무일 평균 시간으로 대체했습니다.` : '')
+        + (incompleteCount ? ` · 출퇴근 시간이 일부 없는 ${incompleteCount}건은 0시간으로 처리됩니다.` : '');
       document.getElementById('importRunBtn').style.display = mapped.length ? 'inline-block' : 'none';
     } catch (err) {
       previewEl.textContent = '파일 분석 실패: ' + err.message;
