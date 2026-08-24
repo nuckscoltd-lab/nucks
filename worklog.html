@@ -1426,8 +1426,17 @@ if ('serviceWorker' in navigator) {
       });
 
       parsedImportRows = mapped;
+
+      // 사원별 건수 - "전체 몇 건" 만으로는 특정 사원 데이터가 빠졌는지 알아채기 어려워서,
+      // 각 사원이 몇 건씩 잡혔는지 미리보기에 바로 보여준다.
+      const countByName = {};
+      mapped.forEach(m => { countByName[m['사원명']] = (countByName[m['사원명']] || 0) + 1; });
+      const breakdown = IMPORT_ALLOWED_NAMES
+        .map(n => `${n} ${countByName[n] || 0}건`)
+        .join(', ');
+
       previewEl.textContent =
-        `조건에 맞는 ${mapped.length}건을 가져올 준비가 되었습니다. (전체 ${rows.length}행 중)`
+        `조건에 맞는 ${mapped.length}건을 가져올 준비가 되었습니다. (전체 ${rows.length}행 중) [${breakdown}]`
         + (anomalyCount ? ` · 퇴근체크 누락 등으로 ${ANOMALY_THRESHOLD_HOURS}시간을 초과한 ${anomalyCount}건은 해당 사원의 정상 근무일 평균 시간으로 대체했습니다.` : '')
         + (incompleteCount ? ` · 출퇴근 시간이 일부 없는 ${incompleteCount}건은 0시간으로 처리됩니다.` : '');
       document.getElementById('importRunBtn').style.display = mapped.length ? 'inline-block' : 'none';
