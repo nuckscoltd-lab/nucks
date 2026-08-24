@@ -46,7 +46,10 @@ if ('serviceWorker' in navigator) {
   .header-right{
     display:flex;
     align-items:center;
-    gap:24px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+    row-gap:8px;
+    gap:20px;
   }
   .home-link{
     font-size:13px; color:var(--muted); text-decoration:none;
@@ -167,10 +170,20 @@ if ('serviceWorker' in navigator) {
   </div>
   <div class="header-right">
     <a href="index.html" class="home-link">Home</a>
-    <a href="cashbook.html" class="home-link">Cashbook</a>
-    <a href="annual-tasks.html" class="home-link">Tasks</a>
-    <a href="insurance-premium.html" class="home-link">Insurance</a>
-    <a href="investment-status.html" class="home-link">Investment</a>
+    <a href="cashbook.html" class="home-link" target="_blank" rel="noopener">현금출납부</a>
+    <a href="annual-tasks.html" class="home-link" target="_blank" rel="noopener">연간 주요직무</a>
+    <a href="insurance-premium.html" class="home-link" target="_blank" rel="noopener">보험료신고서</a>
+    <a href="investment-status.html" class="home-link" target="_blank" rel="noopener">투자·가수금현황</a>
+    <a href="세금계산서_통합본.html" class="home-link" target="_blank" rel="noopener">세금계산서(개인)</a>
+    <a href="project-billing.html" class="home-link" target="_blank" rel="noopener">기성청구현황</a>
+    <a href="corporate-card.html" class="home-link" target="_blank" rel="noopener">법인카드 관리</a>
+    <a href="utilities.html" class="home-link" target="_blank" rel="noopener">공과금 관리</a>
+    <a href="insurance-general.html" class="home-link" target="_blank" rel="noopener">보험 관리</a>
+    <a href="tax-management.html" class="home-link" target="_blank" rel="noopener">세금 관리</a>
+    <a href="stock-equity.html" class="home-link" target="_blank" rel="noopener">주식·배당 관리</a>
+    <a href="loan-repayment.html" class="home-link" target="_blank" rel="noopener">이자상환 관리</a>
+    <a href="quarterly-overview.html" class="home-link" target="_blank" rel="noopener">분기별매출매입현황</a>
+    <a href="nucks_dashboard_updated_260723.html" class="home-link" target="_blank" rel="noopener">회계현황 대시보드</a>
     <a href="#" class="logout" id="logoutBtn">Logout</a>
   </div>
 </header>
