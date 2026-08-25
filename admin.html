@@ -59,6 +59,32 @@ if ('serviceWorker' in navigator) {
     font-size:13px; color:var(--muted); text-decoration:none;
     border-bottom:1px solid var(--muted); cursor:pointer;
   }
+
+  /* 업무 도구 드롭다운 (index.html의 nav-item-dropdown 패턴과 동일) */
+  .nav-item-dropdown{ position:relative; }
+  .nav-dropdown-toggle{
+    display:inline-flex; align-items:center; gap:4px; cursor:pointer;
+    font-size:13px; color:var(--muted); text-decoration:none;
+    border-bottom:1px solid var(--muted);
+  }
+  .nav-dropdown-toggle .caret{ font-size:10px; transition:transform .2s; cursor:pointer; padding:4px; margin:-4px; }
+  .nav-dropdown-menu{
+    display:none; position:absolute; top:100%; right:0; padding-top:14px;
+    min-width:210px; z-index:1001;
+  }
+  .nav-dropdown-menu-inner{
+    background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.08);
+    padding:8px;
+  }
+  .nav-dropdown-menu a{
+    display:block; padding:9px 12px; font-size:12.5px;
+    color:var(--ink); border-radius:5px; white-space:nowrap; text-decoration:none; border-bottom:none;
+  }
+  .nav-dropdown-menu a:hover{ background:var(--paper); }
+  .nav-item-dropdown:hover .nav-dropdown-menu{ display:block; }
+  .nav-item-dropdown:hover .caret{ transform:rotate(180deg); }
+  .nav-item-dropdown.open .nav-dropdown-menu{ display:block; }
+  .nav-item-dropdown.open .caret{ transform:rotate(180deg); }
   main{ max-width:1180px; margin:0 auto; padding:48px; }
   .section-label{
     font-size:11px; letter-spacing:.16em; text-transform:uppercase;
@@ -140,6 +166,10 @@ if ('serviceWorker' in navigator) {
   @media (max-width: 640px) {
     header{ padding:20px !important; flex-wrap:wrap; gap:10px; }
     .header-right{ flex-wrap:wrap; gap:12px !important; }
+    .nav-dropdown-menu{ position:static; display:none; padding-top:0; margin:8px 0 0; min-width:0; right:auto; }
+    .nav-dropdown-menu-inner{ box-shadow:none; border:none; border-radius:0; padding:0; border-left:2px solid var(--line); padding-left:10px; }
+    .nav-item-dropdown:hover .nav-dropdown-menu{ display:none; }
+    .nav-item-dropdown.open .nav-dropdown-menu{ display:block; }
     main{ padding:24px 16px !important; }
     h1{ font-size:24px !important; }
     input, select, textarea{ font-size:16px !important; }
@@ -170,20 +200,27 @@ if ('serviceWorker' in navigator) {
   </div>
   <div class="header-right">
     <a href="index.html" class="home-link">Home</a>
-    <a href="cashbook.html" class="home-link" target="_blank" rel="noopener">현금출납부</a>
-    <a href="annual-tasks.html" class="home-link" target="_blank" rel="noopener">연간 주요직무</a>
-    <a href="insurance-premium.html" class="home-link" target="_blank" rel="noopener">보험료신고서</a>
-    <a href="investment-status.html" class="home-link" target="_blank" rel="noopener">투자·가수금현황</a>
-    <a href="세금계산서_통합본.html" class="home-link" target="_blank" rel="noopener">세금계산서(개인)</a>
-    <a href="project-billing.html" class="home-link" target="_blank" rel="noopener">기성청구현황</a>
-    <a href="corporate-card.html" class="home-link" target="_blank" rel="noopener">법인카드 관리</a>
-    <a href="utilities.html" class="home-link" target="_blank" rel="noopener">공과금 관리</a>
-    <a href="insurance-general.html" class="home-link" target="_blank" rel="noopener">보험 관리</a>
-    <a href="tax-management.html" class="home-link" target="_blank" rel="noopener">세금 관리</a>
-    <a href="stock-equity.html" class="home-link" target="_blank" rel="noopener">주식·배당 관리</a>
-    <a href="loan-repayment.html" class="home-link" target="_blank" rel="noopener">이자상환 관리</a>
-    <a href="quarterly-overview.html" class="home-link" target="_blank" rel="noopener">분기별매출매입현황</a>
-    <a href="nucks_dashboard_updated_260723.html" class="home-link" target="_blank" rel="noopener">회계현황 대시보드</a>
+
+    <div class="nav-item-dropdown" id="toolsNavLink">
+      <a href="#" class="nav-dropdown-toggle" onclick="return false;">업무 도구 <span class="caret" onclick="return toggleNavDropdown(event, this)">▾</span></a>
+      <div class="nav-dropdown-menu"><div class="nav-dropdown-menu-inner">
+        <a href="cashbook.html" target="_blank" rel="noopener">현금출납부</a>
+        <a href="annual-tasks.html" target="_blank" rel="noopener">연간 주요직무</a>
+        <a href="insurance-premium.html" target="_blank" rel="noopener">보험료신고서</a>
+        <a href="investment-status.html" target="_blank" rel="noopener">투자·가수금현황</a>
+        <a href="세금계산서_통합본.html" target="_blank" rel="noopener">세금계산서(개인)</a>
+        <a href="project-billing.html" target="_blank" rel="noopener">기성청구현황</a>
+        <a href="corporate-card.html" target="_blank" rel="noopener">법인카드 관리</a>
+        <a href="utilities.html" target="_blank" rel="noopener">공과금 관리</a>
+        <a href="insurance-general.html" target="_blank" rel="noopener">보험 관리</a>
+        <a href="tax-management.html" target="_blank" rel="noopener">세금 관리</a>
+        <a href="stock-equity.html" target="_blank" rel="noopener">주식·배당 관리</a>
+        <a href="loan-repayment.html" target="_blank" rel="noopener">이자상환 관리</a>
+        <a href="quarterly-overview.html" target="_blank" rel="noopener">분기별매출매입현황</a>
+        <a href="nucks_dashboard_updated_260723.html" target="_blank" rel="noopener">회계현황 대시보드</a>
+      </div></div>
+    </div>
+
     <a href="#" class="logout" id="logoutBtn">Logout</a>
   </div>
 </header>
@@ -218,6 +255,22 @@ if ('serviceWorker' in navigator) {
 <script>
   // 관리자만 접근 가능
   requireRole(['admin']);
+
+  // 상단 "업무 도구" 드롭다운 (index.html과 동일한 동작 패턴)
+  function toggleNavDropdown(e, el) {
+    e.preventDefault();
+    e.stopPropagation();
+    const wrap = el.closest('.nav-item-dropdown');
+    const wasOpen = wrap.classList.contains('open');
+    document.querySelectorAll('.nav-item-dropdown.open').forEach(d => d.classList.remove('open'));
+    if (!wasOpen) wrap.classList.add('open');
+    return false;
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.nav-item-dropdown')) {
+      document.querySelectorAll('.nav-item-dropdown.open').forEach(d => d.classList.remove('open'));
+    }
+  });
 
   const functions = firebase.functions();
   const tableBody = document.getElementById('userTableBody');

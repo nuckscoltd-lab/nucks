@@ -36,9 +36,11 @@ if ('serviceWorker' in navigator) {
             z-index: 1000; background: rgba(255,255,255,0.95); backdrop-filter: blur(5px);
         }
         .logo { font-size: 24px; font-weight: 800; text-decoration: none; color: #000; }
-        nav { display: flex; gap: 40px; }
+        nav { display: flex; gap: 40px; flex-wrap: wrap; row-gap: 14px; align-items: center; }
         nav a { text-decoration: none; color: #666; font-size: 14px; text-transform: uppercase; transition: 0.3s; font-weight: 500; }
         nav a:hover { color: #000; }
+        /* 노출 항목이 7개를 넘으면 강제로 줄바꿈되는 지점(JS에서 삽입) */
+        .nav-break { flex-basis: 100%; width: 0; height: 0; margin: 0; padding: 0; }
 
         .nav-item-dropdown{ position: relative; }
         .nav-dropdown-toggle{ display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
@@ -207,7 +209,8 @@ if ('serviceWorker' in navigator) {
             }
             .nav-item-dropdown:hover .nav-dropdown-menu{ display: none; }
             .nav-item-dropdown.open .nav-dropdown-menu{ display: block; }
-            .hero { flex-direction: column; padding: 20px; margin-top: 70px; gap: 30px;}
+            .nav-break{ display: none; }
+            .hero { flex-direction: column; padding: 20px; margin-top: 70px !important; gap: 30px;}
             .hero-video-area { width: 100%; height: auto; aspect-ratio: 16 / 9; flex: none; }
             .grid { grid-template-columns: repeat(2, 1fr); }
             .footer-grid { grid-template-columns: 1fr; gap: 35px;}
@@ -443,6 +446,51 @@ if ('serviceWorker' in navigator) {
                 document.querySelectorAll('.nav-item-dropdown.open').forEach(d => d.classList.remove('open'));
             }
         });
+
+        // ---------- 네비게이션: 노출된 항목이 7개 넘어가면 자동으로 줄바꿈 ----------
+        // 로그인 상태/역할에 따라 항목별 display가 동적으로 바뀌므로,
+        // "실제로 보이는" 항목만 세어서 7개마다 줄바꿈 지점을 삽입한다.
+        function regroupNavBreaks() {
+            const nav = document.getElementById('navbar');
+            if (!nav) return;
+            nav.querySelectorAll(':scope > .nav-break').forEach(b => b.remove());
+            const items = Array.from(nav.children);
+            let visibleCount = 0;
+            items.forEach(el => {
+                if (window.getComputedStyle(el).display === 'none') return;
+                if (visibleCount > 0 && visibleCount % 7 === 0) {
+                    const brk = document.createElement('div');
+                    brk.className = 'nav-break';
+                    nav.insertBefore(brk, el);
+                }
+                visibleCount++;
+            });
+            adjustHeroOffset();
+        }
+
+        // 네비가 여러 줄로 늘어나면 header 높이도 늘어나므로, hero 영역이 가려지지 않도록
+        // 실제 header 높이에 맞춰 hero의 margin-top을 동적으로 맞춰준다(모바일 레이아웃은 제외).
+        function adjustHeroOffset() {
+            const header = document.querySelector('header');
+            const hero = document.querySelector('.hero');
+            if (!header || !hero) return;
+            if (window.innerWidth <= 768) {
+                hero.style.marginTop = '';
+                return;
+            }
+            hero.style.marginTop = (header.offsetHeight + 25) + 'px';
+        }
+
+        (function initNavRegroup() {
+            const nav = document.getElementById('navbar');
+            if (!nav) return;
+            regroupNavBreaks();
+            const observer = new MutationObserver(() => regroupNavBreaks());
+            Array.from(nav.children).forEach(el => {
+                observer.observe(el, { attributes: true, attributeFilter: ['style'] });
+            });
+            window.addEventListener('resize', adjustHeroOffset);
+        })();
 
         function filterSelection(cat, btn) {
             const items = document.querySelectorAll('.project-item');
