@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#141414">
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+</script>
+<title>사무실비품계약관리현황 | NUCKS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
+
+  :root{
+    --ink:#141414;
+    --paper:#f7f6f3;
+    --line:#d8d5cd;
+    --muted:#8a8578;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:var(--paper);
+    font-family:'Pretendard', -apple-system, sans-serif;
+    color:var(--ink);
+  }
+  header{
+    padding:28px 48px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .eyebrow{
+    font-size:11px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:6px;
+  }
+  h1{
+    font-family:'Cormorant Garamond', serif;
+    font-weight:500; font-size:32px; margin:0; letter-spacing:.01em;
+  }
+  .header-right{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+    row-gap:8px;
+    gap:20px;
+  }
+  .home-link{
+    font-size:13px; color:var(--muted); text-decoration:none;
+    border-bottom:1px solid var(--muted);
+  }
+  main{ max-width:1180px; margin:0 auto; padding:48px; }
+  .section-label{
+    font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:16px;
+  }
+  .status-msg{ font-size:13px; margin-bottom:20px; min-height:18px; }
+
+  .toolbar{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:20px; flex-wrap:wrap; gap:12px;
+  }
+  .add-btn{
+    padding:9px 18px; background:var(--ink); color:var(--paper);
+    border:none; font-size:13px; letter-spacing:.03em; cursor:pointer; border-radius:4px;
+  }
+  .add-btn:hover{ opacity:.85; }
+
+  .form-panel{
+    display:none; background:#fff; border:1px solid var(--line); border-radius:8px;
+    padding:24px; margin-bottom:28px;
+  }
+  .form-panel.open{ display:block; }
+  .form-grid{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px;
+  }
+  .field label{
+    display:block; font-size:11px; color:var(--muted); margin-bottom:5px; letter-spacing:.03em;
+  }
+  .field input, .field select, .field textarea{
+    width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13.5px; background:#fff; color:var(--ink);
+  }
+  .field textarea{ resize:vertical; min-height:38px; }
+  .form-actions{ margin-top:18px; display:flex; gap:10px; }
+  .save-btn{
+    padding:8px 18px; background:var(--ink); color:var(--paper);
+    border:none; font-size:12.5px; cursor:pointer; border-radius:4px;
+  }
+  .save-btn:hover{ opacity:.85; }
+  .cancel-btn{
+    padding:8px 18px; background:#fff; color:var(--ink); border:1px solid var(--line);
+    font-size:12.5px; cursor:pointer; border-radius:4px;
+  }
+
+  table{ width:100%; border-collapse:collapse; }
+  th{
+    text-align:left; font-size:12px; color:var(--muted);
+    font-weight:500; padding:10px 12px; border-bottom:1px solid var(--line); white-space:nowrap;
+  }
+  td{
+    padding:14px 12px; font-size:13.5px; border-bottom:1px solid var(--line);
+    vertical-align:middle; white-space:nowrap;
+  }
+  td.note-cell{ white-space:normal; max-width:220px; }
+  .status-badge{
+    display:inline-block; font-size:11px; padding:3px 10px;
+    border-radius:20px; letter-spacing:.02em; white-space:nowrap;
+  }
+  .status-active{ background:#f2d9e6; color:#9c3f68; }
+  .status-ended{ background:#ece9e2; color:#7a766c; }
+  .status-terminated{ background:#f0c9c4; color:#a4453c; }
+  .remain-negative{ color:#3f6b52; }
+  .remain-positive{ color:#a4453c; }
+  .edit-btn, .delete-btn{
+    padding:6px 12px; background:#fff; color:var(--ink); border:1px solid var(--line);
+    font-size:12px; cursor:pointer; border-radius:4px; margin-right:6px;
+  }
+  .edit-btn:hover{ border-color:var(--ink); }
+  .delete-btn{ color:#a4453c; border-color:#f0c9c4; }
+  .delete-btn:hover{ background:#fdf1f0; }
+  .empty{ font-size:13px; color:var(--muted); padding:20px 0; }
+
+  @media (max-width: 640px) {
+    header{ padding:20px !important; flex-wrap:wrap; gap:10px; }
+    .header-right{ flex-wrap:wrap; gap:12px !important; }
+    main{ padding:24px 16px !important; }
+    h1{ font-size:24px !important; }
+    input, select, textarea{ font-size:16px !important; }
+
+    table{ min-width:0 !important; }
+    thead{ display:none; }
+    table, tbody, tr, td{ display:block; width:100%; }
+    tr{
+      border:1px solid var(--line); border-radius:6px;
+      margin-bottom:12px; padding:10px 14px; background:#fff;
+    }
+    td{
+      border:none !important; padding:6px 0 !important; white-space:normal !important;
+    }
+    td[data-label]::before{
+      content:attr(data-label);
+      display:block; font-size:11px; color:var(--muted); margin-bottom:2px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">NUCKS · Secret Mode</div>
+    <h1>사무실비품계약관리현황</h1>
+  </div>
+  <div class="header-right">
+    <a href="admin.html" class="home-link">회원 관리</a>
+    <a href="index.html" class="home-link">Home</a>
+  </div>
+</header>
+
+<main>
+  <div class="section-label">비품/설비 렌탈·계약 현황</div>
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="toolbar">
+    <div></div>
+    <button class="add-btn" id="addBtn">+ 새 계약 추가</button>
+  </div>
+
+  <div class="form-panel" id="formPanel">
+    <div class="form-grid">
+      <div class="field">
+        <label>품목</label>
+        <input type="text" id="f_item" placeholder="예: 복합기">
+      </div>
+      <div class="field">
+        <label>렌탈업체</label>
+        <input type="text" id="f_vendor" placeholder="예: 와이지 솔루션">
+      </div>
+      <div class="field">
+        <label>계약일자</label>
+        <input type="date" id="f_signDate">
+      </div>
+      <div class="field">
+        <label>계약시작일</label>
+        <input type="date" id="f_startDate">
+      </div>
+      <div class="field">
+        <label>계약종료일</label>
+        <input type="date" id="f_endDate">
+      </div>
+      <div class="field">
+        <label>상태</label>
+        <select id="f_status">
+          <option value="계약유지">계약유지</option>
+          <option value="계약종료">계약종료</option>
+          <option value="중도해지">중도해지</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>렌탈료(월)</label>
+        <input type="number" id="f_fee" placeholder="예: 330000">
+      </div>
+      <div class="field">
+        <label>출금일</label>
+        <input type="date" id="f_withdrawDate">
+      </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label>비고</label>
+        <textarea id="f_note" placeholder="특이사항, 갱신 조건 등"></textarea>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="save-btn" id="saveBtn">저장</button>
+      <button class="cancel-btn" id="cancelBtn">취소</button>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>품목</th>
+        <th>렌탈업체</th>
+        <th>계약일자</th>
+        <th>계약기간</th>
+        <th>종료일자</th>
+        <th>잔여개월</th>
+        <th>상태</th>
+        <th>렌탈료</th>
+        <th>출금일</th>
+        <th>비고</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+  <div class="empty" id="emptyMsg" style="display:none;">등록된 계약이 없습니다.</div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+  // 관리자만 접근 가능
+  requireRole(['admin']);
+
+  const COLLECTION = 'officeEquipmentContracts';
+  const tableBody = document.getElementById('tableBody');
+  const emptyMsg = document.getElementById('emptyMsg');
+  const statusMsg = document.getElementById('statusMsg');
+  const formPanel = document.getElementById('formPanel');
+  const addBtn = document.getElementById('addBtn');
+  const saveBtn = document.getElementById('saveBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
+
+  let editingId = null;
+  let contractsCache = [];
+
+  function fmtDateKr(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T00:00:00');
+    if (isNaN(d)) return dateStr;
+    return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+  }
+
+  function fmtDateDot(dateStr) {
+    if (!dateStr) return '';
+    const [y, m, d] = dateStr.split('-');
+    return `${y}.${m}.${d}`;
+  }
+
+  // 잔여개월: 음수 = 종료일까지 남은 개월 수, 양수 = 종료일이 지난 지 얼마나 됐는지.
+  // (기존 노션 표와 동일한 부호 규칙에 맞춰 계산)
+  function monthsUntilEnd(endDateStr) {
+    if (!endDateStr) return null;
+    const end = new Date(endDateStr + 'T00:00:00');
+    const now = new Date();
+    let months = (now.getFullYear() - end.getFullYear()) * 12 + (now.getMonth() - end.getMonth());
+    if (now.getDate() > end.getDate()) months += 1;
+    return months;
+  }
+
+  function statusBadgeClass(status) {
+    if (status === '계약종료') return 'status-ended';
+    if (status === '중도해지') return 'status-terminated';
+    return 'status-active';
+  }
+
+  function escapeHtml(str) {
+    return String(str || '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+  }
+
+  function openForm(data) {
+    formPanel.classList.add('open');
+    if (data) {
+      editingId = data.id;
+      document.getElementById('f_item').value = data['품목'] || '';
+      document.getElementById('f_vendor').value = data['렌탈업체'] || '';
+      document.getElementById('f_signDate').value = data['계약일자'] || '';
+      document.getElementById('f_startDate').value = data['계약시작일'] || '';
+      document.getElementById('f_endDate').value = data['계약종료일'] || '';
+      document.getElementById('f_status').value = data['상태'] || '계약유지';
+      document.getElementById('f_fee').value = data['렌탈료'] || '';
+      document.getElementById('f_withdrawDate').value = data['출금일'] || '';
+      document.getElementById('f_note').value = data['비고'] || '';
+    } else {
+      editingId = null;
+      ['f_item','f_vendor','f_signDate','f_startDate','f_endDate','f_fee','f_withdrawDate','f_note'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('f_status').value = '계약유지';
+    }
+    formPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function closeForm() {
+    formPanel.classList.remove('open');
+    editingId = null;
+  }
+
+  addBtn.addEventListener('click', () => openForm(null));
+  cancelBtn.addEventListener('click', closeForm);
+
+  saveBtn.addEventListener('click', async () => {
+    const item = document.getElementById('f_item').value.trim();
+    const vendor = document.getElementById('f_vendor').value.trim();
+    if (!item) { alert('품목을 입력해주세요.'); return; }
+
+    const payload = {
+      '품목': item,
+      '렌탈업체': vendor,
+      '계약일자': document.getElementById('f_signDate').value || '',
+      '계약시작일': document.getElementById('f_startDate').value || '',
+      '계약종료일': document.getElementById('f_endDate').value || '',
+      '상태': document.getElementById('f_status').value,
+      '렌탈료': Number(document.getElementById('f_fee').value) || 0,
+      '출금일': document.getElementById('f_withdrawDate').value || '',
+      '비고': document.getElementById('f_note').value.trim(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    try {
+      saveBtn.disabled = true;
+      if (editingId) {
+        await db.collection(COLLECTION).doc(editingId).update(payload);
+        statusMsg.textContent = '수정되었습니다.';
+      } else {
+        payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+        await db.collection(COLLECTION).add(payload);
+        statusMsg.textContent = '추가되었습니다.';
+      }
+      closeForm();
+      await loadContracts();
+      setTimeout(() => { statusMsg.textContent = ''; }, 2500);
+    } catch (err) {
+      alert('저장 실패: ' + err.message);
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+
+  async function deleteContract(id) {
+    if (!confirm('이 계약 항목을 삭제하시겠습니까?')) return;
+    try {
+      await db.collection(COLLECTION).doc(id).delete();
+      await loadContracts();
+    } catch (err) {
+      alert('삭제 실패: ' + err.message);
+    }
+  }
+
+  async function loadContracts() {
+    const snap = await db.collection(COLLECTION).get();
+    contractsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // 종료일 기준 오름차순 정렬(임박한 순)
+    contractsCache.sort((a, b) => (a['계약종료일'] || '').localeCompare(b['계약종료일'] || ''));
+
+    tableBody.innerHTML = '';
+    emptyMsg.style.display = contractsCache.length === 0 ? 'block' : 'none';
+
+    contractsCache.forEach(c => {
+      const months = monthsUntilEnd(c['계약종료일']);
+      const monthsText = months === null ? '' : `${months}`;
+      const monthsClass = months === null ? '' : (months <= 0 ? 'remain-negative' : 'remain-positive');
+      const periodText = (c['계약시작일'] && c['계약종료일'])
+        ? `${fmtDateDot(c['계약시작일'])}~${fmtDateDot(c['계약종료일'])}`
+        : '';
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td data-label="품목">${escapeHtml(c['품목'])}</td>
+        <td data-label="렌탈업체">${escapeHtml(c['렌탈업체'])}</td>
+        <td data-label="계약일자">${fmtDateKr(c['계약일자'])}</td>
+        <td data-label="계약기간">${periodText}</td>
+        <td data-label="종료일자">${fmtDateKr(c['계약종료일'])}</td>
+        <td data-label="잔여개월" class="${monthsClass}">${monthsText}</td>
+        <td data-label="상태"><span class="status-badge ${statusBadgeClass(c['상태'])}">${escapeHtml(c['상태'] || '계약유지')}</span></td>
+        <td data-label="렌탈료">${(c['렌탈료'] || 0).toLocaleString()}</td>
+        <td data-label="출금일">${fmtDateKr(c['출금일'])}</td>
+        <td data-label="비고" class="note-cell">${escapeHtml(c['비고'])}</td>
+        <td data-label="">
+          <button class="edit-btn" data-edit="${c.id}">수정</button>
+          <button class="delete-btn" data-delete="${c.id}">삭제</button>
+        </td>
+      `;
+      tableBody.appendChild(tr);
+    });
+
+    tableBody.querySelectorAll('[data-edit]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const c = contractsCache.find(x => x.id === btn.dataset.edit);
+        if (c) openForm(c);
+      });
+    });
+    tableBody.querySelectorAll('[data-delete]').forEach(btn => {
+      btn.addEventListener('click', () => deleteContract(btn.dataset.delete));
+    });
+  }
+
+  loadContracts().catch(err => {
+    console.error(err);
+    statusMsg.textContent = '목록을 불러오지 못했습니다: ' + err.message;
+  });
+</script>
+</body>
+</html>
