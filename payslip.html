@@ -903,7 +903,24 @@ if ('serviceWorker' in navigator) {
     }
     const payMonth = (s['지급일'] || '').slice(0, 7);
     const subject = `[NUCKS] ${payMonth} 급여명세서`;
-    const body = `${s['사원명'] || ''}님 안녕하세요.\n\n${payMonth} 급여명세서를 안내드립니다.\n지급액계: ${(s['지급액계'] || 0).toLocaleString()}원\n공제액계: ${(s['공제액계'] || 0).toLocaleString()}원\n차인지급액: ${(s['차인지급액'] || 0).toLocaleString()}원\n\n자세한 내역은 첨부파일(또는 사내 시스템)을 확인해주세요.\n\n감사합니다.`;
+
+    // 지급/공제 항목별 상세 내역을 본문에 함께 적어준다 (0원인 항목은 생략).
+    const payLines = PAY_KEYS
+      .filter(k => (s[k] || 0) !== 0)
+      .map(k => `  - ${k}: ${(s[k] || 0).toLocaleString()}원`)
+      .join('\n');
+    const dedLines = DED_KEYS
+      .filter(k => (s[k] || 0) !== 0)
+      .map(k => `  - ${k}: ${(s[k] || 0).toLocaleString()}원`)
+      .join('\n');
+
+    const body = `${s['사원명'] || ''}님 안녕하세요.\n\n${payMonth} 급여명세서를 안내드립니다.\n\n` +
+      `[지급 항목]\n${payLines || '  -'}\n지급액계: ${(s['지급액계'] || 0).toLocaleString()}원\n\n` +
+      `[공제 항목]\n${dedLines || '  -'}\n공제액계: ${(s['공제액계'] || 0).toLocaleString()}원\n\n` +
+      `차인지급액: ${(s['차인지급액'] || 0).toLocaleString()}원\n\n` +
+      `※ 브라우저 보안 정책상 이 메일 초안에는 파일을 자동으로 첨부할 수 없습니다.\n` +
+      `PDF로 보관/첨부하시려면 명세서 목록의 "인쇄" 버튼을 눌러 인쇄 대화상자에서 "PDF로 저장"을 선택한 뒤,\n` +
+      `이 메일 초안에 파일을 직접 첨부해주세요.\n\n감사합니다.`;
 
     // 버그 수정: 수신자 주소(email)는 encodeURIComponent로 감싸면 안 된다.
     // '@'가 %40으로 인코딩되면서 일부 메일 클라이언트/브라우저가 받는사람 칸을

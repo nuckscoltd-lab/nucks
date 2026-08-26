@@ -169,7 +169,7 @@ if ('serviceWorker' in navigator) {
   <div class="status-msg" id="statusMsg"></div>
 
   <div class="toolbar">
-    <div></div>
+    <button class="cancel-btn" id="seedBtn">기존 노션 데이터 3건 불러오기</button>
     <button class="add-btn" id="addBtn">+ 새 계약 추가</button>
   </div>
 
@@ -330,6 +330,44 @@ if ('serviceWorker' in navigator) {
 
   addBtn.addEventListener('click', () => openForm(null));
   cancelBtn.addEventListener('click', closeForm);
+
+  // 이전에 캡처해준 노션 표(복합기/정수기/홈페이지도메인) 3건을 그대로 등록해주는 1회성 버튼.
+  const SEED_DATA = [
+    {
+      '품목': '복합기', '렌탈업체': '와이지 솔루션',
+      '계약일자': '2025-03-21', '계약시작일': '2025-03-01', '계약종료일': '2027-02-28',
+      '상태': '계약유지', '렌탈료': 330000, '출금일': '2025-06-23', '비고': ''
+    },
+    {
+      '품목': '정수기', '렌탈업체': 'SK매직',
+      '계약일자': '2026-06-05', '계약시작일': '2026-06-05', '계약종료일': '2032-06-04',
+      '상태': '계약유지', '렌탈료': 46900, '출금일': '2025-06-20',
+      '비고': '계약종료 약5개월전 교체시 위약금미발생\n(2026.06.09 교체완료)\n→3개월 단위 필터자체교체'
+    },
+    {
+      '품목': '홈페이지도메인', '렌탈업체': '예스닉',
+      '계약일자': '2026-02-02', '계약시작일': '2026-02-02', '계약종료일': '2036-02-02',
+      '상태': '계약유지', '렌탈료': 107000, '출금일': '',
+      '비고': '10년소유권구매완료(10,700원/연)'
+    }
+  ];
+
+  document.getElementById('seedBtn').addEventListener('click', async () => {
+    if (!confirm('기존 노션 표에 있던 복합기/정수기/홈페이지도메인 3건을 그대로 추가합니다. 계속할까요?')) return;
+    try {
+      const batch = db.batch();
+      SEED_DATA.forEach(row => {
+        const ref = db.collection(COLLECTION).doc();
+        batch.set(ref, { ...row, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      });
+      await batch.commit();
+      await loadContracts();
+      statusMsg.textContent = '3건이 추가되었습니다.';
+      setTimeout(() => { statusMsg.textContent = ''; }, 2500);
+    } catch (err) {
+      alert('추가 실패: ' + err.message);
+    }
+  });
 
   saveBtn.addEventListener('click', async () => {
     const item = document.getElementById('f_item').value.trim();
