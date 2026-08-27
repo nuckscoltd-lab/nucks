@@ -38,6 +38,9 @@ if ('serviceWorker' in navigator) {
   .card-head{ display:flex; align-items:center; gap:14px; padding:16px 18px; cursor:pointer; flex-wrap:wrap; }
   .card-head:hover{ background:#fafaf8; }
   .card-name{ font-size:14.5px; font-weight:500; }
+  .status-badge-done{ display:inline-block; font-size:10.5px; padding:2px 8px; border-radius:10px; background:#dfe9e2; color:var(--green); margin-left:8px; vertical-align:middle; font-weight:500; }
+  .hide-toggle{ display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); cursor:pointer; }
+  .hide-toggle input{ cursor:pointer; }
   .card-sub{ font-size:12px; color:var(--muted); margin-top:3px; }
   .card-meta{ margin-left:auto; display:flex; gap:22px; align-items:center; }
   .card-meta .m-item{ text-align:right; font-size:11.5px; color:var(--muted); min-width:110px; }
@@ -121,6 +124,7 @@ if ('serviceWorker' in navigator) {
   let activeYear = '전체';
   let startMonth = '';
   let endMonth = '';
+  let hideCompleted = false; // 상환완료로 표시된 계좌를 목록에서 숨길지 여부
 
   function esc(s){ return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
   function fmtWon(n){ return (Math.round(n) || 0).toLocaleString() + '원'; }
@@ -165,6 +169,7 @@ if ('serviceWorker' in navigator) {
 
   function getFilteredCards(){
     let rows = allCards;
+    if (hideCompleted) rows = rows.filter(c => !c.completed);
     if (activeYear !== '전체') rows = rows.filter(c => Object.keys(c.monthly || {}).some(ym => ym.startsWith(activeYear)));
     if (startMonth) rows = rows.filter(c => Object.keys(c.monthly || {}).some(ym => ym >= startMonth));
     if (endMonth) rows = rows.filter(c => Object.keys(c.monthly || {}).some(ym => ym <= endMonth));
@@ -184,6 +189,10 @@ if ('serviceWorker' in navigator) {
             <input type="month" id="endMonthFilter" style="padding:7px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff;">
             <button type="button" class="row-btn" id="clearMonthRangeBtn" style="margin-left:2px;">초기화</button>
           </span>
+          <label class="hide-toggle">
+            <input type="checkbox" id="hideCompletedChk">
+            상환완료 계좌 숨기기
+          </label>
           <button class="add-btn" id="newItemBtn">+ 새 항목 등록</button>
         </div>
       </div>
@@ -209,6 +218,12 @@ if ('serviceWorker' in navigator) {
 
     document.getElementById('newItemBtn').addEventListener('click', createBlankCard);
 
+    document.getElementById('hideCompletedChk').checked = hideCompleted;
+    document.getElementById('hideCompletedChk').addEventListener('change', (e) => {
+      hideCompleted = e.target.checked;
+      renderList();
+    });
+
     renderList();
   }
 
@@ -219,11 +234,13 @@ if ('serviceWorker' in navigator) {
     const thisMonth = thisMonthKey();
     const thisMonthTotal = allCards.reduce((s, c) => s + (Number((c.monthly || {})[thisMonth]) || 0), 0);
     const periodLabel = (startMonth || endMonth) ? `${startMonth || '처음'}~${endMonth || '지금'}` : (activeYear === '전체' ? '전체' : activeYear + '년');
+    const completedCount = allCards.filter(c => c.completed).length;
 
     bar.innerHTML = `
       <div class="summary-chip">${periodLabel} 항목 수<b>${rows.length}건</b></div>
       <div class="summary-chip">${periodLabel} 사용액<b>${fmtWon(total)}</b></div>
       <div class="summary-chip">이번달(${thisMonth}) 전체 사용액<b>${fmtWon(thisMonthTotal)}</b></div>
+      ${completedCount ? `<div class="summary-chip">상환완료 계좌<b>${completedCount}건${hideCompleted ? ' (숨김)' : ''}</b></div>` : ''}
     `;
   }
 
@@ -262,7 +279,7 @@ if ('serviceWorker' in navigator) {
       <div class="card-item">
         <div class="card-head" data-head="${c.id}">
           <div>
-            <div class="card-name">${esc(c.name)}</div>
+            <div class="card-name">${esc(c.name)}${c.completed ? '<span class="status-badge-done">상환완료</span>' : ''}</div>
             <div class="card-sub">${esc(c.category)}${c.account ? ' · ' + esc(c.account) : ''}</div>
           </div>
           <div class="card-meta">
@@ -313,6 +330,12 @@ if ('serviceWorker' in navigator) {
           <div class="field"><label>이름/항목명</label><input type="text" id="ec-name-${c.id}" value="${esc(c.name)}"></div>
           <div class="field"><label>구분 (주주배당/외부투자배당)</label><input type="text" id="ec-number-${c.id}" value="${esc(c.category)}"></div>
           <div class="field" style="flex:1;"><label>계좌번호</label><input type="text" id="ec-account-${c.id}" value="${esc(c.account)}"></div>
+          <div class="field">
+            <label>상환 완료 여부</label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; padding-top:7px; cursor:pointer;">
+              <input type="checkbox" id="ec-completed-${c.id}" ${c.completed ? 'checked' : ''}> 상환완료로 표시
+            </label>
+          </div>
         </div>
         <button class="add-btn" id="ec-save-${c.id}">저장</button>
       </div>
@@ -384,7 +407,8 @@ if ('serviceWorker' in navigator) {
     const updateData = {
       name: document.getElementById(`ec-name-${id}`).value.trim(),
       category: document.getElementById(`ec-number-${id}`).value.trim(),
-      account: document.getElementById(`ec-account-${id}`).value.trim()
+      account: document.getElementById(`ec-account-${id}`).value.trim(),
+      completed: document.getElementById(`ec-completed-${id}`).checked
     };
     if (!updateData.name) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '이름/항목명을 입력해주세요.'; return; }
     try {
