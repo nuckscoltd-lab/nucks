@@ -254,7 +254,7 @@ if ('serviceWorker' in navigator) {
   <div class="write-panel" id="importPanel" style="display:none;">
     <div class="panel-title">노션 CSV/엑셀 가져오기 (관리자)</div>
     <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
-      대상: 이연경(2025-01 이후), 손영화·윤성원(2025-11 이후) · 그 외 인원 및 기간 이전 데이터는 자동으로 제외됩니다.<br>
+      파일에 담긴 모든 인원·기간의 데이터를 그대로 가져옵니다 (대상자/기간 필터 없음).<br>
       하루에 프로젝트가 여러 개(콤마로 구분) 기재된 경우, 총 근무시간을 프로젝트 개수만큼 균등 분할(1/n)해서 각각 별도 항목으로 저장합니다.
     </div>
     <input type="file" id="importFile" accept=".csv,.xlsx,.xls">
@@ -1239,9 +1239,11 @@ if ('serviceWorker' in navigator) {
   });
 
   // ---------- 노션 CSV 가져오기 (관리자 전용) ----------
+  // ※ 아래 IMPORT_ALLOWED_NAMES / IMPORT_MIN_DATE_* 는 더 이상 "파일 분석/가져오기" 자체를
+  // 필터링하는 데 쓰이지 않습니다 (요청에 따라 대상자/기간 제한을 없앴습니다 - 파일에 있는
+  // 모든 인원/날짜를 그대로 가져옵니다). 다만 아래쪽 "가져온 데이터 초기화" 삭제 도구는
+  // 실수로 회사 전체 근무일지를 지우는 걸 막기 위해 여전히 이 값들로 삭제 범위를 제한합니다.
   const IMPORT_ALLOWED_NAMES = ['이연경', '손영화', '윤성원'];
-  // 사원별로 언제부터의 데이터를 가져올지 다르게 설정 (이연경은 2025년 1월부터, 나머지는 11월부터)
-  // - 급여명세서(payslips) 쪽 가져오기 기준과 맞춰야 프로젝트별 인건비 집계에서 해당 월 기본급을 찾을 수 있습니다.
   const IMPORT_MIN_DATE_BY_NAME = {
     '이연경': '2025-01-01',
     '손영화': '2025-11-01',
@@ -1383,11 +1385,10 @@ if ('serviceWorker' in navigator) {
 
       rows.forEach((row) => {
         const name = String(row['사원명'] || '').trim();
-        if (!IMPORT_ALLOWED_NAMES.includes(name)) return;
+        if (!name) return; // 사원명이 비어있는 행만 제외
 
         const dateStr = parseDateFlexible(row['날짜']);
-        const minDate = IMPORT_MIN_DATE_BY_NAME[name] || IMPORT_MIN_DATE_DEFAULT;
-        if (!dateStr || dateStr < minDate) return;
+        if (!dateStr) return; // 날짜를 인식할 수 없는 행만 제외 (대상자/기간 필터는 없음)
 
         const checkin = extractTimeHHMM(row['출근시간']);
         const checkout = extractTimeHHMM(row['퇴근시간']);
@@ -1471,12 +1472,13 @@ if ('serviceWorker' in navigator) {
       // 각 사원이 몇 건씩 잡혔는지 미리보기에 바로 보여준다.
       const countByName = {};
       mapped.forEach(m => { countByName[m['사원명']] = (countByName[m['사원명']] || 0) + 1; });
-      const breakdown = IMPORT_ALLOWED_NAMES
-        .map(n => `${n} ${countByName[n] || 0}건`)
+      const breakdown = Object.keys(countByName)
+        .sort()
+        .map(n => `${n} ${countByName[n]}건`)
         .join(', ');
 
       previewEl.textContent =
-        `조건에 맞는 ${mapped.length}건을 가져올 준비가 되었습니다. (전체 ${rows.length}행 중) [${breakdown}]`
+        `${mapped.length}건을 가져올 준비가 되었습니다. (전체 ${rows.length}행 중) [${breakdown}]`
         + (anomalyCount ? ` · 퇴근체크 누락 등으로 ${ANOMALY_THRESHOLD_HOURS}시간을 초과한 ${anomalyCount}건은 해당 사원의 정상 근무일 평균 시간으로 대체했습니다.` : '')
         + (incompleteCount ? ` · 출퇴근 시간이 일부 없는 ${incompleteCount}건은 0시간으로 처리됩니다.` : '');
       document.getElementById('importRunBtn').style.display = mapped.length ? 'inline-block' : 'none';
