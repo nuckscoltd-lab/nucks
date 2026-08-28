@@ -969,6 +969,21 @@ async function loadWorklogProjectNames(){
   }
 }
 
+// 회계장부 프로젝트 목록을 파이어베이스에 동기화 — worklog.html이 이걸 읽어다가
+// 프로젝트 입력 자동완성 목록에 자동으로 반영한다(새 프로젝트가 생겨도 사람이 두 파일을
+// 따로 손댈 필요 없이 대시보드→근무일지 방향으로 자동 전파됨).
+async function syncOfficialProjectsToFirestore(){
+  try{
+    const names = collectLedgerProjectNames();
+    if(!names.length) return;
+    await db.collection('officialProjects').doc('list').set({
+      names, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }catch(err){
+    console.error('공식 프로젝트 목록 동기화 실패:', err);
+  }
+}
+
 async function loadProjectNameMapping(){
   try{
     const snap = await db.collection('projectNameMapping').get();
@@ -1010,13 +1025,16 @@ function renderMappingTable(forceResuggest){
   if(ledgerNames.length===0){ body.innerHTML = '<tr><td colspan="3" style="color:var(--t4);font-size:12px">회계장부 프로젝트 데이터가 없습니다.</td></tr>'; return; }
   body.innerHTML = ledgerNames.map(name=>{
     const existing = PROJECT_NAME_MAP[name];
-    const selected = (!forceResuggest && existing) ? existing : (existing || suggestMatches(name));
+    const exactMatch = !existing && WL_PROJECT_NAMES.includes(name);
+    const selected = (!forceResuggest && existing) ? existing : (existing || (exactMatch ? [name] : suggestMatches(name)));
     const optionsHtml = WL_PROJECT_NAMES.map(wl=>
       `<option value="${escapeHtmlSafe(wl)}" ${selected.includes(wl)?'selected':''}>${escapeHtmlSafe(wl)}</option>`
     ).join('');
-    const autoTag = (!existing && selected.length) ? ' <span style="font-size:9px;color:var(--blue)">자동제안(확인 필요)</span>' : '';
+    let tag = '';
+    if(exactMatch) tag = ' <span style="font-size:9px;color:var(--green)">✓ 이름 일치 (자동 연결됨, 저장 안 해도 적용됨)</span>';
+    else if(!existing && selected.length) tag = ' <span style="font-size:9px;color:var(--blue)">자동제안(확인 후 저장 필요)</span>';
     return `<tr data-ledger="${escapeHtmlSafe(name)}">
-      <td style="font-size:12px">${escapeHtmlSafe(name)}${autoTag}</td>
+      <td style="font-size:12px">${escapeHtmlSafe(name)}${tag}</td>
       <td><select multiple size="3" style="width:100%;background:var(--bg4);border:1px solid var(--border2);color:var(--t1);font-size:11px;border-radius:6px" class="mapSelect">${optionsHtml || '<option disabled>근무일지 프로젝트 로딩 중...</option>'}</select></td>
       <td><button class="fbt" style="font-size:11px" onclick="saveOneMapping('${escapeHtmlSafe(name).replace(/'/g,"\\'")}', this)">저장</button></td>
     </tr>`;
@@ -1126,7 +1144,20 @@ async function loadHoursBasedLaborData(){
 function applyHoursBasedLabor(){
   if(!HOURS_LABOR_READY) { renderMappingTable(); return; }
 
-  const mappingEntries = Object.entries(PROJECT_NAME_MAP).filter(([,wl])=>wl && wl.length);
+  // 수동 매핑이 저장돼 있으면 그것을 쓰고, 없더라도 근무일지 프로젝트명이 회계장부 이름과
+  // "완전히 똑같으면" 매핑 없이도 자동으로 연결한다 (worklog.html에서 "프로젝트명 정리"로
+  // 회계장부 이름과 통일해둔 프로젝트가 여기 해당된다).
+  const effectiveMap = {};
+  collectLedgerProjectNames().forEach(name=>{
+    const explicit = PROJECT_NAME_MAP[name];
+    if(explicit && explicit.length){
+      effectiveMap[name] = explicit;
+    } else if(WL_PROJECT_NAMES.includes(name)){
+      effectiveMap[name] = [name];
+    }
+  });
+
+  const mappingEntries = Object.entries(effectiveMap);
   mappingEntries.forEach(([ledgerProj, wlProjs])=>{
     const pp = PROJ_PERIODS[ledgerProj];
     if(!pp) return; // 매출/매입 자체가 없는(=거래 자체가 없는) 프로젝트는 손대지 않음
@@ -1211,6 +1242,7 @@ async function ensureHoursBasedLaborLoaded(){
   await loadWorklogProjectNames();
   await loadProjectNameMapping();
   renderMappingTable();
+  syncOfficialProjectsToFirestore(); // 결과를 기다릴 필요는 없음(실패해도 나머지 기능에 영향 없음)
   await loadHoursBasedLaborData(); // 내부에서 applyHoursBasedLabor() 호출
 }
 
@@ -2094,6 +2126,8 @@ function rebuildAllData(txs){
   regenAllYearButtons(years);
   updateFooterMeta();
   saveToLocalStorage();
+  syncOfficialProjectsToFirestore(); // 새로 생긴 프로젝트가 있으면 근무일지 쪽 자동완성 목록에도 자동 반영됨
+  applyHoursBasedLabor(); // 이미 근무일지 실측 데이터를 불러온 상태였다면, 새로 계산된 매출비중 배분 위에 다시 덧씌운다
   refreshAllTabs();
 }
 
