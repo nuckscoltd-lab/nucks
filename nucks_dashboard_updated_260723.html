@@ -321,15 +321,15 @@ pre .k{color:var(--purple)} pre .s{color:var(--green)} pre .c{color:var(--t4)} p
   <div style="background:rgba(88,166,255,0.08);border:1px solid rgba(88,166,255,0.2);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;gap:14px">
     <div style="font-size:18px;margin-top:1px">💡</div>
     <div>
-      <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:4px">설계 프로젝트 인건비 배분 기능</div>
-      <div style="font-size:12px;color:var(--t2);line-height:1.7">설계는 외주 매입비가 거의 없어 이익률이 100%에 가깝게 보입니다. <strong style="color:var(--t1)">판관비 포함</strong> 토글을 켜면 해당 연도 판관비(급여·복리후생비·임차료·수수료 등)를 <strong style="color:var(--t1)">설계 매출 비중에 따라 배분</strong>하여 실질 손익률을 추정합니다.</div>
+      <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:4px">인건비 반영 방식</div>
+      <div style="font-size:12px;color:var(--t2);line-height:1.7">인건비는 <strong style="color:var(--t1)">기본적으로 항상</strong> 손익에 포함됩니다. 근무일지에 실제 투입시간이 매핑되어 있는 프로젝트·달은 그 실측값을, 없는 경우는 기존처럼 매출 비중 배분 추정값을 사용합니다(⏱ 표시로 구분). <strong style="color:var(--t1)">판관비 포함</strong> 토글은 인건비를 제외한 그 외 관리비(임차료·보험료·세금·복리후생비 등)를 <strong style="color:var(--t1)">설계 매출 비중에 따라 추가로 배분</strong>하고 싶을 때만 켜는 옵션입니다.</div>
     </div>
   </div>
   <div class="filter-bar" style="margin-bottom:8px">
     <span class="filter-label">원가방식</span>
-    <button class="fbt on" data-g="pj-cost" id="costToggleOff" onclick="setCostMode(0,this)">직접매입만</button>
-    <button class="fbt" data-g="pj-cost" id="costToggleOn" onclick="setCostMode(1,this)">판관비 포함</button>
-    <button class="fbt" data-g="pj-cost" id="costToggleNoGs" onclick="setCostMode(2,this)">판관비 포함 (가수금 제외)</button>
+    <button class="fbt on" data-g="pj-cost" id="costToggleOff" onclick="setCostMode(0,this)">기본 (매입+인건비)</button>
+    <button class="fbt" data-g="pj-cost" id="costToggleOn" onclick="setCostMode(1,this)">+판관비(기타 관리비)</button>
+    <button class="fbt" data-g="pj-cost" id="costToggleNoGs" onclick="setCostMode(2,this)">+판관비(기타 관리비, 가수금 제외)</button>
     <div class="f-div"></div>
     <span class="filter-label" style="font-size:10px;color:var(--t4)" id="laborInfo"></span>
   </div>
@@ -371,7 +371,7 @@ pre .k{color:var(--purple)} pre .s{color:var(--green)} pre .c{color:var(--t4)} p
   </div>
   <div class="card"><div class="card-head"><span class="card-title">프로젝트별 손익 상세</span></div>
     <div id="projFilterBanner" style="display:none;margin-bottom:10px;padding:8px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;font-size:12px;color:var(--t2)"></div>
-    <div class="tbl-wrap"><table class="tbl"><thead id="projThead"><tr><th>프로젝트명</th><th>구분</th><th class="r">매출 (원)</th><th class="r">매입 (원)</th><th class="r">손익 (원)</th><th class="r">이익률</th></tr></thead><tbody id="projBody"></tbody></table></div>
+    <div class="tbl-wrap"><table class="tbl"><thead id="projThead"><tr><th>프로젝트명</th><th>구분</th><th class="r">매출 (원)</th><th class="r">매입 (원)</th><th class="r" style="color:var(--amber-bright)">인건비 (원)</th><th class="r">손익 (원)</th><th class="r">이익률</th></tr></thead><tbody id="projBody"></tbody></table></div>
   </div>
 </div>
 
@@ -434,6 +434,33 @@ pre .k{color:var(--purple)} pre .s{color:var(--green)} pre .c{color:var(--t4)} p
       </tr></thead>
       <tbody id="contribAutoBody"></tbody>
     </table></div>
+    <div style="font-size:11px;color:var(--t4);margin-top:8px">
+      <span style="color:var(--green);border:1px solid var(--green);border-radius:8px;padding:1px 5px;margin-right:4px">⏱ 실측 n/m</span>
+      표시가 붙은 프로젝트는 근무일지 실제 투입시간 기준으로 인건비가 계산된 달(n)이 전체 활동 달(m) 중 일부 이상 포함된 것입니다. 표시가 없으면 매출 비중 배분(기존 방식)입니다.
+    </div>
+  </div>
+
+  <!-- ④ 프로젝트명 매핑 관리 -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-head">
+      <span class="card-title">프로젝트명 매핑 관리</span>
+      <span style="font-size:11px;color:var(--t4)">회계장부 프로젝트명 ↔ 근무일지 프로젝트명 연결 (실제 인건비 계산에 사용)</span>
+    </div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:10px;line-height:1.7">
+      회계장부(거래내역)의 프로젝트명과 근무일지에 직원들이 입력한 프로젝트명은 표기가 서로 다릅니다.
+      아래에서 각 회계장부 프로젝트에 해당하는 근무일지 프로젝트명을 선택해 연결해두면(복수 선택 가능),
+      그 프로젝트·달에 대해서는 위 표의 추정인건비가 근무일지의 실제 투입시간 기준으로 계산됩니다.
+      연결하지 않은 프로젝트는 지금까지 쓰던 매출 비중 배분 방식이 그대로 적용됩니다.
+    </div>
+    <div id="mapStatusMsg" style="font-size:12px;color:var(--blue);margin-bottom:10px;min-height:16px"></div>
+    <div id="mapTableWrap" class="tbl-wrap"><table class="tbl">
+      <thead><tr><th style="width:34%">회계장부 프로젝트명</th><th>근무일지 프로젝트명 (Ctrl/Shift-클릭으로 복수 선택)</th><th style="width:64px"></th></tr></thead>
+      <tbody id="mapTableBody"><tr><td colspan="3" style="color:var(--t4);font-size:12px">불러오는 중...</td></tr></tbody>
+    </table></div>
+    <div style="margin-top:10px;display:flex;gap:8px">
+      <button class="fbt" onclick="renderMappingTable(true)">자동 매칭 다시 제안</button>
+      <button class="fbt on" onclick="saveAllMappings()">전체 저장</button>
+    </div>
   </div>
 </div>
 
@@ -477,7 +504,15 @@ pre .k{color:var(--purple)} pre .s{color:var(--green)} pre .c{color:var(--t4)} p
 </main>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
 <script>
+// 관리자만 접근 가능 (근무일지 기반 실제 인건비 계산을 위해 workLogs/payslips를 읽어와야 하므로 로그인 필요)
+requireRole(['admin']);
+
 const ORIGINAL_HTML_SOURCE = document.documentElement.outerHTML;
 // ── NucksChart: Chart.js 대체 경량 구현 ──
 window.Chart = (function(){
@@ -721,6 +756,7 @@ function initContrib(){
   renderContribDetail();
   renderEmpSummary('total');
   renderContribAuto('rev');
+  ensureHoursBasedLaborLoaded();
 }
 
 function renderContribDetail(){
@@ -739,10 +775,13 @@ function renderContribDetail(){
     const realPL    = totalRev - totalCost - total;
     const margin    = totalRev > 0 ? (realPL/totalRev*100).toFixed(1) : null;
     const mColor    = margin === null ? 'var(--t4)' : parseFloat(margin) >= 0 ? 'var(--green)' : 'var(--red)';
+    const hoursNote = (pp._hoursBasedYmCount > 0)
+      ? `<span style="font-size:10px;color:var(--green);border:1px solid var(--green);border-radius:8px;padding:1px 5px">⏱ 실측 ${pp._hoursBasedYmCount}/${pp._hoursBasedTotalYmCount}개월</span>`
+      : '';
     infoEl.innerHTML = [
       `<span style="color:var(--t4)">기간</span> <strong style="color:var(--t1)">${pp.start||'?'} ~ ${pp.end||'?'}</strong>`,
       `<span style="color:var(--t4)">매출</span> <strong style="color:var(--t1)">${wn(totalRev)}원</strong>`,
-      `<span style="color:var(--t4)">추정인건비</span> <strong style="color:var(--amber-bright)">${wn(total)}원</strong>`,
+      `<span style="color:var(--t4)">추정인건비</span> <strong style="color:var(--amber-bright)">${wn(total)}원</strong> ${hoursNote}`,
       margin !== null ? `<span style="color:var(--t4)">실질이익률</span> <strong style="color:${mColor}">${margin}%</strong>` : ''
     ].filter(Boolean).join(' &nbsp;·&nbsp; ');
   }
@@ -850,6 +889,8 @@ function renderContribAuto(sort, btn){
       cost:   v.total_cost   || 0,
       salary: v.total_salary || 0,
       real_pl: (v.total_rev||0) - (v.total_cost||0) - (v.total_salary||0),
+      hoursYmCount: v._hoursBasedYmCount || 0,
+      totalYmCount: v._hoursBasedTotalYmCount || 0,
     }));
 
   rows.sort((a,b) => {
@@ -868,18 +909,310 @@ function renderContribAuto(sort, btn){
     const plColor = r.real_pl >= 0 ? 'var(--green)' : 'var(--red)';
     // 기간이 같은 달이면 단건, 다르면 범위 표시
     const period = r.start === r.end ? r.start : `${r.start}~${r.end}`;
+    const laborBadge = r.hoursYmCount > 0
+      ? `<span title="근무일지 실제 투입시간 기준으로 계산된 달: ${r.hoursYmCount}/${r.totalYmCount}개월" style="display:inline-block;font-size:9px;color:var(--green);border:1px solid var(--green);border-radius:8px;padding:0 5px;margin-left:5px;white-space:nowrap;vertical-align:middle">⏱ 실측 ${r.hoursYmCount}/${r.totalYmCount}</span>`
+      : '';
     return `<tr>
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.name}">${r.name}</td>
       <td style="font-size:11px;color:var(--t4);white-space:nowrap">${period}</td>
       <td class="r">${wn(r.rev)}</td>
       <td class="r" style="color:var(--t3)">${wn(r.cost)}</td>
-      <td class="r" style="color:var(--amber-bright)">${wn(r.salary)}</td>
+      <td class="r" style="color:var(--amber-bright)">${wn(r.salary)}${laborBadge}</td>
       <td class="r" style="color:${plColor}">${r.real_pl>=0?'+':''}${wn(r.real_pl)}</td>
       <td class="r" style="color:${mColor};font-weight:600">${mText}</td>
     </tr>`;
   }).join('');
 }
 
+
+/* ══════════════════════════════
+   근무일지 기반 실제 인건비 (2026-08 추가)
+   - worklog.html의 "프로젝트별 인건비 집계" 패널과 동일한 방식으로 계산:
+     직원의 해당월 기본급(payslips) ÷ 209시간(월 소정근로시간) × 그 프로젝트에 투입한 시간
+   - 회계장부 프로젝트명과 근무일지 프로젝트명 표기가 서로 달라서, 관리자가 지정한
+     매핑(projectNameMapping 컬렉션)이 있는 프로젝트에 한해서만, 실제 데이터가 있는
+     "달" 단위로 기존 매출비중 배분 값을 대체한다. 매핑이 없거나 그 달에 근무일지가
+     없으면 기존 방식(매출 비중 배분)이 그대로 유지된다.
+══════════════════════════════ */
+const STANDARD_MONTHLY_HOURS = 209; // worklog.html과 동일한 기준
+let PROJECT_NAME_MAP = {};          // { 회계장부 프로젝트명: [근무일지 프로젝트명, ...] }
+let WL_PROJECT_NAMES = [];          // 근무일지에 실제로 쓰인 프로젝트명 목록
+let HOURS_LABOR_BY_WLPROJ_YM = {};  // { 근무일지 프로젝트명: { 'YYYY-MM': { total, byEmp:{사원명:금액} } } }
+let HOURS_LABOR_READY = false;
+let _hoursLoadStarted = false;
+
+function escapeHtmlSafe(str){
+  return String(str||'').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+function collectLedgerProjectNames(){
+  const set = new Set();
+  Object.values(PROJ_YR || {}).forEach(list => (list||[]).forEach(p => set.add(p.name)));
+  return [...set].sort();
+}
+
+async function loadWorklogProjectNames(){
+  try{
+    const snap = await db.collection('workLogs').get();
+    const set = new Set();
+    snap.docs.forEach(d=>{
+      const row = d.data();
+      (row.projects||[]).forEach(p=>{
+        const nm = (p['프로젝트']||'').trim();
+        if(nm) set.add(nm);
+      });
+    });
+    WL_PROJECT_NAMES = [...set].sort();
+  }catch(err){
+    console.error('근무일지 프로젝트명 로딩 실패:', err);
+    WL_PROJECT_NAMES = [];
+  }
+}
+
+async function loadProjectNameMapping(){
+  try{
+    const snap = await db.collection('projectNameMapping').get();
+    PROJECT_NAME_MAP = {};
+    snap.docs.forEach(d=>{
+      const v = d.data();
+      if(v && v.ledgerProject) PROJECT_NAME_MAP[v.ledgerProject] = Array.isArray(v.worklogProjects) ? v.worklogProjects : [];
+    });
+  }catch(err){
+    console.error('프로젝트명 매핑 로딩 실패:', err);
+  }
+}
+
+// 두 프로젝트명이 얼마나 비슷한지 대략 점수화 (자동 매칭 "제안"용 — 정밀하지 않으므로 반드시 사람이 최종 확인)
+function normalizeProjName(s){
+  return (s||'').replace(/[\/\-()·,._]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function similarityScore(a, b){
+  const wa = new Set(normalizeProjName(a).split(' ').filter(w=>w.length>=2));
+  const wb = new Set(normalizeProjName(b).split(' ').filter(w=>w.length>=2));
+  if(!wa.size || !wb.size) return 0;
+  let overlap = 0;
+  wa.forEach(w=>{ if([...wb].some(w2=>w2.includes(w)||w.includes(w2))) overlap++; });
+  return overlap / Math.max(wa.size, wb.size);
+}
+function suggestMatches(ledgerName){
+  return WL_PROJECT_NAMES
+    .map(wl=>({wl, score: similarityScore(ledgerName, wl)}))
+    .filter(x=>x.score >= 0.34)
+    .sort((a,b)=>b.score-a.score)
+    .slice(0,3)
+    .map(x=>x.wl);
+}
+
+function renderMappingTable(forceResuggest){
+  const body = document.getElementById('mapTableBody');
+  if(!body) return;
+  const ledgerNames = collectLedgerProjectNames();
+  if(ledgerNames.length===0){ body.innerHTML = '<tr><td colspan="3" style="color:var(--t4);font-size:12px">회계장부 프로젝트 데이터가 없습니다.</td></tr>'; return; }
+  body.innerHTML = ledgerNames.map(name=>{
+    const existing = PROJECT_NAME_MAP[name];
+    const selected = (!forceResuggest && existing) ? existing : (existing || suggestMatches(name));
+    const optionsHtml = WL_PROJECT_NAMES.map(wl=>
+      `<option value="${escapeHtmlSafe(wl)}" ${selected.includes(wl)?'selected':''}>${escapeHtmlSafe(wl)}</option>`
+    ).join('');
+    const autoTag = (!existing && selected.length) ? ' <span style="font-size:9px;color:var(--blue)">자동제안(확인 필요)</span>' : '';
+    return `<tr data-ledger="${escapeHtmlSafe(name)}">
+      <td style="font-size:12px">${escapeHtmlSafe(name)}${autoTag}</td>
+      <td><select multiple size="3" style="width:100%;background:var(--bg4);border:1px solid var(--border2);color:var(--t1);font-size:11px;border-radius:6px" class="mapSelect">${optionsHtml || '<option disabled>근무일지 프로젝트 로딩 중...</option>'}</select></td>
+      <td><button class="fbt" style="font-size:11px" onclick="saveOneMapping('${escapeHtmlSafe(name).replace(/'/g,"\\'")}', this)">저장</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function readSelectedFromRow(tr){
+  const sel = tr.querySelector('.mapSelect');
+  return sel ? Array.from(sel.selectedOptions).map(o=>o.value) : [];
+}
+
+async function saveOneMapping(ledgerName, btn){
+  const tr = btn.closest('tr');
+  const wlProjects = readSelectedFromRow(tr);
+  const statusEl = document.getElementById('mapStatusMsg');
+  try{
+    await db.collection('projectNameMapping').doc(encodeURIComponent(ledgerName)).set({
+      ledgerProject: ledgerName, worklogProjects: wlProjects, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    PROJECT_NAME_MAP[ledgerName] = wlProjects;
+    if(statusEl) statusEl.textContent = `저장됨: ${ledgerName} (${wlProjects.length}건 연결)`;
+    applyHoursBasedLabor();
+  }catch(err){
+    console.error(err);
+    if(statusEl) statusEl.textContent = '저장 실패: ' + err.message;
+  }
+}
+
+async function saveAllMappings(){
+  const rows = document.querySelectorAll('#mapTableBody tr[data-ledger]');
+  const statusEl = document.getElementById('mapStatusMsg');
+  if(statusEl) statusEl.textContent = '저장 중...';
+  try{
+    const batch = db.batch();
+    rows.forEach(tr=>{
+      const ledgerName = tr.getAttribute('data-ledger');
+      const wlProjects = readSelectedFromRow(tr);
+      const ref = db.collection('projectNameMapping').doc(encodeURIComponent(ledgerName));
+      batch.set(ref, { ledgerProject: ledgerName, worklogProjects: wlProjects, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      PROJECT_NAME_MAP[ledgerName] = wlProjects;
+    });
+    await batch.commit();
+    if(statusEl) statusEl.textContent = `전체 저장 완료 (${rows.length}건)`;
+    applyHoursBasedLabor();
+  }catch(err){
+    console.error(err);
+    if(statusEl) statusEl.textContent = '저장 실패: ' + err.message;
+  }
+}
+
+async function loadHoursBasedLaborData(){
+  try{
+    const [wlSnap, paySnap] = await Promise.all([
+      db.collection('workLogs').get(),
+      db.collection('payslips').get()
+    ]);
+
+    // uid별, 연-월별 기본급 매핑 (worklog.html의 loadCostAnalysis()와 동일)
+    const wageMap = {};
+    paySnap.docs.forEach(d=>{
+      const p = d.data();
+      const ym = (p['지급일']||'').slice(0,7);
+      if(!ym || !p.uid) return;
+      if(!wageMap[p.uid]) wageMap[p.uid] = {};
+      wageMap[p.uid][ym] = (p.pay && p.pay['기본급']) || 0;
+    });
+
+    HOURS_LABOR_BY_WLPROJ_YM = {};
+    wlSnap.docs.forEach(d=>{
+      const row = d.data();
+      const ym = (row['날짜']||'').slice(0,7);
+      if(!ym) return;
+      const uidWages = wageMap[row.uid] || {};
+      let baseSalary = uidWages[ym];
+      if(baseSalary === undefined){
+        const priorMonths = Object.keys(uidWages).filter(m=>m<=ym).sort().reverse();
+        baseSalary = priorMonths.length ? uidWages[priorMonths[0]] : undefined;
+      }
+      if(baseSalary === undefined) return; // 급여 데이터가 없는 직원/기간은 실제 인건비 산정 불가 → 기존 방식 대상으로 남겨둠
+
+      const hourlyWage = baseSalary / STANDARD_MONTHLY_HOURS;
+      const empName = row['사원명'] || '(이름없음)';
+
+      (row.projects||[]).forEach(p=>{
+        const name = (p['프로젝트']||'').trim();
+        if(!name) return;
+        const hours = Number(p['투입시간']) || 0;
+        if(hours <= 0) return;
+        const cost = hours * hourlyWage;
+
+        if(!HOURS_LABOR_BY_WLPROJ_YM[name]) HOURS_LABOR_BY_WLPROJ_YM[name] = {};
+        if(!HOURS_LABOR_BY_WLPROJ_YM[name][ym]) HOURS_LABOR_BY_WLPROJ_YM[name][ym] = { total: 0, byEmp: {} };
+        HOURS_LABOR_BY_WLPROJ_YM[name][ym].total += cost;
+        HOURS_LABOR_BY_WLPROJ_YM[name][ym].byEmp[empName] = (HOURS_LABOR_BY_WLPROJ_YM[name][ym].byEmp[empName]||0) + cost;
+      });
+    });
+
+    HOURS_LABOR_READY = true;
+    applyHoursBasedLabor();
+  }catch(err){
+    console.error('실제 근무시간 기반 인건비 로딩 실패:', err);
+  }
+}
+
+// PROJ_PERIODS[p].salary / PROJ_EMP_CONTRIB[p]를, 매핑되고 실제 데이터가 있는 "달"만 골라
+// 근무일지 실측 인건비로 대체한다. 매핑이 없거나 그 달에 데이터가 없으면 기존 매출비중 배분을 그대로 둔다.
+function applyHoursBasedLabor(){
+  if(!HOURS_LABOR_READY) { renderMappingTable(); return; }
+
+  const mappingEntries = Object.entries(PROJECT_NAME_MAP).filter(([,wl])=>wl && wl.length);
+  mappingEntries.forEach(([ledgerProj, wlProjs])=>{
+    const pp = PROJ_PERIODS[ledgerProj];
+    if(!pp) return; // 매출/매입 자체가 없는(=거래 자체가 없는) 프로젝트는 손대지 않음
+
+    // 매핑된 근무일지 프로젝트(들)의 실제 인건비를 월별로 합산
+    const hoursYm = {}; // ym -> {total, byEmp}
+    wlProjs.forEach(wl=>{
+      const data = HOURS_LABOR_BY_WLPROJ_YM[wl];
+      if(!data) return;
+      Object.entries(data).forEach(([ym, v])=>{
+        if(!hoursYm[ym]) hoursYm[ym] = { total: 0, byEmp: {} };
+        hoursYm[ym].total += v.total;
+        Object.entries(v.byEmp).forEach(([emp, amt])=>{
+          hoursYm[ym].byEmp[emp] = (hoursYm[ym].byEmp[emp]||0) + amt;
+        });
+      });
+    });
+    if(Object.keys(hoursYm).length === 0) return; // 실제 데이터 없음 → 기존 방식 그대로 유지
+
+    // 기존(매출비중 배분) 방식의 직원별 지분 비율 — 실제 데이터가 없는 달의 근사 배분에 사용
+    const oldEmpContrib = PROJ_EMP_CONTRIB[ledgerProj] || {};
+    const oldTotal = Object.values(oldEmpContrib).reduce((a,b)=>a+b,0);
+    const oldRatio = {};
+    Object.entries(oldEmpContrib).forEach(([emp, amt])=>{ oldRatio[emp] = oldTotal>0 ? amt/oldTotal : 0; });
+
+    const oldSalaryByYm = Object.assign({}, pp.salary || {});
+    const ymKeys = new Set([...Object.keys(oldSalaryByYm), ...Object.keys(hoursYm)]);
+
+    const newSalaryByYm = {};
+    const newEmpContrib = {};
+    let hoursAppliedYmCount = 0;
+
+    ymKeys.forEach(ym=>{
+      if(hoursYm[ym]){
+        newSalaryByYm[ym] = hoursYm[ym].total;
+        hoursAppliedYmCount++;
+        Object.entries(hoursYm[ym].byEmp).forEach(([emp, amt])=>{
+          newEmpContrib[emp] = (newEmpContrib[emp]||0) + amt;
+        });
+      } else {
+        const amt = oldSalaryByYm[ym] || 0;
+        newSalaryByYm[ym] = amt;
+        // 실제 근무시간 데이터가 없는 달만, 기존 매출비중 배분의 직원 지분율로 근사 배분
+        Object.entries(oldRatio).forEach(([emp, ratio])=>{
+          if(ratio<=0) return;
+          newEmpContrib[emp] = (newEmpContrib[emp]||0) + amt*ratio;
+        });
+      }
+    });
+
+    Object.keys(newSalaryByYm).forEach(ym=>{ newSalaryByYm[ym] = Math.round(newSalaryByYm[ym]); });
+    pp.salary = newSalaryByYm;
+    pp.total_salary = Math.round(Object.values(newSalaryByYm).reduce((a,b)=>a+b,0));
+    pp._hoursBasedYmCount = hoursAppliedYmCount;
+    pp._hoursBasedTotalYmCount = ymKeys.size;
+
+    const sortedYm = [...ymKeys].sort();
+    if(sortedYm.length){
+      if(!pp.start || sortedYm[0] < pp.start) pp.start = sortedYm[0];
+      if(!pp.end || sortedYm[sortedYm.length-1] > pp.end) pp.end = sortedYm[sortedYm.length-1];
+    }
+
+    Object.keys(newEmpContrib).forEach(emp=>{ newEmpContrib[emp] = Math.round(newEmpContrib[emp]); });
+    PROJ_EMP_CONTRIB[ledgerProj] = newEmpContrib;
+  });
+
+  renderMappingTable();
+  // 이미 화면이 그려진 상태라면 최신 값으로 다시 그린다 (재귀 로딩은 하지 않음 — _hoursLoadStarted가 이미 true이므로 재요청되지 않는다)
+  if(document.getElementById('contribAutoBody')){
+    renderContribDetail();
+    renderEmpSummary('total');
+    renderContribAuto('rev');
+  }
+  if(document.getElementById('projBody')){
+    renderProj();
+  }
+}
+
+async function ensureHoursBasedLaborLoaded(){
+  if(_hoursLoadStarted){ renderMappingTable(); return; }
+  _hoursLoadStarted = true;
+  await loadWorklogProjectNames();
+  await loadProjectNameMapping();
+  renderMappingTable();
+  await loadHoursBasedLaborData(); // 내부에서 applyHoursBasedLabor() 호출
+}
 
 /* ══════════════════════════════
    실제 데이터
@@ -1176,11 +1509,22 @@ function getProjData(){
     const yrData=PROJ_YR[String(y)];if(!yrData)return;
     yrData.forEach(r=>{
       if(PF_TYPE!=='all'&&r.type!==PF_TYPE)return;
-      if(!merged[r.name])merged[r.name]={name:r.name,type:r.type,s:0,c:0};
+      if(!merged[r.name])merged[r.name]={name:r.name,type:r.type,s:0,c:0,labor:0};
       merged[r.name].s+=r.s;merged[r.name].c+=r.c;
     });
   });
-  return Object.values(merged).filter(p=>p.s>0||p.c>0).sort((a,b)=>b.s-a.s);
+  // 인건비: PROJ_PERIODS[name].salary(연-월 단위, 근무일지 실측/매출비중 배분 혼합)에서
+  // 현재 선택된 연도에 해당하는 달만 합산 — "프로젝트별 직원 기여도" 탭과 같은 원천 데이터를 공유한다.
+  Object.values(merged).forEach(p=>{
+    const pp = PROJ_PERIODS[p.name];
+    if(!pp || !pp.salary) return;
+    Object.entries(pp.salary).forEach(([ym, amt])=>{
+      if(years.includes(Number(ym.slice(0,4)))) p.labor += (amt||0);
+    });
+    p._hoursBasedYmCount = pp._hoursBasedYmCount || 0;
+    p._hoursBasedTotalYmCount = pp._hoursBasedTotalYmCount || 0;
+  });
+  return Object.values(merged).filter(p=>p.s>0||p.c>0||p.labor>0).sort((a,b)=>b.s-a.s);
 }
 // 인건비 배분 데이터 [year] → [{name,type,s,c,la,adj_c,adj_p,adj_m}]
 let LABOR_ALLOC={
@@ -1197,13 +1541,14 @@ function setCostMode(v,b){
   const th=document.getElementById('projThead');
   if(th){
     th.innerHTML=(COST_MODE>0)
-      ?'<tr><th>프로젝트명</th><th>구분</th><th class="r">매출 (원)</th><th class="r">직접매입 (원)</th><th class="r" style="color:var(--amber)">판관비배분 (원)</th><th class="r">총원가 (원)</th><th class="r">손익 (원)</th><th class="r">이익률</th></tr>'
-      :'<tr><th>프로젝트명</th><th>구분</th><th class="r">매출 (원)</th><th class="r">매입 (원)</th><th class="r">손익 (원)</th><th class="r">이익률</th></tr>';
+      ?'<tr><th>프로젝트명</th><th>구분</th><th class="r">매출 (원)</th><th class="r">매입 (원)</th><th class="r" style="color:var(--amber-bright)">인건비 (원)</th><th class="r" style="color:var(--amber)">판관비배분 (원)</th><th class="r">총원가 (원)</th><th class="r">손익 (원)</th><th class="r">이익률</th></tr>'
+      :'<tr><th>프로젝트명</th><th>구분</th><th class="r">매출 (원)</th><th class="r">매입 (원)</th><th class="r" style="color:var(--amber-bright)">인건비 (원)</th><th class="r">손익 (원)</th><th class="r">이익률</th></tr>';
   }
   renderProj();
 }
 
 function renderProj(){
+  if(!_hoursLoadStarted) ensureHoursBasedLaborLoaded();
   const rawData=getProjData();
   let data;
   if(COST_MODE>0){
@@ -1215,38 +1560,42 @@ function renderProj(){
     const totDesignInc=yrKey==='all'
       ? Object.values(PROJ_YR).flat().filter(x=>x.type==='설계').reduce((a,x)=>a+x.s,0)
       : (PROJ_YR[yrKey]||[]).filter(x=>x.type==='설계').reduce((a,x)=>a+x.s,0);
+    // 판관비 배분(SGNA_ALLOC_NEW 등)에는 이미 인건비가 포함되어 있지 않다 — rebuildAllData()의
+    // 판관비 집계에서 직원급여/임원급여(SALARY_ACCTS)를 제외하도록 고쳤기 때문에, 아래에서
+    // 인건비(p.labor)를 별도로 더해도 이중 계산되지 않는다.
     data=rawData.map(p=>{
       if(p.type==='설계'){
         if(COST_MODE===2){
           // 가수금 제외: 항상 NOGS 비율로 직접 계산
           const la=totDesignInc>0?Math.round(srFallback.sgna*p.s/totDesignInc):0;
-          return {...p, c:p.c+la, _la:la, _isAdj:true};
+          return {...p, sgna:la};
         }
         // MODE===1: SGNA_ALLOC_NEW 매칭 우선, 없으면 비율 계산
         const match=Object.values(allocMap).find(a=>
           p.name===a.name || p.name.includes(a.name.slice(0,10)) || a.name.includes(p.name.slice(0,10)));
-        if(match) return {...p, c:match.adj_c, _la:match.la, _isAdj:true};
+        if(match) return {...p, sgna:match.la};
         const la=totDesignInc>0?Math.round(srFallback.sgna*p.s/totDesignInc):0;
-        return {...p, c:p.c+la, _la:la, _isAdj:true};
+        return {...p, sgna:la};
       }
-      return p;
+      return {...p, sgna:0};
     });
     const ratesTable2=COST_MODE===2?SGNA_RATES_NOGS:SGNA_RATES_NEW;
     const sr=ratesTable2[yrKey]||{sgna:0,ratio:0};
     const info=document.getElementById('laborInfo');
     const modeLabel=COST_MODE===2?'(가수금 제외)':'';
-    if(info) info.textContent=`판관비${modeLabel} ${(sr.sgna/100000000).toFixed(1)}억을 설계 매출 비중으로 배분`;
+    if(info) info.textContent=`판관비(인건비 제외)${modeLabel} ${(sr.sgna/100000000).toFixed(1)}억을 설계 매출 비중으로 배분 · 인건비는 별도 열에 항상 반영됨`;
   } else {
-    data=rawData;
+    data=rawData.map(p=>({...p, sgna:0}));
     const info=document.getElementById('laborInfo');
     if(info) info.textContent='';
   }
+  data.forEach(p=>{ p.totalC = p.c + (p.labor||0) + (p.sgna||0); });
   const dataWithRev    = data.filter(p=>p.s>0);        // 매출 있는 것
   const dataNoRev      = data.filter(p=>p.s<=0);       // 매출 0
   const showNoRev      = window._showNoRev !== false;
   const kpiData        = showNoRev ? data : dataWithRev; // KPI 계산 기준
-  const bl             = kpiData.filter(p=>p.s>p.c).length;
-  const avgM           = dataWithRev.reduce((a,p)=>a+(p.s-p.c)/p.s,0)/Math.max(1,dataWithRev.length)*100;
+  const bl             = kpiData.filter(p=>p.s>p.totalC).length;
+  const avgM           = dataWithRev.reduce((a,p)=>a+(p.s-p.totalC)/p.s,0)/Math.max(1,dataWithRev.length)*100;
   // KPI 클릭 필터 상태
   if(typeof window._plFilter==='undefined') window._plFilter=null;
   if(typeof window._showNoRev==='undefined') window._showNoRev=true; // 매출미발생 포함 기본값
@@ -1279,8 +1628,8 @@ function renderProj(){
       <div class="kpi-val" style="font-size:13px;color:${showNoRev?'var(--amber-bright)':'var(--t4)'}">${showNoRev?'KPI 포함 ●':'KPI 제외 ○'}</div>
       <div class="kpi-sub" style="font-size:10px">클릭하여 전환</div>
     </div>`;
-  const byM=[...data].filter(p=>p.s>0).map(p=>({...p,m:(p.s-p.c)/p.s*100})).sort((a,b)=>b.m-a.m);
-  const noRevData=[...data].filter(p=>p.s<=0).sort((a,b)=>a.c-b.c); // 매출 0 (비용만 발생)
+  const byM=[...data].filter(p=>p.s>0).map(p=>({...p,m:(p.s-p.totalC)/p.s*100})).sort((a,b)=>b.m-a.m);
+  const noRevData=[...data].filter(p=>p.s<=0).sort((a,b)=>a.totalC-b.totalC); // 매출 0 (비용만 발생)
   const maxA=Math.max(...byM.map(p=>Math.abs(p.m)),10);
   const wrap=document.getElementById('marginWrap');wrap.innerHTML='';
 
@@ -1302,7 +1651,7 @@ function renderProj(){
     wrap.appendChild(divider);
     noRevData.forEach(p=>{
       const row=document.createElement('div');row.className='mb-row';
-      row.innerHTML=`<span class="mb-name" style="width:220px;min-width:220px;color:var(--t4);font-size:12px;white-space:normal;word-break:keep-all;line-height:1.4">${p.name}</span><span class="mb-type" style="width:44px;flex-shrink:0"><span class="bdg ${p.type==='공사'?'bdg-b':'bdg-g'}" style="opacity:.5">${p.type}</span></span><div class="mb-track"><div class="mb-fill" style="width:3%;background:var(--t4)"></div></div><span class="mb-pct" style="color:var(--t4)">매출없음 / -${wn(p.c)}원</span>`;
+      row.innerHTML=`<span class="mb-name" style="width:220px;min-width:220px;color:var(--t4);font-size:12px;white-space:normal;word-break:keep-all;line-height:1.4">${p.name}</span><span class="mb-type" style="width:44px;flex-shrink:0"><span class="bdg ${p.type==='공사'?'bdg-b':'bdg-g'}" style="opacity:.5">${p.type}</span></span><div class="mb-track"><div class="mb-fill" style="width:3%;background:var(--t4)"></div></div><span class="mb-pct" style="color:var(--t4)">매출없음 / -${wn(p.totalC)}원</span>`;
       wrap.appendChild(row);
     });
   }
@@ -1311,14 +1660,14 @@ function renderProj(){
   const hgt=sorted.length*barRowH+90;
   document.querySelector('.h340').style.height=hgt+'px';
   function splitLabel(n){if(n.length<=13)return n;const m=Math.ceil(n.length/2);let c=n.lastIndexOf(' ',m);if(c<4)c=m;return[n.slice(0,c).trimEnd(),n.slice(c).trimStart()];}
-  mk('projBar',{type:'bar',data:{labels:sorted.map(p=>splitLabel(p.name)),datasets:[{label:'매출',data:sorted.map(p=>p.s),backgroundColor:sorted.map(p=>p.type==='공사'?BLUE+'88':AMBER+'88'),borderRadius:3},{label:'매입',data:sorted.map(p=>p.c),backgroundColor:GRAY+'66',borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${wn(c.raw)}원`,title:tt=>sorted[tt[0].dataIndex].name}}},scales:{y:{ticks:{font:{size:11,family:"'Noto Sans KR',sans-serif"},color:'#c9d1d9',crossAlign:'far'},grid:{display:false}},x:{ticks:{callback:v=>fk(v),font:{size:11},color:'#8b949e'},grid:{color:'rgba(255,255,255,0.06)'}}}},plugins:{tooltip:{bodyFont:{size:12}}}});
+  mk('projBar',{type:'bar',data:{labels:sorted.map(p=>splitLabel(p.name)),datasets:[{label:'매출',data:sorted.map(p=>p.s),backgroundColor:sorted.map(p=>p.type==='공사'?BLUE+'88':AMBER+'88'),borderRadius:3},{label:'매입',data:sorted.map(p=>p.c),backgroundColor:GRAY+'66',borderRadius:3},{label:'인건비',data:sorted.map(p=>p.labor||0),backgroundColor:'#d9a441aa',borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${wn(c.raw)}원`,title:tt=>sorted[tt[0].dataIndex].name}}},scales:{y:{ticks:{font:{size:11,family:"'Noto Sans KR',sans-serif"},color:'#c9d1d9',crossAlign:'far'},grid:{display:false}},x:{ticks:{callback:v=>fk(v),font:{size:11},color:'#8b949e'},grid:{color:'rgba(255,255,255,0.06)'}}}},plugins:{tooltip:{bodyFont:{size:12}}}});
   const lh=document.getElementById('labor-col-head');
   if(lh) lh.style.display=COST_MODE?'':'none';
   // PL 필터 적용
   const pf2 = window._plFilter;
   let displayData = [...data].sort((a,b)=>b.s-a.s);
-  if(pf2==='pos') displayData = displayData.filter(p=>p.s>p.c);
-  if(pf2==='neg') displayData = displayData.filter(p=>p.s<=p.c);
+  if(pf2==='pos') displayData = displayData.filter(p=>p.s>p.totalC);
+  if(pf2==='neg') displayData = displayData.filter(p=>p.s<=p.totalC);
 
   // 필터 결과 안내
   const filterBanner = document.getElementById('projFilterBanner');
@@ -1334,12 +1683,16 @@ function renderProj(){
   }
 
   document.getElementById('projBody').innerHTML=displayData.map(p=>{
-    const directC=p._isAdj?(p.c-(p._la||0)):p.c;
-    const la=p._la||0;
-    const totalC=p.c;
+    const directC=p.c;
+    const labor=p.labor||0;
+    const sgna=p.sgna||0;
+    const totalC=p.totalC;
     const pr=p.s-totalC;
     const mg=p.s>0?(pr/p.s*100).toFixed(1):'−';
     const nm=p.name;
+    const laborBadge = p._hoursBasedYmCount>0
+      ? `<span title="근무일지 실제 투입시간 기준으로 계산된 달: ${p._hoursBasedYmCount}/${p._hoursBasedTotalYmCount}개월" style="display:inline-block;font-size:9px;color:var(--green);border:1px solid var(--green);border-radius:8px;padding:0 4px;margin-left:4px;vertical-align:middle">⏱실측 ${p._hoursBasedYmCount}/${p._hoursBasedTotalYmCount}</span>`
+      : '';
     // 손익 배지
     const plBadge = pr>0
       ? `<span class="pl-badge pl-pos">▲ 흑자</span>`
@@ -1347,9 +1700,9 @@ function renderProj(){
         ? `<span class="pl-badge pl-neg">▼ 적자</span>`
         : `<span class="pl-badge pl-zero">— 손익없음</span>`;
     if(COST_MODE){
-      return`<tr class="${pf2?'pl-highlight':''}"><td style="color:var(--t1);white-space:normal;word-break:keep-all;min-width:160px;line-height:1.5">${nm} ${plBadge}</td><td><span class="bdg ${p.type==='공사'?'bdg-b':'bdg-g'}">${p.type}</span></td><td class="r">${wn(p.s)}</td><td class="r">${wn(directC)}</td><td class="r" style="color:var(--amber)">${la>0?wn(la):'—'}</td><td class="r" style="color:var(--t3)">${wn(totalC)}</td><td class="r ${pr>=0?'pos':'neg'}">${pr>=0?'+':''}${wn(Math.abs(pr))}</td><td class="r ${pr>=0?'pos':'neg'}">${mg}%*</td></tr>`;
+      return`<tr class="${pf2?'pl-highlight':''}"><td style="color:var(--t1);white-space:normal;word-break:keep-all;min-width:160px;line-height:1.5">${nm} ${plBadge}</td><td><span class="bdg ${p.type==='공사'?'bdg-b':'bdg-g'}">${p.type}</span></td><td class="r">${wn(p.s)}</td><td class="r">${wn(directC)}</td><td class="r" style="color:var(--amber-bright)">${labor>0?wn(labor):'—'}${laborBadge}</td><td class="r" style="color:var(--amber)">${sgna>0?wn(sgna):'—'}</td><td class="r" style="color:var(--t3)">${wn(totalC)}</td><td class="r ${pr>=0?'pos':'neg'}">${pr>=0?'+':''}${wn(Math.abs(pr))}</td><td class="r ${pr>=0?'pos':'neg'}">${mg}%*</td></tr>`;
     }else{
-      return`<tr class="${pf2?'pl-highlight':''}"><td style="color:var(--t1);white-space:normal;word-break:keep-all;min-width:160px;line-height:1.5">${nm} ${plBadge}</td><td><span class="bdg ${p.type==='공사'?'bdg-b':'bdg-g'}">${p.type}</span></td><td class="r">${wn(p.s)}</td><td class="r">${wn(totalC)}</td><td class="r ${pr>=0?'pos':'neg'}">${pr>=0?'+':''}${wn(Math.abs(pr))}</td><td class="r ${pr>=0?'pos':'neg'}">${mg}%</td></tr>`;
+      return`<tr class="${pf2?'pl-highlight':''}"><td style="color:var(--t1);white-space:normal;word-break:keep-all;min-width:160px;line-height:1.5">${nm} ${plBadge}</td><td><span class="bdg ${p.type==='공사'?'bdg-b':'bdg-g'}">${p.type}</span></td><td class="r">${wn(p.s)}</td><td class="r">${wn(directC)}</td><td class="r" style="color:var(--amber-bright)">${labor>0?wn(labor):'—'}${laborBadge}</td><td class="r ${pr>=0?'pos':'neg'}">${pr>=0?'+':''}${wn(Math.abs(pr))}</td><td class="r ${pr>=0?'pos':'neg'}">${mg}%</td></tr>`;
     }
   }).join('');
 }
@@ -1638,7 +1991,10 @@ function rebuildAllData(txs){
   const newSGNA_RATES_NEW = {}, newSGNA_RATES_NOGS = {}, newSGNA_ALLOC_NEW = {};
   let sgnaAllTotal=0, sgnaNogsAllTotal=0;
   years.forEach(y=>{
-    const genSub = txs.filter(t=>t.proj==='일반관리' && t.year===y);
+    // 인건비(직원급여/임원급여)는 별도로 "프로젝트별 직원 기여도" 계산(섹션 6)에서 이미 프로젝트에 배분되므로,
+    // 판관비(SGNA) 집계에서는 제외한다 — 그렇지 않으면 "프로젝트별 손익" 탭에서 인건비 열과 판관비배분 열에
+    // 같은 인건비가 두 번 잡히게 된다.
+    const genSub = txs.filter(t=>t.proj==='일반관리' && t.year===y && !SALARY_ACCTS.has(t.acct));
     const sgnaY = genSub.reduce((a,t)=>a+t.outAmt,0);
     const gasuY = genSub.filter(t=>t.acct==='가수금').reduce((a,t)=>a+t.outAmt,0);
     const nogsY = sgnaY - gasuY;
