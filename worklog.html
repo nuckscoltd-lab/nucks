@@ -134,6 +134,23 @@ if ('serviceWorker' in navigator) {
     padding:32px; text-align:center; color:var(--muted); font-size:13.5px;
   }
 
+  /* 월별 카드 토글 (목록보기 · 전체 기간 보기에서 사용) */
+  #monthGroups{ display:flex; flex-direction:column; gap:12px; }
+  .month-card{
+    background:#fff; border:1px solid var(--line); border-radius:6px; overflow:hidden;
+  }
+  .month-card-head{
+    width:100%; display:flex; align-items:center; gap:10px;
+    padding:14px 16px; background:none; border:none; cursor:pointer;
+    font-family:inherit; text-align:left;
+  }
+  .month-card-head:hover{ background:#f2f0eb; }
+  .month-card-toggle{ font-size:11px; color:var(--muted); width:12px; flex-shrink:0; }
+  .month-card-title{ font-size:14px; font-weight:600; color:var(--ink); }
+  .month-card-meta{ font-size:12px; color:var(--muted); margin-left:auto; }
+  .month-card-body{ border-top:1px solid var(--line); overflow-x:auto; }
+  .month-table{ min-width:800px; }
+
   /* 목록/달력 전환 버튼 */
   .view-toggle-btn{
     padding:6px 14px; border:1px solid var(--line); border-radius:20px;
@@ -371,6 +388,7 @@ if ('serviceWorker' in navigator) {
       <span id="activeMonthLabel" style="font-size:13.5px; font-weight:600; min-width:88px; text-align:center;"></span>
       <button class="cal-nav-btn" id="listNextBtn" style="font-size:16px;">▶</button>
       <button class="row-btn" id="toggleAllRangeBtn" style="text-decoration:underline; font-size:12px; margin-left:6px;">전체 기간 보기</button>
+      <button class="row-btn" id="expandAllMonthsBtn" style="text-decoration:underline; font-size:12px; display:none;">전체 펼치기</button>
       <select id="employeeFilter" style="display:none;">
         <option value="전체">전체 사원</option>
       </select>
@@ -390,15 +408,7 @@ if ('serviceWorker' in navigator) {
   </div>
 
   <div class="table-wrap" id="listView">
-    <table id="logTable" style="display:none;">
-      <thead>
-        <tr>
-          <th>날짜</th><th>사원명</th><th>출근</th><th>퇴근</th><th>총근무</th><th>프로젝트별 내역</th>
-          <th>상세내용</th><th>중요업무일정</th><th>첨부</th><th>관리</th>
-        </tr>
-      </thead>
-      <tbody id="tableBody"></tbody>
-    </table>
+    <div id="monthGroups" style="display:none;"></div>
   </div>
   <div class="empty" id="emptyMsg">불러오는 중...</div>
 
@@ -970,10 +980,10 @@ if ('serviceWorker' in navigator) {
 
   async function loadLogs() {
     const emptyMsg = document.getElementById('emptyMsg');
-    const table = document.getElementById('logTable');
+    const monthGroups = document.getElementById('monthGroups');
     emptyMsg.textContent = '불러오는 중...';
     emptyMsg.style.display = 'block';
-    table.style.display = 'none';
+    monthGroups.style.display = 'none';
     updateMonthLabel();
 
     try {
@@ -1028,47 +1038,29 @@ if ('serviceWorker' in navigator) {
     if (names.includes(current)) select.value = current;
   }
 
-  function renderTable() {
-    const table = document.getElementById('logTable');
-    const emptyMsg = document.getElementById('emptyMsg');
-    const tbody = document.getElementById('tableBody');
+  // 목록보기에서 "펼쳐진" 월(YYYY-MM) 목록. 토글 상태를 재렌더링 사이에도 유지하기 위한 전역 상태.
+  let expandedMonths = new Set();
 
-    const filterVal = document.getElementById('employeeFilter').value;
-    // 날짜 범위는 이미 loadLogs()에서 서버단으로 걸러져 allRows에 담겨있으므로, 여기선 사원 필터만 적용
-    let rows = (currentRole === 'admin' && filterVal !== '전체')
-      ? allRows.filter(r => r['사원명'] === filterVal)
-      : allRows;
+  function rowHtml(row) {
+    const canManage = (row.uid === currentUser.uid) || (currentRole === 'admin');
+    const attach = row.attachment
+      ? `<a class="attach-link" href="${row.attachment.url}" target="_blank" rel="noopener">${row.attachment.name}</a>`
+      : '';
 
-    if (rows.length === 0) {
-      table.style.display = 'none';
-      emptyMsg.textContent = '등록된 근무일지가 없습니다.';
-      emptyMsg.style.display = 'block';
-      return;
-    }
-    emptyMsg.style.display = 'none';
-    table.style.display = 'table';
+    const projectList = row.projects || [];
+    const projectHtml = projectList.map(p => {
+      const taskTags = Object.keys(p.tasks || {}).filter(k => p.tasks[k])
+        .map(t => `<span class="task-tag">${t}</span>`).join('');
+      return `
+        <div style="margin-bottom:8px;">
+          <b>${p['프로젝트'] || '(프로젝트 미입력)'}</b> · ${p['투입시간'] || 0}시간<br>
+          ${taskTags}
+        </div>
+      `;
+    }).join('');
 
-    tbody.innerHTML = '';
-    rows.forEach(row => {
-      const canManage = (row.uid === currentUser.uid) || (currentRole === 'admin');
-      const attach = row.attachment
-        ? `<a class="attach-link" href="${row.attachment.url}" target="_blank" rel="noopener">${row.attachment.name}</a>`
-        : '';
-
-      const projectList = row.projects || [];
-      const projectHtml = projectList.map(p => {
-        const taskTags = Object.keys(p.tasks || {}).filter(k => p.tasks[k])
-          .map(t => `<span class="task-tag">${t}</span>`).join('');
-        return `
-          <div style="margin-bottom:8px;">
-            <b>${p['프로젝트'] || '(프로젝트 미입력)'}</b> · ${p['투입시간'] || 0}시간<br>
-            ${taskTags}
-          </div>
-        `;
-      }).join('');
-
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
+    return `
+      <tr>
         <td class="nowrap" data-label="날짜">${row['날짜'] || ''}</td>
         <td class="nowrap" data-label="사원명">${row['사원명'] || ''}</td>
         <td class="nowrap" data-label="출근">${row['출근시간'] || ''}</td>
@@ -1084,16 +1076,104 @@ if ('serviceWorker' in navigator) {
             <button class="row-btn danger" data-id="${row.id}">삭제</button>
           ` : ''}
         </td>
-      `;
-      tbody.appendChild(tr);
-    });
+      </tr>
+    `;
+  }
 
-    document.querySelectorAll('.row-btn.danger').forEach(btn => {
+  function renderTable() {
+    const container = document.getElementById('monthGroups');
+    const emptyMsg = document.getElementById('emptyMsg');
+    const expandAllBtn = document.getElementById('expandAllMonthsBtn');
+
+    const filterVal = document.getElementById('employeeFilter').value;
+    // 날짜 범위는 이미 loadLogs()에서 서버단으로 걸러져 allRows에 담겨있으므로, 여기선 사원 필터만 적용
+    let rows = (currentRole === 'admin' && filterVal !== '전체')
+      ? allRows.filter(r => r['사원명'] === filterVal)
+      : allRows;
+
+    if (rows.length === 0) {
+      container.style.display = 'none';
+      container.innerHTML = '';
+      if (expandAllBtn) expandAllBtn.style.display = 'none';
+      emptyMsg.textContent = '등록된 근무일지가 없습니다.';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+    container.style.display = 'block';
+
+    // 날짜(YYYY-MM) 기준으로 그룹핑해서 월별 카드로 표시 — 상세 목록이 한번에 다 펼쳐지지 않도록
+    const groups = {};
+    rows.forEach(r => {
+      const ym = (r['날짜'] || '').slice(0, 7) || '(날짜 미상)';
+      if (!groups[ym]) groups[ym] = [];
+      groups[ym].push(r);
+    });
+    const monthKeys = Object.keys(groups).sort((a, b) => b.localeCompare(a)); // 최신 달이 위로
+
+    // "이번 달만 보기" 모드는 항상 달이 하나뿐이므로 그대로 펼쳐서 보여준다.
+    // "전체 기간 보기"에서는 처음 볼 때 가장 최근 달만 펼쳐두고 나머지는 접어서, 상세 목록이 한꺼번에 노출되지 않게 한다.
+    if (!showAllRange) {
+      monthKeys.forEach(k => expandedMonths.add(k));
+    } else if (expandedMonths.size === 0 && monthKeys.length) {
+      expandedMonths.add(monthKeys[0]);
+    }
+
+    container.innerHTML = monthKeys.map(ym => {
+      const monthRows = groups[ym];
+      const [y, m] = ym.split('-');
+      const monthLabel = (y && m) ? `${y}년 ${Number(m)}월` : ym;
+      const totalHours = monthRows.reduce((s, r) => s + (Number(r['총근무시간']) || 0), 0);
+      const isOpen = expandedMonths.has(ym);
+
+      return `
+        <div class="month-card">
+          <button type="button" class="month-card-head" data-ym="${ym}">
+            <span class="month-card-toggle">${isOpen ? '▾' : '▸'}</span>
+            <span class="month-card-title">${monthLabel}</span>
+            <span class="month-card-meta">${monthRows.length}건 · 총 ${totalHours}시간</span>
+          </button>
+          <div class="month-card-body" style="display:${isOpen ? '' : 'none'}">
+            <table class="month-table">
+              <thead>
+                <tr>
+                  <th>날짜</th><th>사원명</th><th>출근</th><th>퇴근</th><th>총근무</th><th>프로젝트별 내역</th>
+                  <th>상세내용</th><th>중요업무일정</th><th>첨부</th><th>관리</th>
+                </tr>
+              </thead>
+              <tbody>${monthRows.map(rowHtml).join('')}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.month-card-head').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ym = btn.dataset.ym;
+        if (expandedMonths.has(ym)) expandedMonths.delete(ym);
+        else expandedMonths.add(ym);
+        renderTable();
+      });
+    });
+    container.querySelectorAll('.row-btn.danger').forEach(btn => {
       btn.addEventListener('click', () => deleteLog(btn.dataset.id));
     });
-    document.querySelectorAll('.row-btn:not(.danger)').forEach(btn => {
+    container.querySelectorAll('.row-btn:not(.danger)').forEach(btn => {
       btn.addEventListener('click', () => loadLogIntoForm(btn.dataset.id));
     });
+
+    // "전체 펼치기/접기" 버튼: 달이 2개 이상일 때만 보여준다
+    if (expandAllBtn) {
+      expandAllBtn.style.display = (showAllRange && monthKeys.length > 1) ? 'inline-block' : 'none';
+      const allExpanded = monthKeys.every(k => expandedMonths.has(k));
+      expandAllBtn.textContent = allExpanded ? '전체 접기' : '전체 펼치기';
+      expandAllBtn.onclick = () => {
+        if (allExpanded) monthKeys.forEach(k => expandedMonths.delete(k));
+        else monthKeys.forEach(k => expandedMonths.add(k));
+        renderTable();
+      };
+    }
   }
 
   let editingLogId = null;
