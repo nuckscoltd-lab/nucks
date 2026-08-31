@@ -133,6 +133,21 @@ pre .k{color:var(--purple)} pre .s{color:var(--green)} pre .c{color:var(--t4)} p
 .acct-clickable{cursor:pointer;transition:color 0.15s}
 .acct-clickable:hover{color:var(--blue)!important;text-decoration:underline}
 
+/* ── 직원 참여 프로젝트 팝업(모달) ── */
+.emp-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px}
+.emp-modal{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r2);box-shadow:var(--shadow);width:100%;max-width:480px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
+.emp-modal-head{display:flex;align-items:flex-start;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border);gap:10px}
+.emp-modal-title{font-size:15px;font-weight:700;color:var(--t1);display:block}
+.emp-modal-sub{font-size:12px;color:var(--t3);display:block;margin-top:3px}
+.emp-modal-close{background:none;border:none;color:var(--t3);cursor:pointer;font-size:22px;line-height:1;padding:0;flex-shrink:0}
+.emp-modal-close:hover{color:var(--t1)}
+.emp-modal-body{padding:6px 10px;overflow-y:auto}
+.emp-modal-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 8px;border-bottom:1px solid var(--border);cursor:pointer;border-radius:6px}
+.emp-modal-row:hover{background:var(--bg5)}
+.emp-modal-row:last-child{border-bottom:none}
+.emp-modal-proj-name{font-size:13px;color:var(--t2);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.emp-modal-proj-amt{font-size:12.5px;font-family:'Consolas','D2Coding','Courier New',monospace;color:var(--t1);white-space:nowrap;flex-shrink:0}
+
 /* ── 스크롤바 ── */
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:var(--bg)}
@@ -823,11 +838,10 @@ function renderContribDetail(){
   });
 }
 
-function renderEmpSummary(sortBy, btn){
-  if(btn){ grp('ca-emp-sort'); btn.classList.add('on'); }
-  
-  // 직원별 전체 집계
-  const empMap = {}; // 직원명 → { total, projects: [{name, amt}] }
+// 직원별 전체 집계: 직원명 → { total, projects: [{name, amt}] }
+// (renderEmpSummary와 openEmpProjModal이 공통으로 사용)
+function getEmpProjectMap(){
+  const empMap = {};
   Object.entries(PROJ_EMP_CONTRIB).forEach(([proj, empData]) => {
     Object.entries(empData).forEach(([emp, amt]) => {
       if(!empMap[emp]) empMap[emp] = { total: 0, projects: [] };
@@ -835,6 +849,13 @@ function renderEmpSummary(sortBy, btn){
       empMap[emp].projects.push({ name: proj, amt });
     });
   });
+  return empMap;
+}
+
+function renderEmpSummary(sortBy, btn){
+  if(btn){ grp('ca-emp-sort'); btn.classList.add('on'); }
+
+  const empMap = getEmpProjectMap();
 
   const entries = Object.entries(empMap).sort((a, b) =>
     sortBy === 'count' ? b[1].projects.length - a[1].projects.length : b[1].total - a[1].total
@@ -859,7 +880,7 @@ function renderEmpSummary(sortBy, btn){
       <div style="width:3px;height:36px;border-radius:2px;background:${col};flex-shrink:0;margin-top:2px"></div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:4px;flex-wrap:wrap">
-          <span style="font-size:14px;font-weight:700;color:var(--t1)">${emp}</span>
+          <span class="emp-name-click" data-emp="${escapeHtmlSafe(emp)}" style="font-size:14px;font-weight:700;color:var(--t1);cursor:pointer" title="클릭하면 참여한 전체 프로젝트 목록을 볼 수 있습니다">${escapeHtmlSafe(emp)} <span style="font-size:11px;font-weight:400;color:var(--t4)">▸ 전체보기</span></span>
           <span style="font-size:13px;font-family:monospace;color:${col}">${wn(info.total)}원</span>
           <span style="font-size:12px;color:var(--t4)">${pct}% · ${info.projects.length}개 프로젝트</span>
         </div>
@@ -872,6 +893,61 @@ function renderEmpSummary(sortBy, btn){
       </div>
     </div>`;
   }).join('');
+
+  el.querySelectorAll('.emp-name-click').forEach(nameEl => {
+    nameEl.addEventListener('click', () => openEmpProjModal(nameEl.dataset.emp));
+  });
+}
+
+/* ══ 직원 참여 프로젝트 팝업(모달) ══ */
+let empModalEl = null;
+function empModalEscHandler(e){ if(e.key === 'Escape') closeEmpProjModal(); }
+function closeEmpProjModal(){
+  if(empModalEl){ empModalEl.remove(); empModalEl = null; }
+  document.removeEventListener('keydown', empModalEscHandler);
+}
+function openEmpProjModal(emp){
+  closeEmpProjModal();
+  const empMap = getEmpProjectMap();
+  const info = empMap[emp];
+  if(!info) return;
+
+  const projects = [...info.projects].sort((a,b) => b.amt - a.amt);
+  const total = info.total || 1;
+
+  const rowsHtml = projects.map(p => `
+    <div class="emp-modal-row" data-proj="${escapeHtmlSafe(p.name)}">
+      <span class="emp-modal-proj-name" title="${escapeHtmlSafe(p.name)}">${escapeHtmlSafe(p.name)}</span>
+      <span class="emp-modal-proj-amt">${wn(p.amt)}원<span style="color:var(--t4);margin-left:6px">(${(p.amt/total*100).toFixed(1)}%)</span></span>
+    </div>`
+  ).join('');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'emp-modal-overlay';
+  overlay.innerHTML = `
+    <div class="emp-modal">
+      <div class="emp-modal-head">
+        <div>
+          <span class="emp-modal-title">👤 ${escapeHtmlSafe(emp)}</span>
+          <span class="emp-modal-sub">참여 프로젝트 ${projects.length}개 · 추정인건비 합계 ${wn(info.total)}원</span>
+        </div>
+        <button class="emp-modal-close" onclick="closeEmpProjModal()">×</button>
+      </div>
+      <div class="emp-modal-body">${rowsHtml}</div>
+    </div>`;
+
+  overlay.addEventListener('click', e => { if(e.target === overlay) closeEmpProjModal(); });
+  overlay.querySelectorAll('.emp-modal-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const sel = document.getElementById('caProjSel');
+      if(sel){ sel.value = row.dataset.proj; renderContribDetail(); }
+      closeEmpProjModal();
+    });
+  });
+
+  document.body.appendChild(overlay);
+  empModalEl = overlay;
+  document.addEventListener('keydown', empModalEscHandler);
 }
 
 /* ══ 프로젝트 자동 추정 인건비 ══ */
