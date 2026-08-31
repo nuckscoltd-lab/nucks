@@ -148,8 +148,30 @@ if ('serviceWorker' in navigator) {
   .month-card-toggle{ font-size:11px; color:var(--muted); width:12px; flex-shrink:0; }
   .month-card-title{ font-size:14px; font-weight:600; color:var(--ink); }
   .month-card-meta{ font-size:12px; color:var(--muted); margin-left:auto; }
-  .month-card-body{ border-top:1px solid var(--line); overflow-x:auto; }
-  .month-table{ min-width:800px; }
+  .month-card-body{ border-top:1px solid var(--line); background:var(--paper); padding:12px; }
+
+  /* 근무일지 항목 카드 (월 카드를 펼쳤을 때 표 대신 표시) */
+  .log-card{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:14px 16px; margin-bottom:10px;
+  }
+  .log-card:last-child{ margin-bottom:0; }
+  .log-card-head{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+  }
+  .log-card-title{ font-size:14px; font-weight:700; color:var(--ink); }
+  .log-card-sub{ font-size:12px; color:var(--muted); margin-top:2px; }
+  .log-card-stat{ text-align:right; flex-shrink:0; }
+  .log-card-stat-label{ display:block; font-size:11px; color:var(--muted); }
+  .log-card-stat-value{ display:block; font-size:14px; font-weight:700; color:var(--ink); margin-top:2px; }
+  .log-card-body{ border-top:1px solid var(--line); margin-top:10px; padding-top:10px; font-size:13px; }
+  .log-card-row{ margin-bottom:8px; }
+  .log-card-row:last-child{ margin-bottom:0; }
+  .log-card-row-label{ font-size:11px; color:var(--muted); margin-bottom:3px; }
+  .log-card-actions{
+    display:flex; justify-content:flex-end; gap:8px;
+    margin-top:10px; padding-top:10px; border-top:1px solid var(--line);
+  }
 
   /* 목록/달력 전환 버튼 */
   .view-toggle-btn{
@@ -233,6 +255,9 @@ if ('serviceWorker' in navigator) {
     .cal-cell{ min-height:70px !important; padding:3px !important; }
     .cal-item{ font-size:9.5px !important; }
     .cal-dow{ font-size:10px !important; padding:5px !important; }
+    .log-card-head{ flex-direction:column; }
+    .log-card-stat{ text-align:left; margin-top:6px; }
+    .month-card-body{ padding:10px !important; }
 
     /* 넓은 표는 가로 스크롤 대신 카드형으로 세로 전환 */
     table{ min-width:0 !important; }
@@ -1059,24 +1084,37 @@ if ('serviceWorker' in navigator) {
       `;
     }).join('');
 
+    const importantHtml = row['중요업무일정']
+      ? `${row['중요업무일정']}${row['중요업무내용'] ? `<br><span style="color:var(--muted); font-size:11.5px;">${row['중요업무내용']}</span>` : ''}`
+      : '';
+
+    const extraRows = [
+      projectHtml ? `<div class="log-card-row"><div class="log-card-row-label">프로젝트별 내역</div>${projectHtml}</div>` : '',
+      row['상세내용'] ? `<div class="log-card-row"><div class="log-card-row-label">상세내용</div>${row['상세내용']}</div>` : '',
+      importantHtml ? `<div class="log-card-row"><div class="log-card-row-label">중요업무일정</div>${importantHtml}</div>` : '',
+      attach ? `<div class="log-card-row"><div class="log-card-row-label">첨부</div>${attach}</div>` : '',
+    ].filter(Boolean).join('');
+
     return `
-      <tr>
-        <td class="nowrap" data-label="날짜">${row['날짜'] || ''}</td>
-        <td class="nowrap" data-label="사원명">${row['사원명'] || ''}</td>
-        <td class="nowrap" data-label="출근">${row['출근시간'] || ''}</td>
-        <td class="nowrap" data-label="퇴근">${row['퇴근시간'] || ''}</td>
-        <td class="nowrap" data-label="총근무">${row['총근무시간'] ?? ''}시간</td>
-        <td style="min-width:220px;" data-label="프로젝트별 내역">${projectHtml}</td>
-        <td class="detail-cell" data-label="상세내용">${row['상세내용'] || ''}</td>
-        <td class="nowrap" data-label="중요업무일정">${row['중요업무일정'] ? `${row['중요업무일정']}<br><span style="color:var(--muted); font-size:11.5px;">${row['중요업무내용'] || ''}</span>` : ''}</td>
-        <td class="nowrap" data-label="첨부">${attach}</td>
-        <td class="nowrap" data-label="관리">
-          ${canManage ? `
+      <div class="log-card">
+        <div class="log-card-head">
+          <div>
+            <div class="log-card-title">${row['날짜'] || ''} · ${row['사원명'] || ''}</div>
+            <div class="log-card-sub">출근 ${row['출근시간'] || '-'} · 퇴근 ${row['퇴근시간'] || '-'}</div>
+          </div>
+          <div class="log-card-stat">
+            <span class="log-card-stat-label">총근무</span>
+            <span class="log-card-stat-value">${row['총근무시간'] ?? ''}시간</span>
+          </div>
+        </div>
+        ${extraRows ? `<div class="log-card-body">${extraRows}</div>` : ''}
+        ${canManage ? `
+          <div class="log-card-actions">
             <button class="row-btn" data-id="${row.id}">수정</button>
             <button class="row-btn danger" data-id="${row.id}">삭제</button>
-          ` : ''}
-        </td>
-      </tr>
+          </div>
+        ` : ''}
+      </div>
     `;
   }
 
@@ -1134,15 +1172,7 @@ if ('serviceWorker' in navigator) {
             <span class="month-card-meta">${monthRows.length}건 · 총 ${totalHours}시간</span>
           </button>
           <div class="month-card-body" style="display:${isOpen ? '' : 'none'}">
-            <table class="month-table">
-              <thead>
-                <tr>
-                  <th>날짜</th><th>사원명</th><th>출근</th><th>퇴근</th><th>총근무</th><th>프로젝트별 내역</th>
-                  <th>상세내용</th><th>중요업무일정</th><th>첨부</th><th>관리</th>
-                </tr>
-              </thead>
-              <tbody>${monthRows.map(rowHtml).join('')}</tbody>
-            </table>
+            ${monthRows.map(rowHtml).join('')}
           </div>
         </div>
       `;
