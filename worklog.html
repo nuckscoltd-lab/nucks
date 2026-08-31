@@ -1065,6 +1065,7 @@ if ('serviceWorker' in navigator) {
 
   // 목록보기에서 "펼쳐진" 월(YYYY-MM) 목록. 토글 상태를 재렌더링 사이에도 유지하기 위한 전역 상태.
   let expandedMonths = new Set();
+  let seenMonthKeys = new Set();
 
   function rowHtml(row) {
     const canManage = (row.uid === currentUser.uid) || (currentRole === 'admin');
@@ -1149,13 +1150,14 @@ if ('serviceWorker' in navigator) {
     });
     const monthKeys = Object.keys(groups).sort((a, b) => b.localeCompare(a)); // 최신 달이 위로
 
-    // "이번 달만 보기" 모드는 항상 달이 하나뿐이므로 그대로 펼쳐서 보여준다.
-    // "전체 기간 보기"에서는 처음 볼 때 가장 최근 달만 펼쳐두고 나머지는 접어서, 상세 목록이 한꺼번에 노출되지 않게 한다.
+    // 처음 화면에 나타나는 달은 펼쳐진 상태로 보여주되(이번 달만 보기 모드는 항상, 전체 기간 보기는 가장 최근 달만),
+    // 그 이후에는 사용자가 직접 눌러 접고 펼친 상태를 그대로 유지한다(재렌더링 때마다 강제로 다시 펼치지 않는다).
     if (!showAllRange) {
-      monthKeys.forEach(k => expandedMonths.add(k));
+      monthKeys.forEach(k => { if (!seenMonthKeys.has(k)) expandedMonths.add(k); });
     } else if (expandedMonths.size === 0 && monthKeys.length) {
       expandedMonths.add(monthKeys[0]);
     }
+    monthKeys.forEach(k => seenMonthKeys.add(k));
 
     container.innerHTML = monthKeys.map(ym => {
       const monthRows = groups[ym];
