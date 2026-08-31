@@ -36,11 +36,12 @@ if ('serviceWorker' in navigator) {
             z-index: 1000; background: rgba(255,255,255,0.95); backdrop-filter: blur(5px);
         }
         .logo { font-size: 24px; font-weight: 800; text-decoration: none; color: #000; }
-        nav { display: flex; gap: 40px; flex-wrap: wrap; row-gap: 14px; align-items: center; justify-content: flex-end; }
+        /* flex-wrap만으로 실제 로고를 제외한 남은 폭에 맞춰 자연스럽게 줄바꿈되도록 함
+           (예전에는 JS로 "7개마다 강제 줄바꿈"을 넣었는데, 화면 폭과 무관하게 항상 7개씩
+           끊다 보니 좁은 화면에서는 로고 쪽을 침범하는 문제가 있어 제거함) */
+        nav { display: flex; gap: 40px; flex-wrap: wrap; row-gap: 14px; align-items: center; justify-content: flex-end; min-width: 0; }
         nav a { text-decoration: none; color: #666; font-size: 14px; text-transform: uppercase; transition: 0.3s; font-weight: 500; }
         nav a:hover { color: #000; }
-        /* 노출 항목이 7개를 넘으면 강제로 줄바꿈되는 지점(JS에서 삽입) */
-        .nav-break { flex-basis: 100%; width: 0; height: 0; margin: 0; padding: 0; }
 
         .nav-item-dropdown{ position: relative; }
         .nav-dropdown-toggle{ display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
@@ -188,7 +189,12 @@ if ('serviceWorker' in navigator) {
             display: none;
         }
 
-        @media (max-width: 768px) {
+        /* 네비게이션 전용 브레이크포인트 (768px보다 넓게 잡음)
+           Z Fold 같은 폴더블의 펼친 화면(대략 717~910px)은 세로/가로 회전에 따라
+           768px 경계를 넘나들면서, 한쪽 방향에서는 햄버거 메뉴로 접히고 반대쪽에서는
+           데스크톱 가로 네비로 억지로 펼쳐지며 layout이 요동치는 문제가 있었음.
+           경계를 900px로 올려서 두 방향 모두 같은(햄버거) 모드로 일관되게 보이게 함. */
+        @media (max-width: 900px) {
             header { padding: 15px 20px; }
             .mobile-menu-icon { display: block; }
             nav { display: none; flex-direction: column; justify-content: flex-start; position: absolute; top: 100%; left: 0; width: 100%; background: #fff; padding: 20px; }
@@ -209,18 +215,29 @@ if ('serviceWorker' in navigator) {
             }
             .nav-item-dropdown:hover .nav-dropdown-menu{ display: none; }
             .nav-item-dropdown.open .nav-dropdown-menu{ display: block; }
-            .nav-break{ display: none; }
-            .hero { flex-direction: column; padding: 20px; margin-top: 70px !important; gap: 30px;}
+            .hero { margin-top: 70px !important; }
+        }
+
+        /* 데스크톱 가로 네비가 유지되는 폭 중에서도 좁은 편(태블릿 가로모드 등)인 구간은
+           간격/글자 크기를 살짝 줄여서 줄바꿈이 일어나도 답답해 보이지 않게 함 */
+        @media (min-width: 901px) and (max-width: 1100px) {
+            header { padding: 20px 36px; }
+            nav { gap: 22px; row-gap: 12px; }
+            nav a { font-size: 12.5px; }
+        }
+
+        @media (max-width: 768px) {
+            .hero { flex-direction: column; padding: 20px; gap: 30px;}
             .hero-video-area { width: 100%; height: auto; aspect-ratio: 16 / 9; flex: none; }
             .grid { grid-template-columns: repeat(2, 1fr); }
             .footer-grid { grid-template-columns: 1fr; gap: 35px;}
-.footer-center { 
+.footer-center {
             justify-content: flex-start; /* 중앙 정렬 해제하고 왼쪽으로 */
             text-align: left;}
             .contact-content-row { flex-direction: column; gap: 25px;}
-.qr-container { 
+.qr-container {
             justify-content: flex-start; /* QR 코드 왼쪽 정렬 */
-            gap: 12px; 
+            gap: 12px;
         }
 
 .projects-header {
@@ -229,15 +246,14 @@ if ('serviceWorker' in navigator) {
             gap: 20px;
             align-items: center; /* 타이틀 중앙 */
         }
-        
-        .filter-container { 
+
+        .filter-container {
             justify-content: center; /* 모바일 버튼 중앙 정렬 */
-            gap: 6px; 
+            gap: 6px;
         }
 
         /* 모바일 프로젝트 정보 상시 노출 */
-        .grid { grid-template-columns: repeat(2, 1fr); }
-        .project-info { 
+        .project-info {
            opacity: 1;
             padding-bottom: 15px;
         }
@@ -448,34 +464,20 @@ if ('serviceWorker' in navigator) {
             }
         });
 
-        // ---------- 네비게이션: 노출된 항목이 7개 넘어가면 자동으로 줄바꿈 ----------
-        // 로그인 상태/역할에 따라 항목별 display가 동적으로 바뀌므로,
-        // "실제로 보이는" 항목만 세어서 7개마다 줄바꿈 지점을 삽입한다.
-        function regroupNavBreaks() {
-            const nav = document.getElementById('navbar');
-            if (!nav) return;
-            nav.querySelectorAll(':scope > .nav-break').forEach(b => b.remove());
-            const items = Array.from(nav.children);
-            let visibleCount = 0;
-            items.forEach(el => {
-                if (window.getComputedStyle(el).display === 'none') return;
-                if (visibleCount > 0 && visibleCount % 7 === 0) {
-                    const brk = document.createElement('div');
-                    brk.className = 'nav-break';
-                    nav.insertBefore(brk, el);
-                }
-                visibleCount++;
-            });
-            adjustHeroOffset();
-        }
+        // ---------- 네비게이션: 남은 폭에 맞춰 자연스럽게 줄바꿈 ----------
+        // (예전에는 "노출 항목 7개마다 강제 줄바꿈"을 JS로 넣었었는데, 화면 폭과 무관하게
+        // 항상 7개씩 끊다 보니 좁은 화면에서 로고 쪽을 침범하는 문제가 있었음. 지금은
+        // nav의 flex-wrap이 실제 남은 폭을 기준으로 알아서 줄바꿈하도록 CSS에 맡기고,
+        // JS에서는 "네비 줄 수가 바뀌면 header 높이도 바뀌니 hero 위치를 다시 맞추는" 것만 담당.
+        const NAV_MOBILE_BREAKPOINT = 900; // CSS의 @media (max-width: 900px)와 반드시 일치시킬 것
 
         // 네비가 여러 줄로 늘어나면 header 높이도 늘어나므로, hero 영역이 가려지지 않도록
-        // 실제 header 높이에 맞춰 hero의 margin-top을 동적으로 맞춰준다(모바일 레이아웃은 제외).
+        // 실제 header 높이에 맞춰 hero의 margin-top을 동적으로 맞춰준다(모바일/햄버거 레이아웃은 제외 — CSS가 처리).
         function adjustHeroOffset() {
             const header = document.querySelector('header');
             const hero = document.querySelector('.hero');
             if (!header || !hero) return;
-            if (window.innerWidth <= 768) {
+            if (window.innerWidth <= NAV_MOBILE_BREAKPOINT) {
                 hero.style.marginTop = '';
                 return;
             }
@@ -485,12 +487,17 @@ if ('serviceWorker' in navigator) {
         (function initNavRegroup() {
             const nav = document.getElementById('navbar');
             if (!nav) return;
-            regroupNavBreaks();
-            const observer = new MutationObserver(() => regroupNavBreaks());
+            adjustHeroOffset();
+            // 로그인 상태/역할에 따라 항목별 display가 동적으로 바뀌면 네비 줄 수도 바뀌므로 다시 계산
+            const observer = new MutationObserver(() => adjustHeroOffset());
             Array.from(nav.children).forEach(el => {
                 observer.observe(el, { attributes: true, attributeFilter: ['style'] });
             });
-            window.addEventListener('resize', adjustHeroOffset);
+            window.addEventListener('resize', () => {
+                adjustHeroOffset();
+                // 화면 회전 등으로 데스크톱 네비 폭으로 넘어가면, 열려 있던 모바일 햄버거 메뉴는 닫아둔다
+                if (window.innerWidth > NAV_MOBILE_BREAKPOINT) nav.classList.remove('active');
+            });
         })();
 
         function filterSelection(cat, btn) {
