@@ -239,6 +239,10 @@ if ('serviceWorker' in navigator) {
     if (!claim) return 0;
     return claim - totalCollect(p);
   }
+  // 잔금: 총계약금 중 아직 청구(기성청구)하지 않은 나머지 금액 — "미수금"(청구했지만 못 받은 돈)과는 다른 개념.
+  function balance(p){
+    return num(p.contractAmount) - totalClaim(p);
+  }
 
   async function seedIfEmpty(){
     const snap = await projectsRef.limit(1).get();
@@ -332,6 +336,7 @@ if ('serviceWorker' in navigator) {
     const totalContract = rows.reduce((s, p) => s + num(p.contractAmount), 0);
     const totalCol = rows.reduce((s, p) => s + totalCollect(p), 0);
     const totalOut = rows.reduce((s, p) => s + outstanding(p), 0);
+    const totalBal = rows.reduce((s, p) => s + balance(p), 0);
     const inProgress = rows.filter(p => p.status && !['완료', '지급완료'].includes(p.status)).length;
 
     bar.innerHTML = `
@@ -339,6 +344,7 @@ if ('serviceWorker' in navigator) {
       <div class="summary-chip">총계약금 합계<b>${fmtWon(totalContract)}</b></div>
       <div class="summary-chip">총수금 합계<b>${fmtWon(totalCol)}</b></div>
       <div class="summary-chip ${totalOut > 0 ? 'warn' : ''}">청구미수금 합계<b>${fmtWon(totalOut)}</b></div>
+      <div class="summary-chip">잔금(미청구) 합계<b>${fmtWon(totalBal)}</b></div>
       <div class="summary-chip">진행중/확인필요<b>${inProgress}건</b></div>
     `;
   }
@@ -386,6 +392,7 @@ if ('serviceWorker' in navigator) {
     const claim = totalClaim(p);
     const collect = totalCollect(p);
     const out = outstanding(p);
+    const bal = balance(p);
 
     return `
       <div class="project-card">
@@ -399,6 +406,7 @@ if ('serviceWorker' in navigator) {
             <div class="m-item">청구액<b>${claim ? fmtWon(claim) : '-'}</b></div>
             <div class="m-item">수금액<b>${fmtWon(collect)}</b></div>
             <div class="m-item">미수금<b style="${out > 0 ? 'color:var(--red);' : ''}">${claim ? fmtWon(out) : '-'}</b></div>
+            <div class="m-item">잔금(미청구)<b>${p.contractAmount ? fmtWon(bal) : '-'}</b></div>
             <span class="status-badge ${statusClass(p.status)}">${esc(p.status || '-')}</span>
           </div>
         </div>
