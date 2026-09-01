@@ -81,6 +81,15 @@
   td button:hover{ border-color:var(--ink); color:var(--ink); }
   td button.danger{ color:var(--warn); border-color:#f0c9c4; }
 
+  .amt.pos{ color:var(--accent); }
+  .amt.neg{ color:var(--warn); }
+
+  .netting-panel{ background:#fff; border:1px solid var(--line); border-radius:8px; padding:22px 24px; margin-bottom:22px; }
+  .netting-panel .panel-title{ margin-bottom:4px; }
+  .netting-note{ font-size:11.5px; color:var(--muted); margin:0 0 16px; line-height:1.6; }
+  table.netting th{ white-space:normal; }
+  td.net-final{ font-weight:700; }
+
   @media (max-width:768px){
     .field{ width:100% !important; }
     .field input, .field select{ width:100% !important; }
@@ -113,6 +122,20 @@
   <div class="section active" id="section-invest">
     <div class="summary-row" id="investSummary"></div>
 
+    <div class="netting-panel">
+      <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+        <span>가수금·가지급 상계 현황 (상대방별)</span>
+        <button type="button" id="migrateInvestBtn" style="font-size:11.5px; background:none; border:1px solid var(--line); border-radius:4px; padding:5px 10px; cursor:pointer; color:var(--muted); font-weight:400;">예전 방식 내역 자동 변환</button>
+      </div>
+      <p class="netting-note">가수금(회사가 빌린 돈)에서 가수금회수(갚은 돈)를 빼고, 가지급(회사가 대신 내준 돈)에서 가지급회수(돌려받은 돈)를 뺀 뒤, 두 값을 서로 상계한 잔액입니다. <b style="color:var(--accent)">파란색(+)</b>은 회사가 그 사람에게 아직 돌려줘야 할 돈, <b style="color:var(--warn)">빨간색(-)</b>은 그 사람이 회사에 아직 갚아야 할 돈입니다. 개인투자 원금은 성격이 달라 상계에 포함하지 않고 아래 요약에 별도 표시됩니다.</p>
+      <div class="table-wrap">
+        <table class="netting">
+          <thead><tr><th>상대방</th><th>가수금 순잔액<br>(가수금-가수금회수)</th><th>가지급 순잔액<br>(가지급-가지급회수)</th><th>상계 후 최종잔액</th></tr></thead>
+          <tbody id="nettingBody"></tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="panel">
       <div class="panel-title" id="investPanelTitle">내역 추가</div>
       <div class="edit-banner" id="investEditBanner" style="display:none;">
@@ -120,21 +143,29 @@
         <button type="button" id="cancelInvestEditBtn">취소</button>
       </div>
       <div class="form-row">
-        <div class="field wide">
-          <label for="inv-investor">구분</label>
-          <input type="text" id="inv-investor" placeholder="예: 개인투자(윤상원), 대표자가수금">
+        <div class="field">
+          <label for="inv-type">거래유형</label>
+          <select id="inv-type">
+            <option value="가수금">가수금 (회사로 입금)</option>
+            <option value="가수금회수">가수금회수 (회사가 상환)</option>
+            <option value="가지급">가지급 (회사가 지급)</option>
+            <option value="가지급회수">가지급회수 (회사가 회수)</option>
+            <option value="개인투자">개인투자 (원금 납입)</option>
+            <option value="개인투자회수">개인투자회수 (원금 반환)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="inv-counterparty">상대방</label>
+          <input type="text" id="inv-counterparty" list="counterpartyList" placeholder="예: 대표자, 김의석">
+          <datalist id="counterpartyList"></datalist>
         </div>
         <div class="field">
           <label for="inv-date">유치월</label>
           <input type="month" id="inv-date">
         </div>
         <div class="field">
-          <label for="inv-raise">유치금</label>
-          <input type="number" id="inv-raise" placeholder="0">
-        </div>
-        <div class="field">
-          <label for="inv-repay">회수금</label>
-          <input type="number" id="inv-repay" placeholder="0">
+          <label for="inv-amount">금액</label>
+          <input type="number" id="inv-amount" placeholder="0">
         </div>
         <div class="field wide">
           <label for="inv-memo">비고 (선택)</label>
@@ -147,7 +178,7 @@
 
     <div class="table-wrap">
       <table>
-        <thead><tr><th>구분</th><th>유치월</th><th>유치금</th><th>회수금</th><th>비고</th><th>관리</th></tr></thead>
+        <thead><tr><th>거래유형</th><th>상대방</th><th>유치월</th><th>금액</th><th>비고</th><th>관리</th></tr></thead>
         <tbody id="investBody"></tbody>
       </table>
     </div>
@@ -260,16 +291,74 @@
     });
   });
 
-  // ---------- Section A: 개인투자·가수금 ----------
+  // ---------- Section A: 개인투자·가수금 (가수금/가지급 상계 구조) ----------
   const SEED_INVEST = [{"investor": "개인투자(윤상원)", "raiseDate": "2024-01", "raiseAmount": 50000000, "repayAmount": 0, "memo": ""}, {"investor": "개인투자(김의석)", "raiseDate": "2024-01", "raiseAmount": 50000000, "repayAmount": 0, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2024-02", "raiseAmount": 50000000, "repayAmount": 50000000, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2024-04", "raiseAmount": 50000000, "repayAmount": 50000000, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2024-05", "raiseAmount": 50000000, "repayAmount": 50000000, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2024-12", "raiseAmount": 10000000, "repayAmount": 10000000, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2025-01", "raiseAmount": 30000000, "repayAmount": 30000000, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2025-02", "raiseAmount": 100000000, "repayAmount": 30000000, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2025-08", "raiseAmount": 20000000, "repayAmount": 90000000, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2025-07", "raiseAmount": 9000000, "repayAmount": 0, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2026-07", "raiseAmount": 20000000, "repayAmount": 0, "memo": ""}, {"investor": "대표자가수금", "raiseDate": "2026-08", "raiseAmount": 10000000, "repayAmount": 0, "memo": ""}];
   let allInvest = [];
+
+  const TX_TYPES = ['가수금', '가수금회수', '가지급', '가지급회수', '개인투자', '개인투자회수'];
+  const INFLOW_TYPES = new Set(['가수금', '가지급회수', '개인투자']); // 회사로 돈이 들어오는 유형
+  const NETTING_TYPES = new Set(['가수금', '가수금회수', '가지급', '가지급회수']); // 상계 대상(개인투자 원금은 제외)
+
+  // 예전 방식(구분 자유텍스트 + 유치금/회수금 두 칸)으로 저장된 내역을, 새 구조(거래유형+상대방+금액 단일칸)로 추정 변환.
+  // 텍스트에 "가수금회수"/"가지급회수"/"가지급"/"가수금"/"개인투자" 키워드가 있으면 그걸 거래유형으로 쓰고,
+  // 상대방은 비고가 있으면 비고를, 없으면 괄호 안 이름이나 "가수금"을 뺀 나머지 텍스트를 사용한다.
+  function inferTypeAndParty(e){
+    const t = (e.investor || '').trim();
+    const memo = (e.memo || '').trim();
+    const net = (e.raiseAmount || 0) - (e.repayAmount || 0);
+    let txType, counterparty;
+    if (t.includes('가수금회수')) { txType = '가수금회수'; counterparty = memo || '미지정'; }
+    else if (t.includes('가지급회수')) { txType = '가지급회수'; counterparty = memo || '미지정'; }
+    else if (t.includes('가지급')) { txType = '가지급'; counterparty = memo || '미지정'; }
+    else if (t.includes('개인투자')) {
+      txType = '개인투자';
+      const m = t.match(/\(([^)]+)\)/);
+      counterparty = m ? m[1] : (memo || '미지정');
+    } else if (t.includes('가수금')) {
+      txType = '가수금';
+      const prefix = t.replace('가수금', '').trim();
+      counterparty = memo || prefix || '대표자';
+    } else {
+      txType = net >= 0 ? '가수금' : '가수금회수';
+      counterparty = memo || t || '미지정';
+    }
+    return { txType, counterparty, amount: Math.abs(net) };
+  }
 
   async function ensureInvestSeeded(){
     const snap = await investRef.limit(1).get();
     if (!snap.empty) return;
     const batch = db.batch();
-    SEED_INVEST.forEach(e => batch.set(investRef.doc(), e));
+    SEED_INVEST.forEach(e => {
+      const guess = inferTypeAndParty(e);
+      batch.set(investRef.doc(), Object.assign({}, e, guess));
+    });
     await batch.commit();
+  }
+
+  // 기존에 이미 저장돼 있던(거래유형/상대방 필드가 없는) 내역들을 한 번에 추정 변환하는 1회성 마이그레이션.
+  async function migrateLegacyInvestEntries(){
+    const snap = await investRef.get();
+    const legacy = snap.docs.filter(d => !d.data().txType);
+    if (!legacy.length) { alert('변환할 예전 방식 내역이 없습니다. 이미 모두 거래유형이 지정되어 있어요.'); return; }
+    if (!confirm(`거래유형이 지정되지 않은 예전 방식 내역 ${legacy.length}건을, 텍스트를 분석해 거래유형·상대방으로 자동 변환합니다.\n(기존 데이터는 삭제되지 않고 그대로 남아있으니, 변환 후 아래 표에서 결과를 확인하고 잘못 추정된 항목은 "수정"으로 직접 고쳐주세요.)\n계속할까요?`)) return;
+    const batch = db.batch();
+    legacy.forEach(doc => {
+      const e = doc.data();
+      const guess = inferTypeAndParty(e);
+      batch.update(doc.ref, guess);
+    });
+    await batch.commit();
+    await loadInvest();
+    alert(`${legacy.length}건 변환 완료. 상계 현황과 표에서 결과를 확인해주세요.`);
+  }
+
+  function entryAmount(e){
+    return e.amount != null ? (e.amount || 0) : Math.abs((e.raiseAmount || 0) - (e.repayAmount || 0));
+  }
+  function entrySigned(e){
+    const amt = entryAmount(e);
+    return INFLOW_TYPES.has(e.txType) ? amt : -amt;
   }
 
   async function loadInvest(){
@@ -278,34 +367,88 @@
     renderInvest();
   }
 
-  function renderInvest(){
-    const byInvestor = {};
+  function renderNetting(){
+    const byParty = {};
     allInvest.forEach(e => {
-      const key = e.investor || '(미지정)';
-      if (!byInvestor[key]) byInvestor[key] = { raise: 0, repay: 0 };
-      byInvestor[key].raise += e.raiseAmount || 0;
-      byInvestor[key].repay += e.repayAmount || 0;
+      if (!NETTING_TYPES.has(e.txType)) return;
+      const p = e.counterparty || '미지정';
+      if (!byParty[p]) byParty[p] = { 가수금: 0, 가수금회수: 0, 가지급: 0, 가지급회수: 0 };
+      byParty[p][e.txType] = (byParty[p][e.txType] || 0) + entryAmount(e);
+    });
+    const rows = Object.entries(byParty).map(([party, v]) => {
+      const gasu = v.가수금 - v.가수금회수;
+      const gaji = v.가지급 - v.가지급회수;
+      return { party, gasu, gaji, net: gasu - gaji };
+    }).sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+
+    const tbody = document.getElementById('nettingBody');
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="4" style="color:var(--muted);">상계 대상 내역이 없습니다.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${esc(r.party)}</td>
+        <td class="amt">${fmtWon(r.gasu)}</td>
+        <td class="amt">${fmtWon(r.gaji)}</td>
+        <td class="amt net-final ${r.net >= 0 ? 'pos' : 'neg'}">${r.net >= 0 ? '+' : ''}${fmtWon(r.net)}</td>
+      </tr>
+    `).join('');
+  }
+
+  function renderInvest(){
+    // 상단 요약 카드: 상계 대상은 상대방별 최종잔액, 개인투자는 원금 잔액으로 별도 표시
+    const nettingRows = (() => {
+      const byParty = {};
+      allInvest.forEach(e => {
+        if (!NETTING_TYPES.has(e.txType)) return;
+        const p = e.counterparty || '미지정';
+        byParty[p] = (byParty[p] || 0) + entrySigned(e);
+      });
+      return byParty;
+    })();
+    const investRows = {};
+    allInvest.forEach(e => {
+      if (e.txType !== '개인투자' && e.txType !== '개인투자회수') return;
+      const p = e.counterparty || '미지정';
+      investRows[p] = (investRows[p] || 0) + entrySigned(e);
     });
 
     const summaryEl = document.getElementById('investSummary');
-    summaryEl.innerHTML = Object.entries(byInvestor).map(([name, v]) => `
+    const chips = [];
+    Object.entries(investRows).forEach(([name, v]) => chips.push(`
       <div class="summary-card">
-        <div class="label">${esc(name)} · 잔여채권</div>
-        <div class="value">${fmtWon(v.raise - v.repay)}</div>
+        <div class="label">개인투자(${esc(name)}) · 원금잔액</div>
+        <div class="value">${fmtWon(v)}</div>
       </div>
-    `).join('');
+    `));
+    Object.entries(nettingRows).forEach(([name, v]) => chips.push(`
+      <div class="summary-card">
+        <div class="label">${esc(name)} · 상계 후 잔액</div>
+        <div class="value" style="color:${v >= 0 ? 'var(--accent)' : 'var(--warn)'}">${v >= 0 ? '+' : ''}${fmtWon(v)}</div>
+      </div>
+    `));
+    summaryEl.innerHTML = chips.join('');
+
+    // 상대방 자동완성 목록
+    const parties = [...new Set(allInvest.map(e => e.counterparty).filter(Boolean))];
+    document.getElementById('counterpartyList').innerHTML = parties.map(p => `<option value="${esc(p)}">`).join('');
 
     const tbody = document.getElementById('investBody');
-    tbody.innerHTML = allInvest.slice().reverse().map(e => `
+    tbody.innerHTML = allInvest.slice().reverse().map(e => {
+      const signed = entrySigned(e);
+      const label = e.txType || esc(e.investor) || '(미지정)';
+      return `
       <tr>
-        <td>${esc(e.investor)}</td>
+        <td>${esc(label)}</td>
+        <td>${esc(e.counterparty || '')}</td>
         <td class="nowrap">${e.raiseDate || ''}</td>
-        <td class="amt">${fmtWon(e.raiseAmount)}</td>
-        <td class="amt">${fmtWon(e.repayAmount)}</td>
+        <td class="amt ${signed >= 0 ? 'pos' : 'neg'}">${signed >= 0 ? '+' : ''}${fmtWon(signed)}</td>
         <td>${esc(e.memo)}</td>
         <td><button data-edit-invest="${e.id}">수정</button> <button class="danger" data-del-invest="${e.id}">삭제</button></td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
 
     tbody.querySelectorAll('[data-edit-invest]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -320,16 +463,18 @@
         await loadInvest();
       });
     });
+
+    renderNetting();
   }
 
   let editingInvestId = null;
 
   function startEditInvest(e){
     editingInvestId = e.id;
-    document.getElementById('inv-investor').value = e.investor || '';
+    document.getElementById('inv-type').value = e.txType || '가수금';
+    document.getElementById('inv-counterparty').value = e.counterparty || '';
     document.getElementById('inv-date').value = e.raiseDate || '';
-    document.getElementById('inv-raise').value = e.raiseAmount || '';
-    document.getElementById('inv-repay').value = e.repayAmount || '';
+    document.getElementById('inv-amount').value = entryAmount(e) || '';
     document.getElementById('inv-memo').value = e.memo || '';
     document.getElementById('investPanelTitle').textContent = '내역 수정';
     document.getElementById('investEditBanner').style.display = 'flex';
@@ -339,10 +484,10 @@
 
   function cancelEditInvest(){
     editingInvestId = null;
-    document.getElementById('inv-investor').value = '';
+    document.getElementById('inv-type').value = '가수금';
+    document.getElementById('inv-counterparty').value = '';
     document.getElementById('inv-date').value = '';
-    document.getElementById('inv-raise').value = '';
-    document.getElementById('inv-repay').value = '';
+    document.getElementById('inv-amount').value = '';
     document.getElementById('inv-memo').value = '';
     document.getElementById('investPanelTitle').textContent = '내역 추가';
     document.getElementById('investEditBanner').style.display = 'none';
@@ -350,31 +495,29 @@
     document.getElementById('investStatus').textContent = '';
   }
   document.getElementById('cancelInvestEditBtn').addEventListener('click', cancelEditInvest);
+  document.getElementById('migrateInvestBtn').addEventListener('click', migrateLegacyInvestEntries);
 
   document.getElementById('saveInvestBtn').addEventListener('click', async () => {
     const statusEl = document.getElementById('investStatus');
-    const investor = document.getElementById('inv-investor').value.trim();
+    const txType = document.getElementById('inv-type').value;
+    const counterparty = document.getElementById('inv-counterparty').value.trim();
     const raiseDate = document.getElementById('inv-date').value;
-    const raiseAmount = Number(document.getElementById('inv-raise').value) || 0;
-    const repayAmount = Number(document.getElementById('inv-repay').value) || 0;
+    const amount = Number(document.getElementById('inv-amount').value) || 0;
     const memo = document.getElementById('inv-memo').value.trim();
 
-    if (!investor || !raiseDate) { statusEl.className = 'status-line err'; statusEl.textContent = '구분과 유치월은 필수입니다.'; return; }
+    if (!counterparty || !raiseDate) { statusEl.className = 'status-line err'; statusEl.textContent = '상대방과 유치월은 필수입니다.'; return; }
 
     try {
       if (editingInvestId) {
-        await investRef.doc(editingInvestId).update({ investor, raiseDate, raiseAmount, repayAmount, memo });
+        await investRef.doc(editingInvestId).update({ txType, counterparty, raiseDate, amount, memo });
         statusEl.className = 'status-line ok';
         statusEl.textContent = '수정되었습니다.';
         cancelEditInvest();
       } else {
-        await investRef.add({ investor, raiseDate, raiseAmount, repayAmount, memo });
+        await investRef.add({ txType, counterparty, raiseDate, amount, memo });
         statusEl.className = 'status-line ok';
         statusEl.textContent = '저장되었습니다.';
-        document.getElementById('inv-investor').value = '';
-        document.getElementById('inv-date').value = '';
-        document.getElementById('inv-raise').value = '';
-        document.getElementById('inv-repay').value = '';
+        document.getElementById('inv-amount').value = '';
         document.getElementById('inv-memo').value = '';
       }
       await loadInvest();
