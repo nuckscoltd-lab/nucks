@@ -361,9 +361,23 @@
     return INFLOW_TYPES.has(e.txType) ? amt : -amt;
   }
 
+  // Firestore Timestamp(또는 없음)를 비교 가능한 숫자(ms)로 변환. 없으면 0(가장 오래된 것으로 취급).
+  function tsMillis(ts){
+    if (!ts) return 0;
+    if (typeof ts.toMillis === 'function') return ts.toMillis();
+    return 0;
+  }
+
   async function loadInvest(){
     const snap = await investRef.orderBy('raiseDate', 'asc').get();
     allInvest = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // 같은 유치월(예: 2026-08) 안에서는 raiseDate만으로 순서가 정해지지 않아 저장 순서가 뒤섞일 수 있다.
+    // 실제로 등록한 순서(=처리된 실제 순서)가 그대로 보이도록, 같은 달 안에서는 등록 시각(createdAt)으로 한 번 더 정렬한다.
+    allInvest.sort((a, b) => {
+      const d = (a.raiseDate || '').localeCompare(b.raiseDate || '');
+      if (d !== 0) return d;
+      return tsMillis(a.createdAt) - tsMillis(b.createdAt);
+    });
     renderInvest();
   }
 
@@ -514,7 +528,7 @@
         statusEl.textContent = '수정되었습니다.';
         cancelEditInvest();
       } else {
-        await investRef.add({ txType, counterparty, raiseDate, amount, memo });
+        await investRef.add({ txType, counterparty, raiseDate, amount, memo, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
         statusEl.className = 'status-line ok';
         statusEl.textContent = '저장되었습니다.';
         document.getElementById('inv-amount').value = '';
