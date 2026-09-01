@@ -407,7 +407,7 @@ if ('serviceWorker' in navigator) {
 
   async function createBlankCard(){
     const category = prompt('구분을 입력하세요 (예: 전기요금, 도시가스)');
-    if (!name) return;
+    if (!category) return;
     const docRef = await cardsRef.add({
       category, detail: '', note: '', monthly: {},
       order: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp()
