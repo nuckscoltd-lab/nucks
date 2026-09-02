@@ -164,7 +164,7 @@ if ('serviceWorker' in navigator) {
   // 법인 분기별매출매입현황의 "일반지출" 자동집계에 이 항목을 포함시킬지 여부(includeInExpense)가
   // 아직 없는 예전 문서에 한해, 항목명 기준으로 한 번만 기본값을 채워준다. 이후부터는 아래
   // "일반지출 자동집계" 체크박스로 항목별로 직접 켜고 끌 수 있다 (이름을 바꿔도 이 값은 그대로 유지됨).
-  const DEFAULT_EXPENSE_INCLUDE_CATEGORIES = ['수도요금', '통신료', '임대료', '사무실임차료'];
+  const DEFAULT_EXPENSE_INCLUDE_CATEGORIES = ['수도요금', '통신료', '임대료', '사무실임차료', '기부금'];
   async function migrateExpenseInclusionIfNeeded(cards){
     const targets = cards.filter(c => c.includeInExpense === undefined);
     if (!targets.length) return;

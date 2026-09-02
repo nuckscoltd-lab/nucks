@@ -133,6 +133,9 @@ if ('serviceWorker' in navigator) {
   // 전기요금·도시가스·인터넷 등 매입계산서(세금계산서)로 별도 발행되어 "매입" 합계와 중복될 수 있는
   // 항목은 기본으로 꺼져 있음). 항목명을 바꿔도 이 값은 그대로 유지되므로, 이름이 바뀌어서 누락되는
   // 일이 없다 - 정확한 포함 여부는 공과금 관리 화면에서 항목을 펼쳐 확인/변경할 수 있다.
+  // includeInExpense 필드는 공과금 관리 화면을 한 번이라도 열어야 자동으로 채워지는 값이라, 그 전까지는
+  // (문서에 필드 자체가 아직 없는 상태) 이 항목명 기본값으로라도 판단해서 첫 화면부터 빠짐없이 잡히게 한다.
+  const DEFAULT_UTILITY_EXPENSE_CATEGORIES = ['수도요금', '통신료', '임대료', '사무실임차료', '기부금'];
 
   let expenseByMonth = {};       // { 'YYYY-MM': 합계 } - 순수 지출만
   let expenseBreakdown = {};     // { 'YYYY-MM': [{source, name, amount}] }
@@ -162,7 +165,11 @@ if ('serviceWorker' in navigator) {
         const name = d.name || d.label || d.category || '(이름없음)';
         // 공과금은 항목별로 저장된 includeInExpense 값(공과금 관리 화면의 체크박스)에 따라서만
         // 일반지출에 반영한다 - 세금계산서(매입계산서)로도 발행되는 항목은 "매입" 합계와 중복되므로 보통 꺼둔다.
-        if (src.key === 'utilityItems' && d.includeInExpense !== true) return;
+        // 값이 아직 저장되지 않은 문서(공과금 관리 화면을 아직 한 번도 안 열어본 경우)는 항목명 기본값으로 판단한다.
+        if (src.key === 'utilityItems') {
+          const included = d.includeInExpense !== undefined ? (d.includeInExpense === true) : DEFAULT_UTILITY_EXPENSE_CATEGORIES.includes(d.category);
+          if (!included) return;
+        }
         // flowType이 '수입'인 항목(예: 주식·배당의 전문건설배당)은 우리가 받는 돈이라 지출이 아니라 별도 수입으로 집계
         const isIncome = d.flowType === '수입';
         Object.entries(d.monthly || {}).forEach(([ym, amt]) => {
