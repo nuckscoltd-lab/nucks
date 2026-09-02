@@ -1285,14 +1285,26 @@ if ('serviceWorker' in navigator) {
   let expandedMonths = new Set();
   let seenMonthKeys = new Set();
 
+  // 연차관리(leaves)에서 승인완료된 항목 중, 이 근무일지 행과 같은 사원·같은 날짜인 것을 찾는다.
+  function findApprovedLeaveForRow(row) {
+    return allLeaveRows.find(l => l.uid === row.uid && l['날짜'] === row['날짜'] && l['승인상태'] === '승인완료');
+  }
+
   function rowHtml(row) {
     const canManage = (row.uid === currentUser.uid) || (currentRole === 'admin');
     const attach = row.attachment
       ? `<a class="attach-link" href="${row.attachment.url}" target="_blank" rel="noopener">${row.attachment.name}</a>`
       : '';
 
+    const leaveMatch = findApprovedLeaveForRow(row);
+    const leaveBadge = leaveMatch
+      ? `<span style="display:inline-block; margin-left:8px; padding:2px 9px; border-radius:10px; font-size:11px; font-weight:500; background:#e8e2f2; color:#5b4b8a; vertical-align:middle;">🏖 ${leaveMatch['연차구분'] || '연차'}</span>`
+      : '';
+
     const projectList = row.projects || [];
     const projectHtml = projectList.map(p => {
+      // 연차/휴가 등으로 승인된 날인데 프로젝트를 비워둔 행은 위 배지로 이미 표시되므로 중복해서 보여주지 않는다.
+      if (!p['프로젝트'] && leaveMatch) return '';
       const taskTags = Object.keys(p.tasks || {}).filter(k => p.tasks[k])
         .map(t => `<span class="task-tag">${t}</span>`).join('');
       return `
@@ -1301,7 +1313,7 @@ if ('serviceWorker' in navigator) {
           ${taskTags}
         </div>
       `;
-    }).join('');
+    }).filter(Boolean).join('');
 
     const importantHtml = row['중요업무일정']
       ? `${row['중요업무일정']}${row['중요업무내용'] ? `<br><span style="color:var(--muted); font-size:11.5px;">${row['중요업무내용']}</span>` : ''}`
@@ -1318,7 +1330,7 @@ if ('serviceWorker' in navigator) {
       <div class="log-card">
         <div class="log-card-head">
           <div>
-            <div class="log-card-title">${row['날짜'] || ''} · ${row['사원명'] || ''}</div>
+            <div class="log-card-title">${row['날짜'] || ''} · ${row['사원명'] || ''}${leaveBadge}</div>
             <div class="log-card-sub">출근 ${row['출근시간'] || '-'} · 퇴근 ${row['퇴근시간'] || '-'}</div>
           </div>
           <div class="log-card-stat">
@@ -1518,13 +1530,17 @@ if ('serviceWorker' in navigator) {
       projects.push({ '프로젝트': name, '투입시간': hours, tasks });
     });
 
-    if (projects.length === 0) {
-      alert('최소 1개 이상의 프로젝트 정보를 입력해 주세요.');
-      return;
-    }
-    if (hasEmptyProjectName) {
-      alert('프로젝트명이 비어있는 행이 있습니다. 프로젝트를 선택하거나 입력해 주세요.');
-      return;
+    // 총 근무시간이 0시간인 날(연차/휴가 등으로 실제 업무가 없는 날)은 프로젝트 입력이 필수가 아니다.
+    // 상세내용에 메모만 남기고 저장할 수 있도록 아래 두 검증을 건너뛴다.
+    if (totalHours !== 0) {
+      if (projects.length === 0) {
+        alert('최소 1개 이상의 프로젝트 정보를 입력해 주세요.');
+        return;
+      }
+      if (hasEmptyProjectName) {
+        alert('프로젝트명이 비어있는 행이 있습니다. 프로젝트를 선택하거나 입력해 주세요.');
+        return;
+      }
     }
 
     // 프로젝트별 투입시간 합계가 총 근무시간과 일치하는지 검증
