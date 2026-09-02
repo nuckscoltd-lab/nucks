@@ -128,16 +128,17 @@ if ('serviceWorker' in navigator) {
     { key: 'loanRepaymentItems', label: '이자상환' }
   ];
 
-  // 공과금 항목 중 아래 항목만 "일반지출" 자동집계에 포함한다.
-  // (전기요금·도시가스·인터넷 등 나머지 항목은 매입계산서(세금계산서)로도 발행되어
-  //  "매입" 합계와 중복 집계될 수 있어 제외)
-  const UTILITY_EXPENSE_INCLUDE = ['수도요금', '통신료', '임대료'];
+  // 공과금 항목은 "공과금 관리(utilities.html)" 화면에서 항목별로 켜둔 includeInExpense 값에
+  // 따라서만 "일반지출" 자동집계에 포함된다 (수도요금·통신료·임대료 등은 그쪽에서 기본으로 켜져 있고,
+  // 전기요금·도시가스·인터넷 등 매입계산서(세금계산서)로 별도 발행되어 "매입" 합계와 중복될 수 있는
+  // 항목은 기본으로 꺼져 있음). 항목명을 바꿔도 이 값은 그대로 유지되므로, 이름이 바뀌어서 누락되는
+  // 일이 없다 - 정확한 포함 여부는 공과금 관리 화면에서 항목을 펼쳐 확인/변경할 수 있다.
 
   let expenseByMonth = {};       // { 'YYYY-MM': 합계 } - 순수 지출만
   let expenseBreakdown = {};     // { 'YYYY-MM': [{source, name, amount}] }
   let otherIncomeByMonth = {};   // { 'YYYY-MM': 합계 } - flowType이 '수입'인 항목(예: 전문건설배당)
   let otherIncomeBreakdown = {}; // { 'YYYY-MM': [{source, name, amount}] }
-  let salesPurchaseByMonth = {}; // { 'YYYY-MM': {salesTotal, salesSupply, salesTax, purchaseTotal, purchaseSupply, purchaseTax} }
+  let salesPurchaseByMonth = {}; // { 'YYYY-MM': {salesTotal/salesSupply/salesTax/purchaseTotal/salesSupply/purchaseTax (세금계산서), cashReceipt*(현금영수증), plainInvoice*(일반계산서)} }
   let activeYear = String(new Date().getFullYear());
   let openBreakdown = new Set();
   let viewMode = 'quarter'; // 'quarter' | 'month'
@@ -159,9 +160,9 @@ if ('serviceWorker' in navigator) {
       snap.docs.forEach(doc => {
         const d = doc.data();
         const name = d.name || d.label || d.category || '(이름없음)';
-        // 공과금 중 세금계산서(매입계산서)로도 발행되는 항목은 "매입" 합계와 중복되므로
-        // 수도요금·통신료·임대료(사무실 임차료)만 일반지출에 반영한다.
-        if (src.key === 'utilityItems' && !UTILITY_EXPENSE_INCLUDE.includes(d.category)) return;
+        // 공과금은 항목별로 저장된 includeInExpense 값(공과금 관리 화면의 체크박스)에 따라서만
+        // 일반지출에 반영한다 - 세금계산서(매입계산서)로도 발행되는 항목은 "매입" 합계와 중복되므로 보통 꺼둔다.
+        if (src.key === 'utilityItems' && d.includeInExpense !== true) return;
         // flowType이 '수입'인 항목(예: 주식·배당의 전문건설배당)은 우리가 받는 돈이라 지출이 아니라 별도 수입으로 집계
         const isIncome = d.flowType === '수입';
         Object.entries(d.monthly || {}).forEach(([ym, amt]) => {
@@ -201,9 +202,34 @@ if ('serviceWorker' in navigator) {
     snap.docs.forEach(doc => { salesPurchaseByMonth[doc.id] = doc.data(); });
   }
 
-  function spFor(ym){
-    return salesPurchaseByMonth[ym] || { salesTotal: 0, salesSupply: 0, salesTax: 0, purchaseTotal: 0, purchaseSupply: 0, purchaseTax: 0 };
+  // 매출/매입은 증빙 서류 종류별로 따로 입력받는다: 세금계산서(기존 필드, 접두사 없음 - 이미 저장된
+  // 데이터와 호환되도록 그대로 둠) · 현금영수증(cashReceipt) · 일반계산서(plainInvoice).
+  // "총매출/총매입"에는 셋을 모두 합산해서 반영한다.
+  const SP_DOC_TYPES = [
+    { prefix: '', label: '세금계산서' },
+    { prefix: 'cashReceipt', label: '현금영수증' },
+    { prefix: 'plainInvoice', label: '일반계산서' }
+  ];
+  // 필드/입력칸 id 키를 만드는 규칙을 한 곳에 모아둔다 - prefix가 없으면 기존 필드명(salesTotal 등)
+  // 그대로, prefix가 있으면 camelCase로 이어붙인다(cashReceiptSalesTotal 등).
+  function spKey(prefix, dir, metric){
+    const Dir = dir[0].toUpperCase() + dir.slice(1);
+    return prefix ? `${prefix}${Dir}${metric}` : `${dir}${metric}`;
   }
+  const SP_FIELD_KEYS = SP_DOC_TYPES.flatMap(t => ['sales', 'purchase'].flatMap(dir =>
+    ['Total', 'Supply', 'Tax'].map(metric => spKey(t.prefix, dir, metric))
+  ));
+
+  function spFor(ym){
+    const raw = salesPurchaseByMonth[ym] || {};
+    const sp = {};
+    SP_FIELD_KEYS.forEach(k => { sp[k] = Number(raw[k]) || 0; });
+    return sp;
+  }
+
+  // 증빙 종류 상관없이 합산한 총매출/총매입 (연/분기/월 집계와 예상손익 계산에 사용)
+  function spSalesAll(sp){ return SP_DOC_TYPES.reduce((s, t) => s + (sp[spKey(t.prefix, 'sales', 'Total')] || 0), 0); }
+  function spPurchaseAll(sp){ return SP_DOC_TYPES.reduce((s, t) => s + (sp[spKey(t.prefix, 'purchase', 'Total')] || 0), 0); }
 
   async function loadAll(){
     await Promise.all([loadExpenses(), loadSalesPurchase()]);
@@ -226,9 +252,9 @@ if ('serviceWorker' in navigator) {
       <div class="panel" style="padding:14px 18px;">
         <div class="import-help" style="margin-bottom:0;">
           "일반지출"은 법인카드·공과금·보험·세금·주식·이자상환·급여명세서 데이터를 매달 자동으로 합산한 값이에요 (직접 입력할 필요 없음).
-          공과금 중에는 수도요금·통신료·임대료(사무실 임차료)만 포함돼요 - 나머지 공과금(전기요금·도시가스·인터넷 등)은 매입계산서로도 발행되어 "매입" 합계와 중복될 수 있어 제외했어요.
+          공과금은 항목별로 포함 여부가 정해져 있어요(기본: 수도요금·통신료·임대료만 포함, 전기요금·도시가스·인터넷 등은 매입계산서와 중복될 수 있어 제외) - 공과금 관리 화면에서 항목을 펼치면 "일반지출 자동집계" 체크박스로 직접 켜고 끌 수 있어요.
           그중 주식·배당의 전문건설배당처럼 "수입"으로 분류된 항목은 지출이 아니라 "기타수입"으로 따로 집계돼요.
-          "매출/매입"(세금계산서 발행 기준)은 부가세 신고 자료를 바탕으로 각 월 항목의 "입력" 버튼을 눌러 채워주세요 - 총합계(VAT포함)만 넣으면 공급가액·세액은 자동 계산되고, 실제 계산서 금액과 다르면 직접 수정할 수 있어요.
+          "매출/매입"은 부가세 신고 자료를 바탕으로 각 월 항목의 "입력" 버튼을 눌러 채워주세요 - 세금계산서·현금영수증·일반계산서 세 증빙별로 각각 입력하며, 화면의 매출/매입 합계에는 셋을 모두 더한 값이 표시돼요. 각 총합계(VAT포함)만 넣으면 공급가액·세액은 자동 계산되고, 실제 서류 금액과 다르면 직접 수정할 수 있어요.
         </div>
       </div>
       <div class="summary-bar" id="summaryBar"></div>
@@ -261,8 +287,8 @@ if ('serviceWorker' in navigator) {
     let sales = 0, purchase = 0, expense = 0, otherIncome = 0;
     for (let m = 1; m <= 12; m++) {
       const ym = `${year}-${String(m).padStart(2, '0')}`;
-      sales += spFor(ym).salesTotal || 0;
-      purchase += spFor(ym).purchaseTotal || 0;
+      sales += spSalesAll(spFor(ym));
+      purchase += spPurchaseAll(spFor(ym));
       expense += expenseByMonth[ym] || 0;
       otherIncome += otherIncomeByMonth[ym] || 0;
     }
@@ -287,16 +313,26 @@ if ('serviceWorker' in navigator) {
     const sp = spFor(ym);
     const exp = expenseByMonth[ym] || 0;
     const inc = otherIncomeByMonth[ym] || 0;
-    const monthProfit = (sp.salesTotal || 0) - (sp.purchaseTotal || 0) - exp + inc;
+    const salesTotal = spSalesAll(sp);
+    const purchaseTotal = spPurchaseAll(sp);
+    const monthProfit = salesTotal - purchaseTotal - exp + inc;
 
     const expBreakdown = expenseBreakdown[ym];
     const incBreakdown = otherIncomeBreakdown[ym];
+    // 매출/매입도 세금계산서·현금영수증·일반계산서 중 2가지 이상 입력된 달만 "내역보기"로 구성을 보여준다.
+    const spBreakdownRows = SP_DOC_TYPES
+      .map(t => ({ label: t.label, sales: sp[spKey(t.prefix, 'sales', 'Total')], purchase: sp[spKey(t.prefix, 'purchase', 'Total')] }))
+      .filter(x => x.sales || x.purchase);
+    const spBreakdown = spBreakdownRows.length > 1 ? spBreakdownRows : null;
 
     return `
       <tr>
         <td>${label}</td>
-        <td>${fmtWon(sp.salesTotal)}</td>
-        <td>${fmtWon(sp.purchaseTotal)}</td>
+        <td>
+          ${fmtWon(salesTotal)}
+          ${spBreakdown ? `<button class="breakdown-toggle" data-toggle-breakdown="sp-${ym}">${openBreakdown.has('sp-' + ym) ? '숨기기' : '내역보기'}</button>` : ''}
+        </td>
+        <td>${fmtWon(purchaseTotal)}</td>
         <td>
           ${fmtWon(exp)}
           ${expBreakdown ? `<button class="breakdown-toggle" data-toggle-breakdown="exp-${ym}">${openBreakdown.has('exp-' + ym) ? '숨기기' : '내역보기'}</button>` : ''}
@@ -308,6 +344,16 @@ if ('serviceWorker' in navigator) {
         <td class="${monthProfit < 0 ? 'neg' : ''}">${fmtWon(monthProfit)}</td>
         <td><button class="edit-link" data-edit-month="${ym}">입력</button></td>
       </tr>
+      ${spBreakdown ? `
+        <tr style="display:${openBreakdown.has('sp-' + ym) ? 'table-row' : 'none'};" data-breakdown-row="sp-${ym}">
+          <td colspan="7">
+            <div class="breakdown-list open">
+              <div style="font-weight:600; margin-bottom:4px;">매출·매입 증빙별 내역</div>
+              ${spBreakdown.map(b => `<div class="b-row"><span>${esc(b.label)}</span><span>매출 ${fmtWon(b.sales)} · 매입 ${fmtWon(b.purchase)}</span></div>`).join('')}
+            </div>
+          </td>
+        </tr>
+      ` : ''}
       ${expBreakdown ? `
         <tr style="display:${openBreakdown.has('exp-' + ym) ? 'table-row' : 'none'};" data-breakdown-row="exp-${ym}">
           <td colspan="7">
@@ -358,8 +404,8 @@ if ('serviceWorker' in navigator) {
       const rowsHtml = months.map(m => {
         const ym = `${activeYear}-${String(m).padStart(2, '0')}`;
         const sp = spFor(ym);
-        qSales += sp.salesTotal || 0;
-        qPurchase += sp.purchaseTotal || 0;
+        qSales += spSalesAll(sp);
+        qPurchase += spPurchaseAll(sp);
         qExpense += expenseByMonth[ym] || 0;
         qIncome += otherIncomeByMonth[ym] || 0;
         return buildMonthRow(ym, `${m}월`);
@@ -442,8 +488,8 @@ if ('serviceWorker' in navigator) {
         for (let i = 0; i < 3; i++) {
           const m = (q - 1) * 3 + i + 1;
           const ym = `${activeYear}-${String(m).padStart(2, '0')}`;
-          s += spFor(ym).salesTotal || 0;
-          p += spFor(ym).purchaseTotal || 0;
+          s += spSalesAll(spFor(ym));
+          p += spPurchaseAll(spFor(ym));
           e += expenseByMonth[ym] || 0;
           inc += otherIncomeByMonth[ym] || 0;
         }
@@ -454,8 +500,8 @@ if ('serviceWorker' in navigator) {
       salesData = []; purchaseData = []; expenseData = []; incomeData = [];
       for (let m = 1; m <= 12; m++) {
         const ym = `${activeYear}-${String(m).padStart(2, '0')}`;
-        salesData.push(spFor(ym).salesTotal || 0);
-        purchaseData.push(spFor(ym).purchaseTotal || 0);
+        salesData.push(spSalesAll(spFor(ym)));
+        purchaseData.push(spPurchaseAll(spFor(ym)));
         expenseData.push(expenseByMonth[ym] || 0);
         incomeData.push(otherIncomeByMonth[ym] || 0);
       }
@@ -483,6 +529,31 @@ if ('serviceWorker' in navigator) {
     });
   }
 
+  // 매출/매입 입력 폼: 세금계산서·현금영수증·일반계산서 세 구획을 SP_DOC_TYPES 기준으로 똑같은
+  // 모양(매출/매입 × 총합계·공급가액·세액)으로 반복 생성한다.
+  function spSectionHtml(docType, sp, ym){
+    const val = (k) => sp[k] ? sp[k].toLocaleString('ko-KR') : '';
+    const kSalesTotal = spKey(docType.prefix, 'sales', 'Total');
+    const kSalesSupply = spKey(docType.prefix, 'sales', 'Supply');
+    const kSalesTax = spKey(docType.prefix, 'sales', 'Tax');
+    const kPurchaseTotal = spKey(docType.prefix, 'purchase', 'Total');
+    const kPurchaseSupply = spKey(docType.prefix, 'purchase', 'Supply');
+    const kPurchaseTax = spKey(docType.prefix, 'purchase', 'Tax');
+    return `
+      <div style="font-size:12px; font-weight:600; color:var(--muted); margin:14px 0 6px; ${docType.prefix ? 'border-top:1px solid var(--line); padding-top:14px;' : ''}">${docType.label}</div>
+      <div class="form-row">
+        <div class="field"><label>매출 총합계(VAT포함)</label><input type="text" inputmode="numeric" class="money-in" id="sp-${kSalesTotal}-${ym}" value="${val(kSalesTotal)}"></div>
+        <div class="field"><label>매출 공급가액</label><input type="text" inputmode="numeric" class="money-in" id="sp-${kSalesSupply}-${ym}" value="${val(kSalesSupply)}"></div>
+        <div class="field"><label>매출 세액</label><input type="text" inputmode="numeric" class="money-in" id="sp-${kSalesTax}-${ym}" value="${val(kSalesTax)}"></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>매입 총합계(VAT포함)</label><input type="text" inputmode="numeric" class="money-in" id="sp-${kPurchaseTotal}-${ym}" value="${val(kPurchaseTotal)}"></div>
+        <div class="field"><label>매입 공급가액</label><input type="text" inputmode="numeric" class="money-in" id="sp-${kPurchaseSupply}-${ym}" value="${val(kPurchaseSupply)}"></div>
+        <div class="field"><label>매입 세액</label><input type="text" inputmode="numeric" class="money-in" id="sp-${kPurchaseTax}-${ym}" value="${val(kPurchaseTax)}"></div>
+      </div>
+    `;
+  }
+
   function openEditForm(ym){
     const row = document.querySelector(`[data-edit-row="${ym}"]`);
     if (!row) return;
@@ -491,15 +562,8 @@ if ('serviceWorker' in navigator) {
     row.innerHTML = `
       <td colspan="7">
         <div class="edit-form" style="margin:0; border:none; background:none; padding:10px 0;">
-          <div class="form-row">
-            <div class="field"><label>매출 총합계(VAT포함)</label><input type="text" inputmode="numeric" class="money-in" id="sp-salesTotal-${ym}" value="${sp.salesTotal ? sp.salesTotal.toLocaleString('ko-KR') : ''}"></div>
-            <div class="field"><label>매출 공급가액</label><input type="text" inputmode="numeric" class="money-in" id="sp-salesSupply-${ym}" value="${sp.salesSupply ? sp.salesSupply.toLocaleString('ko-KR') : ''}"></div>
-            <div class="field"><label>매출 세액</label><input type="text" inputmode="numeric" class="money-in" id="sp-salesTax-${ym}" value="${sp.salesTax ? sp.salesTax.toLocaleString('ko-KR') : ''}"></div>
-          </div>
-          <div class="form-row">
-            <div class="field"><label>매입 총합계(VAT포함)</label><input type="text" inputmode="numeric" class="money-in" id="sp-purchaseTotal-${ym}" value="${sp.purchaseTotal ? sp.purchaseTotal.toLocaleString('ko-KR') : ''}"></div>
-            <div class="field"><label>매입 공급가액</label><input type="text" inputmode="numeric" class="money-in" id="sp-purchaseSupply-${ym}" value="${sp.purchaseSupply ? sp.purchaseSupply.toLocaleString('ko-KR') : ''}"></div>
-            <div class="field"><label>매입 세액</label><input type="text" inputmode="numeric" class="money-in" id="sp-purchaseTax-${ym}" value="${sp.purchaseTax ? sp.purchaseTax.toLocaleString('ko-KR') : ''}"></div>
+          ${SP_DOC_TYPES.map(t => spSectionHtml(t, sp, ym)).join('')}
+          <div style="margin-top:14px; display:flex; gap:8px;">
             <button id="sp-save-${ym}">저장</button>
             <button id="sp-cancel-${ym}" style="background:#fff; color:var(--ink); border:1px solid var(--line);">취소</button>
           </div>
@@ -513,14 +577,8 @@ if ('serviceWorker' in navigator) {
 
   async function saveSalesPurchase(ym){
     const statusEl = document.getElementById(`sp-status-${ym}`);
-    const data = {
-      salesTotal: parseMoney(document.getElementById(`sp-salesTotal-${ym}`)),
-      salesSupply: parseMoney(document.getElementById(`sp-salesSupply-${ym}`)),
-      salesTax: parseMoney(document.getElementById(`sp-salesTax-${ym}`)),
-      purchaseTotal: parseMoney(document.getElementById(`sp-purchaseTotal-${ym}`)),
-      purchaseSupply: parseMoney(document.getElementById(`sp-purchaseSupply-${ym}`)),
-      purchaseTax: parseMoney(document.getElementById(`sp-purchaseTax-${ym}`))
-    };
+    const data = {};
+    SP_FIELD_KEYS.forEach(k => { data[k] = parseMoney(document.getElementById(`sp-${k}-${ym}`)); });
     try {
       await salesPurchaseRef.doc(ym).set(data);
       await loadAll();
@@ -548,12 +606,13 @@ if ('serviceWorker' in navigator) {
   document.addEventListener('input', (e) => {
     const el = e.target;
     if (!el.id) return;
-    const m = el.id.match(/^sp-(sales|purchase)Total-(.+)$/);
+    // sp-salesTotal-YYYY-MM, sp-cashReceiptSalesTotal-YYYY-MM 등 세 증빙 종류 모두 공통으로 처리
+    const m = el.id.match(/^sp-(.+)Total-(.+)$/);
     if (!m) return;
-    const [, kind, ym] = m;
+    const [, base, ym] = m;
     const total = parseMoney(el);
-    const supplyEl = document.getElementById(`sp-${kind}Supply-${ym}`);
-    const taxEl = document.getElementById(`sp-${kind}Tax-${ym}`);
+    const supplyEl = document.getElementById(`sp-${base}Supply-${ym}`);
+    const taxEl = document.getElementById(`sp-${base}Tax-${ym}`);
     if (!supplyEl || !taxEl) return;
     if (!total) { supplyEl.value = ''; taxEl.value = ''; return; }
     const supply = Math.round(total / 1.1);

@@ -29,6 +29,8 @@ if ('serviceWorker' in navigator) {
 
   .panel{ background:#fff; border:1px solid var(--line); border-radius:6px; padding:16px 18px; margin-bottom:24px; }
   .toolbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .toolbar .month-range{ flex-wrap:wrap; }
+  .toolbar .month-range input[type="month"]{ flex:1 1 110px; min-width:0; }
   .toolbar select, .toolbar input{ padding:8px 10px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff; }
   .add-btn{ padding:8px 16px; background:var(--ink); color:var(--paper); border:none; font-size:12.5px; letter-spacing:.05em; cursor:pointer; border-radius:4px; }
   .row-btn{ font-size:11.5px; background:none; border:none; cursor:pointer; text-decoration:underline; color:var(--muted); margin-right:8px; padding:0; }
@@ -74,6 +76,9 @@ if ('serviceWorker' in navigator) {
     input, select{ font-size:16px !important; }
     .card-head{ flex-wrap:wrap; }
     .card-meta{ margin-left:0; width:100%; justify-content:space-between; }
+    .toolbar{ flex-direction:column; align-items:stretch; }
+    .toolbar > *{ width:100%; }
+    .toolbar .month-range{ width:100%; }
   }
 </style>
 </head>
@@ -177,7 +182,7 @@ if ('serviceWorker' in navigator) {
       <div class="panel">
         <div class="toolbar">
           <select id="yearFilter"><option value="전체">전체 연도</option></select>
-          <span style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted);">
+          <span class="month-range" style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted);">
             <input type="month" id="startMonthFilter" style="padding:7px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff;">
             ~
             <input type="month" id="endMonthFilter" style="padding:7px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff;">
@@ -407,7 +412,7 @@ if ('serviceWorker' in navigator) {
 
   async function createBlankCard(){
     const label = prompt('항목명을 입력하세요 (예: 부가가치세)');
-    if (!name) return;
+    if (!label) return;
     const docRef = await cardsRef.add({
       label, category: '', refundRate: null, monthly: {},
       order: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp()

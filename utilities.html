@@ -29,6 +29,8 @@ if ('serviceWorker' in navigator) {
 
   .panel{ background:#fff; border:1px solid var(--line); border-radius:6px; padding:16px 18px; margin-bottom:24px; }
   .toolbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .toolbar .month-range{ flex-wrap:wrap; }
+  .toolbar .month-range input[type="month"]{ flex:1 1 110px; min-width:0; }
   .toolbar select, .toolbar input{ padding:8px 10px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff; }
   .add-btn{ padding:8px 16px; background:var(--ink); color:var(--paper); border:none; font-size:12.5px; letter-spacing:.05em; cursor:pointer; border-radius:4px; }
   .row-btn{ font-size:11.5px; background:none; border:none; cursor:pointer; text-decoration:underline; color:var(--muted); margin-right:8px; padding:0; }
@@ -74,6 +76,9 @@ if ('serviceWorker' in navigator) {
     input, select{ font-size:16px !important; }
     .card-head{ flex-wrap:wrap; }
     .card-meta{ margin-left:0; width:100%; justify-content:space-between; }
+    .toolbar{ flex-direction:column; align-items:stretch; }
+    .toolbar > *{ width:100%; }
+    .toolbar .month-range{ width:100%; }
   }
 </style>
 </head>
@@ -156,10 +161,27 @@ if ('serviceWorker' in navigator) {
     await batch.commit();
   }
 
+  // 법인 분기별매출매입현황의 "일반지출" 자동집계에 이 항목을 포함시킬지 여부(includeInExpense)가
+  // 아직 없는 예전 문서에 한해, 항목명 기준으로 한 번만 기본값을 채워준다. 이후부터는 아래
+  // "일반지출 자동집계" 체크박스로 항목별로 직접 켜고 끌 수 있다 (이름을 바꿔도 이 값은 그대로 유지됨).
+  const DEFAULT_EXPENSE_INCLUDE_CATEGORIES = ['수도요금', '통신료', '임대료', '사무실임차료'];
+  async function migrateExpenseInclusionIfNeeded(cards){
+    const targets = cards.filter(c => c.includeInExpense === undefined);
+    if (!targets.length) return;
+    const batch = db.batch();
+    targets.forEach(c => {
+      const shouldInclude = DEFAULT_EXPENSE_INCLUDE_CATEGORIES.includes(c.category);
+      batch.update(cardsRef.doc(c.id), { includeInExpense: shouldInclude });
+      c.includeInExpense = shouldInclude; // 로컬 캐시에도 즉시 반영
+    });
+    await batch.commit();
+  }
+
   async function loadCards(){
     await seedIfEmpty();
     const snap = await cardsRef.orderBy('order', 'asc').get();
     allCards = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    await migrateExpenseInclusionIfNeeded(allCards);
     renderAll();
   }
 
@@ -178,7 +200,7 @@ if ('serviceWorker' in navigator) {
       <div class="panel">
         <div class="toolbar">
           <select id="yearFilter"><option value="전체">전체 연도</option></select>
-          <span style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted);">
+          <span class="month-range" style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted);">
             <input type="month" id="startMonthFilter" style="padding:7px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff;">
             ~
             <input type="month" id="endMonthFilter" style="padding:7px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff;">
@@ -262,7 +284,7 @@ if ('serviceWorker' in navigator) {
       <div class="card-item">
         <div class="card-head" data-head="${c.id}">
           <div>
-            <div class="card-name">${esc(c.category)}</div>
+            <div class="card-name">${esc(c.category)}${c.includeInExpense ? ' <span style="font-size:10.5px; font-weight:500; color:#3f6b52; background:#eef2e8; border-radius:8px; padding:1px 8px; vertical-align:middle;">일반지출 포함</span>' : ''}</div>
             <div class="card-sub">${esc(c.detail) || '상세정보 없음'}</div>
           </div>
           <div class="card-meta">
@@ -324,6 +346,12 @@ if ('serviceWorker' in navigator) {
           <div class="field"><label>구분</label><input type="text" id="ec-name-${c.id}" value="${esc(c.category)}"></div>
           <div class="field"><label>상세정보 (계량기/사업자번호 등)</label><input type="text" id="ec-number-${c.id}" value="${esc(c.detail)}"></div>
           <div class="field" style="flex:1;"><label>비고</label><input type="text" id="ec-note-${c.id}" value="${esc(c.note)}"></div>
+          <div class="field">
+            <label>일반지출 자동집계</label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; padding-top:7px; cursor:pointer; white-space:nowrap;">
+              <input type="checkbox" id="ec-includeExpense-${c.id}" ${c.includeInExpense ? 'checked' : ''}> 법인 분기별매출매입현황에 포함
+            </label>
+          </div>
         </div>
         <button class="add-btn" id="ec-save-${c.id}">저장</button>
       </div>
@@ -398,7 +426,8 @@ if ('serviceWorker' in navigator) {
     const updateData = {
       category: document.getElementById(`ec-name-${id}`).value.trim(),
       detail: document.getElementById(`ec-number-${id}`).value.trim(),
-      note: document.getElementById(`ec-note-${id}`).value.trim()
+      note: document.getElementById(`ec-note-${id}`).value.trim(),
+      includeInExpense: document.getElementById(`ec-includeExpense-${id}`).checked
     };
     if (!updateData.category) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '구분을 입력해주세요.'; return; }
     try {
@@ -424,7 +453,7 @@ if ('serviceWorker' in navigator) {
     const category = prompt('구분을 입력하세요 (예: 전기요금, 도시가스)');
     if (!category) return;
     const docRef = await cardsRef.add({
-      category, detail: '', note: '', monthly: {},
+      category, detail: '', note: '', monthly: {}, includeInExpense: false,
       order: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     await loadCards();
