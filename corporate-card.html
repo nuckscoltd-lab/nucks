@@ -120,6 +120,7 @@ if ('serviceWorker' in navigator) {
   const cardsRef = db.collection('corporateCards');
   let allCards = [];
   let openIds = new Set();
+  let cardYearFilter = {}; // 카드별로 펼쳤을 때 그 안의 월별 목록만 따로 좁혀보는 연도 필터 (상단 전체 필터와 별개)
   let activeYear = '전체';
   let activeCardName = '전체';
   let startMonth = '';
@@ -304,16 +305,27 @@ if ('serviceWorker' in navigator) {
 
   function renderBody(c){
     const months = filteredMonthlyEntries(c);
-    const filterNote = (startMonth || endMonth) ? `<div style="font-size:11.5px; color:var(--muted); margin-bottom:8px;">* 현재 기간 필터(${startMonth || '처음'}~${endMonth || '지금'})에 맞는 달만 표시 중</div>` : '';
+    // 카드 안에서 한 번 더 좁혀보는 연도 필터. 기본값은 "가장 최근에 데이터가 있는 연도" - 펼치자마자
+    // 몇 년치가 한꺼번에 쭉 나열되지 않도록 한다. 필요하면 "전체 연도"로 바꿔서 다 볼 수 있다.
+    const cardYears = [...new Set(Object.keys(c.monthly || {}).map(ym => ym.slice(0, 4)))].sort().reverse();
+    const cardSelYear = Object.prototype.hasOwnProperty.call(cardYearFilter, c.id) ? cardYearFilter[c.id] : (cardYears[0] || '전체');
+    const displayMonths = cardSelYear === '전체' ? months : months.filter(([ym]) => ym.startsWith(cardSelYear));
+    const filterNote = (startMonth || endMonth) ? `<div style="font-size:11.5px; color:var(--muted); margin-bottom:8px;">* 상단의 기간 필터(${startMonth || '처음'}~${endMonth || '지금'})에 맞는 달 중에서만 표시돼요.</div>` : '';
     return `
       ${c.note ? `<div class="subsection-title">비고</div><div style="font-size:12.5px; color:#54514a; margin-bottom:16px;">${esc(c.note)}</div>` : ''}
-      <div class="subsection-title">월별 사용액</div>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+        <div class="subsection-title" style="margin:0;">월별 사용액</div>
+        <select class="card-year-select" data-card-year="${c.id}" style="padding:5px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:12px; background:#fff;">
+          <option value="전체" ${cardSelYear === '전체' ? 'selected' : ''}>전체 연도</option>
+          ${cardYears.map(y => `<option value="${y}" ${y === cardSelYear ? 'selected' : ''}>${y}년</option>`).join('')}
+        </select>
+      </div>
       ${filterNote}
-      ${months.length ? `
+      ${displayMonths.length ? `
         <table class="mini">
           <thead><tr><th>연-월</th><th>사용액</th><th>관리</th></tr></thead>
           <tbody>
-            ${months.map(([ym, amt]) => `
+            ${displayMonths.map(([ym, amt]) => `
               <tr>
                 <td>${ym}</td>
                 <td>${fmtWon(amt)}</td>
@@ -325,7 +337,7 @@ if ('serviceWorker' in navigator) {
             `).join('')}
           </tbody>
         </table>
-      ` : '<div style="font-size:12.5px; color:var(--muted); margin-bottom:10px;">등록된 월별 내역이 없습니다.</div>'}
+      ` : `<div style="font-size:12.5px; color:var(--muted); margin-bottom:10px;">${months.length ? '선택한 연도에는 등록된 내역이 없습니다.' : '등록된 월별 내역이 없습니다.'}</div>`}
       <div class="inline-add">
         <div class="field"><label>연-월</label><input type="month" id="nm-month-${c.id}" value="${thisMonthKey()}"></div>
         <div class="field"><label>사용액</label><input type="text" inputmode="numeric" class="money-in" id="nm-amount-${c.id}" style="width:130px;" placeholder="0"></div>
@@ -353,6 +365,9 @@ if ('serviceWorker' in navigator) {
   }
 
   function bindCardEvents(c){
+    const yearSel = document.querySelector(`[data-card-year="${c.id}"]`);
+    if (yearSel) yearSel.addEventListener('change', (e) => { cardYearFilter[c.id] = e.target.value; renderList(); });
+
     const addBtn = document.querySelector(`[data-month-add="${c.id}"]`);
     if (addBtn) addBtn.addEventListener('click', () => addMonth(c.id));
 
