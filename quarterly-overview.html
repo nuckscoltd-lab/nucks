@@ -167,7 +167,8 @@ if ('serviceWorker' in navigator) {
         // 일반지출에 반영한다 - 세금계산서(매입계산서)로도 발행되는 항목은 "매입" 합계와 중복되므로 보통 꺼둔다.
         // 값이 아직 저장되지 않은 문서(공과금 관리 화면을 아직 한 번도 안 열어본 경우)는 항목명 기본값으로 판단한다.
         if (src.key === 'utilityItems') {
-          const included = d.includeInExpense !== undefined ? (d.includeInExpense === true) : DEFAULT_UTILITY_EXPENSE_CATEGORIES.includes(d.category);
+          // "임대료(넉스빌딩)"처럼 뒤에 부연설명이 붙은 이름도 매칭되도록 완전일치 대신 포함 여부로 판단한다.
+          const included = d.includeInExpense !== undefined ? (d.includeInExpense === true) : DEFAULT_UTILITY_EXPENSE_CATEGORIES.some(k => (d.category || '').includes(k));
           if (!included) return;
         }
         // flowType이 '수입'인 항목(예: 주식·배당의 전문건설배당)은 우리가 받는 돈이라 지출이 아니라 별도 수입으로 집계

@@ -170,7 +170,8 @@ if ('serviceWorker' in navigator) {
     if (!targets.length) return;
     const batch = db.batch();
     targets.forEach(c => {
-      const shouldInclude = DEFAULT_EXPENSE_INCLUDE_CATEGORIES.includes(c.category);
+      // "임대료(넉스빌딩)"처럼 뒤에 부연설명이 붙은 이름도 매칭되도록 완전일치 대신 포함 여부로 판단한다.
+      const shouldInclude = DEFAULT_EXPENSE_INCLUDE_CATEGORIES.some(k => (c.category || '').includes(k));
       batch.update(cardsRef.doc(c.id), { includeInExpense: shouldInclude });
       c.includeInExpense = shouldInclude; // 로컬 캐시에도 즉시 반영
     });
