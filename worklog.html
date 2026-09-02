@@ -221,6 +221,45 @@ if ('serviceWorker' in navigator) {
   }
   .cal-cell-holiday{ background:#fdf6f5; }
   .cal-cell-holiday.other-month{ background:#f2f0eb; }
+  .cal-item-office{
+    background:#eef2e8; color:#3f6b52; font-weight:500;
+    display:flex; align-items:center; gap:4px;
+  }
+  .cal-item-office.clickable{ cursor:pointer; }
+  .cal-item-office.clickable:hover{ background:#e2ead9; }
+  .cal-item-office .office-dot{ width:6px; height:6px; border-radius:50%; flex:none; background:#8a8578; }
+  .cal-item-office.status-done .office-dot{ background:#3f6b52; }
+  .cal-item-office.status-progress .office-dot{ background:#c9a24b; }
+  .cal-item-office.status-todo .office-dot{ background:#8a8578; }
+  .cal-add-office-btn{
+    display:block; width:100%; text-align:center; font-size:10.5px; color:var(--muted);
+    background:none; border:1px dashed var(--line); border-radius:3px; padding:2px 0;
+    cursor:pointer; margin-top:2px;
+  }
+  .cal-add-office-btn:hover{ background:#fff; color:var(--ink); }
+  .office-modal-overlay{
+    display:none; position:fixed; inset:0; background:rgba(20,20,20,.45);
+    align-items:center; justify-content:center; z-index:200; padding:20px;
+  }
+  .office-modal-overlay.open{ display:flex; }
+  .office-modal{
+    background:#fff; border-radius:8px; padding:24px; width:100%; max-width:380px;
+    border:1px solid var(--line);
+  }
+  .office-modal h3{ margin:0 0 16px; font-size:16px; font-weight:600; }
+  .office-modal .field{ margin-bottom:14px; }
+  .office-modal .field label{ display:block; font-size:11.5px; color:var(--muted); margin-bottom:5px; }
+  .office-modal .field input, .office-modal .field select{
+    width:100%; padding:8px 9px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13.5px;
+  }
+  .office-modal .modal-btns{ display:flex; gap:8px; margin-top:18px; }
+  .office-modal .modal-btns button{
+    flex:1; padding:9px 0; border-radius:4px; font-size:13px; cursor:pointer; border:1px solid var(--line);
+    background:#fff; color:var(--ink); font-family:inherit;
+  }
+  .office-modal .modal-btns .primary{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  .office-modal .modal-btns .danger{ color:#a4453c; border-color:#a4453c; }
+  .office-modal .modal-status{ font-size:12px; margin-top:10px; min-height:14px; }
   /* 태블릿/폴더블 대응 (Z Fold 펼침 화면 등, 641~1024px) */
   @media (min-width: 641px) and (max-width: 1024px) {
     main{ padding:32px 24px !important; max-width:100% !important; }
@@ -430,6 +469,36 @@ if ('serviceWorker' in navigator) {
       <button class="cal-nav-btn" id="calNextBtn">▶</button>
     </div>
     <div class="cal-grid" id="calGrid"></div>
+    <div style="font-size:11.5px; color:var(--muted); margin-top:8px;" id="officeLegend"></div>
+  </div>
+
+  <!-- 회사 업무일정(관리자용) 등록/수정 모달 -->
+  <div class="office-modal-overlay" id="officeModalOverlay">
+    <div class="office-modal">
+      <h3 id="officeModalTitle">업무일정 등록</h3>
+      <div class="field">
+        <label>날짜</label>
+        <input type="date" id="om-date">
+      </div>
+      <div class="field">
+        <label>제목</label>
+        <input type="text" id="om-title" placeholder="예: [계산서]화성(대명,청원)">
+      </div>
+      <div class="field">
+        <label>진행상태</label>
+        <select id="om-status">
+          <option value="시작 전">시작 전</option>
+          <option value="진행중">진행중</option>
+          <option value="완료">완료</option>
+        </select>
+      </div>
+      <div class="modal-btns">
+        <button type="button" id="om-cancelBtn">취소</button>
+        <button type="button" class="danger" id="om-deleteBtn" style="display:none;">삭제</button>
+        <button type="button" class="primary" id="om-saveBtn">저장</button>
+      </div>
+      <div class="modal-status" id="om-statusMsg"></div>
+    </div>
   </div>
 
   <div class="table-wrap" id="listView">
@@ -719,6 +788,15 @@ if ('serviceWorker' in navigator) {
   let allRows = [];
   let allLeaveRows = [];
 
+  // ---------- 회사 업무일정 캘린더 (관리자 전용, 이연경만 작성) ----------
+  const officeTasksRef = db.collection('officeTasks');
+  let allOfficeTasks = [];
+  let officeTasksByDate = {};
+  let editingOfficeTaskId = null;
+
+  function esc(s) { return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+  function canManageOfficeTasks() { return currentRole === 'admin' && currentDisplayName === '이연경'; }
+
   // 2026년 대한민국 공휴일 (우주항공청 발표 월력요항 기준)
   // 다른 연도가 필요하거나 날짜가 변경되면 이 목록만 수정하면 됩니다.
   const HOLIDAYS = {
@@ -968,6 +1046,20 @@ if ('serviceWorker' in navigator) {
         cellHtml += `<div class="cal-item cal-item-holiday" title="${holidayName}">🎌 ${holidayName}</div>`;
       }
 
+      // 회사 업무일정 표시 (관리자 전용 - 이연경이 등록한 항목, 다른 관리자는 보기만 가능)
+      if (currentRole === 'admin') {
+        const officeItems = officeTasksByDate[dateStr] || [];
+        const canManage = canManageOfficeTasks();
+        officeItems.forEach(t => {
+          const statusClass = t.status === '완료' ? 'status-done' : (t.status === '진행중' ? 'status-progress' : 'status-todo');
+          const clickableClass = canManage ? 'clickable' : '';
+          cellHtml += `<div class="cal-item cal-item-office ${statusClass} ${clickableClass}" ${canManage ? `data-office-edit="${t.id}"` : ''} title="${esc(t.title)} · ${esc(t.status || '시작 전')}"><span class="office-dot"></span>${esc(t.title)}</div>`;
+        });
+        if (canManage) {
+          cellHtml += `<button type="button" class="cal-add-office-btn" data-office-add="${dateStr}">+ 업무일정</button>`;
+        }
+      }
+
       // 연차 항목 표시
       leaveItems.forEach(r => {
         const label = (currentRole === 'admin')
@@ -1001,6 +1093,26 @@ if ('serviceWorker' in navigator) {
     }
 
     grid.innerHTML = html;
+
+    const legendEl = document.getElementById('officeLegend');
+    if (legendEl) {
+      if (currentRole === 'admin' && canManageOfficeTasks()) {
+        legendEl.textContent = '🟢 회사 업무일정은 이연경 관리자만 등록/수정할 수 있어요. 날짜 칸의 "+ 업무일정"을 눌러 추가하거나, 등록된 항목을 클릭해 수정·삭제하세요.';
+      } else if (currentRole === 'admin') {
+        legendEl.textContent = '🟢 회사 업무일정 항목은 이연경 관리자만 등록/수정할 수 있어요 (다른 관리자는 보기만 가능).';
+      } else {
+        legendEl.textContent = '';
+      }
+    }
+
+    if (currentRole === 'admin') {
+      document.querySelectorAll('[data-office-add]').forEach(btn => {
+        btn.addEventListener('click', () => openOfficeTaskModal(btn.dataset.officeAdd));
+      });
+      document.querySelectorAll('[data-office-edit]').forEach(el => {
+        el.addEventListener('click', () => openOfficeTaskModal(null, el.dataset.officeEdit));
+      });
+    }
   }
 
   async function loadLogs() {
@@ -1043,6 +1155,7 @@ if ('serviceWorker' in navigator) {
 
       if (currentRole === 'admin') populateEmployeeFilter();
       updateProjectDatalist();
+      if (currentRole === 'admin') await loadOfficeTasks();
       renderTable();
       renderCalendar();
       if (currentRole === 'admin') await loadCostAnalysis();
@@ -1050,6 +1163,111 @@ if ('serviceWorker' in navigator) {
       emptyMsg.textContent = '불러오기 실패: ' + err.message;
     }
   }
+
+  // 회사 업무일정(관리자 전용) - 현재 목록/달력이 보고 있는 기간(또는 전체 기간)에 맞춰 함께 불러온다.
+  async function loadOfficeTasks() {
+    try {
+      let query;
+      if (showAllRange) {
+        query = officeTasksRef.orderBy('date', 'desc');
+      } else {
+        const { start, end } = monthBounds(activeMonth);
+        query = officeTasksRef.where('date', '>=', start).where('date', '<=', end);
+      }
+      const snap = await query.get();
+      allOfficeTasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      officeTasksByDate = {};
+      allOfficeTasks.forEach(t => {
+        if (!t.date) return;
+        (officeTasksByDate[t.date] = officeTasksByDate[t.date] || []).push(t);
+      });
+    } catch (err) {
+      // 업무일정 로딩 실패는 근무일지 화면 전체를 막지 않고 조용히 넘어간다 (콘솔에만 기록)
+      console.error('업무일정 불러오기 실패:', err);
+      allOfficeTasks = [];
+      officeTasksByDate = {};
+    }
+  }
+
+  function openOfficeTaskModal(dateStr, taskId) {
+    if (!canManageOfficeTasks()) return; // 이연경 외에는 열리지 않도록 이중 방어
+    editingOfficeTaskId = taskId || null;
+    const task = taskId ? allOfficeTasks.find(t => t.id === taskId) : null;
+
+    document.getElementById('officeModalTitle').textContent = task ? '업무일정 수정' : '업무일정 등록';
+    document.getElementById('om-date').value = task ? task.date : dateStr;
+    document.getElementById('om-title').value = task ? (task.title || '') : '';
+    document.getElementById('om-status').value = task ? (task.status || '시작 전') : '시작 전';
+    document.getElementById('om-deleteBtn').style.display = task ? 'block' : 'none';
+    document.getElementById('om-statusMsg').textContent = '';
+    document.getElementById('om-statusMsg').style.color = '';
+    document.getElementById('officeModalOverlay').classList.add('open');
+  }
+
+  function closeOfficeTaskModal() {
+    document.getElementById('officeModalOverlay').classList.remove('open');
+    editingOfficeTaskId = null;
+  }
+
+  async function saveOfficeTask() {
+    const statusMsg = document.getElementById('om-statusMsg');
+    const date = document.getElementById('om-date').value;
+    const title = document.getElementById('om-title').value.trim();
+    const status = document.getElementById('om-status').value;
+
+    if (!date) { statusMsg.style.color = '#a4453c'; statusMsg.textContent = '날짜를 선택해주세요.'; return; }
+    if (!title) { statusMsg.style.color = '#a4453c'; statusMsg.textContent = '제목을 입력해주세요.'; return; }
+
+    const saveBtn = document.getElementById('om-saveBtn');
+    saveBtn.disabled = true;
+    saveBtn.textContent = '저장 중...';
+
+    try {
+      const data = {
+        date, title, status,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      if (editingOfficeTaskId) {
+        await officeTasksRef.doc(editingOfficeTaskId).update(data);
+      } else {
+        data.createdBy = currentUser.uid;
+        data.createdByName = currentDisplayName;
+        data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+        await officeTasksRef.add(data);
+      }
+      closeOfficeTaskModal();
+      await loadOfficeTasks();
+      renderCalendar();
+    } catch (err) {
+      statusMsg.style.color = '#a4453c';
+      statusMsg.textContent = '저장 실패: ' + err.message;
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = '저장';
+    }
+  }
+
+  async function deleteOfficeTask() {
+    if (!editingOfficeTaskId) return;
+    if (!confirm('이 업무일정을 삭제할까요?')) return;
+    const statusMsg = document.getElementById('om-statusMsg');
+    try {
+      await officeTasksRef.doc(editingOfficeTaskId).delete();
+      closeOfficeTaskModal();
+      await loadOfficeTasks();
+      renderCalendar();
+    } catch (err) {
+      statusMsg.style.color = '#a4453c';
+      statusMsg.textContent = '삭제 실패: ' + err.message;
+    }
+  }
+
+  document.getElementById('om-cancelBtn').addEventListener('click', closeOfficeTaskModal);
+  document.getElementById('om-saveBtn').addEventListener('click', saveOfficeTask);
+  document.getElementById('om-deleteBtn').addEventListener('click', deleteOfficeTask);
+  document.getElementById('officeModalOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'officeModalOverlay') closeOfficeTaskModal();
+  });
 
   function populateEmployeeFilter() {
     const select = document.getElementById('employeeFilter');
