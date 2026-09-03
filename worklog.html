@@ -336,9 +336,12 @@ if ('serviceWorker' in navigator) {
     <div class="panel-title">근무일지 엑셀로 내보내기 (관리자)</div>
     <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
       현재까지 작성된 전체 근무일지를 연도별로 시트를 나눠 엑셀로 내보냅니다. 프로젝트 칸에는
-      프로젝트 결산 기준 27개 프로젝트명 드롭다운이 걸려 있어서, 엑셀에서 기존 프로젝트명을
-      이 목록으로 바로 바꿔 넣을 수 있어요. 목록에 없는 새 프로젝트명은 드롭다운을 무시하고
-      셀에 직접 타이핑해서 자유롭게 입력하셔도 돼요(막지 않습니다).
+      근무일지 화면 자동완성과 동일한 최신 프로젝트명 드롭다운이 걸려 있어서(프로젝트 결산·회계현황에
+      새로 추가된 이름도 다음 내보내기부터 자동 반영됨), 엑셀에서 기존 프로젝트명을 이 목록으로 바로
+      바꿔 넣을 수 있어요. 목록에 없는 새 프로젝트명은 드롭다운을 무시하고 셀에 직접 타이핑해서
+      자유롭게 입력하셔도 돼요(막지 않습니다) - 다만 이렇게 새로 타이핑한 이름이 드롭다운 목록 자체에
+      자동으로 추가되진 않아요(엑셀 자체 제약). 계속 쓸 이름이면 프로젝트 결산 페이지에 등록해두시면
+      다음 내보내기부터 정식으로 목록에 잡혀요.
       <b>주의: 이 파일은 정리용 다운로드일 뿐, 여기서 수정한다고 실제 근무일지가 자동으로 바뀌지는
       않습니다.</b> 수정을 마치고 다시 반영하고 싶으시면 파일을 올려주세요 - 실제 데이터에 업데이트하는
       기능을 추가로 만들어드릴게요.
@@ -1709,38 +1712,12 @@ if ('serviceWorker' in navigator) {
   });
 
   // ---------- 근무일지 엑셀로 내보내기 (연도별 시트 + 프로젝트명 드롭다운, 관리자 전용) ----------
-  // 프로젝트 결산 페이지 기준 27개 프로젝트명 - 가나다순. 새 프로젝트가 결산에 추가되면 이 목록도
-  // 같이 갱신해줘야 드롭다운에 반영된다.
-  const SETTLEMENT_PROJECT_NAMES = [
-    'A1 현장 단위세대 마감 트랜드업',
-    '건영 세종 라포르테',
-    '극동건설 대구 신기역 극동스타클래스',
-    '극동건설 진주 백년문화공원 극동스타클래스',
-    '극동건설 천안 극동스타클래스 더 퍼스트',
-    '대우건설 광주 운남 재개발정비사업 대안설계',
-    '롯데건설 용산 산호아파트 재건축정비사업 대안설계',
-    '롯데건설 전농8 재정비 촉진구역 주택재개발 정비사업 대안설계',
-    '몽천토성역세권 장기전세주택 단위세대 설계',
-    '밥장인 부산 중앙역점',
-    '밥장인 부산경성부경대점',
-    '밥장인 홍대점',
-    '서서울생활과학고 학교관리실 환경개선공사',
-    '서초 르니드 홍보관 인테리어 공사',
-    '양산 더 샵 엔 데시앙',
-    '이테크건설 구리역 더리브 드웰',
-    '현대건설 힐스테이트 장안 라보니타',
-    '현대건설 힐스테이트 장안 센트럴',
-    '현대건설 힐스테이트 청량리역',
-    '현대산업개발 경산 2차 아이파크',
-    '현대산업개발 대전 도안 센트럴 아이파크',
-    '현대산업개발 보문 센트럴',
-    '현대산업개발 익산부송 아이파크 단위세대및 MH 설계',
-    '현대엔지니어링 속초 금호동 힐스테이트',
-    '현대엔지니어링 힐스테이트 도봉역 웰가',
-    '현대엔지니어링 힐스테이트 청량리 더 퍼스트',
-    '홍천 대상 웰라움 단위세대 설계'
-  ];
-
+  // 엑셀 데이터 유효성 검사는 "목록에 없는 값을 셀에 직접 입력"해도 그 값이 목록(원본 범위)에
+  // 자동으로 추가되지는 않는다 - 이건 엑셀 자체의 동작 방식이라 파일 안에서는 해결이 안 된다.
+  // 대신 내보내기 시점마다 매번, 근무일지 화면의 프로젝트명 자동완성과 똑같은 실시간 목록
+  // (DEFAULT_PROJECTS + 회계현황·프로젝트 결산에서 동기화된 OFFICIAL_PROJECTS + 근무일지 실사용
+  // 이름, 통합/삭제로 제외된 이름은 제외)을 새로 계산해서 써준다. 그래서 프로젝트 결산 페이지에
+  // 새 프로젝트를 추가해두면, 다음 번 "엑셀로 내보내기"를 누를 때부터는 자동으로 드롭다운에 잡힌다.
   document.getElementById('exportExcelBtn')?.addEventListener('click', async () => {
     const btn = document.getElementById('exportExcelBtn');
     const resultEl = document.getElementById('exportExcelResult');
@@ -1749,8 +1726,13 @@ if ('serviceWorker' in navigator) {
     resultEl.textContent = '데이터 불러오는 중...';
 
     try {
+      await loadOfficialProjects(); // 내보내기 시점 기준으로 최신 목록을 다시 받아온다
       const snapshot = await db.collection('workLogs').orderBy('날짜', 'asc').get();
       const rows = snapshot.docs.map(d => d.data());
+      const usedProjectsForExport = rows.flatMap(r => (r.projects || []).map(p => p['프로젝트'])).filter(Boolean);
+      const exportProjectNames = [...new Set([...DEFAULT_PROJECTS, ...OFFICIAL_PROJECTS, ...usedProjectsForExport])]
+        .filter(p => !EXCLUDED_PROJECTS.includes(p))
+        .sort();
 
       if (rows.length === 0) {
         resultEl.style.color = '#a4453c';
@@ -1771,7 +1753,7 @@ if ('serviceWorker' in navigator) {
       // 프로젝트명 드롭다운 원본 - 셀 안에 목록을 직접 나열하면 엑셀 255자 제한에 걸려서,
       // 숨김 시트에 목록을 넣어두고 그 범위를 참조하는 방식으로 건다.
       const listSheet = workbook.addWorksheet('프로젝트목록');
-      SETTLEMENT_PROJECT_NAMES.forEach((name, i) => { listSheet.getCell(`A${i + 1}`).value = name; });
+      exportProjectNames.forEach((name, i) => { listSheet.getCell(`A${i + 1}`).value = name; });
       listSheet.state = 'veryHidden';
 
       const headers = ['사원명', '날짜', '출근시간', '퇴근시간', '상세내용', '프로젝트', '투입시간',
@@ -1807,7 +1789,7 @@ if ('serviceWorker' in navigator) {
           sheet.getCell(`F${r}`).dataValidation = {
             type: 'list',
             allowBlank: true,
-            formulae: [`'프로젝트목록'!$A$1:$A$${SETTLEMENT_PROJECT_NAMES.length}`],
+            formulae: [`'프로젝트목록'!$A$1:$A$${exportProjectNames.length}`],
             showErrorMessage: false
           };
         }
