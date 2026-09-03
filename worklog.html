@@ -383,9 +383,12 @@ if ('serviceWorker' in navigator) {
 
     <div class="panel-title">프로젝트명 정리 (중복 통합)</div>
     <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
-      가져오기 과정에서 같은 프로젝트가 표기 차이(띄어쓰기 등)로 여러 이름으로 흩어져 있을 수 있어요.
-      아래에서 같은 프로젝트를 가리키는 이름들을 체크하고, 통합할 이름을 입력한 뒤 실행하면
-      해당 근무일지들의 프로젝트명이 전부 하나로 바뀝니다.
+      아래 목록은 프로젝트명 자동완성 드롭다운에 실제로 뜨는 이름 전체예요(근무일지에 이미 쓰인 이름 +
+      회계현황 대시보드·프로젝트 결산 등에서 동기화된 이름 모두 포함) - 근무일지에 아직 안 쓰인 이름도
+      여기서 같이 정리할 수 있어요. 같은 프로젝트를 가리키는 이름들을 체크하고, 통합할 이름을 입력한 뒤
+      "통합" 버튼을 누르면 해당 근무일지들의 프로젝트명이 전부 하나로 바뀌고, 자동완성 드롭다운에서도
+      선택한 이름들 대신 통합한 이름 하나만 남아요(다른 페이지를 다시 열어도 다시 갈라지지 않아요).
+      근무일지에서 아예 안 쓰이고 목록에서만 지우고 싶으면 "삭제"를 쓰면 돼요.
     </div>
     <div id="projectCleanupList" style="max-height:220px; overflow-y:auto; border:1px solid var(--line); border-radius:4px; padding:12px; margin-bottom:12px; background:#fff;"></div>
     <div class="field" style="max-width:320px; margin-bottom:12px;">
@@ -623,14 +626,18 @@ if ('serviceWorker' in navigator) {
     'OA 관리업무'
   ];
 
-  // 회계현황 대시보드에서 동기화된 공식 프로젝트 목록(officialProjects/list) — 새 프로젝트가
-  // 대시보드에 생기면 사람이 이 파일을 고치지 않아도 자동으로 여기에 채워집니다.
+  // 회계현황 대시보드/프로젝트 결산 등에서 동기화된 공식 프로젝트 목록(officialProjects/list) — 새
+  // 프로젝트가 생기면 사람이 이 파일을 고치지 않아도 자동으로 여기에 채워집니다.
+  // excluded는 "프로젝트명 정리" 도구에서 다른 이름으로 통합했거나 삭제한 이름들 - 원본 목록(회계
+  // 대시보드/프로젝트 결산/DEFAULT_PROJECTS)에 다시 나타나더라도 자동완성에서는 계속 숨겨진다.
   let OFFICIAL_PROJECTS = [];
+  let EXCLUDED_PROJECTS = [];
   async function loadOfficialProjects(){
     try{
       const doc = await db.collection('officialProjects').doc('list').get();
       if(doc.exists){
         OFFICIAL_PROJECTS = doc.data().names || [];
+        EXCLUDED_PROJECTS = doc.data().excluded || [];
         updateProjectDatalist();
       }
     }catch(err){
@@ -651,9 +658,10 @@ if ('serviceWorker' in navigator) {
       }
     }
     const usedProjects = sourceRows.flatMap(r => (r.projects || []).map(p => p['프로젝트'])).filter(Boolean);
-    const merged = [...new Set([...DEFAULT_PROJECTS, ...OFFICIAL_PROJECTS, ...usedProjects])].sort();
-    document.getElementById('projectList').innerHTML = merged.map(p => `<option value="${p}">`).join('');
-    if (currentRole === 'admin') renderProjectCleanupList(getProjectNameCounts(sourceRows));
+    const allPoolNames = [...new Set([...DEFAULT_PROJECTS, ...OFFICIAL_PROJECTS, ...usedProjects])].sort();
+    const merged = allPoolNames.filter(p => !EXCLUDED_PROJECTS.includes(p));
+    document.getElementById('projectList').innerHTML = merged.map(p => `<option value="${esc(p)}">`).join('');
+    if (currentRole === 'admin') renderProjectCleanupList(getProjectNameCounts(sourceRows), merged);
   }
 
   // 실제 근무일지에 쓰인 프로젝트명별 사용 건수 집계 (표기가 다른 중복 확인용)
@@ -669,21 +677,25 @@ if ('serviceWorker' in navigator) {
     return counts;
   }
 
-  function renderProjectCleanupList(counts) {
+  // poolNames: 자동완성 드롭다운에 실제로 뜨는 전체 이름 풀(DEFAULT_PROJECTS + 회계/결산 동기화 목록 +
+  // 근무일지 실사용 이름, excluded 제외 반영됨) - 근무일지에 아직 한 번도 안 쓰인 이름도 여기서 같이
+  // 통합/제외할 수 있게 counts와 합쳐서 보여준다.
+  function renderProjectCleanupList(counts, poolNames) {
     counts = counts || getProjectNameCounts();
-    const names = Object.keys(counts).sort();
+    const names = [...new Set([...(poolNames || []), ...Object.keys(counts)])].sort();
     const container = document.getElementById('projectCleanupList');
     if (names.length === 0) {
-      container.innerHTML = '<div style="color:var(--muted); font-size:13px;">아직 등록된 프로젝트 근무 내역이 없습니다.</div>';
+      container.innerHTML = '<div style="color:var(--muted); font-size:13px;">등록된 프로젝트명이 없습니다.</div>';
       return;
     }
     container.innerHTML = names.map(n => {
       const suspicious = n.includes(',');
+      const count = counts[n] || 0;
       return `
       <label style="display:flex; align-items:center; gap:8px; padding:4px 0; font-size:13px;">
-        <input type="checkbox" class="cleanup-check" value="${n}">
-        <span>${n}</span>
-        <span style="color:var(--muted); font-size:11.5px;">(${counts[n]}건)</span>
+        <input type="checkbox" class="cleanup-check" value="${esc(n)}">
+        <span>${esc(n)}</span>
+        <span style="color:var(--muted); font-size:11.5px;">${count > 0 ? `(근무일지 ${count}건)` : '(목록에만 있음, 근무일지엔 미사용)'}</span>
         ${suspicious ? '<span style="color:#a4453c; font-size:11px;">⚠ 다중값 의심</span>' : ''}
       </label>
     `;
@@ -736,11 +748,26 @@ if ('serviceWorker' in navigator) {
         await batch.commit();
       }
 
+      // 근무일지뿐 아니라 회계현황 대시보드/프로젝트 결산에서 동기화된 공식 목록(officialProjects/list)에도
+      // 반영해둔다 - 안 그러면 그쪽 페이지를 다시 열 때마다 통합했던 이름이 다시 갈라져서 뜬다.
+      const otherChecked = checked.filter(n => n !== targetName);
+      const listRef = db.collection('officialProjects').doc('list');
+      const listDoc = await listRef.get();
+      const existingNames = (listDoc.exists && listDoc.data().names) || [];
+      const existingExcluded = (listDoc.exists && listDoc.data().excluded) || [];
+      OFFICIAL_PROJECTS = [...new Set([...existingNames.filter(n => !otherChecked.includes(n)), targetName])].sort();
+      EXCLUDED_PROJECTS = [...new Set([...existingExcluded, ...otherChecked])].sort();
+      await listRef.set({
+        names: OFFICIAL_PROJECTS, excluded: EXCLUDED_PROJECTS,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
       resultEl.style.color = '#3f6b52';
-      resultEl.textContent = `완료: 근무일지 ${toUpdate.length}건의 프로젝트명이 "${targetName}"(으)로 통합되었습니다.`;
+      resultEl.textContent = `완료: 근무일지 ${toUpdate.length}건 + 프로젝트명 목록이 "${targetName}"(으)로 통합되었습니다.`;
       document.getElementById('mergeTargetName').value = '';
 
       await loadLogs();
+      await updateProjectDatalist();
     } catch (err) {
       resultEl.style.color = '#a4453c';
       resultEl.textContent = '통합 실패: ' + err.message;
@@ -785,10 +812,24 @@ if ('serviceWorker' in navigator) {
         await batch.commit();
       }
 
+      // 공식 목록(officialProjects/list)에서도 제외 처리 - 회계현황 대시보드/프로젝트 결산 쪽에
+      // 여전히 남아있는 이름이라도 자동완성에는 다시 뜨지 않게 한다.
+      const listRef = db.collection('officialProjects').doc('list');
+      const listDoc = await listRef.get();
+      const existingNames = (listDoc.exists && listDoc.data().names) || [];
+      const existingExcluded = (listDoc.exists && listDoc.data().excluded) || [];
+      OFFICIAL_PROJECTS = existingNames.filter(n => !checked.includes(n));
+      EXCLUDED_PROJECTS = [...new Set([...existingExcluded, ...checked])].sort();
+      await listRef.set({
+        names: OFFICIAL_PROJECTS, excluded: EXCLUDED_PROJECTS,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
       resultEl.style.color = '#3f6b52';
-      resultEl.textContent = `완료: ${toUpdate.length}건의 근무일지에서 선택한 항목이 삭제되었습니다.`;
+      resultEl.textContent = `완료: 근무일지 ${toUpdate.length}건에서 삭제하고, 프로젝트명 목록에서도 제외했습니다.`;
 
       await loadLogs();
+      await updateProjectDatalist();
     } catch (err) {
       resultEl.style.color = '#a4453c';
       resultEl.textContent = '삭제 실패: ' + err.message;
