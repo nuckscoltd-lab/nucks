@@ -358,6 +358,19 @@ if ('serviceWorker' in navigator) {
 
     <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
 
+    <div class="panel-title">2022~2023년 가져오기 데이터 정리 (프로젝트명→상세내용 이동, 1회성)</div>
+    <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
+      퇴사자 7명(김래정·박시연·신재훈·오지은·윤두현·조성채·한정식)의 2022~2023년 가져오기 데이터는
+      원본 파일의 "프로젝트" 칸에 실제로는 업무내용이 들어있었어요. 아래 버튼을 누르면 해당 기간 근무일지의
+      프로젝트명 칸 내용을 상세내용 칸으로 옮기고, 프로젝트명은 비웁니다(자동완성 목록에서도 자연히 사라집니다).
+      이미 정리된 항목은 다시 건드리지 않아서 여러 번 눌러도 안전해요. 프로젝트명 통일 작업은 아래
+      "프로젝트명 정리" 도구로 직접 진행해 주세요.
+    </div>
+    <button class="submit-btn" id="fixLegacyDetailBtn">프로젝트명→상세내용 이동 실행</button>
+    <div id="fixLegacyDetailResult" style="margin-top:10px; font-size:13px;"></div>
+
+    <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
+
     <div class="panel-title">예전 구조 데이터 변환 (1회성)</div>
     <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
       단일 프로젝트 구조로 저장된 예전 근무일지를, 지금의 "프로젝트별 내역" 구조로 변환합니다.
@@ -1963,6 +1976,72 @@ if ('serviceWorker' in navigator) {
     } catch (err) {
       resultEl.style.color = '#a4453c';
       resultEl.textContent = '삭제 실패: ' + err.message;
+    }
+  });
+
+  // ---------- 2022~2023년 가져오기 데이터: 프로젝트명 칸에 들어간 업무내용을 상세내용으로 이동 ----------
+  // worklog_import_2022_2023.xlsx 원본의 "프로젝트" 칸에 실제로는 업무내용 텍스트가 들어있어서,
+  // 이미 가져오기가 끝난 해당 기간 데이터의 프로젝트명 칸을 비우고 그 텍스트를 상세내용 칸으로 옮긴다.
+  // 프로젝트명이 이미 빈 문서는 대상에서 제외되므로 여러 번 눌러도 안전하다.
+  const LEGACY_DETAIL_FIX_NAMES = ['김래정', '박시연', '신재훈', '오지은', '윤두현', '조성채', '한정식'];
+  const LEGACY_DETAIL_FIX_MIN_DATE = '2022-01-01';
+  const LEGACY_DETAIL_FIX_MAX_DATE = '2023-12-31';
+
+  document.getElementById('fixLegacyDetailBtn')?.addEventListener('click', async () => {
+    const resultEl = document.getElementById('fixLegacyDetailResult');
+    resultEl.style.color = 'var(--muted)';
+    resultEl.textContent = '대상 확인 중...';
+
+    try {
+      const snapshot = await db.collection('workLogs').get();
+      const targets = snapshot.docs.filter(d => {
+        const data = d.data();
+        if (!LEGACY_DETAIL_FIX_NAMES.includes(data['사원명'])) return false;
+        const dateStr = data['날짜'] || '';
+        if (dateStr < LEGACY_DETAIL_FIX_MIN_DATE || dateStr > LEGACY_DETAIL_FIX_MAX_DATE) return false;
+        return (data.projects || []).some(p => (p['프로젝트'] || '').trim());
+      });
+
+      if (targets.length === 0) {
+        resultEl.style.color = 'var(--muted)';
+        resultEl.textContent = '정리할 대상이 없습니다. (이미 정리되었거나 대상 데이터가 없음)';
+        return;
+      }
+
+      if (!confirm(
+        `김래정·박시연·신재훈·오지은·윤두현·조성채·한정식의 2022~2023년 근무일지 ${targets.length}건에서\n` +
+        `프로젝트명 칸의 내용을 상세내용 칸으로 옮기고, 프로젝트명은 비웁니다.\n` +
+        `(이미 상세내용이 있는 문서는 뒤에 이어붙입니다)\n\n정말 실행하시겠습니까?`
+      )) {
+        resultEl.textContent = '';
+        return;
+      }
+
+      resultEl.textContent = '정리 중...';
+      let count = 0;
+      for (let i = 0; i < targets.length; i += 400) {
+        const chunk = targets.slice(i, i + 400);
+        const batch = db.batch();
+        chunk.forEach(doc => {
+          const data = doc.data();
+          const projects = data.projects || [];
+          const movedTexts = projects.map(p => (p['프로젝트'] || '').trim()).filter(Boolean);
+          const existingDetail = (data['상세내용'] || '').trim();
+          const newDetail = [existingDetail, ...movedTexts].filter(Boolean).join(' / ');
+          const clearedProjects = projects.map(p => ({ ...p, '프로젝트': '' }));
+          batch.update(doc.ref, { '상세내용': newDetail, projects: clearedProjects });
+          count++;
+        });
+        await batch.commit();
+      }
+
+      resultEl.style.color = '#3f6b52';
+      resultEl.textContent = `${count}건 정리 완료했습니다. 목록과 프로젝트 자동완성 목록에도 바로 반영됩니다.`;
+      await loadLogs();
+      await updateProjectDatalist();
+    } catch (err) {
+      resultEl.style.color = '#a4453c';
+      resultEl.textContent = '정리 실패: ' + err.message;
     }
   });
 
