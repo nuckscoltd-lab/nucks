@@ -236,11 +236,31 @@ if ('serviceWorker' in navigator) {
     await batch.commit();
   }
 
+  // 근무일지(worklog.html)의 프로젝트명 자동완성에서도 이 페이지(프로젝트 결산)의 프로젝트명을
+  // 골라 쓸 수 있도록, 이름만 officialProjects/list에 병합해서 동기화한다. 이 문서는 worker 권한도
+  // 읽을 수 있어서 근무일지 작성 화면에도 자동 반영된다. 기성청구현황/회계현황이 앞으로 이 페이지의
+  // 프로젝트명으로 통일될 예정이라, 프로젝트 결산 쪽을 자동완성 목록의 기준으로 삼는다. 기존에
+  // 다른 곳(회계현황 대시보드 등)에서 채워둔 이름과는 덮어쓰지 않고 합쳐서(Set) 저장한다.
+  async function syncSettlementProjectNamesToOfficialList(settlements){
+    try{
+      const names = settlements.map(p => (p.name || '').trim()).filter(Boolean);
+      if (!names.length) return;
+      const ref = db.collection('officialProjects').doc('list');
+      const doc = await ref.get();
+      const existing = (doc.exists && doc.data().names) || [];
+      const merged = [...new Set([...existing, ...names])].sort();
+      await ref.set({ names: merged, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    }catch(err){
+      console.error('프로젝트명 동기화 실패:', err);
+    }
+  }
+
   async function loadSettlements(){
     await seedIfEmpty();
     const snap = await settlementsRef.orderBy('order', 'asc').get();
     allSettlements = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderAll();
+    syncSettlementProjectNamesToOfficialList(allSettlements); // 백그라운드 동기화 - 실패해도 화면 표시엔 영향 없음
   }
 
   function getFilteredSettlements(){
