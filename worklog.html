@@ -333,6 +333,20 @@ if ('serviceWorker' in navigator) {
 <main>
   <!-- 노션 CSV 가져오기 (관리자 전용) -->
   <div class="write-panel" id="importPanel" style="display:none;">
+    <div class="panel-title">근무일지 엑셀로 내보내기 (관리자)</div>
+    <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
+      현재까지 작성된 전체 근무일지를 연도별로 시트를 나눠 엑셀로 내보냅니다. 프로젝트 칸에는
+      프로젝트 결산 기준 27개 프로젝트명 드롭다운이 걸려 있어서, 엑셀에서 기존 프로젝트명을
+      이 목록으로 바로 바꿔 넣을 수 있어요.
+      <b>주의: 이 파일은 정리용 다운로드일 뿐, 여기서 수정한다고 실제 근무일지가 자동으로 바뀌지는
+      않습니다.</b> 수정을 마치고 다시 반영하고 싶으시면 파일을 올려주세요 - 실제 데이터에 업데이트하는
+      기능을 추가로 만들어드릴게요.
+    </div>
+    <button class="submit-btn" id="exportExcelBtn">엑셀로 내보내기</button>
+    <div id="exportExcelResult" style="margin-top:10px; font-size:13px;"></div>
+
+    <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
+
     <div class="panel-title">노션 CSV/엑셀 가져오기 (관리자)</div>
     <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
       파일에 담긴 모든 인원·기간의 데이터를 그대로 가져옵니다 (대상자/기간 필터 없음).<br>
@@ -555,6 +569,9 @@ if ('serviceWorker' in navigator) {
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-functions-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- 근무일지 엑셀 내보내기(연도별 시트 + 프로젝트명 드롭다운)에 사용 - xlsx(SheetJS) 무료판은
+     드롭다운(데이터 유효성 검사) 쓰기를 지원하지 않아서 이 용도로는 ExcelJS를 별도로 쓴다. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="firebase-config.js"></script>
 <script src="auth.js"></script>
 <script>
@@ -1687,6 +1704,132 @@ if ('serviceWorker' in navigator) {
     } finally {
       btn.disabled = false;
       btn.textContent = editingLogId ? '수정 저장' : '등록';
+    }
+  });
+
+  // ---------- 근무일지 엑셀로 내보내기 (연도별 시트 + 프로젝트명 드롭다운, 관리자 전용) ----------
+  // 프로젝트 결산 페이지 기준 27개 프로젝트명 - 가나다순. 새 프로젝트가 결산에 추가되면 이 목록도
+  // 같이 갱신해줘야 드롭다운에 반영된다.
+  const SETTLEMENT_PROJECT_NAMES = [
+    'A1 현장 단위세대 마감 트랜드업',
+    '건영 세종 라포르테',
+    '극동건설 대구 신기역 극동스타클래스',
+    '극동건설 진주 백년문화공원 극동스타클래스',
+    '극동건설 천안 극동스타클래스 더 퍼스트',
+    '대우건설 광주 운남 재개발정비사업 대안설계',
+    '롯데건설 용산 산호아파트 재건축정비사업 대안설계',
+    '롯데건설 전농8 재정비 촉진구역 주택재개발 정비사업 대안설계',
+    '몽천토성역세권 장기전세주택 단위세대 설계',
+    '밥장인 부산 중앙역점',
+    '밥장인 부산경성부경대점',
+    '밥장인 홍대점',
+    '서서울생활과학고 학교관리실 환경개선공사',
+    '서초 르니드 홍보관 인테리어 공사',
+    '양산 더 샵 엔 데시앙',
+    '이테크건설 구리역 더리브 드웰',
+    '현대건설 힐스테이트 장안 라보니타',
+    '현대건설 힐스테이트 장안 센트럴',
+    '현대건설 힐스테이트 청량리역',
+    '현대산업개발 경산 2차 아이파크',
+    '현대산업개발 대전 도안 센트럴 아이파크',
+    '현대산업개발 보문 센트럴',
+    '현대산업개발 익산부송 아이파크 단위세대및 MH 설계',
+    '현대엔지니어링 속초 금호동 힐스테이트',
+    '현대엔지니어링 힐스테이트 도봉역 웰가',
+    '현대엔지니어링 힐스테이트 청량리 더 퍼스트',
+    '홍천 대상 웰라움 단위세대 설계'
+  ];
+
+  document.getElementById('exportExcelBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('exportExcelBtn');
+    const resultEl = document.getElementById('exportExcelResult');
+    btn.disabled = true;
+    resultEl.style.color = 'var(--muted)';
+    resultEl.textContent = '데이터 불러오는 중...';
+
+    try {
+      const snapshot = await db.collection('workLogs').orderBy('날짜', 'asc').get();
+      const rows = snapshot.docs.map(d => d.data());
+
+      if (rows.length === 0) {
+        resultEl.style.color = '#a4453c';
+        resultEl.textContent = '내보낼 근무일지가 없습니다.';
+        return;
+      }
+
+      // 연도별로 그룹화 (날짜를 인식할 수 없는 건은 "연도미상" 시트로 모음)
+      const byYear = {};
+      rows.forEach(row => {
+        const year = /^\d{4}/.test(row['날짜'] || '') ? row['날짜'].slice(0, 4) : '연도미상';
+        (byYear[year] = byYear[year] || []).push(row);
+      });
+      const years = Object.keys(byYear).sort();
+
+      const workbook = new ExcelJS.Workbook();
+
+      // 프로젝트명 드롭다운 원본 - 셀 안에 목록을 직접 나열하면 엑셀 255자 제한에 걸려서,
+      // 숨김 시트에 목록을 넣어두고 그 범위를 참조하는 방식으로 건다.
+      const listSheet = workbook.addWorksheet('프로젝트목록');
+      SETTLEMENT_PROJECT_NAMES.forEach((name, i) => { listSheet.getCell(`A${i + 1}`).value = name; });
+      listSheet.state = 'veryHidden';
+
+      const headers = ['사원명', '날짜', '출근시간', '퇴근시간', '상세내용', '프로젝트', '투입시간',
+        '도면작성', '스케치업', '마감스펙', '제안서', '회의', '경영관리', '공무', '기타업무'];
+      const colWidths = [10, 12, 10, 10, 30, 40, 10, 9, 9, 9, 9, 8, 9, 8, 9];
+
+      years.forEach(year => {
+        const sheet = workbook.addWorksheet(year);
+        sheet.addRow(headers);
+        sheet.getRow(1).font = { bold: true };
+        sheet.columns = colWidths.map(w => ({ width: w }));
+
+        byYear[year].forEach(row => {
+          const tasks0 = (row.projects && row.projects[0] && row.projects[0].tasks) || row.tasks || {};
+          const projects = (row.projects && row.projects.length) ? row.projects : [{ '프로젝트': '', '투입시간': row['총근무시간'] || 0, tasks: tasks0 }];
+          projects.forEach(p => {
+            const tasks = p.tasks || {};
+            sheet.addRow([
+              row['사원명'] || '', row['날짜'] || '', row['출근시간'] || '', row['퇴근시간'] || '',
+              row['상세내용'] || '', p['프로젝트'] || '', p['투입시간'] || 0,
+              tasks['도면작성'] ? 'O' : '', tasks['스케치업'] ? 'O' : '', tasks['마감스펙'] ? 'O' : '',
+              tasks['제안서'] ? 'O' : '', tasks['회의'] ? 'O' : '', tasks['경영관리'] ? 'O' : '',
+              tasks['공무'] ? 'O' : '', tasks['기타업무'] ? 'O' : ''
+            ]);
+          });
+        });
+
+        // 프로젝트(F열) 드롭다운 - 데이터가 있는 마지막 행까지
+        const lastRow = sheet.lastRow ? sheet.lastRow.number : 1;
+        for (let r = 2; r <= lastRow; r++) {
+          sheet.getCell(`F${r}`).dataValidation = {
+            type: 'list',
+            allowBlank: true,
+            formulae: [`'프로젝트목록'!$A$1:$A$${SETTLEMENT_PROJECT_NAMES.length}`],
+            showErrorMessage: true,
+            errorTitle: '프로젝트명 확인',
+            error: '목록에 없는 프로젝트명입니다. 드롭다운에서 선택해주세요.'
+          };
+        }
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `근무일지_전체_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      resultEl.style.color = '#3f6b52';
+      resultEl.textContent = `완료: ${years.length}개 연도 시트, 총 ${rows.length}건의 근무일지를 내보냈습니다.`;
+    } catch (err) {
+      resultEl.style.color = '#a4453c';
+      resultEl.textContent = '내보내기 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
     }
   });
 
