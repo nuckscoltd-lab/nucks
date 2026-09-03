@@ -337,7 +337,8 @@ if ('serviceWorker' in navigator) {
     <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
       현재까지 작성된 전체 근무일지를 연도별로 시트를 나눠 엑셀로 내보냅니다. 프로젝트 칸에는
       프로젝트 결산 기준 27개 프로젝트명 드롭다운이 걸려 있어서, 엑셀에서 기존 프로젝트명을
-      이 목록으로 바로 바꿔 넣을 수 있어요.
+      이 목록으로 바로 바꿔 넣을 수 있어요. 목록에 없는 새 프로젝트명은 드롭다운을 무시하고
+      셀에 직접 타이핑해서 자유롭게 입력하셔도 돼요(막지 않습니다).
       <b>주의: 이 파일은 정리용 다운로드일 뿐, 여기서 수정한다고 실제 근무일지가 자동으로 바뀌지는
       않습니다.</b> 수정을 마치고 다시 반영하고 싶으시면 파일을 올려주세요 - 실제 데이터에 업데이트하는
       기능을 추가로 만들어드릴게요.
@@ -1801,13 +1802,13 @@ if ('serviceWorker' in navigator) {
         // 프로젝트(F열) 드롭다운 - 데이터가 있는 마지막 행까지
         const lastRow = sheet.lastRow ? sheet.lastRow.number : 1;
         for (let r = 2; r <= lastRow; r++) {
+          // showErrorMessage: false로 두면 드롭다운 화살표는 그대로 뜨면서도, 목록에 없는 이름을
+          // 직접 타이핑해서 새로 넣는 것도 막지 않는다(신규 프로젝트 자율 입력 허용).
           sheet.getCell(`F${r}`).dataValidation = {
             type: 'list',
             allowBlank: true,
             formulae: [`'프로젝트목록'!$A$1:$A$${SETTLEMENT_PROJECT_NAMES.length}`],
-            showErrorMessage: true,
-            errorTitle: '프로젝트명 확인',
-            error: '목록에 없는 프로젝트명입니다. 드롭다운에서 선택해주세요.'
+            showErrorMessage: false
           };
         }
       });
