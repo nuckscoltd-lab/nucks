@@ -310,6 +310,15 @@ if ('serviceWorker' in navigator) {
     </label>
   </div>
 
+  <div class="write-panel" id="dupCheckPanel" style="display:none; padding:20px 24px; margin-bottom:20px;">
+    <div class="panel-title" style="margin-bottom:10px;">중복 급여명세서 점검 (같은 사원 + 같은 지급일)</div>
+    <div style="font-size:12.5px; color:var(--muted); margin-bottom:12px; line-height:1.6;">
+      같은 사원명·같은 지급일로 등록된 급여명세서가 2건 이상이면 중복일 가능성이 높습니다. 자동으로 지우지는 않고, 비교해서 직접 지울 건을 고를 수 있게 목록만 보여드립니다.
+    </div>
+    <button type="button" class="submit-btn" id="checkDupSlipsBtn" style="margin:0;">중복 점검 실행</button>
+    <div id="dupSlipsResult" style="margin-top:14px; font-size:13px;"></div>
+  </div>
+
   <div class="summary-bar" id="paySummaryBar"></div>
 
   <table id="listTable" style="display:none;">
@@ -594,6 +603,7 @@ if ('serviceWorker' in navigator) {
     if (currentRole === 'admin') {
       document.getElementById('adminOnlyPanel').style.display = 'block';
       document.getElementById('importPanel').style.display = 'block';
+      document.getElementById('dupCheckPanel').style.display = 'block';
       await init();
     } else {
       document.getElementById('adminOnlyPanel').style.display = 'none';
@@ -1240,6 +1250,83 @@ if ('serviceWorker' in navigator) {
       btn.disabled = false;
     }
   });
+
+  // ---------- 중복 급여명세서 점검 (관리자 전용) ----------
+  // "사원명 + 지급일"이 같은 문서가 2건 이상이면 중복으로 보고 목록에 띄운다.
+  // 실수로 값이 다른 정상 건까지 지우면 안 되므로 자동 삭제는 하지 않고, 비교해서
+  // 직접 지울 건을 고르게 한다 (import 시점의 중복판단 키와 동일하게 맞춤).
+  function runDupSlipCheck() {
+    const resultEl = document.getElementById('dupSlipsResult');
+    const groups = {};
+    allSlips.forEach(s => {
+      const key = `${s['사원명']}__${s['지급일']}`;
+      (groups[key] = groups[key] || []).push(s);
+    });
+    const dupGroups = Object.values(groups).filter(g => g.length > 1);
+
+    if (dupGroups.length === 0) {
+      resultEl.innerHTML = `<div style="color:#3f6b52;">중복된 급여명세서가 없습니다. (총 ${allSlips.length}건 점검)</div>`;
+      return;
+    }
+
+    const totalExtra = dupGroups.reduce((sum, g) => sum + (g.length - 1), 0);
+    // 그룹별로 가장 먼저 등록된 1건을 뺀 "초과분"의 지급액계 합 - 실제로 얼마나 과다반영됐는지 가늠하는 참고용 수치
+    const totalExtraAmount = dupGroups.reduce((sum, g) => {
+      const sorted = sortByCreatedAt(g);
+      return sum + sorted.slice(1).reduce((s2, x) => s2 + (x['지급액계'] || 0), 0);
+    }, 0);
+
+    let html = `<div style="color:#a4453c; margin-bottom:12px; font-weight:600;">
+      ${dupGroups.length}건의 (사원명+지급일) 조합에서 중복 발견 - 문서 초과분 ${totalExtra}건, 지급액계 기준 약 ${totalExtraAmount.toLocaleString()}원이 이중 반영됐을 수 있습니다.
+    </div>`;
+
+    html += dupGroups.map(g => {
+      const sorted = sortByCreatedAt(g);
+      const amounts = new Set(g.map(x => x['지급액계']));
+      const sameAmount = amounts.size === 1;
+      const badge = sameAmount
+        ? `<span style="color:#a4453c;">⚠ 금액까지 동일 (완전 중복일 가능성 높음)</span>`
+        : `<span style="color:#8a8578;">금액이 서로 다름 (실제 별개 지급 건일 수 있으니 내용 확인 후 판단해주세요)</span>`;
+      const rowsHtml = sorted.map((s, idx) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--line);">
+          <span>${idx === 0 ? '① 가장 먼저 등록됨' : `${idx + 1}번째 등록`} · 문서번호 ${s.docNumber || '-'} · 지급액계 ${(s['지급액계'] || 0).toLocaleString()}원 · 공제액계 ${(s['공제액계'] || 0).toLocaleString()}원 · 근무형태 ${s['근무형태구분'] || '-'}${s['프로젝트'] ? ' · ' + s['프로젝트'] : ''}</span>
+          <button type="button" class="row-btn" data-dup-del="${s.id}">삭제</button>
+        </div>
+      `).join('');
+      return `
+        <div style="background:var(--paper); border-radius:4px; padding:10px 14px; margin-bottom:10px;">
+          <div style="font-weight:600; margin-bottom:4px;">${g[0]['사원명']} · ${g[0]['지급일']} (${g.length}건) - ${badge}</div>
+          ${rowsHtml}
+        </div>
+      `;
+    }).join('');
+
+    resultEl.innerHTML = html;
+
+    resultEl.querySelectorAll('[data-dup-del]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.dupDel;
+        if (!confirm('이 급여명세서를 삭제하시겠습니까?')) return;
+        try {
+          await db.collection('payslips').doc(id).delete();
+          await loadSlips();
+          runDupSlipCheck(); // 삭제 후 최신 목록 기준으로 다시 점검
+        } catch (err) {
+          alert('삭제 실패: ' + err.message);
+        }
+      });
+    });
+  }
+
+  function sortByCreatedAt(list) {
+    return [...list].sort((a, b) => {
+      const at = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+      const bt = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+      return at - bt;
+    });
+  }
+
+  document.getElementById('checkDupSlipsBtn')?.addEventListener('click', runDupSlipCheck);
 
   document.getElementById('logoutBtn').addEventListener('click', async (e) => {
     e.preventDefault();
