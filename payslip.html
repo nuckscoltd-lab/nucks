@@ -297,6 +297,14 @@ if ('serviceWorker' in navigator) {
     </span>
     <button type="button" class="submit-btn" id="bulkPrintFilteredBtn" style="margin:0; padding:8px 16px;">현재 목록 일괄 인쇄</button>
     <button type="button" class="submit-btn" id="bulkPrintSelectedBtn" style="margin:0; padding:8px 16px; display:none;">선택 항목 일괄 인쇄</button>
+    <span id="bulkEmploymentTypeBox" style="display:none; align-items:center; gap:6px;">
+      <select id="bulkEmploymentTypeSelect" style="padding:8px 9px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff;">
+        <option value="정규">정규</option>
+        <option value="외주">외주</option>
+        <option value="일용">일용</option>
+      </select>
+      <button type="button" class="submit-btn" id="bulkSetEmploymentTypeBtn" style="margin:0; padding:8px 16px;">선택 항목 근무형태구분 일괄 변경</button>
+    </span>
     <label style="display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--muted); cursor:pointer;">
       <input type="checkbox" id="includeItemDetailChk"> 요약 인쇄 시 항목별 상세 포함
     </label>
@@ -643,11 +651,11 @@ if ('serviceWorker' in navigator) {
     }
   }
 
-  // 근무형태구분이 "외주"일 때만 프로젝트 선택 칸을 보여준다.
+  // 근무형태구분이 "외주" 또는 "일용"일 때 프로젝트 선택 칸을 보여준다.
   function updateProjectFieldVisibility() {
     const type = document.getElementById('f-employmentType').value;
     const field = document.getElementById('projectField');
-    const show = type === '외주';
+    const show = type === '외주' || type === '일용';
     field.style.display = show ? '' : 'none';
     if (!show) document.getElementById('f-project').value = '';
   }
@@ -839,6 +847,11 @@ if ('serviceWorker' in navigator) {
     const selBtn = document.getElementById('bulkPrintSelectedBtn');
     selBtn.style.display = selectedSlipIds.size > 0 ? 'inline-block' : 'none';
     selBtn.textContent = `선택 항목 일괄 인쇄 (${selectedSlipIds.size}건)`;
+
+    const typeBox = document.getElementById('bulkEmploymentTypeBox');
+    typeBox.style.display = (currentRole === 'admin' && selectedSlipIds.size > 0) ? 'inline-flex' : 'none';
+    const typeBtn = document.getElementById('bulkSetEmploymentTypeBtn');
+    if (typeBtn) typeBtn.textContent = `선택 항목 근무형태구분 일괄 변경 (${selectedSlipIds.size}건)`;
   }
 
   function renderList() {
@@ -1142,6 +1155,8 @@ if ('serviceWorker' in navigator) {
           '지급일': payDate,
           '부서명': String(row['부서'] || '').trim(),
           '직급': String(row['직급'] || '').trim(),
+          '근무형태구분': String(row['근무형태구분'] || '정규').trim(),
+          '프로젝트': String(row['프로젝트'] || '').trim(),
           pay,
           deductions,
           '지급액계': toNumber(row['지급액계']),
@@ -1200,6 +1215,30 @@ if ('serviceWorker' in navigator) {
     // 화면에 보이는 순서(지급일 최신순)를 그대로 따라가도록 allSlips 기준으로 정렬
     const ids = allSlips.filter(s => selectedSlipIds.has(s.id)).map(s => s.id);
     printMultipleSlips(ids);
+  });
+
+  document.getElementById('bulkSetEmploymentTypeBtn')?.addEventListener('click', async () => {
+    if (selectedSlipIds.size === 0) return;
+    const type = document.getElementById('bulkEmploymentTypeSelect').value;
+    const ids = [...selectedSlipIds];
+    if (!confirm(`선택한 ${ids.length}건의 근무형태구분을 "${type}"(으)로 일괄 변경합니다. 계속할까요?`)) return;
+
+    const btn = document.getElementById('bulkSetEmploymentTypeBtn');
+    btn.disabled = true;
+    try {
+      for (let i = 0; i < ids.length; i += 400) {
+        const chunk = ids.slice(i, i + 400);
+        const batch = db.batch();
+        chunk.forEach(id => batch.update(db.collection('payslips').doc(id), { '근무형태구분': type }));
+        await batch.commit();
+      }
+      await loadSlips();
+      alert(`${ids.length}건의 근무형태구분을 "${type}"(으)로 변경했습니다.`);
+    } catch (err) {
+      alert('일괄 변경 실패: ' + err.message);
+    } finally {
+      btn.disabled = false;
+    }
   });
 
   document.getElementById('logoutBtn').addEventListener('click', async (e) => {
