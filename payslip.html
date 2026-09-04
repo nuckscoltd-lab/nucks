@@ -238,7 +238,20 @@ if ('serviceWorker' in navigator) {
         <label for="f-position">직급</label>
         <input type="text" id="f-position">
       </div>
+      <div class="field">
+        <label for="f-employmentType">근무형태구분</label>
+        <select id="f-employmentType">
+          <option value="정규">정규</option>
+          <option value="외주">외주</option>
+          <option value="일용">일용</option>
+        </select>
+      </div>
+      <div class="field" id="projectField" style="display:none;">
+        <label for="f-project">프로젝트</label>
+        <input type="text" id="f-project" list="payslipProjectList" placeholder="해당 프로젝트를 선택하거나 입력">
+      </div>
     </div>
+    <datalist id="payslipProjectList"></datalist>
 
     <div class="section-label">지급 항목</div>
     <div class="grid">
@@ -592,6 +605,10 @@ if ('serviceWorker' in navigator) {
 
     document.getElementById('f-payDate').value = new Date().toISOString().slice(0, 10);
 
+    loadPayslipProjectOptions();
+    document.getElementById('f-employmentType').addEventListener('change', updateProjectFieldVisibility);
+    updateProjectFieldVisibility();
+
     [...PAY_KEYS, ...DED_KEYS].forEach(key => {
       const el = document.getElementById((PAY_KEYS.includes(key) ? 'p-' : 'd-') + key);
       el.addEventListener('input', updateSums);
@@ -608,6 +625,31 @@ if ('serviceWorker' in navigator) {
     const emp = employees.find(e => e.uid === uid);
     document.getElementById('f-department').value = emp?.department || '';
     document.getElementById('f-position').value = (emp?.positionTags || []).filter(t => t !== '근무중').join(', ');
+  }
+
+  // worklog.html의 프로젝트명 드롭다운과 같은 소스(officialProjects/list)를 그대로 읽어와서
+  // 항상 최신 프로젝트명 목록을 보여준다. 목록에 없는 이름도 자유롭게 입력할 수 있다.
+  async function loadPayslipProjectOptions() {
+    try {
+      const doc = await db.collection('officialProjects').doc('list').get();
+      if (!doc.exists) return;
+      const names = doc.data().names || [];
+      const excluded = doc.data().excluded || [];
+      const merged = names.filter(n => !excluded.includes(n)).sort();
+      document.getElementById('payslipProjectList').innerHTML =
+        merged.map(n => `<option value="${n.replace(/"/g, '&quot;')}">`).join('');
+    } catch (err) {
+      console.warn('프로젝트 목록 불러오기 실패:', err);
+    }
+  }
+
+  // 근무형태구분이 "외주"일 때만 프로젝트 선택 칸을 보여준다.
+  function updateProjectFieldVisibility() {
+    const type = document.getElementById('f-employmentType').value;
+    const field = document.getElementById('projectField');
+    const show = type === '외주';
+    field.style.display = show ? '' : 'none';
+    if (!show) document.getElementById('f-project').value = '';
   }
 
   function updateSums() {
@@ -663,6 +705,10 @@ if ('serviceWorker' in navigator) {
       document.getElementById('f-department').value = selected[0]['부서명'] || '';
       document.getElementById('f-position').value = selected[0]['직급'] || '';
       document.getElementById('f-payDate').value = selected[0]['지급일'] || '';
+      document.getElementById('f-employmentType').value = selected[0]['근무형태구분'] || '정규';
+      document.getElementById('f-project').value = selected[0]['프로젝트'] || '';
+      updateProjectFieldVisibility();
+      if (selected[0]['프로젝트']) document.getElementById('projectField').style.display = ''; // 값이 있으면 정규/일용이어도 확인할 수 있게 보여줌
       const emp = employees.find(e => e.displayName === selected[0]['사원명']);
       if (emp) document.getElementById('f-employee').value = emp.uid;
     } else {
@@ -686,6 +732,8 @@ if ('serviceWorker' in navigator) {
     DED_KEYS.forEach(k => { document.getElementById('d-' + k).value = 0; });
     document.getElementById('f-department').value = '';
     document.getElementById('f-position').value = '';
+    document.getElementById('f-employmentType').value = '정규';
+    updateProjectFieldVisibility();
     prefillEmployeeInfo();
     updateSums();
     updateBulkPrintButtons();
@@ -714,6 +762,8 @@ if ('serviceWorker' in navigator) {
       '지급일': document.getElementById('f-payDate').value,
       '부서명': document.getElementById('f-department').value.trim(),
       '직급': document.getElementById('f-position').value.trim(),
+      '근무형태구분': document.getElementById('f-employmentType').value,
+      '프로젝트': document.getElementById('f-project').value.trim(),
       pay,
       deductions,
       '지급액계': payTotal,
