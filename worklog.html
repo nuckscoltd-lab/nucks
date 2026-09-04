@@ -415,6 +415,20 @@ if ('serviceWorker' in navigator) {
 
     <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
 
+    <div class="panel-title">점심시간 제외 재계산 (기존 근무일지 일괄 적용, 1회성)</div>
+    <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
+      지금까지 근무일지의 총 근무시간은 "퇴근시간-출근시간"으로만 계산되어 점심시간이 그대로 포함돼 있었어요.
+      아래 버튼을 누르면 출근·퇴근시간이 있는 기존 근무일지 전체를 다시 확인해서, 아직 순수 시간차 그대로인
+      항목만 골라 "퇴근시간-출근시간-1시간(점심)"으로 총 근무시간을 다시 계산하고, 프로젝트별 투입시간도
+      같은 비율로 줄여서 합계가 새 총 근무시간과 맞도록 맞춥니다. 이미 이 계산으로 저장되어 있거나, 출근·퇴근시간이
+      없는 날(연차 등)은 건드리지 않아서 여러 번 눌러도 안전해요. 앞으로 새로 작성/가져오기하는 근무일지는
+      자동으로 점심시간이 제외된 값으로 저장됩니다.
+    </div>
+    <button class="submit-btn" id="recalcLunchBtn">점심시간 제외 재계산 실행</button>
+    <div id="recalcLunchResult" style="margin-top:10px; font-size:13px;"></div>
+
+    <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
+
     <div class="panel-title">프로젝트명 정리 (중복 통합)</div>
     <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
       아래 목록은 프로젝트명 자동완성 드롭다운에 실제로 뜨는 이름 전체예요(근무일지에 이미 쓰인 이름 +
@@ -965,14 +979,21 @@ if ('serviceWorker' in navigator) {
   document.getElementById('addProjectBtn').addEventListener('click', () => createProjectRow());
   resetProjectRows();
 
-  // 출근~퇴근 기준 총 근무시간 자동계산
-  function calcHoursDiff(checkin, checkout) {
+  // 출근~퇴근 기준 총 근무시간 자동계산 (점심시간 제외 전, 순수 시간차)
+  function calcHoursDiffRaw(checkin, checkout) {
     if (!checkin || !checkout) return 0;
     const [h1, m1] = checkin.split(':').map(Number);
     const [h2, m2] = checkout.split(':').map(Number);
     let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
     if (diff < 0) diff += 24 * 60;
     return Math.round((diff / 60) * 100) / 100;
+  }
+
+  // 출근~퇴근 기준 총 근무시간 자동계산 - 점심시간 1시간은 근무시간에서 제외한다.
+  function calcHoursDiff(checkin, checkout) {
+    if (!checkin || !checkout) return 0;
+    const raw = calcHoursDiffRaw(checkin, checkout);
+    return Math.max(Math.round((raw - 1) * 100) / 100, 0);
   }
 
   function updateTotalHoursDisplay() {
@@ -2202,8 +2223,11 @@ if ('serviceWorker' in navigator) {
 
         let status, rawHours;
         if (inDt && outDt) {
-          rawHours = Math.round(((outDt - inDt) / 3600000) * 100) / 100;
-          status = (rawHours > 0 && rawHours <= ANOMALY_THRESHOLD_HOURS) ? 'normal' : 'anomaly';
+          // 이상치 판정은 점심시간을 빼기 전의 순수 시간차로 한다(체크아웃 누락으로 며칠치가
+          // 하루로 잡히는지 여부를 보는 것이므로 점심시간 유무와 무관).
+          const rawDiffHours = Math.round(((outDt - inDt) / 3600000) * 100) / 100;
+          status = (rawDiffHours > 0 && rawDiffHours <= ANOMALY_THRESHOLD_HOURS) ? 'normal' : 'anomaly';
+          rawHours = status === 'normal' ? Math.max(Math.round((rawDiffHours - 1) * 100) / 100, 0) : rawDiffHours;
         } else if (checkin && checkout) {
           rawHours = calcHoursDiff(checkin, checkout);
           status = 'normal';
@@ -2509,6 +2533,82 @@ if ('serviceWorker' in navigator) {
     } finally {
       btn.disabled = false;
       btn.textContent = '예전 데이터 변환 실행';
+    }
+  });
+
+  document.getElementById('recalcLunchBtn')?.addEventListener('click', async () => {
+    if (!confirm('기존 근무일지의 총 근무시간·투입시간에서 점심시간 1시간을 일괄로 제외합니다. 계속할까요?')) return;
+
+    const btn = document.getElementById('recalcLunchBtn');
+    const resultEl = document.getElementById('recalcLunchResult');
+    btn.disabled = true;
+    btn.textContent = '재계산 중...';
+    resultEl.style.color = 'var(--muted)';
+    resultEl.textContent = '전체 근무일지를 불러오는 중...';
+
+    try {
+      const snapshot = await db.collection('workLogs').get();
+
+      const toUpdate = [];
+      let skippedNoTime = 0;
+      let skippedAlreadyApplied = 0;
+
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const checkin = data['출근시간'];
+        const checkout = data['퇴근시간'];
+        if (!checkin || !checkout) { skippedNoTime++; return; }
+
+        const oldRawTotal = calcHoursDiffRaw(checkin, checkout);
+        const storedTotal = Number(data['총근무시간']) || 0;
+
+        // 저장된 총근무시간이 "순수 시간차(점심 포함)"와 다르면, 이미 이 계산으로 반영되어 있거나
+        // 수기로 별도 조정된 값이라는 뜻이므로 건드리지 않는다(멱등성 보장 - 여러 번 눌러도 안전).
+        if (Math.abs(storedTotal - oldRawTotal) > 0.02) { skippedAlreadyApplied++; return; }
+        if (oldRawTotal <= 0) { skippedAlreadyApplied++; return; } // 원래 0시간(연차 등)인 날은 변화 없음
+
+        const newTotal = Math.max(Math.round((oldRawTotal - 1) * 100) / 100, 0);
+        const ratio = newTotal / oldRawTotal;
+
+        const oldProjects = data.projects || [];
+        let newProjects = oldProjects;
+        if (oldProjects.length > 0) {
+          newProjects = oldProjects.map(p => ({
+            ...p,
+            '투입시간': Math.round((Number(p['투입시간']) || 0) * ratio * 100) / 100
+          }));
+          // 반올림 오차를 마지막 항목에서 흡수해 합계를 새 총근무시간과 정확히 맞춘다.
+          const sum = newProjects.reduce((s, p) => s + p['투입시간'], 0);
+          const diff = Math.round((newTotal - sum) * 100) / 100;
+          if (diff !== 0) {
+            const last = newProjects[newProjects.length - 1];
+            last['투입시간'] = Math.round((last['투입시간'] + diff) * 100) / 100;
+          }
+        }
+
+        toUpdate.push({ ref: doc.ref, data: { '총근무시간': newTotal, projects: newProjects } });
+      });
+
+      resultEl.textContent = `${toUpdate.length}건 재계산 중...`;
+
+      for (let i = 0; i < toUpdate.length; i += 400) {
+        const chunk = toUpdate.slice(i, i + 400);
+        const batch = db.batch();
+        chunk.forEach(item => batch.update(item.ref, item.data));
+        await batch.commit();
+      }
+
+      resultEl.style.color = '#3f6b52';
+      resultEl.textContent = `완료: ${toUpdate.length}건에 점심시간 1시간을 제외해 재계산했습니다. ` +
+        `(이미 적용되어 있었거나 시간정보가 없어 건너뜀: ${skippedAlreadyApplied + skippedNoTime}건)`;
+
+      await loadLogs();
+    } catch (err) {
+      resultEl.style.color = '#a4453c';
+      resultEl.textContent = '재계산 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '점심시간 제외 재계산 실행';
     }
   });
 
