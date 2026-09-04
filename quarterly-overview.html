@@ -499,10 +499,10 @@ if ('serviceWorker' in navigator) {
     canvas.style.display = '';
     if (errorEl) errorEl.style.display = 'none';
 
-    let labels, salesData, purchaseData, expenseData, incomeData;
+    let labels, salesData, purchaseData, expenseData, incomeData, profitData;
     if (viewMode === 'quarter') {
       labels = ['1분기', '2분기', '3분기', '4분기'];
-      salesData = []; purchaseData = []; expenseData = []; incomeData = [];
+      salesData = []; purchaseData = []; expenseData = []; incomeData = []; profitData = [];
       for (let q = 1; q <= 4; q++) {
         let s = 0, p = 0, e = 0, inc = 0;
         for (let i = 0; i < 3; i++) {
@@ -514,16 +514,23 @@ if ('serviceWorker' in navigator) {
           inc += otherIncomeByMonth[ym] || 0;
         }
         salesData.push(s); purchaseData.push(p); expenseData.push(e); incomeData.push(inc);
+        // 화면 상단/분기별 카드에 쓰는 예상손익 계산식(매출-매입-일반지출+기타수입)과 동일하게 맞춤
+        profitData.push(s - p - e + inc);
       }
     } else {
       labels = Array.from({ length: 12 }, (_, i) => `${i + 1}월`);
-      salesData = []; purchaseData = []; expenseData = []; incomeData = [];
+      salesData = []; purchaseData = []; expenseData = []; incomeData = []; profitData = [];
       for (let m = 1; m <= 12; m++) {
         const ym = `${activeYear}-${String(m).padStart(2, '0')}`;
-        salesData.push(spSalesAll(spFor(ym)));
-        purchaseData.push(spPurchaseAll(spFor(ym)));
-        expenseData.push(expenseByMonth[ym] || 0);
-        incomeData.push(otherIncomeByMonth[ym] || 0);
+        const s = spSalesAll(spFor(ym));
+        const p = spPurchaseAll(spFor(ym));
+        const e = expenseByMonth[ym] || 0;
+        const inc = otherIncomeByMonth[ym] || 0;
+        salesData.push(s);
+        purchaseData.push(p);
+        expenseData.push(e);
+        incomeData.push(inc);
+        profitData.push(s - p - e + inc);
       }
     }
 
@@ -536,7 +543,8 @@ if ('serviceWorker' in navigator) {
           { label: '매출', data: salesData, backgroundColor: '#3f6b52' },
           { label: '매입', data: purchaseData, backgroundColor: '#a4453c' },
           { label: '일반지출', data: expenseData, backgroundColor: '#8a8578' },
-          { label: '기타수입', data: incomeData, backgroundColor: '#c9a24b' }
+          { label: '기타수입', data: incomeData, backgroundColor: '#c9a24b' },
+          { label: '예상손익', data: profitData, backgroundColor: '#141414' }
         ]
       },
       options: {
