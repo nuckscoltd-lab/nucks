@@ -429,6 +429,25 @@ if ('serviceWorker' in navigator) {
 
     <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
 
+    <div class="panel-title">동일인·동일날짜 중복 근무일지 진단/정리</div>
+    <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
+      같은 사람이 같은 날짜에 근무일지를 <b>2개 이상의 별도 문서</b>로 나눠 저장한 경우를 찾아냅니다(엑셀로
+      내보내면 같은 이름·날짜가 여러 줄로 보이는 것과 같은 원인이에요). 이런 경우 각 문서가 그 날의
+      "총 근무시간"을 각자 따로 갖고 있어서, 합계·인건비 계산 시 하루가 여러 번 중복으로 잡힐 수 있어요.<br><br>
+      "중복 확인"을 누르면 두 종류로 나눠서 보여드려요: <b>① 자동 병합 가능</b> - 여러 문서의 출근·퇴근·총
+      근무시간이 전부 똑같은 경우(프로젝트명만 다름). 이 경우 "자동 병합 실행"을 누르면 여러 문서의 프로젝트를
+      한 문서 안에 모아 넣고(총 근무시간을 프로젝트 개수만큼 나눠 담음), 나머지 문서는 삭제해요.
+      <b>② 확인 필요</b> - 문서마다 시간이나 총 근무시간이 서로 달라서 자동으로 합치면 위험한 경우. 이건
+      목록으로 보여드리기만 하니, 아래 근무일지 목록에서 직접 확인하신 뒤 필요하면 "수정"으로 합치거나
+      "삭제"로 정리해 주세요.
+    </div>
+    <button class="submit-btn" id="checkDuplicateDaysBtn">중복 확인</button>
+    <button class="submit-btn" id="autoMergeDuplicateDaysBtn" style="margin-left:8px; display:none;">자동 병합 실행</button>
+    <div id="duplicateDaysSummary" style="margin-top:10px; font-size:13px;"></div>
+    <div id="duplicateDaysReviewList" style="max-height:280px; overflow-y:auto; border:1px solid var(--line); border-radius:4px; padding:12px; margin-top:10px; background:#fff; display:none; font-size:12.5px; line-height:1.7;"></div>
+
+    <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
+
     <div class="panel-title">프로젝트명 정리 (중복 통합)</div>
     <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
       아래 목록은 프로젝트명 자동완성 드롭다운에 실제로 뜨는 이름 전체예요(근무일지에 이미 쓰인 이름 +
@@ -2296,12 +2315,19 @@ if ('serviceWorker' in navigator) {
         }
 
         // 노션 데이터는 하루에 프로젝트가 여러 개면 콤마로 구분되어 한 칸에 같이 들어있다.
-        // 이 경우 그 날의 총 근무시간을 프로젝트 개수(n)로 균등 분할(1/n)해서 각각 별도 항목으로 배정한다.
+        // 이 경우 그 날의 총 근무시간을 프로젝트별로 나눠서 각각 별도 항목으로 배정한다.
+        // 기본은 프로젝트 개수(n)로 균등 분할(1/n)이지만, "프로젝트명::가중치" 형식으로 쓰면
+        // (예: "A프로젝트::2,B프로젝트::1") 가중치 비율대로 나눌 수 있다 - 상세내용에 여러 프로젝트가
+        // 섞여있는 옛 근무일지를 정리할 때, 프로젝트별로 언급된 작업량(줄 수 등)에 비례해서 시간을
+        // 배분하고 싶을 때 쓴다. "::가중치"가 없으면 가중치 1로 취급되어 기존과 동일하게 균등분할된다.
         // (마지막 항목에서 반올림 오차를 흡수해, 항목별 투입시간 합계가 총근무시간과 정확히 일치하도록 함)
-        const projectNames = r.projText.split(',').map(s => s.trim()).filter(Boolean);
-        const nameList = projectNames.length ? projectNames : [''];
-        const rawShare = totalHours / nameList.length;
-        const shares = nameList.map(() => Math.round(rawShare * 100) / 100);
+        const projectTokens = r.projText.split(',').map(s => s.trim()).filter(Boolean);
+        const parsedProjects = (projectTokens.length ? projectTokens : ['']).map(token => {
+          const m = token.match(/^(.*?)::([0-9]+(?:\.[0-9]+)?)$/);
+          return m ? { name: m[1].trim(), weight: Number(m[2]) || 1 } : { name: token, weight: 1 };
+        });
+        const totalWeight = parsedProjects.reduce((sum, p) => sum + p.weight, 0) || parsedProjects.length;
+        const shares = parsedProjects.map(p => Math.round((totalHours * p.weight / totalWeight) * 100) / 100);
         const shareSum = shares.reduce((a, b) => a + b, 0);
         const roundingDiff = Math.round((totalHours - shareSum) * 100) / 100;
         shares[shares.length - 1] = Math.round((shares[shares.length - 1] + roundingDiff) * 100) / 100;
@@ -2313,8 +2339,8 @@ if ('serviceWorker' in navigator) {
           '퇴근시간': r.checkout,
           '총근무시간': totalHours,
           '상세내용': r.detail,
-          projects: nameList.map((pname, i) => ({
-            '프로젝트': pname,
+          projects: parsedProjects.map((p, i) => ({
+            '프로젝트': p.name,
             '투입시간': shares[i],
             tasks: r.tasks
           }))
@@ -2635,6 +2661,148 @@ if ('serviceWorker' in navigator) {
     } finally {
       btn.disabled = false;
       btn.textContent = '점심시간 제외 재계산 실행';
+    }
+  });
+
+  // 같은 사람(uid) + 같은 날짜로 저장된 근무일지 "문서"가 2개 이상인 경우를 찾는다.
+  // (문서 안에서 프로젝트가 여러 개인 것은 정상 - 여기서 찾는 건 그 자체가 별도 문서로 중복된 경우)
+  function docHourSignature(d) {
+    return `${d['출근시간'] || ''}|${d['퇴근시간'] || ''}|${Math.round((Number(d['총근무시간']) || 0) * 100)}`;
+  }
+
+  async function scanDuplicateDayDocs() {
+    const snapshot = await db.collection('workLogs').get();
+    const byKey = {};
+    snapshot.docs.forEach(doc => {
+      const d = doc.data();
+      if (!d.uid || !d['날짜']) return;
+      const key = d.uid + '__' + d['날짜'];
+      (byKey[key] = byKey[key] || []).push({ id: doc.id, ref: doc.ref, data: d });
+    });
+    return Object.values(byKey).filter(g => g.length > 1);
+  }
+
+  let duplicateDayAutoMergeGroups = [];
+
+  document.getElementById('checkDuplicateDaysBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('checkDuplicateDaysBtn');
+    const summaryEl = document.getElementById('duplicateDaysSummary');
+    const listEl = document.getElementById('duplicateDaysReviewList');
+    const mergeBtn = document.getElementById('autoMergeDuplicateDaysBtn');
+    btn.disabled = true;
+    summaryEl.style.color = 'var(--muted)';
+    summaryEl.textContent = '전체 근무일지를 확인하는 중...';
+    listEl.style.display = 'none';
+    mergeBtn.style.display = 'none';
+
+    try {
+      const groups = await scanDuplicateDayDocs();
+      const autoMergeable = [];
+      const needsReview = [];
+      groups.forEach(g => {
+        const sigs = new Set(g.map(item => docHourSignature(item.data)));
+        (sigs.size === 1 ? autoMergeable : needsReview).push(g);
+      });
+
+      duplicateDayAutoMergeGroups = autoMergeable;
+
+      const totalDocs = groups.reduce((s, g) => s + g.length, 0);
+      summaryEl.style.color = '#3f6b52';
+      summaryEl.textContent = groups.length === 0
+        ? '중복된 (사원·날짜) 근무일지가 없습니다.'
+        : `중복된 (사원·날짜) ${groups.length}건 발견 (문서 총 ${totalDocs}개). ` +
+          `자동 병합 가능 ${autoMergeable.length}건, 직접 확인 필요 ${needsReview.length}건.`;
+
+      if (autoMergeable.length > 0) {
+        mergeBtn.style.display = 'inline-block';
+        mergeBtn.textContent = `자동 병합 실행 (${autoMergeable.length}건)`;
+      }
+
+      if (needsReview.length > 0) {
+        listEl.style.display = 'block';
+        listEl.innerHTML = needsReview.map(g => {
+          const first = g[0].data;
+          const rowsHtml = g.map(item => {
+            const projs = (item.data.projects || []).map(p => `${esc(p['프로젝트'] || '(미지정)')} ${p['투입시간'] || 0}h`).join(', ') || '(프로젝트 없음)';
+            return `<div style="padding:4px 0; border-top:1px dashed var(--line);">문서 ${esc(item.id)} - 출근 ${esc(item.data['출근시간'] || '-')} · 퇴근 ${esc(item.data['퇴근시간'] || '-')} · 총근무 ${item.data['총근무시간'] || 0}h<br>&nbsp;&nbsp;${projs}</div>`;
+          }).join('');
+          return `<div style="margin-bottom:10px;"><b>${esc(first['사원명'] || '')} · ${esc(first['날짜'] || '')}</b> (문서 ${g.length}개)${rowsHtml}</div>`;
+        }).join('');
+      } else {
+        listEl.style.display = 'none';
+        listEl.innerHTML = '';
+      }
+    } catch (err) {
+      summaryEl.style.color = '#a4453c';
+      summaryEl.textContent = '확인 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('autoMergeDuplicateDaysBtn')?.addEventListener('click', async () => {
+    if (duplicateDayAutoMergeGroups.length === 0) return;
+    if (!confirm(`${duplicateDayAutoMergeGroups.length}건을 자동 병합합니다. 각 그룹의 문서들을 하나로 합치고 나머지 문서는 삭제해요. 계속할까요?`)) return;
+
+    const btn = document.getElementById('autoMergeDuplicateDaysBtn');
+    const summaryEl = document.getElementById('duplicateDaysSummary');
+    btn.disabled = true;
+
+    try {
+      const writes = [];
+
+      duplicateDayAutoMergeGroups.forEach(g => {
+        const total = Number(g[0].data['총근무시간']) || 0;
+
+        // 그룹 내 모든 문서의 프로젝트를 모아 이름 기준으로 중복 제거한 뒤, 그 날의 총근무시간을
+        // 프로젝트 개수만큼 나눠 담는다(마지막 항목에서 반올림 오차를 흡수).
+        const seen = new Map();
+        g.forEach(item => {
+          const projects = (item.data.projects && item.data.projects.length) ? item.data.projects : [{ '프로젝트': '', tasks: {} }];
+          projects.forEach(p => {
+            const name = p['프로젝트'] || '';
+            if (!seen.has(name)) seen.set(name, { '프로젝트': name, tasks: p.tasks || {} });
+          });
+        });
+        const nameList = [...seen.values()];
+        const n = nameList.length || 1;
+        const rawShare = total / n;
+        const shares = nameList.map(() => Math.round(rawShare * 100) / 100);
+        const shareSum = shares.reduce((a, b) => a + b, 0);
+        const diff = Math.round((total - shareSum) * 100) / 100;
+        if (shares.length) shares[shares.length - 1] = Math.round((shares[shares.length - 1] + diff) * 100) / 100;
+        const mergedProjects = nameList.map((p, i) => ({ ...p, '투입시간': shares[i] }));
+
+        // 상세내용은 문서마다 다르면 줄바꿈으로 이어붙이고, 완전히 같은 내용은 한 번만 남긴다.
+        const details = [...new Set(g.map(item => (item.data['상세내용'] || '').trim()).filter(Boolean))];
+
+        const mergedData = {
+          ...g[0].data,
+          projects: mergedProjects,
+          '상세내용': details.join('\n')
+        };
+
+        writes.push({ op: 'update', ref: g[0].ref, data: mergedData });
+        g.slice(1).forEach(item => writes.push({ op: 'delete', ref: item.ref }));
+      });
+
+      for (let i = 0; i < writes.length; i += 400) {
+        const chunk = writes.slice(i, i + 400);
+        const batch = db.batch();
+        chunk.forEach(w => (w.op === 'update' ? batch.update(w.ref, w.data) : batch.delete(w.ref)));
+        await batch.commit();
+      }
+
+      summaryEl.style.color = '#3f6b52';
+      summaryEl.textContent = `${duplicateDayAutoMergeGroups.length}건 병합 완료했습니다.`;
+      btn.style.display = 'none';
+      duplicateDayAutoMergeGroups = [];
+      await loadLogs();
+    } catch (err) {
+      summaryEl.style.color = '#a4453c';
+      summaryEl.textContent = '병합 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
     }
   });
 
