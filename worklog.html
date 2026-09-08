@@ -448,6 +448,25 @@ if ('serviceWorker' in navigator) {
 
     <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
 
+    <div class="panel-title">다수결 기준 일괄 정리 (소수 의견 문서 삭제)</div>
+    <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
+      위 "중복 확인"에서 출근·퇴근·총근무시간까지 서로 달라 <b>자동 병합 대상이 아니었던</b> 건들 중에서도,
+      실제로는 같은 사람이 같은 날짜에 문서를 여러 번 나눠 저장했을 뿐 대부분 같은 내용인 경우가 많습니다.
+      이 도구는 그런 그룹을 아래 3가지로 나눠서 처리해요(프로젝트 시간을 다시 나누거나 합치지 않고,
+      <b>과반수 문서와 똑같은 문서 1개만 남기고 나머지를 그대로 삭제</b>하는 방식이라 더 안전합니다):<br><br>
+      <b>① 완전동일</b> - 문서 내용이 전부 똑같음 → 1개만 남기고 삭제<br>
+      <b>② 오차수준</b> - 프로젝트 구성은 같은데 시간이 반올림 수준(±0.5시간 이내)으로만 다름 → 대표값 1개만 남기고 삭제<br>
+      <b>③ 다수결</b> - 문서 여러 개 중 절반을 넘는 다수가 같은 내용이고 나머지 소수만 다름 → 다수 쪽 문서 1개만 남기고 삭제<br><br>
+      다수결이 나오지 않는(문서들이 서로 다 다른) 애매한 그룹은 절대 자동 처리하지 않고 목록으로만 보여드리니,
+      아래 근무일지 목록에서 직접 확인해 주세요.
+    </div>
+    <button class="submit-btn" id="checkMajorityCleanupBtn">일괄 정리 대상 확인</button>
+    <button class="submit-btn" id="runMajorityCleanupBtn" style="margin-left:8px; display:none;">일괄 정리 실행</button>
+    <div id="majorityCleanupSummary" style="margin-top:10px; font-size:13px;"></div>
+    <div id="majorityCleanupReviewList" style="max-height:280px; overflow-y:auto; border:1px solid var(--line); border-radius:4px; padding:12px; margin-top:10px; background:#fff; display:none; font-size:12.5px; line-height:1.7;"></div>
+
+    <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
+
     <div class="panel-title">프로젝트명 정리 (중복 통합)</div>
     <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
       아래 목록은 프로젝트명 자동완성 드롭다운에 실제로 뜨는 이름 전체예요(근무일지에 이미 쓰인 이름 +
@@ -2804,6 +2823,150 @@ if ('serviceWorker' in navigator) {
     } catch (err) {
       summaryEl.style.color = '#a4453c';
       summaryEl.textContent = '병합 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // ---------- 다수결 기준 일괄 정리 (프로젝트 시간을 재분배하지 않고, 소수 의견 문서만 삭제) ----------
+  function projSetKey(projects) {
+    return JSON.stringify(
+      (projects || [])
+        .map(p => [p['프로젝트'] || '', Math.round((Number(p['투입시간']) || 0) * 100)])
+        .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    );
+  }
+  function projNameSetKey(projects) {
+    return JSON.stringify([...new Set((projects || []).map(p => p['프로젝트'] || ''))].sort());
+  }
+  function docProjectTotal(d) {
+    return (d.projects || []).reduce((s, p) => s + (Number(p['투입시간']) || 0), 0);
+  }
+
+  // 그룹을 분류해서 { exact, close, majority, ambiguous } 로 나눈다.
+  // exact/close/majority 각 항목은 { group, keepIndex } - keepIndex번째 문서만 남기고 나머지를 삭제 대상으로 본다.
+  function classifyMajorityCleanupGroups(groups) {
+    const exact = [], close = [], majority = [], ambiguous = [];
+    groups.forEach(g => {
+      const setKeys = g.map(item => projSetKey(item.data.projects));
+      if (new Set(setKeys).size === 1) {
+        exact.push({ group: g, keepIndex: 0 });
+        return;
+      }
+      const nameSetKeys = new Set(g.map(item => projNameSetKey(item.data.projects)));
+      const totals = g.map(item => docProjectTotal(item.data));
+      const spread = Math.max(...totals) - Math.min(...totals);
+      if (nameSetKeys.size === 1 && spread <= 0.5) {
+        const sorted = [...totals].sort((a, b) => a - b);
+        const median = sorted[Math.floor(sorted.length / 2)];
+        let bestIdx = 0, bestDiff = Infinity;
+        totals.forEach((t, i) => { const diff = Math.abs(t - median); if (diff < bestDiff) { bestDiff = diff; bestIdx = i; } });
+        close.push({ group: g, keepIndex: bestIdx });
+        return;
+      }
+      const counts = {};
+      setKeys.forEach(k => counts[k] = (counts[k] || 0) + 1);
+      let topKey = null, topCount = 0;
+      Object.entries(counts).forEach(([k, c]) => { if (c > topCount) { topCount = c; topKey = k; } });
+      if (topCount > g.length / 2) {
+        majority.push({ group: g, keepIndex: setKeys.indexOf(topKey) });
+      } else {
+        ambiguous.push({ group: g });
+      }
+    });
+    return { exact, close, majority, ambiguous };
+  }
+
+  let majorityCleanupActionable = []; // [{group, keepIndex, category}]
+
+  document.getElementById('checkMajorityCleanupBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('checkMajorityCleanupBtn');
+    const summaryEl = document.getElementById('majorityCleanupSummary');
+    const listEl = document.getElementById('majorityCleanupReviewList');
+    const runBtn = document.getElementById('runMajorityCleanupBtn');
+    btn.disabled = true;
+    summaryEl.style.color = 'var(--muted)';
+    summaryEl.textContent = '전체 근무일지를 확인하는 중...';
+    listEl.style.display = 'none';
+    runBtn.style.display = 'none';
+
+    try {
+      const groups = await scanDuplicateDayDocs();
+      const { exact, close, majority, ambiguous } = classifyMajorityCleanupGroups(groups);
+      majorityCleanupActionable = [
+        ...exact.map(x => ({ ...x, category: '완전동일' })),
+        ...close.map(x => ({ ...x, category: '오차수준' })),
+        ...majority.map(x => ({ ...x, category: '다수결' })),
+      ];
+      const actionableDocsToDelete = majorityCleanupActionable.reduce((s, x) => s + (x.group.length - 1), 0);
+
+      summaryEl.style.color = '#3f6b52';
+      summaryEl.textContent =
+        `정리 대상 ${majorityCleanupActionable.length}건 (완전동일 ${exact.length} · 오차수준 ${close.length} · 다수결 ${majority.length}, ` +
+        `삭제될 문서 총 ${actionableDocsToDelete}개). 다수결이 안 나오는 애매한 그룹 ${ambiguous.length}건은 자동 처리하지 않습니다.`;
+
+      if (majorityCleanupActionable.length > 0) {
+        runBtn.style.display = 'inline-block';
+        runBtn.textContent = `일괄 정리 실행 (${majorityCleanupActionable.length}건)`;
+      }
+
+      if (ambiguous.length > 0) {
+        listEl.style.display = 'block';
+        listEl.innerHTML = ambiguous.map(({ group }) => {
+          const first = group[0].data;
+          const rowsHtml = group.map(item => {
+            const projs = (item.data.projects || []).map(p => `${esc(p['프로젝트'] || '(미지정)')} ${p['투입시간'] || 0}h`).join(', ') || '(프로젝트 없음)';
+            return `<div style="padding:4px 0; border-top:1px dashed var(--line);">문서 ${esc(item.id)} - 출근 ${esc(item.data['출근시간'] || '-')} · 퇴근 ${esc(item.data['퇴근시간'] || '-')}<br>&nbsp;&nbsp;${projs}</div>`;
+          }).join('');
+          return `<div style="margin-bottom:10px;"><b>${esc(first['사원명'] || '')} · ${esc(first['날짜'] || '')}</b> (문서 ${group.length}개, 다수결 안 나옴)${rowsHtml}</div>`;
+        }).join('');
+      } else {
+        listEl.style.display = 'none';
+        listEl.innerHTML = '';
+      }
+    } catch (err) {
+      summaryEl.style.color = '#a4453c';
+      summaryEl.textContent = '확인 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('runMajorityCleanupBtn')?.addEventListener('click', async () => {
+    if (majorityCleanupActionable.length === 0) return;
+    const totalDelete = majorityCleanupActionable.reduce((s, x) => s + (x.group.length - 1), 0);
+    if (!confirm(
+      `${majorityCleanupActionable.length}건을 정리합니다. 각 그룹마다 대표 문서 1개만 남기고, 나머지 문서 총 ${totalDelete}개를 삭제해요. ` +
+      `프로젝트 이름이나 시간은 다시 나누지 않고, 남는 문서는 원래 값 그대로 유지됩니다. 계속할까요?`
+    )) return;
+
+    const btn = document.getElementById('runMajorityCleanupBtn');
+    const summaryEl = document.getElementById('majorityCleanupSummary');
+    btn.disabled = true;
+
+    try {
+      const writes = [];
+      majorityCleanupActionable.forEach(({ group, keepIndex }) => {
+        group.forEach((item, i) => {
+          if (i !== keepIndex) writes.push({ op: 'delete', ref: item.ref });
+        });
+      });
+
+      for (let i = 0; i < writes.length; i += 400) {
+        const chunk = writes.slice(i, i + 400);
+        const batch = db.batch();
+        chunk.forEach(w => batch.delete(w.ref));
+        await batch.commit();
+      }
+
+      summaryEl.style.color = '#3f6b52';
+      summaryEl.textContent = `${majorityCleanupActionable.length}건 정리 완료했습니다 (문서 ${writes.length}개 삭제).`;
+      btn.style.display = 'none';
+      majorityCleanupActionable = [];
+      await loadLogs();
+    } catch (err) {
+      summaryEl.style.color = '#a4453c';
+      summaryEl.textContent = '정리 실패: ' + err.message;
     } finally {
       btn.disabled = false;
     }
