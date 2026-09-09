@@ -170,6 +170,8 @@ if ('serviceWorker' in navigator) {
   <div class="empty">불러오는 중...</div>
 </main>
 
+<datalist id="worklogProjectNameList"></datalist>
+
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
@@ -223,6 +225,23 @@ if ('serviceWorker' in navigator) {
     { key: 'salesAgency', label: '분양대행사' }
   ];
 
+  // 근무일지(worklog.html)에서 실제로 쓰는 프로젝트명 자동완성 후보 - "근무일지 프로젝트명 연결" 입력칸에서
+  // 참고용 자동완성으로 보여준다(직접 타이핑도 항상 가능).
+  let WORKLOG_PROJECT_NAMES = [];
+  async function loadWorklogProjectNames(){
+    try{
+      const doc = await db.collection('officialProjects').doc('list').get();
+      if (!doc.exists) return;
+      const names = doc.data().names || [];
+      const excluded = doc.data().excluded || [];
+      WORKLOG_PROJECT_NAMES = names.filter(n => !excluded.includes(n)).sort();
+      const dl = document.getElementById('worklogProjectNameList');
+      if (dl) dl.innerHTML = WORKLOG_PROJECT_NAMES.map(n => `<option value="${esc(n)}">`).join('');
+    }catch(err){
+      console.warn('근무일지 프로젝트명 목록 불러오기 실패:', err);
+    }
+  }
+
   function esc(s){ return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
 
   async function seedIfEmpty(){
@@ -249,7 +268,32 @@ if ('serviceWorker' in navigator) {
       const doc = await ref.get();
       const existing = (doc.exists && doc.data().names) || [];
       const merged = [...new Set([...existing, ...names])].sort();
-      await ref.set({ names: merged, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+
+      // PROJ.NO(작업분류번호)도 함께 동기화해서, 근무일지(worklog.html)에서 프로젝트를 선택하면 그
+      // 프로젝트의 코드가 자동으로 같이 붙도록 한다. 결산서의 이름(name)과 근무일지에서 실제로 쓰는
+      // 프로젝트명은 표기 방식이 서로 다른 경우가 많아서(예: "현대건설 힐스테이트 장안 라보니타" vs
+      // "현대건설-힐스테이트 장안 라보니타"), 결산서 자체의 이름이 아니라 아래 "근무일지 프로젝트명
+      // 연결" 칸에 등록해둔 이름(workLogProjectNames)을 기준으로 코드를 매핑한다. 아직 연결해두지
+      // 않은 결산서는 결산서 이름 자체를 기준으로 삼는다(연결 전까지의 임시 대체). 이름이 같은
+      // 프로젝트가 여러 결산서로 나뉘어 있으면 나중에 읽은 값이 앞의 값을 덮어쓴다(마지막 값 우선).
+      const existingCodes = (doc.exists && doc.data().codes) || {};
+      const codes = { ...existingCodes };
+      settlements.forEach(p => {
+        const code = (p.projNo || '').trim();
+        if (!code) return;
+        const linked = (p.workLogProjectNames || []).map(n => (n || '').trim()).filter(Boolean);
+        if (linked.length) {
+          linked.forEach(nm => { codes[nm] = code; });
+        } else {
+          const nm = (p.name || '').trim();
+          if (nm) codes[nm] = code;
+        }
+      });
+
+      // 주의: 반드시 merge:true로 저장해야 한다 - 이 문서에는 근무일지(worklog.html)의 "프로젝트명 정리"
+      // 도구가 써넣는 excluded(통합/삭제로 자동완성에서 숨긴 이름) 필드도 같이 들어있는데, merge 없이
+      // set()하면 그 필드가 통째로 사라져서 예전에 정리해둔 이름들이 자동완성에 다시 나타나 버린다.
+      await ref.set({ names: merged, codes, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
     }catch(err){
       console.error('프로젝트명 동기화 실패:', err);
     }
@@ -389,6 +433,14 @@ if ('serviceWorker' in navigator) {
   function renderBody(p){
     if (editingId === p.id) return renderEditForm(p);
 
+    const linkedNames = p.workLogProjectNames || [];
+    const linkedHtml = `
+      <div class="subsection-title">근무일지 프로젝트명 연결</div>
+      ${linkedNames.length
+        ? `<div style="display:flex; flex-wrap:wrap; gap:6px;">${linkedNames.map(n => `<span class="tag">${esc(n)}</span>`).join('')}</div>`
+        : `<div style="font-size:12.5px; color:var(--red);">⚠ 연결된 근무일지 프로젝트명이 없습니다 - 코드가 근무일지에 자동으로 붙지 않아요. "수정"에서 연결해주세요.</div>`}
+    `;
+
     const partnerHtml = `
       <div class="subsection-title">대외업체</div>
       <div class="partner-grid">
@@ -423,6 +475,7 @@ if ('serviceWorker' in navigator) {
     `;
 
     return `
+      ${linkedHtml}
       ${partnerHtml}
       ${progressHtml}
       ${peopleHtml}
@@ -454,12 +507,14 @@ if ('serviceWorker' in navigator) {
   }
 
   // ---------- 목록형(진행내용/특이사항) + 인원(이름+역할) 편집기 ----------
-  function renderSimpleListEditor(containerId, items){
+  // listAttr(선택): 자동완성용 <datalist> id - 지정하면 각 입력칸에 list 속성이 붙는다(직접 타이핑도 항상 가능).
+  function renderSimpleListEditor(containerId, items, listAttr){
+    const listHtml = listAttr ? ` list="${listAttr}"` : '';
     return `
       <div class="list-editor" id="${containerId}">
         ${items.map((v, i) => `
           <div class="li-row" data-idx="${i}">
-            <input type="text" class="li-text" value="${esc(v)}">
+            <input type="text" class="li-text"${listHtml} value="${esc(v)}">
             <button type="button" class="li-remove" data-remove="${i}">삭제</button>
           </div>
         `).join('')}
@@ -483,12 +538,13 @@ if ('serviceWorker' in navigator) {
     `;
   }
 
-  function wireSimpleListEditor(containerId){
+  function wireSimpleListEditor(containerId, listAttr){
     const container = document.getElementById(containerId);
+    const listHtml = listAttr ? ` list="${listAttr}"` : '';
     container.querySelector('.li-add').addEventListener('click', () => {
       const row = document.createElement('div');
       row.className = 'li-row';
-      row.innerHTML = `<input type="text" class="li-text" value=""><button type="button" class="li-remove">삭제</button>`;
+      row.innerHTML = `<input type="text" class="li-text"${listHtml} value=""><button type="button" class="li-remove">삭제</button>`;
       row.querySelector('.li-remove').addEventListener('click', () => row.remove());
       container.insertBefore(row, container.querySelector('.li-add'));
     });
@@ -538,6 +594,15 @@ if ('serviceWorker' in navigator) {
         <div class="field"><label>종료일</label><input type="date" id="ef-endDate" value="${p.endDate || ''}"></div>
       </div>
 
+      <div class="subsection-title">근무일지 프로젝트명 연결</div>
+      <div style="font-size:12px; color:var(--muted); margin-bottom:10px; line-height:1.6;">
+        위 프로젝트명(name)과 근무일지에서 실제로 쓰는 프로젝트명 표기가 다른 경우가 많아서(하이픈
+        유무, 발주처 축약 방식 등) 따로 연결해요. 근무일지에서 이 프로젝트를 부르는 이름을 정확히
+        입력하거나 자동완성에서 골라주세요(여러 표기를 같이 썼다면 여러 개 추가해도 돼요) - 이 코드가
+        근무일지 프로젝트 선택 시 자동으로 붙으려면 여기 연결이 꼭 필요해요.
+      </div>
+      ${renderSimpleListEditor(`ef-worklog-names-${p.id}`, p.workLogProjectNames || [], 'worklogProjectNameList')}
+
       <div class="subsection-title">대외업체</div>
       <div class="form-row" style="align-items:flex-start;">
         ${PARTNER_FIELDS.map(f => `
@@ -566,6 +631,7 @@ if ('serviceWorker' in navigator) {
   }
 
   function bindEditFormEvents(id){
+    wireSimpleListEditor(`ef-worklog-names-${id}`, 'worklogProjectNameList');
     wireSimpleListEditor(`ef-progress-${id}`);
     wirePeopleListEditor(`ef-people-${id}`);
     wireSimpleListEditor(`ef-notes-${id}`);
@@ -591,6 +657,7 @@ if ('serviceWorker' in navigator) {
       startDate: document.getElementById('ef-startDate').value || null,
       endDate: document.getElementById('ef-endDate').value || null,
       partners,
+      workLogProjectNames: readSimpleList(`ef-worklog-names-${id}`),
       progressItems: readSimpleList(`ef-progress-${id}`),
       people: readPeopleList(`ef-people-${id}`),
       notes: readSimpleList(`ef-notes-${id}`)
@@ -622,7 +689,7 @@ if ('serviceWorker' in navigator) {
 
     const docRef = await settlementsRef.add({
       projNo: '', name, pm: '', startDate: null, endDate: null,
-      partners: emptyPartners, progressItems: [], people: [], notes: [],
+      partners: emptyPartners, workLogProjectNames: [], progressItems: [], people: [], notes: [],
       order: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     await loadSettlements();
@@ -632,7 +699,7 @@ if ('serviceWorker' in navigator) {
   }
 
   auth.onAuthStateChanged((user) => {
-    if (user) loadSettlements();
+    if (user) { loadSettlements(); loadWorklogProjectNames(); }
   });
 </script>
 </body>
