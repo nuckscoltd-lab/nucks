@@ -519,6 +519,18 @@ if ('serviceWorker' in navigator) {
     </div>
     <button class="submit-btn" id="backfillCodesBtn">코드 일괄 채우기 실행</button>
     <div id="backfillCodesResult" style="margin-top:10px; font-size:13px;"></div>
+
+    <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
+
+    <div class="panel-title">코드 미지정 프로젝트에 코드 부여</div>
+    <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
+      프로젝트 결산 페이지에 아직 등록되지 않아(진행중이거나, 결산 대상이 아니거나) 코드가 없는
+      프로젝트명들이에요. 근무일지를 하나하나 열어서 고칠 필요 없이, 여기서 이름별로 코드를 한 번만
+      지정하면 그 이름을 쓰는 <b>기존 근무일지 전체에 즉시 소급 반영</b>돼요(공식 코드 목록에도 저장되어
+      새로 작성하는 근무일지에도 이후 자동으로 붙어요).
+    </div>
+    <div id="uncodedProjectsList" style="max-height:320px; overflow-y:auto; border:1px solid var(--line); border-radius:4px; padding:12px; margin-bottom:12px; background:#fff;"></div>
+    <div id="uncodedCodeResult" style="margin-top:10px; font-size:13px;"></div>
     </div>
   </div>
 
@@ -868,7 +880,11 @@ if ('serviceWorker' in navigator) {
     const allPoolNames = [...new Set([...DEFAULT_PROJECTS, ...OFFICIAL_PROJECTS, ...usedProjects])].sort();
     const merged = allPoolNames.filter(p => !EXCLUDED_PROJECTS.includes(p));
     document.getElementById('projectList').innerHTML = merged.map(p => `<option value="${esc(p)}">`).join('');
-    if (currentRole === 'admin') renderProjectCleanupList(getProjectNameCounts(sourceRows), merged);
+    if (currentRole === 'admin') {
+      const counts = getProjectNameCounts(sourceRows);
+      renderProjectCleanupList(counts, merged);
+      renderUncodedProjectsList(counts);
+    }
   }
 
   // 실제 근무일지에 쓰인 프로젝트명별 사용 건수 집계 (표기가 다른 중복 확인용)
@@ -911,6 +927,108 @@ if ('serviceWorker' in navigator) {
       </label>
     `;
     }).join('');
+  }
+
+  // 결산서와 연결되지 않아 코드가 없는(PROJECT_CODES에 없는) 프로젝트명들 - 근무일지를 하나하나 열지
+  // 않고도 이름 단위로 코드를 한 번만 지정하면 그 이름을 쓰는 기존 근무일지 전체에 바로 소급 반영해준다.
+  function renderUncodedProjectsList(counts) {
+    const container = document.getElementById('uncodedProjectsList');
+    if (!container) return;
+    counts = counts || getProjectNameCounts();
+    const names = Object.keys(counts)
+      .filter(n => n && !EXCLUDED_PROJECTS.includes(n) && !PROJECT_CODES[n])
+      .sort((a, b) => counts[b] - counts[a]);
+
+    if (names.length === 0) {
+      container.innerHTML = '<div style="color:var(--muted); font-size:13px;">코드가 없는 프로젝트가 없습니다. 모두 코드가 지정되어 있어요.</div>';
+      return;
+    }
+
+    container.innerHTML = names.map((n, i) => {
+      const safeId = `uncoded-${i}`;
+      return `
+      <div class="uncoded-row" data-name="${esc(n)}" style="display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); flex-wrap:wrap;">
+        <div style="flex:1; min-width:180px; padding-top:8px;">
+          <b style="font-size:13px;">${esc(n)}</b>
+          <span style="color:var(--muted); font-size:11.5px; margin-left:6px;">(근무일지 ${counts[n]}건)</span>
+        </div>
+        <div class="field" style="min-width:150px;">
+          <input type="text" class="uncoded-code-input" list="projectCodesDatalist" placeholder="코드 직접 입력">
+          ${codeBuilderHtml(safeId)}
+        </div>
+        <button type="button" class="submit-btn uncoded-save-btn" style="align-self:flex-start; margin-top:6px;">저장 + 소급 반영</button>
+      </div>
+    `;
+    }).join('');
+
+    container.querySelectorAll('.uncoded-row').forEach(row => {
+      const name = row.dataset.name;
+      const codeInput = row.querySelector('.uncoded-code-input');
+      row.querySelector('.cb-generate').addEventListener('click', () => {
+        const year = row.querySelector('.cb-year').value;
+        const classCode = row.querySelector('.cb-class').value;
+        const pool = [...Object.values(PROJECT_CODES), ...ALL_WORKLOG_CODES];
+        const serial = suggestNextSerial(year, classCode, pool);
+        codeInput.value = `${year}-${classCode}-${serial}`;
+      });
+
+      row.querySelector('.uncoded-save-btn').addEventListener('click', async () => {
+        const code = codeInput.value.trim();
+        const resultEl = document.getElementById('uncodedCodeResult');
+        if (!code) {
+          resultEl.style.color = '#a4453c';
+          resultEl.textContent = '코드를 입력하거나 생성해 주세요.';
+          return;
+        }
+        resultEl.style.color = 'var(--muted)';
+        resultEl.textContent = `"${name}"에 "${code}" 저장 중...`;
+
+        try {
+          // 1) officialProjects/list.codes에 반영 - 다른 페이지(프로젝트 결산 등)와 공유되는
+          // 매핑이라 여기 저장해두면 이후 새 근무일지 작성 시에도 자동으로 붙는다.
+          const listRef = db.collection('officialProjects').doc('list');
+          const listDoc = await listRef.get();
+          const existingCodes = (listDoc.exists && listDoc.data().codes) || {};
+          const newCodes = { ...existingCodes, [name]: code };
+          await listRef.set({ codes: newCodes, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+          PROJECT_CODES = newCodes;
+
+          // 2) 이 프로젝트명을 쓰는 기존 근무일지 전체에 즉시 소급 반영
+          const snapshot = await db.collection('workLogs').get();
+          const toUpdate = [];
+          let matchedCount = 0;
+          snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            const projects = data.projects || [];
+            let changed = false;
+            const newProjects = projects.map(p => {
+              const pName = (p['프로젝트'] || '').trim();
+              if (pName !== name) return p;
+              if ((p['프로젝트코드'] || '') === code) return p;
+              changed = true;
+              matchedCount++;
+              return { ...p, '프로젝트코드': code };
+            });
+            if (changed) toUpdate.push({ ref: doc.ref, projects: newProjects });
+          });
+          for (let i = 0; i < toUpdate.length; i += 400) {
+            const chunk = toUpdate.slice(i, i + 400);
+            const batch = db.batch();
+            chunk.forEach(item => batch.update(item.ref, { projects: item.projects }));
+            await batch.commit();
+          }
+
+          resultEl.style.color = '#3f6b52';
+          resultEl.textContent = `완료: "${name}" → "${code}" 저장, 근무일지 ${matchedCount}건에 소급 반영했습니다.`;
+
+          await loadLogs();
+          await updateProjectDatalist();
+        } catch (err) {
+          resultEl.style.color = '#a4453c';
+          resultEl.textContent = '저장 실패: ' + err.message;
+        }
+      });
+    });
   }
 
   document.getElementById('mergeProjectsBtn')?.addEventListener('click', async () => {
