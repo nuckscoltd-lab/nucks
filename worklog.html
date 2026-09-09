@@ -483,6 +483,11 @@ if ('serviceWorker' in navigator) {
     </div>
     <button class="submit-btn" id="mergeProjectsBtn">선택한 이름들을 위 이름으로 통합</button>
     <button class="submit-btn" id="deleteProjectsBtn" style="background:#a4453c; margin-left:8px;">선택한 항목 삭제</button>
+    <button class="submit-btn" id="restoreProjectsBtn" style="background:var(--muted); margin-left:8px;">선택한 항목 자동완성에 복원</button>
+    <div style="font-size:11.5px; color:var(--muted); margin-top:6px;">
+      ⚠ 표시가 붙은 이름은 예전에 통합/삭제로 자동완성 목록에서 제외됐지만, 근무일지에는 여전히 그 이름으로 남아있는 항목이에요.
+      실수로 제외된 것이라면 체크하고 "자동완성에 복원"을 누르면 드롭다운에 다시 나타나요.
+    </div>
     <div id="mergeResult" style="margin-top:10px; font-size:13px;"></div>
     </div>
   </div>
@@ -782,7 +787,9 @@ if ('serviceWorker' in navigator) {
   // 통합/제외할 수 있게 counts와 합쳐서 보여준다.
   function renderProjectCleanupList(counts, poolNames) {
     counts = counts || getProjectNameCounts();
-    const names = [...new Set([...(poolNames || []), ...Object.keys(counts)])].sort();
+    // EXCLUDED_PROJECTS도 함께 보여준다 - 그래야 근무일지에 한 번도 안 쓰였는데(count=0) 실수로
+    // 통합/삭제되어 제외 목록에만 남은 이름도 여기서 체크해서 "복원" 버튼으로 되살릴 수 있다.
+    const names = [...new Set([...(poolNames || []), ...Object.keys(counts), ...EXCLUDED_PROJECTS])].sort();
     const container = document.getElementById('projectCleanupList');
     if (names.length === 0) {
       container.innerHTML = '<div style="color:var(--muted); font-size:13px;">등록된 프로젝트명이 없습니다.</div>';
@@ -791,12 +798,14 @@ if ('serviceWorker' in navigator) {
     container.innerHTML = names.map(n => {
       const suspicious = n.includes(',');
       const count = counts[n] || 0;
+      const isExcluded = EXCLUDED_PROJECTS.includes(n);
       return `
       <label style="display:flex; align-items:center; gap:8px; padding:4px 0; font-size:13px;">
         <input type="checkbox" class="cleanup-check" value="${esc(n)}">
         <span>${esc(n)}</span>
         <span style="color:var(--muted); font-size:11.5px;">${count > 0 ? `(근무일지 ${count}건)` : '(목록에만 있음, 근무일지엔 미사용)'}</span>
         ${suspicious ? '<span style="color:#a4453c; font-size:11px;">⚠ 다중값 의심</span>' : ''}
+        ${isExcluded ? `<span style="color:#a4453c; font-size:11px;">⚠ 자동완성 목록에서 제외됨(과거 통합/삭제 이력)${count > 0 ? ' - 근무일지엔 남아있음' : ''}</span>` : ''}
       </label>
     `;
     }).join('');
@@ -933,6 +942,44 @@ if ('serviceWorker' in navigator) {
     } catch (err) {
       resultEl.style.color = '#a4453c';
       resultEl.textContent = '삭제 실패: ' + err.message;
+    }
+  });
+
+  document.getElementById('restoreProjectsBtn')?.addEventListener('click', async () => {
+    const checked = [...document.querySelectorAll('.cleanup-check:checked')].map(cb => cb.value);
+    const resultEl = document.getElementById('mergeResult');
+
+    if (checked.length === 0) {
+      resultEl.style.color = '#a4453c';
+      resultEl.textContent = '복원할 항목을 1개 이상 선택해 주세요.';
+      return;
+    }
+
+    resultEl.style.color = 'var(--muted)';
+    resultEl.textContent = '복원 처리 중...';
+
+    try {
+      // 근무일지 데이터는 건드리지 않고, officialProjects/list의 excluded 목록에서만 제거한다.
+      // (제외 목록에서 빠지면 usedProjects/DEFAULT_PROJECTS/OFFICIAL_PROJECTS 풀에 있던 이름이
+      // updateProjectDatalist()의 필터를 다시 통과해서 자동완성 드롭다운에 재등장한다.)
+      const listRef = db.collection('officialProjects').doc('list');
+      const listDoc = await listRef.get();
+      const existingNames = (listDoc.exists && listDoc.data().names) || [];
+      const existingExcluded = (listDoc.exists && listDoc.data().excluded) || [];
+      OFFICIAL_PROJECTS = [...new Set([...existingNames, ...checked])].sort();
+      EXCLUDED_PROJECTS = existingExcluded.filter(n => !checked.includes(n));
+      await listRef.set({
+        names: OFFICIAL_PROJECTS, excluded: EXCLUDED_PROJECTS,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      resultEl.style.color = '#3f6b52';
+      resultEl.textContent = `완료: 선택한 ${checked.length}개 항목을 자동완성 드롭다운에 복원했습니다.`;
+
+      await updateProjectDatalist();
+    } catch (err) {
+      resultEl.style.color = '#a4453c';
+      resultEl.textContent = '복원 실패: ' + err.message;
     }
   });
 
