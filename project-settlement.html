@@ -126,6 +126,17 @@ if ('serviceWorker' in navigator) {
     padding:8px 9px; border:1px solid var(--line); border-radius:4px;
     font-family:inherit; font-size:13px; background:#fff;
   }
+  .field.projno-field{ min-width:220px; }
+  .code-builder{ display:flex; gap:4px; margin-top:6px; flex-wrap:wrap; }
+  .code-builder select{
+    padding:4px 4px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:11px; background:#fff; flex:1; min-width:0;
+  }
+  .code-builder button{
+    padding:4px 8px; border:1px solid var(--line); border-radius:4px; background:#fff;
+    color:var(--muted); font-size:11px; cursor:pointer; white-space:nowrap;
+  }
+  .code-builder button:hover{ border-color:var(--ink); color:var(--ink); }
 
   .list-editor{ background:#fff; border:1px solid var(--line); border-radius:6px; padding:12px 14px; margin-bottom:14px; }
   .list-editor .li-row{ display:flex; gap:8px; margin-bottom:8px; align-items:flex-start; }
@@ -211,6 +222,55 @@ if ('serviceWorker' in navigator) {
   let allSettlements = [];
   let openIds = new Set();
   let editingId = null;
+
+  // 작업분류코드 체계: 년도-작업분류-일련번호 (예: 2022-00-02) - 근무일지 페이지와 동일한 체계.
+  const WORK_CLASSIFICATION = [
+    { code: '00', label: '대안설계' },
+    { code: '01', label: '견본주택설계' },
+    { code: '02', label: '세대설계' },
+    { code: '03', label: '상업공간설계' },
+    { code: '04', label: '관공서설계' },
+    { code: '11', label: '시공' }
+  ];
+
+  function getCodeYearOptions() {
+    const nowYear = new Date().getFullYear();
+    const years = [];
+    for (let y = nowYear + 1; y >= 2018; y--) years.push(y);
+    return years;
+  }
+
+  // year, classCode로 시작하는 기존 PROJ.NO들 중 가장 큰 일련번호를 찾아 +1한 두자리 문자열을
+  // 돌려준다(중복 방지 자동 제안).
+  function suggestNextSerial(year, classCode, existingCodesPool) {
+    const prefix = `${year}-${classCode}-`;
+    let maxSerial = 0;
+    (existingCodesPool || []).forEach(code => {
+      if (!code) return;
+      const c = String(code).trim();
+      if (!c.startsWith(prefix)) return;
+      const rest = c.slice(prefix.length);
+      const n = parseInt(rest, 10);
+      if (!isNaN(n) && n > maxSerial) maxSerial = n;
+    });
+    return String(maxSerial + 1).padStart(2, '0');
+  }
+
+  function codeBuilderHtml(idPrefix) {
+    const years = getCodeYearOptions();
+    const nowYear = new Date().getFullYear();
+    return `
+      <div class="code-builder">
+        <select class="cb-year" data-id="${idPrefix}">
+          ${years.map(y => `<option value="${y}" ${y === nowYear ? 'selected' : ''}>${y}</option>`).join('')}
+        </select>
+        <select class="cb-class" data-id="${idPrefix}">
+          ${WORK_CLASSIFICATION.map(c => `<option value="${c.code}">${c.code} ${c.label}</option>`).join('')}
+        </select>
+        <button type="button" class="cb-generate" data-id="${idPrefix}">코드 생성</button>
+      </div>
+    `;
+  }
 
   let activeOrderer = '전체';
   let searchText = '';
@@ -585,7 +645,11 @@ if ('serviceWorker' in navigator) {
   function renderEditForm(p){
     return `
       <div class="form-row">
-        <div class="field"><label>PROJ. NO.</label><input type="text" id="ef-projNo" value="${esc(p.projNo)}"></div>
+        <div class="field projno-field">
+          <label>PROJ. NO.</label>
+          <input type="text" id="ef-projNo" value="${esc(p.projNo)}">
+          ${codeBuilderHtml(p.id)}
+        </div>
         <div class="field wide"><label>프로젝트명</label><input type="text" id="ef-name" value="${esc(p.name)}"></div>
         <div class="field"><label>PM</label><input type="text" id="ef-pm" value="${esc(p.pm)}"></div>
       </div>
@@ -635,6 +699,24 @@ if ('serviceWorker' in navigator) {
     wireSimpleListEditor(`ef-progress-${id}`);
     wirePeopleListEditor(`ef-people-${id}`);
     wireSimpleListEditor(`ef-notes-${id}`);
+
+    // 코드분류범례 드롭다운으로 년도+작업분류를 고르고 "코드 생성"을 누르면 기존 결산서 전체(PROJ.NO)
+    // 중 해당 조합에서 아직 쓰이지 않은 다음 일련번호를 자동 제안해서 PROJ. NO. 칸에 채워준다.
+    const projNoInput = document.getElementById('ef-projNo');
+    const cbGenerateBtn = document.querySelector(`.cb-generate[data-id="${id}"]`);
+    if (cbGenerateBtn) {
+      cbGenerateBtn.addEventListener('click', () => {
+        const year = document.querySelector(`.cb-year[data-id="${id}"]`).value;
+        const classCode = document.querySelector(`.cb-class[data-id="${id}"]`).value;
+        const pool = allSettlements.map(p => p.projNo).filter(Boolean);
+        const serial = suggestNextSerial(year, classCode, pool);
+        const generated = `${year}-${classCode}-${serial}`;
+        if (projNoInput.value.trim() && projNoInput.value.trim() !== generated) {
+          if (!confirm(`현재 PROJ. NO. 칸에 "${projNoInput.value.trim()}"이(가) 입력되어 있습니다.\n"${generated}"(으)로 덮어쓸까요?`)) return;
+        }
+        projNoInput.value = generated;
+      });
+    }
 
     document.getElementById(`ef-save-${id}`).addEventListener('click', () => saveSettlement(id));
     document.getElementById(`ef-cancel-${id}`).addEventListener('click', () => { editingId = null; renderList(); });
