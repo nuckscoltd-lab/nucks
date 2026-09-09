@@ -347,17 +347,21 @@ if ('serviceWorker' in navigator) {
       자유롭게 입력하셔도 돼요(막지 않습니다) - 다만 이렇게 새로 타이핑한 이름이 드롭다운 목록 자체에
       자동으로 추가되진 않아요(엑셀 자체 제약). 계속 쓸 이름이면 프로젝트 결산 페이지에 등록해두시면
       다음 내보내기부터 정식으로 목록에 잡혀요.
-      <b>주의: 엑셀에서 수정한다고 실제 근무일지가 바로 바뀌진 않아요.</b> 프로젝트명 칸을 다 정리하신
+      <b>주의: 엑셀에서 수정한다고 실제 근무일지가 바로 바뀌진 않아요.</b> 칸을 다 정리하신
       뒤, 아래 "정리한 엑셀 다시 반영"에 그 파일을 그대로 올리면 실제 근무일지에 반영돼요(문서ID·항목번호
-      숨김열로 정확히 어느 근무일지인지 찾아서 프로젝트명만 바꿔치기하는 방식이라, 행을 추가/삭제하거나
-      숨김열을 건드리지 않고 프로젝트 칸만 고치시면 돼요).
+      숨김열로 정확히 어느 근무일지인지 찾아서 값을 바꿔치기하는 방식이라, 행을 추가/삭제하거나
+      숨김열을 건드리지 않고 칸만 고치시면 돼요).
     </div>
     <button class="submit-btn" id="exportExcelBtn">엑셀로 내보내기</button>
 
     <div style="margin-top:20px; padding-top:16px; border-top:1px dashed var(--line);">
       <div style="font-size:12.5px; color:var(--muted); margin-bottom:10px; line-height:1.6;">
-        위에서 내보낸 엑셀의 프로젝트명 칸을 정리하신 뒤, 그 파일을 여기 올리면 실제 근무일지의
-        프로젝트명이 엑셀에 적힌 값으로 바뀝니다(투입시간·업무유형·상세내용 등 다른 값은 건드리지 않아요).
+        위에서 내보낸 엑셀에서 값을 채우거나 고치신 뒤, 그 파일을 여기 올리면 <b>엑셀에 값이 채워져 있는
+        칸만</b> 실제 근무일지에 반영돼요(프로젝트·출근시간·퇴근시간·상세내용·투입시간·업무유형 O표시
+        모두 대상 - 다만 빈 칸으로 남겨둔 셀은 건드리지 않고 기존 값을 그대로 둡니다). 출근·퇴근시간을
+        새로 채우면 프로젝트별 투입시간 합계에 맞춰 총 근무시간도 같이 다시 계산돼요. 행을 새로 추가한다고
+        새 프로젝트 항목이 생기진 않으니(기존 항목번호에만 매칭돼요), 하루를 여러 프로젝트로 새로 나누고
+        싶으면 이 방법 대신 알려주세요.
       </div>
       <input type="file" id="reimportProjectFile" accept=".xlsx,.xls">
       <button class="submit-btn" id="reimportProjectBtn" style="margin-left:8px;">정리한 엑셀 다시 반영</button>
@@ -2200,8 +2204,9 @@ if ('serviceWorker' in navigator) {
     try {
       const fileRows = await readAllSheetsRows(file);
 
-      // 문서ID별로 { 항목번호: 새 프로젝트명 } 형태로 모은다 - 하나의 근무일지에 프로젝트가
-      // 여러 개면 항목번호별로 각각 담겨있다.
+      // 문서ID별로 { doc: {출근시간/퇴근시간/상세내용 중 채워진 값}, projects: {항목번호: {프로젝트/투입시간/tasks 중
+      // 채워진 값}} } 형태로 모은다. 엑셀 셀이 빈칸이면 그 필드는 아예 담지 않아서, 기존 값을 건드리지 않는다.
+      const TASK_COLS = ['도면작성', '스케치업', '마감스펙', '제안서', '회의', '경영관리', '공무', '기타업무'];
       const byDocId = {};
       let skippedNoId = 0;
       fileRows.forEach(r => {
@@ -2210,7 +2215,29 @@ if ('serviceWorker' in navigator) {
         if (!docId || idxRaw === '' || idxRaw === undefined || idxRaw === null) { skippedNoId++; return; }
         const idx = Number(idxRaw);
         if (!Number.isInteger(idx) || idx < 0) { skippedNoId++; return; }
-        (byDocId[docId] = byDocId[docId] || {})[idx] = String(r['프로젝트'] || '').trim();
+
+        const entry = (byDocId[docId] = byDocId[docId] || { doc: {}, projects: {} });
+
+        const checkin = String(r['출근시간'] ?? '').trim();
+        const checkout = String(r['퇴근시간'] ?? '').trim();
+        const detail = String(r['상세내용'] ?? '').trim();
+        if (checkin) entry.doc['출근시간'] = checkin;
+        if (checkout) entry.doc['퇴근시간'] = checkout;
+        if (detail) entry.doc['상세내용'] = detail;
+
+        const projEdit = (entry.projects[idx] = entry.projects[idx] || {});
+        const projName = String(r['프로젝트'] ?? '').trim();
+        if (projName) projEdit['프로젝트'] = projName;
+        const hoursRaw = r['투입시간'];
+        const hoursStr = String(hoursRaw ?? '').trim();
+        if (hoursStr !== '' && !Number.isNaN(Number(hoursStr))) projEdit['투입시간'] = Number(hoursStr);
+        TASK_COLS.forEach(t => {
+          const v = String(r[t] ?? '').trim();
+          if (v) {
+            projEdit.tasks = projEdit.tasks || {};
+            projEdit.tasks[t] = v.toUpperCase() === 'O';
+          }
+        });
       });
 
       const docIds = Object.keys(byDocId);
@@ -2226,6 +2253,8 @@ if ('serviceWorker' in navigator) {
       // Firestore 'in' 쿼리는 한 번에 최대 10개까지만 지원해서 10개씩 나눠서 조회한다.
       const toUpdate = [];
       let changedProjectCount = 0;
+      let changedHoursCount = 0;
+      let changedDocFieldCount = 0;
       let missingDocCount = 0;
 
       for (let i = 0; i < docIds.length; i += 10) {
@@ -2235,18 +2264,62 @@ if ('serviceWorker' in navigator) {
         snap.docs.forEach(doc => {
           found.add(doc.id);
           const data = doc.data();
+          const edit = byDocId[doc.id];
           const projects = data.projects || [];
-          const edits = byDocId[doc.id];
           let changed = false;
-          const newProjects = projects.map((p, idx) => {
-            if (Object.prototype.hasOwnProperty.call(edits, idx) && (p['프로젝트'] || '') !== edits[idx]) {
+          const update = {};
+
+          // 문서 레벨 필드 (출근시간/퇴근시간/상세내용) - 엑셀에 채워진 값만, 기존과 다를 때만 반영
+          ['출근시간', '퇴근시간', '상세내용'].forEach(f => {
+            if (Object.prototype.hasOwnProperty.call(edit.doc, f) && (data[f] || '') !== edit.doc[f]) {
+              update[f] = edit.doc[f];
               changed = true;
-              changedProjectCount++;
-              return { ...p, '프로젝트': edits[idx] };
+              changedDocFieldCount++;
             }
+          });
+
+          // 프로젝트별 필드 (프로젝트명/투입시간/업무유형) - 기존 항목번호에만 매칭, 배열에 새 항목을 추가하진 않음
+          let projectsChanged = false;
+          const newProjects = projects.map((p, idx) => {
+            const pe = edit.projects[idx];
+            if (!pe) return p;
+            const merged = { ...p };
+            let pChanged = false;
+            if (Object.prototype.hasOwnProperty.call(pe, '프로젝트') && (p['프로젝트'] || '') !== pe['프로젝트']) {
+              merged['프로젝트'] = pe['프로젝트'];
+              pChanged = true;
+              changedProjectCount++;
+            }
+            if (Object.prototype.hasOwnProperty.call(pe, '투입시간') && Number(p['투입시간'] || 0) !== pe['투입시간']) {
+              merged['투입시간'] = pe['투입시간'];
+              pChanged = true;
+              changedHoursCount++;
+            }
+            if (pe.tasks) {
+              const existingTasks = p.tasks || {};
+              const newTasks = { ...existingTasks };
+              let tChanged = false;
+              Object.keys(pe.tasks).forEach(t => {
+                if (!!existingTasks[t] !== pe.tasks[t]) { newTasks[t] = pe.tasks[t]; tChanged = true; }
+              });
+              if (tChanged) { merged.tasks = newTasks; pChanged = true; }
+            }
+            if (pChanged) { projectsChanged = true; return merged; }
             return p;
           });
-          if (changed) toUpdate.push({ ref: doc.ref, projects: newProjects });
+
+          if (projectsChanged) {
+            update.projects = newProjects;
+            changed = true;
+            // 투입시간이 바뀐 경우, 총 근무시간도 프로젝트별 투입시간 합계에 맞춰 다시 계산해준다
+            // (안 그러면 출퇴근시간은 채워졌는데 총 근무시간만 예전 값/0으로 남아 불일치가 생김).
+            const newTotal = newProjects.reduce((s, p) => s + (Number(p['투입시간']) || 0), 0);
+            if (Math.abs(newTotal - (Number(data['총근무시간']) || 0)) > 0.001) {
+              update['총근무시간'] = newTotal;
+            }
+          }
+
+          if (changed) toUpdate.push({ ref: doc.ref, update });
         });
         chunk.forEach(id => { if (!found.has(id)) missingDocCount++; });
       }
@@ -2254,12 +2327,13 @@ if ('serviceWorker' in navigator) {
       for (let i = 0; i < toUpdate.length; i += 400) {
         const batchChunk = toUpdate.slice(i, i + 400);
         const batch = db.batch();
-        batchChunk.forEach(item => batch.update(item.ref, { projects: item.projects }));
+        batchChunk.forEach(item => batch.update(item.ref, item.update));
         await batch.commit();
       }
 
       resultEl.style.color = '#3f6b52';
-      resultEl.textContent = `완료: 근무일지 ${toUpdate.length}건, 프로젝트명 ${changedProjectCount}개 항목을 반영했습니다.`
+      resultEl.textContent = `완료: 근무일지 ${toUpdate.length}건 반영했습니다 `
+        + `(프로젝트명 ${changedProjectCount}건, 투입시간 ${changedHoursCount}건, 출근/퇴근/상세내용 ${changedDocFieldCount}건).`
         + (skippedNoId ? ` (문서ID/항목번호 없어서 건너뛴 행 ${skippedNoId}건)` : '')
         + (missingDocCount ? ` (이미 삭제되었거나 찾을 수 없는 근무일지 ${missingDocCount}건)` : '');
 
