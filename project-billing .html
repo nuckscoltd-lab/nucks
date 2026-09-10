@@ -93,6 +93,20 @@ if ('serviceWorker' in navigator) {
   }
   .status-badge.done{ background:#dfe9e2; color:var(--green); }
   .status-badge.review{ background:#fbe4e2; color:var(--red); }
+  .tag{
+    display:inline-block; font-size:11px; padding:3px 10px; border-radius:12px;
+    background:#ece9e2; color:#7a766c; white-space:nowrap;
+  }
+  .link-warn-dot{
+    display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--red);
+    margin-left:2px; vertical-align:middle;
+  }
+  .list-editor{ background:#fff; border:1px solid var(--line); border-radius:6px; padding:12px 14px; margin-bottom:14px; }
+  .list-editor .li-row{ display:flex; gap:8px; margin-bottom:8px; align-items:flex-start; }
+  .list-editor .li-row input{ flex:1; padding:7px 9px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:12.5px; }
+  .list-editor .li-remove{ background:none; border:none; color:var(--red); cursor:pointer; font-size:12px; text-decoration:underline; padding:7px 0; }
+  .list-editor .li-add{ background:#fff; border:1px dashed var(--line); border-radius:4px; padding:6px 12px; font-size:12px; color:var(--muted); cursor:pointer; }
+  .list-editor .li-add:hover{ border-color:var(--ink); color:var(--ink); }
 
   .status-btn-group{ display:flex; gap:6px; flex-wrap:wrap; }
   .status-btn{
@@ -188,6 +202,7 @@ if ('serviceWorker' in navigator) {
 <main id="mainArea">
   <div class="empty">불러오는 중...</div>
 </main>
+<datalist id="worklogProjectNameList"></datalist>
 
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
@@ -226,6 +241,93 @@ if ('serviceWorker' in navigator) {
   function num(v){ return Number(v) || 0; }
   function esc(s){ return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
 
+  // ---------- 근무일지 프로젝트명 동기화 ----------
+  // 근무일지(worklog.html)에서 실제로 쓰는 프로젝트명 자동완성 후보 - "근무일지 프로젝트명 연결"
+  // 입력칸에서 참고용 자동완성으로 보여준다(직접 타이핑도 항상 가능).
+  let WORKLOG_PROJECT_NAMES = [];
+  async function loadWorklogProjectNames(){
+    try{
+      const doc = await db.collection('officialProjects').doc('list').get();
+      if (!doc.exists) return;
+      const names = doc.data().names || [];
+      const excluded = doc.data().excluded || [];
+      WORKLOG_PROJECT_NAMES = names.filter(n => !excluded.includes(n)).sort();
+      const dl = document.getElementById('worklogProjectNameList');
+      if (dl) dl.innerHTML = WORKLOG_PROJECT_NAMES.map(n => `<option value="${esc(n)}">`).join('');
+      // 이미 목록이 그려진 뒤 로드가 끝났을 수도 있으니, 연결 필요 여부(⚠) 표시를 다시 갱신
+      // (아직 첫 렌더 전이면 곧 loadProjects()의 renderAll()이 최신 WORKLOG_PROJECT_NAMES로 그려줌)
+      if (document.getElementById('projectList')) renderList();
+    }catch(err){
+      console.warn('근무일지 프로젝트명 목록 불러오기 실패:', err);
+    }
+  }
+
+  // 기성청구에 등록된 프로젝트명 전체를 officialProjects/list.names에 반영한다(다른 페이지가 써둔
+  // excluded/codes 필드는 건드리지 않도록 항상 merge:true 사용) - 근무일지에 아직 한 번도 안 쓰인
+  // 이름도 자동완성 드롭다운에서 고를 수 있게 해준다. 실제로 "같은 프로젝트"인지 연결하는 것은 이것과
+  // 별개로 workLogProjectNames 필드가 담당한다(이름이 다르면 이 동기화만으로는 연결되지 않음).
+  async function syncBillingProjectNamesToOfficialList(projects){
+    try{
+      const names = (projects || []).map(p => (p.name || '').trim()).filter(Boolean);
+      if (!names.length) return;
+      const ref = db.collection('officialProjects').doc('list');
+      const doc = await ref.get();
+      const existing = (doc.exists && doc.data().names) || [];
+      const merged = [...new Set([...existing, ...names])].sort();
+      await ref.set({ names: merged, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    }catch(err){
+      console.error('프로젝트명 동기화 실패:', err);
+    }
+  }
+
+  function renderSimpleListEditor(containerId, items, listAttr){
+    const listHtml = listAttr ? ` list="${listAttr}"` : '';
+    return `
+      <div class="list-editor" id="${containerId}">
+        ${(items || []).map((v, i) => `
+          <div class="li-row" data-idx="${i}">
+            <input type="text" class="li-text"${listHtml} value="${esc(v)}">
+            <button type="button" class="li-remove" data-remove="${i}">삭제</button>
+          </div>
+        `).join('')}
+        <button type="button" class="li-add" data-add="1">+ 항목 추가</button>
+      </div>
+    `;
+  }
+
+  function wireSimpleListEditor(containerId, listAttr){
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const listHtml = listAttr ? ` list="${listAttr}"` : '';
+    container.querySelector('.li-add').addEventListener('click', () => {
+      const row = document.createElement('div');
+      row.className = 'li-row';
+      row.innerHTML = `<input type="text" class="li-text"${listHtml} value=""><button type="button" class="li-remove">삭제</button>`;
+      row.querySelector('.li-remove').addEventListener('click', () => row.remove());
+      container.insertBefore(row, container.querySelector('.li-add'));
+    });
+    container.querySelectorAll('.li-remove').forEach(btn => {
+      btn.addEventListener('click', () => btn.closest('.li-row').remove());
+    });
+  }
+
+  function readSimpleList(containerId){
+    const container = document.getElementById(containerId);
+    if (!container) return [];
+    return Array.from(container.querySelectorAll('.li-row .li-text'))
+      .map(el => el.value.trim())
+      .filter(Boolean);
+  }
+
+  // 이 기성청구 건이 근무일지와 실제로 "연결"이 필요한지 판단한다 - 이름이 근무일지 쪽과 이미 정확히
+  // 같으면(WORKLOG_PROJECT_NAMES에 존재) 연결 안 해도 이미 동기화된 것으로 본다. workLogProjectNames가
+  // 비어있고 이름도 안 겹칠 때만 "연결 필요" 상태로 취급한다.
+  function needsWorklogLink(p){
+    const linked = (p.workLogProjectNames || []).filter(Boolean);
+    if (linked.length) return false;
+    return !WORKLOG_PROJECT_NAMES.includes((p.name || '').trim());
+  }
+
   function totalClaim(p){
     if (p.rounds && p.rounds.length) return p.rounds.reduce((s, r) => s + num(r.claimAmount), 0);
     return 0;
@@ -259,6 +361,7 @@ if ('serviceWorker' in navigator) {
     await seedIfEmpty();
     const snap = await projectsRef.orderBy('order', 'asc').get();
     allProjects = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    syncBillingProjectNamesToOfficialList(allProjects); // 백그라운드 동기화 - 실패해도 화면 표시엔 영향 없음
     renderAll();
   }
 
@@ -398,7 +501,7 @@ if ('serviceWorker' in navigator) {
       <div class="project-card">
         <div class="project-head" data-head="${p.id}">
           <div>
-            <div class="project-name">${esc(p.name)}</div>
+            <div class="project-name">${esc(p.name)}${needsWorklogLink(p) ? ' <span class="link-warn-dot" title="근무일지 프로젝트명 연결 필요"></span>' : ''}</div>
             <div class="project-sub">${esc(p.client || '-')} · ${esc(p.category || '-')}${p.contractDate ? ' · 계약 ' + p.contractDate : ''}</div>
           </div>
           <div class="project-meta">
@@ -467,6 +570,16 @@ if ('serviceWorker' in navigator) {
       </div>
     `;
 
+    const linkedNames = p.workLogProjectNames || [];
+    const linkedHtml = `
+      <div class="subsection-title">근무일지 프로젝트명 연결</div>
+      ${linkedNames.length
+        ? `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px;">${linkedNames.map(n => `<span class="tag">${esc(n)}</span>`).join('')}</div>`
+        : (needsWorklogLink(p)
+          ? `<div style="font-size:12.5px; color:var(--red); margin-bottom:16px;">⚠ 연결된 근무일지 프로젝트명이 없습니다 - 이름 표기가 달라서 근무일지 쪽과 자동으로 매칭되지 않아요. "프로젝트 정보 수정"에서 연결해주세요.</div>`
+          : `<div style="font-size:12.5px; color:var(--muted); margin-bottom:16px;">근무일지에 쓰이는 이름과 이미 동일해서 별도 연결이 필요 없습니다.</div>`)}
+    `;
+
     const contentHtml = p.content ? `<div class="subsection-title">진행 메모</div><div class="content-box">${esc(p.content)}</div>` : '';
     const noteHtml = p.note ? `<div class="subsection-title">특이사항</div><div class="content-box">${esc(p.note)}</div>` : '';
     const extraInfo = `
@@ -482,6 +595,7 @@ if ('serviceWorker' in navigator) {
     `;
 
     return `
+      ${linkedHtml}
       ${contentHtml}
       ${noteHtml}
       ${extraInfo}
@@ -602,10 +716,20 @@ if ('serviceWorker' in navigator) {
           <div class="field"><label>최종사업비</label><input type="text" inputmode="numeric" id="ep-finalCost-${id}" class="money-in" value="${p.finalCost ? p.finalCost.toLocaleString('ko-KR') : ''}"></div>
         </div>
         <div class="field" style="margin-bottom:10px;"><label>특이사항</label><textarea id="ep-note-${id}">${esc(p.note)}</textarea></div>
+
+        <div class="subsection-title">근무일지 프로젝트명 연결</div>
+        <div style="font-size:12px; color:var(--muted); margin-bottom:10px; line-height:1.6;">
+          위 계약명과 근무일지에서 실제로 쓰는 프로젝트명 표기가 다른 경우 따로 연결해요. 근무일지에서
+          이 프로젝트를 부르는 이름을 정확히 입력하거나 자동완성에서 골라주세요(여러 표기를 같이
+          썼다면 여러 개 추가해도 돼요). 표기가 이미 완전히 같다면 비워둬도 괜찮아요.
+        </div>
+        ${renderSimpleListEditor(`ep-worklog-names-${id}`, p.workLogProjectNames || [], 'worklogProjectNameList')}
+
         <button class="add-btn" id="ep-save-${id}">저장</button>
         <button class="row-btn" id="ep-cancel-${id}" style="margin-left:8px;">취소</button>
       </div>
     `;
+    wireSimpleListEditor(`ep-worklog-names-${id}`, 'worklogProjectNameList');
     document.getElementById(`ep-save-${id}`).addEventListener('click', () => saveProjectEdit(id));
     document.getElementById(`ep-cancel-${id}`).addEventListener('click', () => { container.innerHTML = ''; });
     document.querySelectorAll(`#ep-status-group-${id} .status-btn`).forEach(btn => {
@@ -629,7 +753,8 @@ if ('serviceWorker' in navigator) {
       endDate: document.getElementById(`ep-endDate-${id}`).value || null,
       contractAmount: parseMoney(document.getElementById(`ep-contractAmount-${id}`)),
       finalCost: parseMoney(document.getElementById(`ep-finalCost-${id}`)),
-      note: document.getElementById(`ep-note-${id}`).value.trim()
+      note: document.getElementById(`ep-note-${id}`).value.trim(),
+      workLogProjectNames: readSimpleList(`ep-worklog-names-${id}`)
     };
     try {
       await projectsRef.doc(id).update(updateData);
@@ -653,14 +778,14 @@ if ('serviceWorker' in navigator) {
     await projectsRef.add({
       source: 'manual', name, client: '', category: '공사', status: '진행중',
       contractDate: null, startDate: null, endDate: null, contractAmount: 0,
-      note: '', content: '', rounds: [], finalCost: 0,
+      note: '', content: '', rounds: [], finalCost: 0, workLogProjectNames: [],
       order: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     await loadProjects();
   }
 
   auth.onAuthStateChanged((user) => {
-    if (user) loadProjects();
+    if (user) { loadProjects(); loadWorklogProjectNames(); }
   });
 
   // 금액 입력칸(money-in) 실시간 콤마 포맷팅 — 동적으로 계속 새로 생기는 요소들이라 이벤트 위임 방식 사용
