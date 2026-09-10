@@ -221,16 +221,16 @@ if ('serviceWorker' in navigator) {
   }
   .cal-month-label{ font-size:16px; font-weight:600; min-width:120px; text-align:center; }
   .cal-grid{
-    display:grid; grid-template-columns:repeat(7, 1fr);
+    display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); width:100%;
     border-top:1px solid var(--line); border-left:1px solid var(--line);
   }
   .cal-dow{
     padding:8px; font-size:11.5px; color:var(--muted); text-align:center;
     border-right:1px solid var(--line); border-bottom:1px solid var(--line);
-    background:#fff;
+    background:#fff; min-width:0;
   }
   .cal-cell{
-    min-height:110px; border-right:1px solid var(--line); border-bottom:1px solid var(--line);
+    min-height:110px; min-width:0; overflow:hidden; border-right:1px solid var(--line); border-bottom:1px solid var(--line);
     padding:6px; background:#fff; vertical-align:top;
   }
   .cal-cell.other-month{ background:#f2f0eb; }
