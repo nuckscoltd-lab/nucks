@@ -93,6 +93,26 @@ if ('serviceWorker' in navigator) {
     color:var(--muted); font-size:11px; cursor:pointer; white-space:nowrap;
   }
   .code-builder button:hover{ border-color:var(--ink); color:var(--ink); }
+  /* 프로젝트별 업무 내역 옆 "코드 목록 보기" - 근로자도 참고할 수 있게 관리자 화면이 아닌 작성폼에
+     달아둔 참고용 토글. 기본은 닫혀 있고, 열었을 때도 화면을 많이 차지하지 않게 작게 고정한다. */
+  .code-ref-toggle{ position:relative; font-size:11.5px; }
+  .code-ref-toggle summary{
+    list-style:none; cursor:pointer; color:var(--muted); text-decoration:underline;
+    white-space:nowrap;
+  }
+  .code-ref-toggle summary::-webkit-details-marker{ display:none; }
+  .code-ref-toggle summary:hover{ color:var(--ink); }
+  .code-ref-box{
+    position:absolute; right:0; top:calc(100% + 6px); z-index:20;
+    width:260px; background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:8px; box-shadow:0 4px 14px rgba(0,0,0,.08);
+  }
+  .code-ref-box input{
+    width:100%; padding:6px 8px; margin-bottom:6px; border:1px solid var(--line);
+    border-radius:4px; font-family:inherit; font-size:12px; box-sizing:border-box;
+  }
+  #codeRefList{ max-height:160px; overflow-y:auto; }
+  #codeRefList > div:last-child{ border-bottom:none !important; }
   .remove-project-btn{
     background:none; border:none; color:#a4453c; font-size:12px;
     cursor:pointer; text-decoration:underline; height:37px;
@@ -585,7 +605,16 @@ if ('serviceWorker' in navigator) {
       </div>
     </div>
 
-    <div class="project-rows-label">프로젝트별 업무 내역</div>
+    <div class="project-rows-label" style="display:flex; align-items:center; justify-content:space-between; gap:10px; text-transform:none; letter-spacing:normal;">
+      <span style="text-transform:uppercase; letter-spacing:.1em;">프로젝트별 업무 내역</span>
+      <details class="code-ref-toggle">
+        <summary>코드 목록 보기</summary>
+        <div class="code-ref-box">
+          <input type="text" id="codeRefSearch" placeholder="프로젝트명 또는 코드로 검색">
+          <div id="codeRefList"></div>
+        </div>
+      </details>
+    </div>
     <div id="projectRows"></div>
     <button class="add-project-btn" id="addProjectBtn" type="button">+ 프로젝트 추가</button>
 
@@ -885,11 +914,37 @@ if ('serviceWorker' in navigator) {
           codeListEl.innerHTML = distinctCodes.map(c => `<option value="${esc(c)}">`).join('');
         }
         updateProjectDatalist();
+        renderCodeRefList();
       }
     }catch(err){
       console.warn('회계현황 대시보드 프로젝트 목록 동기화 실패(대시보드에서 아직 한 번도 동기화되지 않았을 수 있음):', err);
     }
   }
+
+  // "코드 목록 보기" 참고용 토글 - 관리자 화면 안에 있는 상세 목록(사용건수·정렬 포함)과 달리,
+  // 작성폼에서 근로자도 바로 볼 수 있게 프로젝트명↔코드만 간단히 보여준다. PROJECT_CODES는
+  // 역할과 무관하게 모든 사용자에게 로드되므로 별도 조회 없이 그 자리에서 필터링만 한다.
+  function renderCodeRefList() {
+    const container = document.getElementById('codeRefList');
+    if (!container) return;
+    const search = (document.getElementById('codeRefSearch')?.value || '').trim().toLowerCase();
+    let rows = Object.entries(PROJECT_CODES).map(([name, code]) => ({ name, code }));
+    if (search) {
+      rows = rows.filter(r => r.name.toLowerCase().includes(search) || r.code.toLowerCase().includes(search));
+    }
+    rows.sort((a, b) => a.code.localeCompare(b.code));
+    if (rows.length === 0) {
+      container.innerHTML = `<div style="padding:6px 4px; color:var(--muted); font-size:11.5px;">${search ? '검색 결과가 없습니다.' : '아직 등록된 코드가 없습니다.'}</div>`;
+      return;
+    }
+    container.innerHTML = rows.map(r => `
+      <div style="display:flex; gap:8px; padding:4px 2px; font-size:11.5px; border-bottom:1px solid var(--line);">
+        <span style="font-family:monospace; color:var(--muted); white-space:nowrap;">${esc(r.code)}</span>
+        <span>${esc(r.name)}</span>
+      </div>
+    `).join('');
+  }
+  document.getElementById('codeRefSearch')?.addEventListener('input', renderCodeRefList);
 
   async function updateProjectDatalist() {
     // 자동완성 목록/정리 목록은 목록 화면의 월별 필터(allRows)와 무관하게 항상 전체 기간 기준으로 보여준다.
@@ -1431,13 +1486,20 @@ if ('serviceWorker' in navigator) {
     `;
     document.getElementById('projectRows').appendChild(row);
 
-    // 프로젝트명을 고르면(결산서와 연결된 이름이면) 코드를 자동으로 채워준다 - 단, 이미 코드 칸에
-    // 값이 있으면(수동으로 입력해둔 진행중 프로젝트 코드 등) 덮어쓰지 않는다.
+    // 프로젝트명을 고르면(결산서와 연결된 이름이면) 코드를 자동으로 채워준다. 프로젝트명을 다른
+    // 것으로 바꿀 때도 코드가 따라 갱신되도록(비어있으면 새 프로젝트 코드로, 매핑이 없으면 다시
+    // 비움), "지금 코드 칸의 값이 방금까지의 프로젝트명에 대한 자동 채움 값과 같았는지"를 기준으로
+    // 판단한다 - 그래야 사용자가 코드 칸에 직접 입력해둔 값(결산서 미등록 진행중 프로젝트 등)은
+    // 프로젝트명이 바뀌어도 실수로 지워지지 않는다.
     const projectInput = row.querySelector('.row-project');
     const codeInput = row.querySelector('.row-code');
+    let lastProjectName = (p['프로젝트'] || '').trim();
     projectInput.addEventListener('change', () => {
-      const matched = PROJECT_CODES[projectInput.value.trim()];
-      if (matched && !codeInput.value.trim()) codeInput.value = matched;
+      const newName = projectInput.value.trim();
+      const currentCode = codeInput.value.trim();
+      const wasAutoForOldName = !currentCode || currentCode === (PROJECT_CODES[lastProjectName] || '');
+      if (wasAutoForOldName) codeInput.value = PROJECT_CODES[newName] || '';
+      lastProjectName = newName;
     });
 
     // 코드분류범례 드롭다운으로 년도+작업분류를 고르고 "코드 생성"을 누르면 해당 조합에서
