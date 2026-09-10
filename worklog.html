@@ -1805,6 +1805,7 @@ if ('serviceWorker' in navigator) {
 
     try {
       let query, leaveQuery;
+      const { start, end } = monthBounds(activeMonth);
 
       if (showAllRange) {
         if (currentRole === 'admin') {
@@ -1814,21 +1815,29 @@ if ('serviceWorker' in navigator) {
           query = db.collection('workLogs').where('uid', '==', currentUser.uid);
           leaveQuery = db.collection('leaves').where('uid', '==', currentUser.uid);
         }
+      } else if (currentRole === 'admin') {
+        // 관리자 화면: 이번 달(또는 이동한 달)만 서버에서 걸러서 가져온다 - 데이터가 쌓여도 매번 가볍게 로딩됨
+        query = db.collection('workLogs').where('날짜', '>=', start).where('날짜', '<=', end).orderBy('날짜', 'desc');
+        leaveQuery = db.collection('leaves').where('날짜', '>=', start).where('날짜', '<=', end);
       } else {
-        // 기본값: 이번 달(또는 이동한 달)만 서버에서 걸러서 가져온다 - 데이터가 쌓여도 매번 가볍게 로딩됨
-        const { start, end } = monthBounds(activeMonth);
-        if (currentRole === 'admin') {
-          query = db.collection('workLogs').where('날짜', '>=', start).where('날짜', '<=', end).orderBy('날짜', 'desc');
-          leaveQuery = db.collection('leaves').where('날짜', '>=', start).where('날짜', '<=', end);
-        } else {
-          query = db.collection('workLogs').where('uid', '==', currentUser.uid).where('날짜', '>=', start).where('날짜', '<=', end);
-          leaveQuery = db.collection('leaves').where('uid', '==', currentUser.uid).where('날짜', '>=', start).where('날짜', '<=', end);
-        }
+        // 근로자 화면: uid(==) 조건과 날짜(범위) 조건을 같은 쿼리에 함께 걸면 Firestore 복합 색인이
+        // 없어서 조회 자체가 실패한다(관리자 쪽은 uid 조건이 없어서 안 걸림 - 그래서 관리자만 정상
+        // 작동했던 것). 본인 데이터만 보는 근로자 계정은 전체를 가져와도 양이 많지 않으니, uid로만
+        // 걸러서 가져온 뒤 이번 달 범위는 아래에서 클라이언트가 걸러낸다(별도 색인 불필요).
+        query = db.collection('workLogs').where('uid', '==', currentUser.uid);
+        leaveQuery = db.collection('leaves').where('uid', '==', currentUser.uid);
       }
 
       const [snapshot, leaveSnapshot] = await Promise.all([query.get(), leaveQuery.get()]);
       allRows = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       allLeaveRows = leaveSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      // 근로자 화면에서 "이번 달만 보기" 모드일 때는 위에서 uid로만 걸러온 전체 데이터 중 이번 달
+      // 범위만 클라이언트에서 남긴다.
+      if (!showAllRange && currentRole !== 'admin') {
+        allRows = allRows.filter(r => (r['날짜'] || '') >= start && (r['날짜'] || '') <= end);
+        allLeaveRows = allLeaveRows.filter(r => (r['날짜'] || '') >= start && (r['날짜'] || '') <= end);
+      }
 
       // 근로자 본인 목록/월별 스코핑 쿼리는 별도 정렬(최신순) - where 절 조합 시 orderBy 인덱스 이슈 회피를 위해 클라이언트에서 정렬
       allRows.sort((a, b) => (b['날짜'] || '').localeCompare(a['날짜'] || ''));
