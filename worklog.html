@@ -504,21 +504,23 @@ if ('serviceWorker' in navigator) {
 
     <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
 
-    <div class="panel-title">프로젝트명 정리 (중복 통합)</div>
+    <div class="panel-title">프로젝트명 정리 (중복 통합 · 이름 변경)</div>
     <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
       아래 목록은 프로젝트명 자동완성 드롭다운에 실제로 뜨는 이름 전체예요(근무일지에 이미 쓰인 이름 +
       회계현황 대시보드·프로젝트 결산 등에서 동기화된 이름 모두 포함) - 근무일지에 아직 안 쓰인 이름도
-      여기서 같이 정리할 수 있어요. 같은 프로젝트를 가리키는 이름들을 체크하고, 통합할 이름을 입력한 뒤
-      "통합" 버튼을 누르면 해당 근무일지들의 프로젝트명이 전부 하나로 바뀌고, 자동완성 드롭다운에서도
-      선택한 이름들 대신 통합한 이름 하나만 남아요(다른 페이지를 다시 열어도 다시 갈라지지 않아요).
+      여기서 같이 정리할 수 있어요. <b>이름 하나만 체크</b>하고 아래에 새 이름을 입력한 뒤 "통합"을
+      누르면 그 프로젝트명만 새 이름으로 바뀌어요(직접 자율입력 후 중복 통합할 필요 없이, 이 화면에서
+      바로 이름을 수정하는 용도로 쓰시면 돼요). 여러 개를 체크하면 그 이름들을 전부 아래 이름 하나로
+      합치는 통합 기능으로 동작해요. 어느 쪽이든 해당 근무일지들의 프로젝트명이 전부 바뀌고,
+      자동완성 드롭다운에서도 새 이름 하나만 남아요(다른 페이지를 다시 열어도 다시 갈라지지 않아요).
       근무일지에서 아예 안 쓰이고 목록에서만 지우고 싶으면 "삭제"를 쓰면 돼요.
     </div>
     <div id="projectCleanupList" style="max-height:220px; overflow-y:auto; border:1px solid var(--line); border-radius:4px; padding:12px; margin-bottom:12px; background:#fff;"></div>
     <div class="field" style="max-width:320px; margin-bottom:12px;">
-      <label for="mergeTargetName">통합할 이름</label>
+      <label for="mergeTargetName">통합/변경할 이름</label>
       <input type="text" id="mergeTargetName" list="projectList" placeholder="예: 힐스테이트 장위">
     </div>
-    <button class="submit-btn" id="mergeProjectsBtn">선택한 이름들을 위 이름으로 통합</button>
+    <button class="submit-btn" id="mergeProjectsBtn">선택한 이름을 위 이름으로 통합/변경</button>
     <button class="submit-btn" id="deleteProjectsBtn" style="background:#a4453c; margin-left:8px;">선택한 항목 삭제</button>
     <button class="submit-btn" id="restoreProjectsBtn" style="background:var(--muted); margin-left:8px;">선택한 항목 자동완성에 복원</button>
     <div style="font-size:11.5px; color:var(--muted); margin-top:6px;">
@@ -1184,17 +1186,25 @@ if ('serviceWorker' in navigator) {
     const targetName = document.getElementById('mergeTargetName').value.trim();
     const resultEl = document.getElementById('mergeResult');
 
-    if (checked.length < 2) {
+    if (checked.length < 1) {
       resultEl.style.color = '#a4453c';
-      resultEl.textContent = '통합할 이름을 2개 이상 선택해 주세요.';
+      resultEl.textContent = '통합(또는 이름 변경)할 항목을 1개 이상 선택해 주세요.';
       return;
     }
     if (!targetName) {
       resultEl.style.color = '#a4453c';
-      resultEl.textContent = '통합할 이름을 입력해 주세요.';
+      resultEl.textContent = '새로 쓸 이름을 입력해 주세요.';
       return;
     }
-    if (!confirm(`선택한 ${checked.length}개 프로젝트명을 "${targetName}"(으)로 통합합니다.\n(이연경, 손영화 등 모든 사원의 근무일지에 적용됩니다) 계속할까요?`)) return;
+    if (checked.length === 1 && checked[0] === targetName) {
+      resultEl.style.color = '#a4453c';
+      resultEl.textContent = '이미 같은 이름이에요. 바꿀 새 이름을 입력해 주세요.';
+      return;
+    }
+    const confirmMsg = checked.length === 1
+      ? `"${checked[0]}"을(를) "${targetName}"(으)로 이름을 바꿉니다.\n(이연경, 손영화 등 모든 사원의 근무일지에 적용됩니다) 계속할까요?`
+      : `선택한 ${checked.length}개 프로젝트명을 "${targetName}"(으)로 통합합니다.\n(이연경, 손영화 등 모든 사원의 근무일지에 적용됩니다) 계속할까요?`;
+    if (!confirm(confirmMsg)) return;
 
     resultEl.style.color = 'var(--muted)';
     resultEl.textContent = '통합 처리 중...';
@@ -1210,7 +1220,10 @@ if ('serviceWorker' in navigator) {
           const name = (p['프로젝트'] || '').trim();
           if (checked.includes(name) && name !== targetName) {
             changed = true;
-            return { ...p, '프로젝트': targetName, '프로젝트코드': PROJECT_CODES[targetName] || '' };
+            // 새 이름에 매핑된 코드가 있으면 그걸 쓰고, 없으면(아직 결산서 연결 전이라 새 이름
+            // 매핑이 없는 경우 등) 원래 이 항목에 붙어있던 코드를 그대로 유지한다 - 이름만 바꾸는
+            // 경우(rename) 코드가 괜히 지워지지 않도록.
+            return { ...p, '프로젝트': targetName, '프로젝트코드': PROJECT_CODES[targetName] || p['프로젝트코드'] || '' };
           }
           return p;
         });
@@ -1232,15 +1245,67 @@ if ('serviceWorker' in navigator) {
       const listDoc = await listRef.get();
       const existingNames = (listDoc.exists && listDoc.data().names) || [];
       const existingExcluded = (listDoc.exists && listDoc.data().excluded) || [];
+      const existingCodes = (listDoc.exists && listDoc.data().codes) || {};
       OFFICIAL_PROJECTS = [...new Set([...existingNames.filter(n => !otherChecked.includes(n)), targetName])].sort();
       EXCLUDED_PROJECTS = [...new Set([...existingExcluded, ...otherChecked])].sort();
+
+      // 코드 매핑도 함께 옮겨준다 - 옛 이름에 걸려있던 코드가 있으면(새 이름에 아직 매핑이 없을 때)
+      // 새 이름으로 이전하고, 옛 이름의 매핑은 정리한다. 이렇게 안 하면 이름을 바꾼 뒤 "새 이름"으로
+      // 새로 근무일지를 작성할 때 코드가 자동으로 안 붙는 문제가 생긴다.
+      const newCodes = { ...existingCodes };
+      if (!newCodes[targetName]) {
+        const movedCode = checked.map(n => existingCodes[n]).find(Boolean);
+        if (movedCode) newCodes[targetName] = movedCode;
+      }
+      otherChecked.forEach(n => { delete newCodes[n]; });
+      PROJECT_CODES = newCodes;
+
       await listRef.set({
-        names: OFFICIAL_PROJECTS, excluded: EXCLUDED_PROJECTS,
+        names: OFFICIAL_PROJECTS, excluded: EXCLUDED_PROJECTS, codes: newCodes,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
 
+      // 프로젝트 결산/기성청구 페이지에도 이 이름을 "근무일지 프로젝트명"으로 연결해둔 곳이 있을 수
+      // 있다(workLogProjectNames 필드) - 그쪽 연결 문자열이 옛 이름 그대로 남아있으면 더 이상 실제
+      // 근무일지와 매칭되지 않아 코드 연결이 끊기므로, 옛 이름이 들어있는 연결을 새 이름으로 함께
+      // 갱신해준다. 실패해도(권한 등) 근무일지 자체 통합/변경은 이미 끝난 뒤라 별도로 안내한다.
+      let settlementUpdated = 0, billingUpdated = 0, linkSyncError = false;
+      async function syncWorklogNameLinks(collectionName) {
+        const snap = await db.collection(collectionName).get();
+        const items = [];
+        snap.docs.forEach(doc => {
+          const names = doc.data().workLogProjectNames || [];
+          if (!names.some(n => checked.includes(n))) return;
+          const newNames = [...new Set(names.map(n => checked.includes(n) ? targetName : n))];
+          items.push({ ref: doc.ref, workLogProjectNames: newNames });
+        });
+        for (let i = 0; i < items.length; i += 400) {
+          const chunk = items.slice(i, i + 400);
+          const batch = db.batch();
+          chunk.forEach(item => batch.update(item.ref, { workLogProjectNames: item.workLogProjectNames }));
+          await batch.commit();
+        }
+        return items.length;
+      }
+      try {
+        settlementUpdated = await syncWorklogNameLinks('projectSettlements');
+        billingUpdated = await syncWorklogNameLinks('billingProjects');
+      } catch (linkErr) {
+        linkSyncError = true;
+        console.warn('결산서/기성청구 연결 정보 갱신 실패:', linkErr);
+      }
+
       resultEl.style.color = '#3f6b52';
-      resultEl.textContent = `완료: 근무일지 ${toUpdate.length}건 + 프로젝트명 목록이 "${targetName}"(으)로 통합되었습니다.`;
+      let msg = checked.length === 1
+        ? `완료: 근무일지 ${toUpdate.length}건 + 프로젝트명 목록에서 "${checked[0]}" → "${targetName}"(으)로 이름이 바뀌었습니다.`
+        : `완료: 근무일지 ${toUpdate.length}건 + 프로젝트명 목록이 "${targetName}"(으)로 통합되었습니다.`;
+      if (settlementUpdated || billingUpdated) {
+        msg += ` (결산서 ${settlementUpdated}건, 기성청구 ${billingUpdated}건의 연결 정보도 함께 갱신)`;
+      }
+      if (linkSyncError) {
+        msg += ' ⚠ 단, 결산서/기성청구 쪽 연결 정보 갱신은 실패했어요 - 해당 페이지에서 직접 확인해주세요.';
+      }
+      resultEl.textContent = msg;
       document.getElementById('mergeTargetName').value = '';
 
       await loadLogs();
