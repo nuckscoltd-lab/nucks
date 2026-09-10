@@ -1494,6 +1494,22 @@ if ('serviceWorker' in navigator) {
     const projectInput = row.querySelector('.row-project');
     const codeInput = row.querySelector('.row-code');
     let lastProjectName = (p['프로젝트'] || '').trim();
+
+    // 이미 프로젝트명이 채워진 상태에서 드롭다운 화살표(▼)를 눌러도 브라우저가 "지금 입력된 값과
+    // 일치하는 항목"으로만 후보를 필터링해서 사실상 아무것도 안 뜨는 것처럼 보이는 문제 - 포커스가
+    // 잡히는 순간 입력칸을 비워서 전체 후보가 다시 펼쳐지게 하고, 아무것도 선택하지 않고 다른 곳을
+    // 클릭하면(빈 칸으로 남으면) 원래 값으로 되돌린다. 다른 프로젝트를 고르거나 직접 타이핑하면
+    // 정상적으로 그 값이 남는다.
+    projectInput.addEventListener('focus', () => {
+      projectInput.dataset.prevValue = projectInput.value;
+      projectInput.value = '';
+    });
+    projectInput.addEventListener('blur', () => {
+      if (!projectInput.value.trim() && projectInput.dataset.prevValue) {
+        projectInput.value = projectInput.dataset.prevValue;
+      }
+    });
+
     projectInput.addEventListener('change', () => {
       const newName = projectInput.value.trim();
       const currentCode = codeInput.value.trim();
