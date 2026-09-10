@@ -707,6 +707,12 @@ if ('serviceWorker' in navigator) {
             </div>
             <input type="hidden" id="ep-status-${id}" value="${esc(p.status)}">
           </div>
+          <div class="field"><label>코드</label>
+            <div style="display:flex; gap:4px;">
+              <input type="text" id="ep-code-${id}" value="${esc(p.code)}" placeholder="예: D-2026" style="min-width:90px;">
+              <button type="button" class="row-btn" id="ep-code-auto-${id}" style="white-space:nowrap; padding:7px 8px; border:1px solid var(--line); border-radius:4px; text-decoration:none;">자동채우기</button>
+            </div>
+          </div>
         </div>
         <div class="form-row">
           <div class="field"><label>계약일자</label><input type="date" id="ep-contractDate-${id}" value="${p.contractDate || ''}"></div>
@@ -739,6 +745,21 @@ if ('serviceWorker' in navigator) {
         btn.classList.add('active');
       });
     });
+    // 코드 "자동채우기" - 기존 코드들이 전부 "구분(D=설계/C=공사)-계약연도" 패턴이라(예: D-2026),
+    // 위에서 고른 구분과 계약일자를 기준으로 같은 패턴을 만들어 채워준다(계약일자가 비어있으면
+    // 올해 기준). 이미 값이 있으면 덮어쓸지 확인한다.
+    document.getElementById(`ep-code-auto-${id}`).addEventListener('click', () => {
+      const category = document.getElementById(`ep-category-${id}`).value;
+      const contractDate = document.getElementById(`ep-contractDate-${id}`).value;
+      const year = contractDate ? contractDate.slice(0, 4) : String(new Date().getFullYear());
+      const prefix = category === '설계' ? 'D' : 'C';
+      const generated = `${prefix}-${year}`;
+      const codeInput = document.getElementById(`ep-code-${id}`);
+      if (codeInput.value.trim() && codeInput.value.trim() !== generated) {
+        if (!confirm(`현재 코드 칸에 "${codeInput.value.trim()}"이(가) 입력되어 있습니다.\n"${generated}"(으)로 덮어쓸까요?`)) return;
+      }
+      codeInput.value = generated;
+    });
   }
 
   async function saveProjectEdit(id){
@@ -747,6 +768,7 @@ if ('serviceWorker' in navigator) {
       name: document.getElementById(`ep-name-${id}`).value.trim(),
       client: document.getElementById(`ep-client-${id}`).value.trim(),
       category: document.getElementById(`ep-category-${id}`).value,
+      code: document.getElementById(`ep-code-${id}`).value.trim(),
       status: document.getElementById(`ep-status-${id}`).value.trim(),
       contractDate: document.getElementById(`ep-contractDate-${id}`).value || null,
       startDate: document.getElementById(`ep-startDate-${id}`).value || null,
@@ -776,7 +798,7 @@ if ('serviceWorker' in navigator) {
     const name = prompt('새 프로젝트의 계약명을 입력하세요');
     if (!name) return;
     await projectsRef.add({
-      source: 'manual', name, client: '', category: '공사', status: '진행중',
+      source: 'manual', name, client: '', category: '공사', status: '진행중', code: '',
       contractDate: null, startDate: null, endDate: null, contractAmount: 0,
       note: '', content: '', rounds: [], finalCost: 0, workLogProjectNames: [],
       order: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp()
