@@ -971,6 +971,28 @@ if ('serviceWorker' in navigator) {
       renderProjectCleanupList(counts, merged);
       renderUncodedProjectsList(counts);
       renderCodeRegistryList();
+      // 근무일지 자체 자동완성(#projectList)은 실제 사용된 이름(usedProjects)까지 항상 다 보여주지만,
+      // officialProjects/list.names는 "정리" 도구로 손댄 이름만 반영되어 있어서 둘이 어긋날 수 있다.
+      // 결산서/기성청구 페이지의 "근무일지 프로젝트명 연결" 드롭다운은 officialProjects/list.names만
+      // 보고 있으므로, 여기서 실사용 이름을 그 목록에도 채워 넣어 두 화면의 드롭다운이 벌어지지 않게 한다.
+      syncUsedProjectNamesToOfficialList(usedProjects);
+    }
+  }
+
+  // 실제 근무일지에서 쓰인 프로젝트명 중 officialProjects/list.names(결산서·기성청구가 참조하는 공식
+  // 목록)에 아직 없는 이름만 골라 채워 넣는다. 제외 목록(EXCLUDED_PROJECTS)에 있는 이름은 의도적으로
+  // 뺀 것이므로 다시 넣지 않는다. 추가할 게 없으면 아예 쓰기를 하지 않는다.
+  async function syncUsedProjectNamesToOfficialList(usedProjects) {
+    try {
+      const newNames = [...new Set(usedProjects)]
+        .filter(n => n && !OFFICIAL_PROJECTS.includes(n) && !EXCLUDED_PROJECTS.includes(n));
+      if (!newNames.length) return;
+      const listRef = db.collection('officialProjects').doc('list');
+      const merged = [...new Set([...OFFICIAL_PROJECTS, ...newNames])].sort();
+      await listRef.set({ names: merged, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      OFFICIAL_PROJECTS = merged;
+    } catch (err) {
+      console.warn('실사용 프로젝트명 → 공식 목록(officialProjects/list) 동기화 실패:', err);
     }
   }
 
