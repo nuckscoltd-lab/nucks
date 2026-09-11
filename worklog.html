@@ -1274,10 +1274,20 @@ if ('serviceWorker' in navigator) {
         const snap = await db.collection(collectionName).get();
         const items = [];
         snap.docs.forEach(doc => {
-          const names = doc.data().workLogProjectNames || [];
-          if (!names.some(n => checked.includes(n))) return;
-          const newNames = [...new Set(names.map(n => checked.includes(n) ? targetName : n))];
-          items.push({ ref: doc.ref, workLogProjectNames: newNames });
+          const data = doc.data();
+          const names = data.workLogProjectNames || [];
+          const ownName = (data.name || '').trim();
+
+          if (names.some(n => checked.includes(n))) {
+            // 이미 "근무일지 프로젝트명 연결"이 명시적으로 되어 있던 문서 - 옛 이름을 새 이름으로 교체
+            const newNames = [...new Set(names.map(n => checked.includes(n) ? targetName : n))];
+            items.push({ ref: doc.ref, workLogProjectNames: newNames });
+          } else if (!names.length && checked.includes(ownName)) {
+            // 명시적 연결은 없었지만, 문서 자체의 이름이 옛 이름과 우연히 똑같아서(암묵적 매칭)
+            // 지금까지는 연결된 것처럼 보였던 문서 - 이름이 바뀌면 이 우연한 일치가 깨지므로,
+            // 이번 기회에 새 이름을 명시적으로 연결해서 다음 번 이름 변경에도 끊기지 않게 만들어둔다.
+            items.push({ ref: doc.ref, workLogProjectNames: [targetName] });
+          }
         });
         for (let i = 0; i < items.length; i += 400) {
           const chunk = items.slice(i, i + 400);
