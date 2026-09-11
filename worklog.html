@@ -1112,7 +1112,14 @@ if ('serviceWorker' in navigator) {
       row.querySelector('.cb-generate').addEventListener('click', () => {
         const year = row.querySelector('.cb-year').value;
         const classCode = row.querySelector('.cb-class').value;
-        const pool = [...Object.values(PROJECT_CODES), ...ALL_WORKLOG_CODES];
+        // 아직 저장 전이라도 이 미지정 목록의 다른 행에 이미 입력/생성해둔 코드까지 풀에 포함해야
+        // 한 번에 여러 프로젝트를 같은 년도-분류로 연달아 생성할 때 서로 같은 일련번호로 겹치지
+        // 않는다(PROJECT_CODES/ALL_WORKLOG_CODES는 실제로 저장(소급 반영)을 눌러야만 갱신되므로,
+        // 저장 전 다른 행들의 입력값은 이 풀에 안 들어가 있으면 그대로 놓치게 된다).
+        const inProgressCodes = Array.from(container.querySelectorAll('.uncoded-code-input'))
+          .map(inp => inp.value.trim())
+          .filter(Boolean);
+        const pool = [...Object.values(PROJECT_CODES), ...ALL_WORKLOG_CODES, ...inProgressCodes];
         const serial = suggestNextSerial(year, classCode, pool);
         codeInput.value = `${year}-${classCode}-${serial}`;
       });
@@ -1176,8 +1183,84 @@ if ('serviceWorker' in navigator) {
     });
   }
 
-  // 지금까지 지정된 프로젝트 코드(officialProjects/list.codes) 전체를 검색/정렬해서 보여주는
-  // 읽기 전용 목록 - "어디까지 코드가 채워져 있는지" 한눈에 확인하기 위한 용도.
+  // 이미 코드가 지정된 프로젝트 1건의 코드 "값"만 바꾼다(이름/다른 프로젝트의 코드는 손대지 않음).
+  // FieldPath로 그 키만 정확히 지정해서 쓰기 때문에, 다른 코드 항목에는 전혀 영향이 없다.
+  async function updateSingleProjectCode(name, newCode) {
+    const listRef = db.collection('officialProjects').doc('list');
+    await listRef.update(
+      new firebase.firestore.FieldPath('codes', name), newCode,
+      'updatedAt', firebase.firestore.FieldValue.serverTimestamp()
+    );
+    PROJECT_CODES[name] = newCode;
+  }
+
+  // 코드 값을 하나 바꿀 때, 그 코드와 연동되어 있는 다른 데이터에도 함께 반영한다:
+  //  1) officialProjects/list.codes(매핑 자체)
+  //  2) 이 프로젝트명을 쓰는 기존 근무일지들의 "프로젝트코드" 필드(소급 반영)
+  //  3) 이 프로젝트명에 연결된 프로젝트결산 문서의 PROJ.NO 필드
+  // 3번이 중요한 이유: project-settlement.html은 페이지를 열 때마다 결산서 자체의 PROJ.NO 값을
+  // officialProjects/list.codes로 다시 밀어넣는다(그쪽이 원본이라는 전제). 여기서 codes만 고치고
+  // 결산서의 PROJ.NO는 그대로 두면, 다음에 프로젝트결산 페이지를 여는 순간 옛 값이 되살아나면서
+  // 방금 고친 게 조용히 되돌아간다 - 그래서 결산서 쪽도 반드시 같이 갱신해야 한다.
+  async function propagateProjectCodeChange(name, newCode) {
+    const result = { worklogCount: 0, settlementCount: 0 };
+
+    // 1) officialProjects/list.codes
+    await updateSingleProjectCode(name, newCode);
+
+    // 2) 근무일지 소급 반영
+    const wlSnap = await db.collection('workLogs').get();
+    const wlToUpdate = [];
+    wlSnap.docs.forEach(doc => {
+      const data = doc.data();
+      const projects = data.projects || [];
+      let changed = false;
+      const newProjects = projects.map(p => {
+        const pName = (p['프로젝트'] || '').trim();
+        if (pName !== name) return p;
+        if ((p['프로젝트코드'] || '') === newCode) return p;
+        changed = true;
+        result.worklogCount++;
+        return { ...p, '프로젝트코드': newCode };
+      });
+      if (changed) wlToUpdate.push({ ref: doc.ref, projects: newProjects });
+    });
+    for (let i = 0; i < wlToUpdate.length; i += 400) {
+      const chunk = wlToUpdate.slice(i, i + 400);
+      const batch = db.batch();
+      chunk.forEach(item => batch.update(item.ref, { projects: item.projects }));
+      await batch.commit();
+    }
+
+    // 3) 연결된 프로젝트결산 문서의 PROJ.NO 갱신 - "근무일지 프로젝트명 연결"(workLogProjectNames)에
+    // 이 이름이 등록되어 있으면 그 문서, 연결이 없으면 결산서 자체의 name이 이 이름과 같은 문서.
+    const stSnap = await db.collection('projectSettlements').get();
+    const stToUpdate = [];
+    stSnap.docs.forEach(doc => {
+      const data = doc.data();
+      const linked = (data.workLogProjectNames || []).map(n => (n || '').trim()).filter(Boolean);
+      const ownName = (data.name || '').trim();
+      const matches = linked.includes(name) || (!linked.length && ownName === name);
+      if (matches && (data.projNo || '') !== newCode) {
+        stToUpdate.push(doc.ref);
+        result.settlementCount++;
+      }
+    });
+    for (let i = 0; i < stToUpdate.length; i += 400) {
+      const chunk = stToUpdate.slice(i, i + 400);
+      const batch = db.batch();
+      chunk.forEach(ref => batch.update(ref, { projNo: newCode }));
+      await batch.commit();
+    }
+
+    return result;
+  }
+
+  // 지금까지 지정된 프로젝트 코드(officialProjects/list.codes) 전체를 검색/정렬해서 보여주고,
+  // 일련번호가 꼬였거나 잘못 지정된 코드를 그 자리에서 바로 고칠 수 있게 해주는 목록.
+  // 수정 전용도로 원래 목록 렌더 함수는 그대로 두고, "수정" 버튼을 누른 행만 인라인으로 편집 모드로
+  // 바뀌도록 별도 함수(renderCodeRegistryList) 안에서 이벤트를 다시 붙인다(검색/정렬이 바뀔 때마다
+  // 전체를 다시 그리므로 편집 중이던 값은 저장하지 않으면 유지되지 않는다).
   function renderCodeRegistryList() {
     const container = document.getElementById('codeRegistryList');
     const summaryEl = document.getElementById('codeRegistrySummary');
@@ -1217,14 +1300,18 @@ if ('serviceWorker' in navigator) {
             <th style="text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap;">코드</th>
             <th style="text-align:left; padding:8px 10px; border-bottom:1px solid var(--line);">프로젝트명</th>
             <th style="text-align:right; padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap;">근무일지 사용건수</th>
+            <th style="padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap;"></th>
           </tr>
         </thead>
         <tbody>
           ${rows.map(r => `
-            <tr>
-              <td style="padding:6px 10px; border-bottom:1px solid var(--line); white-space:nowrap; font-family:monospace;">${esc(r.code)}</td>
+            <tr class="code-registry-row" data-name="${esc(r.name)}">
+              <td class="code-registry-code-cell" style="padding:6px 10px; border-bottom:1px solid var(--line); white-space:nowrap; font-family:monospace;">${esc(r.code)}</td>
               <td style="padding:6px 10px; border-bottom:1px solid var(--line);">${esc(r.name)}</td>
               <td style="padding:6px 10px; border-bottom:1px solid var(--line); text-align:right; ${r.count === 0 ? 'color:var(--muted);' : ''}">${r.count}건</td>
+              <td style="padding:6px 10px; border-bottom:1px solid var(--line); white-space:nowrap;">
+                <button type="button" class="code-registry-edit-btn" style="font-size:11.5px; padding:2px 8px; border:1px solid var(--line); border-radius:4px; background:#fff; cursor:pointer;">수정</button>
+              </td>
             </tr>
           `).join('')}
         </tbody>
@@ -1234,6 +1321,42 @@ if ('serviceWorker' in navigator) {
     summaryEl.textContent = search
       ? `검색 결과 ${rows.length}건 (전체 코드 지정 ${totalCount}건 중)`
       : `총 ${totalCount}개 프로젝트에 코드가 지정되어 있습니다.`;
+
+    // "수정" 버튼 - 코드 칸을 입력창으로 바꿔서 그 프로젝트 하나의 코드 값만 직접 고칠 수 있게 한다.
+    // (일련번호가 꼬였거나 오타로 잘못 지정된 코드를 콘솔 스크립트 없이 바로 고치기 위한 용도)
+    container.querySelectorAll('.code-registry-row').forEach(rowEl => {
+      const name = rowEl.dataset.name;
+      const codeCell = rowEl.querySelector('.code-registry-code-cell');
+      const editBtn = rowEl.querySelector('.code-registry-edit-btn');
+      const originalCode = PROJECT_CODES[name] || '';
+
+      editBtn.addEventListener('click', () => {
+        if (editBtn.textContent === '수정') {
+          codeCell.innerHTML = `<input type="text" class="code-registry-edit-input" value="${esc(originalCode)}" style="width:120px; font-family:monospace; font-size:12.5px;">`;
+          editBtn.textContent = '저장';
+        } else {
+          const input = codeCell.querySelector('.code-registry-edit-input');
+          const newCode = (input?.value || '').trim();
+          if (!newCode) { alert('코드를 입력해 주세요.'); return; }
+          if (newCode === originalCode) {
+            codeCell.textContent = originalCode;
+            editBtn.textContent = '수정';
+            return;
+          }
+          if (!confirm(`"${name}"의 코드를 "${originalCode}" → "${newCode}"(으)로 바꿀까요?\n(다른 프로젝트의 코드는 영향받지 않습니다. 이 이름을 쓰는 근무일지와 연결된 프로젝트결산 문서의 코드도 함께 갱신됩니다 - 문서 수에 따라 몇 초 걸릴 수 있어요.)`)) return;
+          editBtn.disabled = true;
+          codeCell.innerHTML = `<span style="color:var(--muted);">반영 중...</span>`;
+          propagateProjectCodeChange(name, newCode).then(result => {
+            renderCodeRegistryList();
+            alert(`완료: "${name}" → "${newCode}"\n근무일지 ${result.worklogCount}건, 프로젝트결산 ${result.settlementCount}건에 반영했습니다.`);
+          }).catch(err => {
+            alert('저장 실패: ' + err.message);
+            editBtn.disabled = false;
+            codeCell.textContent = originalCode;
+          });
+        }
+      });
+    });
   }
 
   document.getElementById('codeRegistrySearch')?.addEventListener('input', () => renderCodeRegistryList());
@@ -1689,7 +1812,13 @@ if ('serviceWorker' in navigator) {
     row.querySelector('.cb-generate').addEventListener('click', () => {
       const year = row.querySelector('.cb-year').value;
       const classCode = row.querySelector('.cb-class').value;
-      const pool = [...Object.values(PROJECT_CODES), ...ALL_WORKLOG_CODES];
+      // 같은 근무일지 안에서 아직 제출 전인 다른 프로젝트 행에 이미 입력/생성해둔 코드까지 풀에
+      // 포함해야, 한 번에 여러 프로젝트를 같은 년도-분류로 연달아 생성할 때 서로 같은 일련번호로
+      // 겹치지 않는다(PROJECT_CODES/ALL_WORKLOG_CODES는 실제 제출 후에만 갱신되기 때문).
+      const inProgressCodes = Array.from(document.querySelectorAll('#projectRows .row-code'))
+        .map(inp => inp.value.trim())
+        .filter(Boolean);
+      const pool = [...Object.values(PROJECT_CODES), ...ALL_WORKLOG_CODES, ...inProgressCodes];
       const serial = suggestNextSerial(year, classCode, pool);
       const generated = `${year}-${classCode}-${serial}`;
       if (codeInput.value.trim() && codeInput.value.trim() !== generated) {
