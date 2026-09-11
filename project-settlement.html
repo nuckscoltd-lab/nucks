@@ -327,7 +327,12 @@ if ('serviceWorker' in navigator) {
       const ref = db.collection('officialProjects').doc('list');
       const doc = await ref.get();
       const existing = (doc.exists && doc.data().names) || [];
-      const merged = [...new Set([...existing, ...names])].sort();
+      const excluded = (doc.exists && doc.data().excluded) || [];
+      // 근무일지(worklog.html)에서 "프로젝트명 정리" 도구로 일부러 제외해둔 이름은 여기서 다시
+      // 채워 넣지 않는다 - 안 그러면 결산서 문서 자체의 name 필드가 옛 표기 그대로인 경우, 페이지를
+      // 열 때마다 그 옛 이름이 officialProjects/list.names에 계속 되살아나 목록이 지저분해진다.
+      const newOnes = names.filter(n => !excluded.includes(n));
+      const merged = [...new Set([...existing, ...newOnes])].sort();
 
       // PROJ.NO(작업분류번호)도 함께 동기화해서, 근무일지(worklog.html)에서 프로젝트를 선택하면 그
       // 프로젝트의 코드가 자동으로 같이 붙도록 한다. 결산서의 이름(name)과 근무일지에서 실제로 쓰는
