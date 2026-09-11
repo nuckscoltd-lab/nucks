@@ -1038,6 +1038,28 @@ if ('serviceWorker' in navigator) {
     }).join('');
   }
 
+  // 공백/하이픈/슬래시/괄호/가운뎃점 등 표기 차이를 무시하고 비교하기 위한 정규화.
+  // "미지정" 목록에 뜬 이름이 사실은 예전에 다른 표기(띄어쓰기/하이픈 등)로 이미 코드가 지정돼
+  // 있던 같은 프로젝트인지 미리 알려주는 용도로만 쓴다(정확한 매칭 판정이 아니라 참고용 힌트).
+  function normalizeProjectNameForCompare(s) {
+    return (s || '').replace(/[\s\-\/()·]/g, '').toLowerCase();
+  }
+
+  // "미지정" 목록의 이름과 표기만 다를 뿐 사실상 같은 프로젝트로 보이는, 이미 코드가 있는 이름을 찾는다.
+  // (완전히 같은 이름은 애초에 PROJECT_CODES[n]에 걸려서 미지정 목록에 뜨지 않으므로 여기 대상은 제외)
+  function findSimilarCodedNames(name) {
+    const target = normalizeProjectNameForCompare(name);
+    if (!target) return [];
+    // 미지정 목록에 뜬 이름은 정의상 PROJECT_CODES에 "그대로"는 없는 이름이므로(그랬으면애초에
+    // 미지정 목록에 안 뜬다), 정규화했을 때 완전히 같아지는 경우(예: 하이픈↔띄어쓰기 표기 차이)가
+    // 바로 "예전 이름으로 이미 코드가 있는" 핵심 케이스다 - 그래서 정규화 완전일치도 포함한다.
+    return Object.keys(PROJECT_CODES).filter(existing => {
+      const en = normalizeProjectNameForCompare(existing);
+      if (!en) return false;
+      return en === target || en.includes(target) || target.includes(en);
+    });
+  }
+
   // 결산서와 연결되지 않아 코드가 없는(PROJECT_CODES에 없는) 프로젝트명들 - 근무일지를 하나하나 열지
   // 않고도 이름 단위로 코드를 한 번만 지정하면 그 이름을 쓰는 기존 근무일지 전체에 바로 소급 반영해준다.
   function renderUncodedProjectsList(counts) {
@@ -1055,6 +1077,16 @@ if ('serviceWorker' in navigator) {
 
     container.innerHTML = names.map((n, i) => {
       const safeId = `uncoded-${i}`;
+      const similar = findSimilarCodedNames(n);
+      const similarWarning = similar.length ? `
+        <div class="uncoded-similar-warning" style="width:100%; background:#fff4e5; border:1px solid #e8c48a; border-radius:6px; padding:7px 9px; font-size:12px; color:#8a5a13; line-height:1.5;">
+          ⚠ 표기만 다를 뿐 같은 프로젝트일 수 있어요 - 이미 코드가 있는 비슷한 이름: ${similar.map(s => `<b>"${esc(s)}"</b>(코드 <b>${esc(PROJECT_CODES[s])}</b>)`).join(', ')}.
+          같은 프로젝트라면 새 코드를 만들지 말고 아래에서 기존 코드를 그대로 눌러 채운 뒤 저장해 주세요.
+          <span style="display:inline-flex; gap:6px; flex-wrap:wrap; margin-top:4px;">
+            ${similar.map(s => `<button type="button" class="use-existing-code-btn" data-code="${esc(PROJECT_CODES[s])}" style="font-size:11.5px; padding:2px 8px; border:1px solid #e8c48a; border-radius:4px; background:#fff; cursor:pointer;">"${esc(PROJECT_CODES[s])}" 그대로 쓰기</button>`).join('')}
+          </span>
+        </div>
+      ` : '';
       return `
       <div class="uncoded-row" data-name="${esc(n)}" style="display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); flex-wrap:wrap;">
         <div style="flex:1; min-width:180px; padding-top:8px;">
@@ -1066,6 +1098,7 @@ if ('serviceWorker' in navigator) {
           ${codeBuilderHtml(safeId)}
         </div>
         <button type="button" class="submit-btn uncoded-save-btn" style="align-self:flex-start; margin-top:6px;">저장 + 소급 반영</button>
+        ${similarWarning}
       </div>
     `;
     }).join('');
@@ -1073,6 +1106,9 @@ if ('serviceWorker' in navigator) {
     container.querySelectorAll('.uncoded-row').forEach(row => {
       const name = row.dataset.name;
       const codeInput = row.querySelector('.uncoded-code-input');
+      row.querySelectorAll('.use-existing-code-btn').forEach(btn => {
+        btn.addEventListener('click', () => { codeInput.value = btn.dataset.code; });
+      });
       row.querySelector('.cb-generate').addEventListener('click', () => {
         const year = row.querySelector('.cb-year').value;
         const classCode = row.querySelector('.cb-class').value;
@@ -1279,18 +1315,46 @@ if ('serviceWorker' in navigator) {
       // 코드 매핑도 함께 옮겨준다 - 옛 이름에 걸려있던 코드가 있으면(새 이름에 아직 매핑이 없을 때)
       // 새 이름으로 이전하고, 옛 이름의 매핑은 정리한다. 이렇게 안 하면 이름을 바꾼 뒤 "새 이름"으로
       // 새로 근무일지를 작성할 때 코드가 자동으로 안 붙는 문제가 생긴다.
+      // 주의: Firestore는 set(data, {merge:true})를 쓰면 codes처럼 "중첩된 map 필드"는 키 단위로
+      // 병합한다 - 즉 여기서 JS 객체(newCodes)에서 delete로 지운 옛 이름 키라도, merge:true로 codes
+      // 전체를 통째로 써보내면 Firestore에는 그 키가 실제로 지워지지 않고 그대로 남는다(생략된 키는
+      // 보존되는 게 merge:true의 동작 방식). 그 결과 "프로젝트 코드 전체 목록"에는 옛 이름+코드가
+      // 새 이름+코드와 나란히 "중복"으로 계속 남게 된다 - 지울 키는 반드시 FieldValue.delete()를
+      // 점(.) 경로로 지정해 명시적으로 지워야 실제로 삭제된다.
       const newCodes = { ...existingCodes };
+      let movedCode = null;
       if (!newCodes[targetName]) {
-        const movedCode = checked.map(n => existingCodes[n]).find(Boolean);
+        movedCode = checked.map(n => existingCodes[n]).find(Boolean) || null;
         if (movedCode) newCodes[targetName] = movedCode;
       }
       otherChecked.forEach(n => { delete newCodes[n]; });
       PROJECT_CODES = newCodes;
 
-      await listRef.set({
-        names: OFFICIAL_PROJECTS, excluded: EXCLUDED_PROJECTS, codes: newCodes,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
+      if (listDoc.exists) {
+        // update()의 점(.) 표기 경로(FieldPath)는 그 키만 정확히 바꾸거나 지운다 - codes의 다른
+        // 키들은 건드리지 않으면서, 옮긴 새 코드는 반영하고 옛 이름 키는 실제로 삭제한다.
+        // (문자열 "codes." + 이름 대신 FieldPath 객체를 쓰는 이유: 프로젝트명에 점(.) 등 특수문자가
+        // 있어도 경로가 잘못 쪼개지지 않도록 하기 위함)
+        const updateArgs = [
+          'names', OFFICIAL_PROJECTS,
+          'excluded', EXCLUDED_PROJECTS,
+          'updatedAt', firebase.firestore.FieldValue.serverTimestamp()
+        ];
+        if (movedCode) updateArgs.push(new firebase.firestore.FieldPath('codes', targetName), movedCode);
+        otherChecked.forEach(n => {
+          if (n in existingCodes) {
+            updateArgs.push(new firebase.firestore.FieldPath('codes', n), firebase.firestore.FieldValue.delete());
+          }
+        });
+        await listRef.update(...updateArgs);
+      } else {
+        // 문서가 아예 없던 최초 1회에는 update()가 실패하므로 생성 목적으로만 set(merge:true) 사용 -
+        // 이 경우는 지울 옛 코드 키 자체가 없으므로 위의 삭제 문제도 해당되지 않는다.
+        await listRef.set({
+          names: OFFICIAL_PROJECTS, excluded: EXCLUDED_PROJECTS, codes: newCodes,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
 
       // 프로젝트 결산/기성청구 페이지에도 이 이름을 "근무일지 프로젝트명"으로 연결해둔 곳이 있을 수
       // 있다(workLogProjectNames 필드) - 그쪽 연결 문자열이 옛 이름 그대로 남아있으면 더 이상 실제
