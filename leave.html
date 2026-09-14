@@ -327,9 +327,12 @@ if ('serviceWorker' in navigator) {
       ? allRows.filter(r => r['사원명'] === filterVal)
       : allRows;
 
-    // 병가, 휴가는 연차 사용량에 포함하지 않음
+    // 병가, 휴가는 연차 사용량에 포함하지 않음. 그리고 실제로 차감되는 건 "승인완료"된 건뿐이다
+    // (아래 calcRemainingForName/buildRunningRemainingMap과 기준을 맞춤) - 승인요청/계획없음 상태인
+    // 건까지 여기서 미리 사용량에 포함시키면, 등록만 하고 아직 승인 전인데도 사용합계·잔여연차 카드가
+    // 먼저 줄어들어서 같은 화면의 "잔여연차" 열(장부식 계산, 승인완료 기준)과 값이 어긋나 보인다.
     const used = rows
-      .filter(r => !['병가', '휴가'].includes(r['연차구분']))
+      .filter(r => r['승인상태'] === '승인완료' && !['병가', '휴가'].includes(r['연차구분']))
       .reduce((sum, r) => sum + (Number(r['사용량']) || 0), 0);
     const label = (currentRole === 'admin' && filterVal !== '전체') ? `${filterVal}의 사용 합계` : '전체 사용 합계';
 
