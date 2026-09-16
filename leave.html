@@ -210,7 +210,13 @@ if ('serviceWorker' in navigator) {
 <script>
   requireRole(['worker', 'admin']);
 
-  const STATUS_OPTIONS = ['계획없음', '승인요청', '승인완료'];
+  const STATUS_OPTIONS = ['승인요청', '보류', '반려', '승인완료'];
+  // 보류/반려는 승인완료가 아니므로 renderSummary/calcRemainingForName/buildRunningRemainingMap의
+  // "승인상태 === '승인완료'" 필터에 의해 자동으로 사용량 카운팅에서 제외된다 - 별도 처리 불필요.
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
   let currentUser = null;
   let currentRole = null;
   let currentDisplayName = '';
@@ -328,7 +334,7 @@ if ('serviceWorker' in navigator) {
       : allRows;
 
     // 병가, 휴가는 연차 사용량에 포함하지 않음. 그리고 실제로 차감되는 건 "승인완료"된 건뿐이다
-    // (아래 calcRemainingForName/buildRunningRemainingMap과 기준을 맞춤) - 승인요청/계획없음 상태인
+    // (아래 calcRemainingForName/buildRunningRemainingMap과 기준을 맞춤) - 승인요청/보류/반려 상태인
     // 건까지 여기서 미리 사용량에 포함시키면, 등록만 하고 아직 승인 전인데도 사용합계·잔여연차 카드가
     // 먼저 줄어들어서 같은 화면의 "잔여연차" 열(장부식 계산, 승인완료 기준)과 값이 어긋나 보인다.
     const used = rows
@@ -362,7 +368,7 @@ if ('serviceWorker' in navigator) {
 
   // 날짜 오름차순으로 하나씩 차감해나가는 "장부식" 잔여연차 계산.
   // 반환값: { 문서id: 그 시점까지 차감된 잔여연차 }
-  // - 승인완료 + 병가/휴가가 아닌 건만 실제로 차감됨 (계획없음/승인요청 건은 그 시점 잔여를 그대로 표시)
+  // - 승인완료 + 병가/휴가가 아닌 건만 실제로 차감됨 (승인요청/보류/반려 건은 그 시점 잔여를 그대로 표시)
   // - 같은 날짜에 여러 건이 있으면 문서 id 순으로 안정적으로 정렬해 처리
   function buildRunningRemainingMap() {
     const map = {};
@@ -427,8 +433,11 @@ if ('serviceWorker' in navigator) {
         <td data-label="잔여연차">${remaining}일</td>
         <td data-label="승인상태">
           ${currentRole === 'admin'
-            ? `<select class="status-select" data-id="${row.id}">${STATUS_OPTIONS.map(s => `<option ${s === row['승인상태'] ? 'selected' : ''}>${s}</option>`).join('')}</select>`
-            : (row['승인상태'] || '계획없음')}
+            ? `<select class="status-select" data-id="${row.id}" data-memo="${esc(row['승인메모'] || '')}">${STATUS_OPTIONS.map(s => `<option ${s === row['승인상태'] ? 'selected' : ''}>${s}</option>`).join('')}</select>`
+            : (row['승인상태'] || '승인요청')}
+          ${['보류', '반려'].includes(row['승인상태']) && row['승인메모']
+            ? `<div style="font-size:11px; color:var(--muted); margin-top:4px;">사유: ${esc(row['승인메모'])}</div>`
+            : ''}
         </td>
         <td data-label="비고">${row['비고'] || ''}</td>
         <td data-label="관리">
@@ -448,7 +457,21 @@ if ('serviceWorker' in navigator) {
       btn.addEventListener('click', () => loadLeaveIntoForm(btn.dataset.id));
     });
     document.querySelectorAll('.status-select').forEach(sel => {
-      sel.addEventListener('change', () => updateStatus(sel.dataset.id, sel.value));
+      const prevStatus = allRows.find(r => r.id === sel.dataset.id)?.['승인상태'] || '';
+      sel.addEventListener('change', () => {
+        const newStatus = sel.value;
+        if (['보류', '반려'].includes(newStatus)) {
+          // 보류/반려는 사유를 남겨야 직원도 왜 그런지 알 수 있으므로 바로 메모를 받는다.
+          // 취소하면 상태 변경 자체를 하지 않고 드롭다운을 원래 값으로 되돌린다.
+          const memo = prompt(`"${newStatus}" 사유를 입력해 주세요 (선택사항, 직원에게도 표시됩니다):`, sel.dataset.memo || '');
+          if (memo === null) { sel.value = prevStatus; return; }
+          updateStatus(sel.dataset.id, newStatus, memo.trim());
+        } else {
+          // 보류/반려가 아닌 상태로 바꿀 때는 승인메모 필드를 건드리지 않는다(과거 사유 기록 보존) -
+          // 어차피 보류/반려일 때만 화면에 표시되므로 다른 상태에서는 자연히 안 보인다.
+          updateStatus(sel.dataset.id, newStatus);
+        }
+      });
     });
   }
 
@@ -489,9 +512,13 @@ if ('serviceWorker' in navigator) {
     }
   });
 
-  async function updateStatus(docId, newStatus) {
+  async function updateStatus(docId, newStatus, memo) {
     try {
-      await db.collection('leaves').doc(docId).update({ '승인상태': newStatus });
+      const payload = { '승인상태': newStatus };
+      // memo가 명시적으로 전달된 경우(보류/반려로 바꿀 때)만 승인메모 필드를 갱신한다 - 그 외
+      // 상태로 바꿀 때는 이 필드를 그대로 둔다(과거 사유 기록 보존, 화면에는 보류/반려일 때만 표시됨).
+      if (memo !== undefined) payload['승인메모'] = memo;
+      await db.collection('leaves').doc(docId).update(payload);
       await loadLeaves();
     } catch (err) {
       alert('상태 변경 실패: ' + err.message);
@@ -555,7 +582,7 @@ if ('serviceWorker' in navigator) {
           '날짜': date,
           '사용량': amount,
           '연차구분': type,
-          '승인상태': '계획없음',
+          '승인상태': '승인요청',
           '비고': note,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
