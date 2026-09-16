@@ -39,6 +39,11 @@
   .summary-card.forecast .value{ color:var(--pending-text); }
   .summary-card .sub{ font-size:11.5px; color:var(--muted); margin-top:4px; }
 
+  .forecast-breakdown{ display:flex; gap:10px; flex-wrap:wrap; margin:-14px 0 28px; }
+  .forecast-breakdown .chip{ font-size:12px; padding:6px 14px; border-radius:20px; background:#f0eee7; color:var(--muted); }
+  .forecast-breakdown .chip.in{ background:#e7f1ec; color:var(--in-color); }
+  .forecast-breakdown .chip.out{ background:#f8e9e7; color:var(--out-color); }
+
   .panel{
     background:#fff; border:1px solid var(--line); border-radius:8px;
     padding:22px 24px; margin-bottom:24px;
@@ -158,6 +163,8 @@
     </div>
   </div>
 
+  <div class="forecast-breakdown" id="forecastBreakdown"></div>
+
   <!-- 이월잔액 설정 -->
   <div class="panel">
     <div class="panel-title">
@@ -200,6 +207,15 @@
           <option value="출금">출금</option>
         </select>
       </div>
+      <div class="field" id="f-incomeType-field" style="display:none;">
+        <label for="f-incomeType">수금구분</label>
+        <select id="f-incomeType">
+          <option value="계약금">계약금</option>
+          <option value="중도금">중도금</option>
+          <option value="잔금">잔금</option>
+          <option value="기타">기타</option>
+        </select>
+      </div>
       <div class="field">
         <label for="f-status">상태</label>
         <select id="f-status">
@@ -222,6 +238,24 @@
       <button class="btn-primary" id="saveEntryBtn">저장</button>
     </div>
     <div class="status-line" id="entryStatus"></div>
+  </div>
+
+  <!-- 수금예상현황 (계약금/중도금 등 예정 수금) -->
+  <div class="panel">
+    <div class="panel-title">
+      수금예상현황 (계약금·중도금 등 예정 수금)
+      <span style="font-size:14px; font-weight:700; font-family:'IBM Plex Mono', monospace; color:var(--in-color);" id="collectionsTotal">-</span>
+    </div>
+    <div class="import-help" style="margin-bottom:14px; margin-top:0;">위 "거래 입력"에서 구분을 <b>입금</b>으로 선택하면 계약금/중도금/잔금/기타 중에서 수금구분을 고를 수 있고, 상태를 <b>예정</b>으로 저장하면 앞으로 들어올 금액이 여기 모여 보입니다. 실제로 입금되면 "수금 확정"을 눌러주세요.</div>
+    <div class="table-wrap">
+      <table id="collectionsTable" style="display:none;">
+        <thead>
+          <tr><th>예상일자</th><th>수금구분</th><th>내용</th><th>예상금액</th><th>비고</th><th>관리</th></tr>
+        </thead>
+        <tbody id="collectionsTableBody"></tbody>
+      </table>
+      <div class="empty-msg" id="collectionsEmptyMsg">등록된 예정 수금 내역이 없습니다.</div>
+    </div>
   </div>
 
   <!-- 고정 항목 (매월 반복되는 거래) -->
@@ -369,6 +403,14 @@
   attachMoneyInputFormatter(document.getElementById('f-amount'));
   attachMoneyInputFormatter(document.getElementById('r-amount'));
 
+  // ---------- 구분=입금일 때만 수금구분(계약금/중도금/잔금/기타) 입력란 표시 ----------
+  function updateIncomeTypeVisibility(){
+    const isIncome = document.getElementById('f-type').value === '입금';
+    document.getElementById('f-incomeType-field').style.display = isIncome ? 'flex' : 'none';
+  }
+  document.getElementById('f-type').addEventListener('change', updateIncomeTypeVisibility);
+  updateIncomeTypeVisibility();
+
   async function loadConfig(){
     const snap = await configRef.get();
     if (snap.exists) config = { startDate: snap.data().startDate || '', startBalance: snap.data().startBalance || 0 };
@@ -430,6 +472,7 @@
   function renderAll(){
     renderSummary();
     renderTable();
+    renderCollectionsForecast();
   }
 
   function renderSummary(){
@@ -453,6 +496,14 @@
     );
     const pendingNet = pendingUntilDate.reduce((sum, e) => sum + (e.type === '입금' ? e.amount : -e.amount), 0);
     const forecast = actual + pendingNet;
+
+    // 수금예정(입금)/지출예정(출금)을 나눠서 별도로 보여줌 - 지출만 보이던 예상현황에 수금 쪽도 함께
+    const pendingIn = pendingUntilDate.filter(e => e.type === '입금').reduce((sum, e) => sum + e.amount, 0);
+    const pendingOut = pendingUntilDate.filter(e => e.type === '출금').reduce((sum, e) => sum + e.amount, 0);
+    document.getElementById('forecastBreakdown').innerHTML = `
+      <div class="chip in">수금예정 +${fmtWon(pendingIn)}</div>
+      <div class="chip out">지출예정 -${fmtWon(pendingOut)}</div>
+    `;
 
     document.getElementById('actualBalance').textContent = fmtWon(actual);
     document.getElementById('actualBalanceSub').textContent = config.startDate ? `${config.startDate} 기준 ${fmtWon(config.startBalance)} + 확정 내역` : '이월잔액을 먼저 설정해주세요';
@@ -556,10 +607,74 @@
     });
   }
 
+  // ---------- 수금예상현황 (계약금/중도금 등 예정 수금만 모아서 보여줌) ----------
+  function renderCollectionsForecast(){
+    const table = document.getElementById('collectionsTable');
+    const tbody = document.getElementById('collectionsTableBody');
+    const emptyMsg = document.getElementById('collectionsEmptyMsg');
+    const totalEl = document.getElementById('collectionsTotal');
+
+    // 월 필터와 무관하게, 아직 확정되지 않은 입금(수금) 전체를 예상일자 순으로 보여준다.
+    const rows = allEntries
+      .filter(e => e.status === '예정' && e.type === '입금')
+      .slice()
+      .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+    const total = rows.reduce((sum, e) => sum + (e.amount || 0), 0);
+    totalEl.textContent = rows.length ? `예정 ${rows.length}건 · +${fmtWon(total)}` : '-';
+
+    if (rows.length === 0) {
+      table.style.display = 'none';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+    table.style.display = 'table';
+
+    tbody.innerHTML = rows.map(e => `
+      <tr>
+        <td class="nowrap">${e.date || ''}</td>
+        <td>${esc(e.incomeType || '기타')}</td>
+        <td>${esc(e.content)}</td>
+        <td class="amount in">+${fmtWon(e.amount)}</td>
+        <td>${esc(e.memo)}</td>
+        <td>
+          <div class="row-actions">
+            <button class="confirm-btn" data-c-confirm="${e.id}">수금 확정</button>
+            <button data-c-edit="${e.id}">수정</button>
+            <button class="danger" data-c-delete="${e.id}">삭제</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+
+    tbody.querySelectorAll('[data-c-confirm]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await entriesRef.doc(btn.dataset.cConfirm).update({ status: '확정' });
+        await loadEntries();
+      });
+    });
+    tbody.querySelectorAll('[data-c-edit]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const entry = allEntries.find(x => x.id === btn.dataset.cEdit);
+        if (entry) startEdit(entry);
+      });
+    });
+    tbody.querySelectorAll('[data-c-delete]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('이 예정 수금 내역을 삭제할까요?')) return;
+        await entriesRef.doc(btn.dataset.cDelete).delete();
+        await loadEntries();
+      });
+    });
+  }
+
   function startEdit(entry){
     editingId = entry.id;
     document.getElementById('f-date').value = entry.date || '';
     document.getElementById('f-type').value = entry.type || '입금';
+    document.getElementById('f-incomeType').value = entry.incomeType || '계약금';
+    updateIncomeTypeVisibility();
     document.getElementById('f-status').value = entry.status || '확정';
     setMoneyInputValue(document.getElementById('f-amount'), entry.amount);
     document.getElementById('f-content').value = entry.content || '';
@@ -576,6 +691,8 @@
     editingId = null;
     document.getElementById('f-date').value = '';
     document.getElementById('f-type').value = '입금';
+    document.getElementById('f-incomeType').value = '계약금';
+    updateIncomeTypeVisibility();
     document.getElementById('f-status').value = '확정';
     document.getElementById('f-amount').value = '';
     document.getElementById('f-content').value = '';
@@ -597,6 +714,8 @@
     const amount = parseMoneyInput(document.getElementById('f-amount'));
     const content = document.getElementById('f-content').value.trim();
     const memo = document.getElementById('f-memo').value.trim();
+    // 입금일 때만 계약금/중도금/잔금/기타로 분류, 출금이면 해당 없음(null)
+    const incomeType = type === '입금' ? document.getElementById('f-incomeType').value : null;
 
     if (!date || !amount || !content) {
       statusEl.className = 'status-line err';
@@ -609,12 +728,12 @@
 
     try {
       if (editingId) {
-        await entriesRef.doc(editingId).update({ date, type, status, amount, content, memo });
+        await entriesRef.doc(editingId).update({ date, type, status, amount, content, memo, incomeType });
         statusEl.className = 'status-line ok';
         statusEl.textContent = '수정되었습니다.';
         cancelEdit();
       } else {
-        await entriesRef.add({ date, type, status, amount, content, memo, order: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        await entriesRef.add({ date, type, status, amount, content, memo, incomeType, order: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp() });
         statusEl.className = 'status-line ok';
         statusEl.textContent = '저장되었습니다.';
         document.getElementById('f-amount').value = '';
