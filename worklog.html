@@ -531,6 +531,25 @@ if ('serviceWorker' in navigator) {
 
     <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
 
+    <div class="panel-title">예정 프로젝트명 사전등록</div>
+    <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
+      아직 근무일지에 한 번도 안 쓰인 신규 프로젝트명을, 가짜 일지를 만들었다 지울 필요 없이 이름만
+      바로 등록할 수 있어요. 등록하면 근무일지 작성폼 자동완성 드롭다운과 기성청구 페이지 드롭다운
+      양쪽에 바로 뜹니다. 나중에 실제로 근무일지에 쓰이기 시작하면 자동으로 "실사용 목록"에도
+      포함되니 이 목록에서 따로 빼지 않아도 돼요 - 착수가 취소되는 등 정말 필요 없어지면 아래
+      목록에서 "삭제"로 빼면 됩니다(근무일지 데이터에는 영향 없고, 기성청구 쪽 등록은 그대로
+      유지돼요 - 거기서까지 완전히 빼려면 위 "프로젝트명 정리" 도구를 따로 써주세요).
+    </div>
+    <div class="field" style="max-width:360px; margin-bottom:10px;">
+      <label for="preRegisterName">사전등록할 프로젝트명</label>
+      <input type="text" id="preRegisterName" placeholder="예: 신규현장 인테리어 설계용역">
+    </div>
+    <button class="submit-btn" id="preRegisterBtn">사전등록</button>
+    <div id="preRegisterResult" style="margin-top:10px; font-size:13px;"></div>
+    <div id="preRegisteredList" style="max-height:160px; overflow-y:auto; border:1px solid var(--line); border-radius:4px; padding:8px 12px; margin-top:10px; background:#fff; font-size:12.5px;"></div>
+
+    <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
+
     <div class="panel-title">프로젝트 코드 전체 목록</div>
     <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
       지금까지 지정된 프로젝트 코드가 어디까지 채워져 있는지 한눈에 확인하는 목록이에요(결산서에서
@@ -841,6 +860,17 @@ if ('serviceWorker' in navigator) {
   // 대시보드/프로젝트 결산/DEFAULT_PROJECTS)에 다시 나타나더라도 자동완성에서는 계속 숨겨진다.
   let OFFICIAL_PROJECTS = [];
   let EXCLUDED_PROJECTS = [];
+  // 근무일지에 실제로 "쓰인" 이름만 모은 것(officialProjects/list.usedNames) - 관리자가 이 페이지를
+  // 열 때마다 전체 근무일지 기준으로 최신화된다. 근로자 계정은 보안규칙상 전체 근무일지를 직접 조회할
+  // 권한이 없어서, 근무일지 작성폼의 프로젝트 자동완성(#projectList)을 "실제 사용중인 이름"만으로
+  // 좁히는 데 이 필드를 대신 쓴다 - OFFICIAL_PROJECTS에는 회계현황/기성청구에서 동기화됐지만 아직
+  // 한 번도 근무일지에 쓰인 적 없는 이름까지 섞여있어서 그대로 쓰면 자동완성이 지저분해진다.
+  let USED_PROJECT_NAMES = [];
+  // 아직 근무일지에 한 번도 안 쓰였지만 미리 등록해둔 프로젝트명(officialProjects/list.preRegistered) -
+  // "예정 프로젝트명 사전등록" 도구로 관리자가 직접 추가/삭제한다. USED_PROJECT_NAMES와 합쳐져서
+  // 근무일지 작성폼 자동완성에 같이 뜬다. 실제 사용이 시작되면 USED_PROJECT_NAMES에도 자연히
+  // 포함되므로 이 목록에서 따로 빼지 않아도 무방하다.
+  let PRE_REGISTERED_PROJECTS = [];
   // 프로젝트 결산 페이지의 PROJ.NO(작업분류번호)를 프로젝트명 기준으로 매핑해둔 것 - { 프로젝트명: 코드 }.
   // 프로젝트 결산 쪽에서 officialProjects/list.codes로 동기화해준다. 근무일지를 작성/수정할 때 프로젝트를
   // 선택하면 이 매핑을 찾아 해당 항목에 코드를 같이 저장해서, 나중에 코드 기준으로도 분류할 수 있게 한다.
@@ -910,6 +940,8 @@ if ('serviceWorker' in navigator) {
         OFFICIAL_PROJECTS = doc.data().names || [];
         EXCLUDED_PROJECTS = doc.data().excluded || [];
         PROJECT_CODES = doc.data().codes || {};
+        USED_PROJECT_NAMES = doc.data().usedNames || [];
+        PRE_REGISTERED_PROJECTS = doc.data().preRegistered || [];
         const codeListEl = document.getElementById('projectCodesDatalist');
         if (codeListEl) {
           const distinctCodes = [...new Set(Object.values(PROJECT_CODES))].sort();
@@ -917,6 +949,7 @@ if ('serviceWorker' in navigator) {
         }
         updateProjectDatalist();
         renderCodeRefList();
+        renderPreRegisteredList();
       }
     }catch(err){
       console.warn('회계현황 대시보드 프로젝트 목록 동기화 실패(대시보드에서 아직 한 번도 동기화되지 않았을 수 있음):', err);
@@ -948,6 +981,26 @@ if ('serviceWorker' in navigator) {
   }
   document.getElementById('codeRefSearch')?.addEventListener('input', renderCodeRefList);
 
+  // "예정 프로젝트명 사전등록" 목록을 그려준다. 컨테이너가 없는 화면(근로자 계정 등 이 패널이
+  // 렌더링되지 않은 상황)에서는 조용히 아무 일도 하지 않는다.
+  function renderPreRegisteredList() {
+    const container = document.getElementById('preRegisteredList');
+    if (!container) return;
+    if (PRE_REGISTERED_PROJECTS.length === 0) {
+      container.innerHTML = `<div style="color:var(--muted);">사전등록된 프로젝트명이 없습니다.</div>`;
+      return;
+    }
+    container.innerHTML = PRE_REGISTERED_PROJECTS.slice().sort().map(name => {
+      const usedNow = USED_PROJECT_NAMES.includes(name);
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:4px 0; border-bottom:1px solid var(--line);">
+          <span>${esc(name)}${usedNow ? ' <span style="color:var(--muted); font-size:11px;">(이미 실사용 시작됨)</span>' : ''}</span>
+          <button type="button" class="pre-register-remove" data-name="${esc(name)}" style="background:none; border:none; color:#a4453c; cursor:pointer; font-size:11.5px; text-decoration:underline; padding:2px 0;">삭제</button>
+        </div>
+      `;
+    }).join('');
+  }
+
   async function updateProjectDatalist() {
     // 자동완성 목록/정리 목록은 목록 화면의 월별 필터(allRows)와 무관하게 항상 전체 기간 기준으로 보여준다.
     // (그렇지 않으면 "이번 달"만 보고 있을 때 다른 달에만 있는 프로젝트명/중복은 안 보여서 놓칠 수 있음)
@@ -962,19 +1015,32 @@ if ('serviceWorker' in navigator) {
     }
     const usedProjects = sourceRows.flatMap(r => (r.projects || []).map(p => p['프로젝트'])).filter(Boolean);
     ALL_WORKLOG_CODES = sourceRows.flatMap(r => (r.projects || []).map(p => p['프로젝트코드'])).filter(Boolean);
-    const allPoolNames = [...new Set([...DEFAULT_PROJECTS, ...OFFICIAL_PROJECTS, ...usedProjects])].sort();
-    const merged = allPoolNames.filter(p => !EXCLUDED_PROJECTS.includes(p));
-    document.getElementById('projectList').innerHTML = merged.map(p => `<option value="${esc(p)}">`).join('');
+
+    // 근무일지 작성폼(#projectList)에는 "실제로 근무일지에 쓰인" 이름만 뜨게 한다 - 회계현황/기성청구
+    // 쪽에서 동기화된 OFFICIAL_PROJECTS에는 아직 한 번도 안 쓰인 이름(예: 계약만 하고 아직 착수 안 한
+    // 프로젝트)까지 섞여있어서 그대로 다 보여주면 목록이 지저분해진다는 요청으로 좁힘. 여기 지금
+    // 이 화면에서 막 새로 계산된 usedProjects도 같이 합쳐서, 방금 직접 입력한 이름은(관리자가 아직
+    // USED_PROJECT_NAMES를 갱신 안 했더라도) 본인 화면에는 바로 보이게 한다. 완전히 새 프로젝트를
+    // 처음 쓸 때는 이 목록에 없어도 직접 타이핑해서 입력하는 건 항상 가능하다(자동완성일 뿐 강제 선택이
+    // 아님).
+    const datalistPoolNames = [...new Set([...USED_PROJECT_NAMES, ...PRE_REGISTERED_PROJECTS, ...usedProjects])].sort();
+    const datalistMerged = datalistPoolNames.filter(p => !EXCLUDED_PROJECTS.includes(p));
+    document.getElementById('projectList').innerHTML = datalistMerged.map(p => `<option value="${esc(p)}">`).join('');
+
     if (currentRole === 'admin') {
+      // 정리/미지정/코드 목록 같은 관리자 전용 도구는 "등록만 되어있고 아직 한 번도 안 쓰인 이름"까지
+      // 다 봐야 정리 작업이 가능하므로, 여기는 기존 방식(DEFAULT_PROJECTS+OFFICIAL_PROJECTS+usedProjects)
+      // 그대로 유지한다 - 위에서 좁힌 datalistMerged와는 별개의 풀이다.
+      const fullPoolNames = [...new Set([...DEFAULT_PROJECTS, ...OFFICIAL_PROJECTS, ...usedProjects])].sort();
+      const fullMerged = fullPoolNames.filter(p => !EXCLUDED_PROJECTS.includes(p));
       const counts = getProjectNameCounts(sourceRows);
       LAST_PROJECT_COUNTS = counts;
-      renderProjectCleanupList(counts, merged);
+      renderProjectCleanupList(counts, fullMerged);
       renderUncodedProjectsList(counts);
       renderCodeRegistryList();
-      // 근무일지 자체 자동완성(#projectList)은 실제 사용된 이름(usedProjects)까지 항상 다 보여주지만,
-      // officialProjects/list.names는 "정리" 도구로 손댄 이름만 반영되어 있어서 둘이 어긋날 수 있다.
-      // 결산서/기성청구 페이지의 "근무일지 프로젝트명 연결" 드롭다운은 officialProjects/list.names만
-      // 보고 있으므로, 여기서 실사용 이름을 그 목록에도 채워 넣어 두 화면의 드롭다운이 벌어지지 않게 한다.
+      // officialProjects/list.names(정리 도구가 손대는 목록)와 .usedNames(근무일지 작성폼이 참조하는
+      // "실사용" 목록)를 둘 다 최신화한다. 결산서/기성청구 페이지의 "근무일지 프로젝트명 연결"
+      // 드롭다운은 officialProjects/list.names를 보고 있으므로 그 목록도 계속 채워 넣어 어긋나지 않게 한다.
       syncUsedProjectNamesToOfficialList(usedProjects);
     }
   }
@@ -984,13 +1050,22 @@ if ('serviceWorker' in navigator) {
   // 뺀 것이므로 다시 넣지 않는다. 추가할 게 없으면 아예 쓰기를 하지 않는다.
   async function syncUsedProjectNamesToOfficialList(usedProjects) {
     try {
-      const newNames = [...new Set(usedProjects)]
-        .filter(n => n && !OFFICIAL_PROJECTS.includes(n) && !EXCLUDED_PROJECTS.includes(n));
-      if (!newNames.length) return;
       const listRef = db.collection('officialProjects').doc('list');
-      const merged = [...new Set([...OFFICIAL_PROJECTS, ...newNames])].sort();
-      await listRef.set({ names: merged, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
-      OFFICIAL_PROJECTS = merged;
+
+      // usedNames는 "지금 이 순간 근무일지 전체에서 실제로 쓰이고 있는 이름" 그 자체이므로, 매번
+      // 통째로 최신값으로 다시 써준다(다른 페이지가 이 필드를 따로 쓰지 않으므로 안전함).
+      const usedNames = [...new Set(usedProjects)].filter(Boolean).sort();
+      USED_PROJECT_NAMES = usedNames;
+
+      // names(정리 도구용 전체 등록 목록)는 기존과 동일하게, 새로 발견된 이름만 추가하는 방식 유지.
+      const newNames = usedNames.filter(n => !OFFICIAL_PROJECTS.includes(n) && !EXCLUDED_PROJECTS.includes(n));
+      const mergedNames = newNames.length ? [...new Set([...OFFICIAL_PROJECTS, ...newNames])].sort() : OFFICIAL_PROJECTS;
+      OFFICIAL_PROJECTS = mergedNames;
+
+      await listRef.set({
+        names: mergedNames, usedNames,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
     } catch (err) {
       console.warn('실사용 프로젝트명 → 공식 목록(officialProjects/list) 동기화 실패:', err);
     }
@@ -1637,6 +1712,89 @@ if ('serviceWorker' in navigator) {
     } catch (err) {
       resultEl.style.color = '#a4453c';
       resultEl.textContent = '복원 실패: ' + err.message;
+    }
+  });
+
+  document.getElementById('preRegisterBtn')?.addEventListener('click', async () => {
+    const input = document.getElementById('preRegisterName');
+    const resultEl = document.getElementById('preRegisterResult');
+    const name = (input.value || '').trim();
+
+    if (!name) {
+      resultEl.style.color = '#a4453c';
+      resultEl.textContent = '등록할 프로젝트명을 입력해 주세요.';
+      return;
+    }
+    if (PRE_REGISTERED_PROJECTS.includes(name) || USED_PROJECT_NAMES.includes(name)) {
+      resultEl.style.color = '#a4453c';
+      resultEl.textContent = '이미 목록에 있는 이름입니다.';
+      return;
+    }
+
+    resultEl.style.color = 'var(--muted)';
+    resultEl.textContent = '등록 중...';
+
+    try {
+      // 공식 목록(names)에도 같이 넣어야 기성청구 페이지의 "근무일지 프로젝트명 연결" 드롭다운에도
+      // 바로 뜬다. 제외 목록에 같은 이름이 남아있으면(예전에 통합/삭제된 적 있는 이름) 사전등록과
+      // 동시에 제외에서도 빼준다 - 안 그러면 updateProjectDatalist()의 excluded 필터에서 다시 걸러진다.
+      const listRef = db.collection('officialProjects').doc('list');
+      const listDoc = await listRef.get();
+      const existingNames = (listDoc.exists && listDoc.data().names) || [];
+      const existingPreRegistered = (listDoc.exists && listDoc.data().preRegistered) || [];
+      const existingExcluded = (listDoc.exists && listDoc.data().excluded) || [];
+
+      OFFICIAL_PROJECTS = [...new Set([...existingNames, name])].sort();
+      PRE_REGISTERED_PROJECTS = [...new Set([...existingPreRegistered, name])].sort();
+      EXCLUDED_PROJECTS = existingExcluded.filter(n => n !== name);
+
+      await listRef.set({
+        names: OFFICIAL_PROJECTS,
+        preRegistered: PRE_REGISTERED_PROJECTS,
+        excluded: EXCLUDED_PROJECTS,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      resultEl.style.color = '#3f6b52';
+      resultEl.textContent = `등록 완료: "${name}"`;
+      input.value = '';
+      renderPreRegisteredList();
+      await updateProjectDatalist();
+    } catch (err) {
+      resultEl.style.color = '#a4453c';
+      resultEl.textContent = '등록 실패: ' + err.message;
+    }
+  });
+
+  document.getElementById('preRegisteredList')?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.pre-register-remove');
+    if (!btn) return;
+    const name = btn.dataset.name;
+    const resultEl = document.getElementById('preRegisterResult');
+
+    resultEl.style.color = 'var(--muted)';
+    resultEl.textContent = '삭제 중...';
+
+    try {
+      // 사전등록 목록(preRegistered)에서만 뺀다 - 공식 목록(names)이나 근무일지 데이터는 건드리지
+      // 않는다. 기성청구 페이지 드롭다운에서도 완전히 빼고 싶으면 위 "프로젝트명 정리" 도구를 쓴다.
+      const listRef = db.collection('officialProjects').doc('list');
+      const listDoc = await listRef.get();
+      const existingPreRegistered = (listDoc.exists && listDoc.data().preRegistered) || [];
+      PRE_REGISTERED_PROJECTS = existingPreRegistered.filter(n => n !== name);
+
+      await listRef.set({
+        preRegistered: PRE_REGISTERED_PROJECTS,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      resultEl.style.color = '#3f6b52';
+      resultEl.textContent = `삭제 완료: "${name}" (근무일지 데이터·기성청구 등록에는 영향 없음)`;
+      renderPreRegisteredList();
+      await updateProjectDatalist();
+    } catch (err) {
+      resultEl.style.color = '#a4453c';
+      resultEl.textContent = '삭제 실패: ' + err.message;
     }
   });
 
