@@ -83,6 +83,12 @@ if ('serviceWorker' in navigator) {
   .project-row-top .field{ flex:1; min-width:160px; }
   .project-row-top .hours-field{ max-width:120px; min-width:100px; }
   .project-row-top .code-field{ max-width:210px; min-width:170px; }
+  .row-code-display{
+    padding:8px 9px; border:1px dashed var(--line); border-radius:4px;
+    font-family:inherit; font-size:13.5px; background:transparent; color:var(--ink);
+    box-sizing:border-box;
+  }
+  .row-code-display.is-empty{ color:var(--muted); font-style:italic; }
   .code-builder{ display:flex; gap:4px; margin-top:6px; flex-wrap:wrap; }
   .code-builder select{
     padding:4px 4px; border:1px solid var(--line); border-radius:4px;
@@ -538,7 +544,11 @@ if ('serviceWorker' in navigator) {
       양쪽에 바로 뜹니다. 나중에 실제로 근무일지에 쓰이기 시작하면 자동으로 "실사용 목록"에도
       포함되니 이 목록에서 따로 빼지 않아도 돼요 - 착수가 취소되는 등 정말 필요 없어지면 아래
       목록에서 "삭제"로 빼면 됩니다(근무일지 데이터에는 영향 없고, 기성청구 쪽 등록은 그대로
-      유지돼요 - 거기서까지 완전히 빼려면 위 "프로젝트명 정리" 도구를 따로 써주세요).
+      유지돼요 - 거기서까지 완전히 빼려면 위 "프로젝트명 정리" 도구를 따로 써주세요).<br><br>
+      프로젝트 코드도 이 자리에서 바로 지정할 수 있어요 - 등록 직후 아래 목록에 "코드 없음"으로
+      뜨는 항목마다 연도·작업분류를 골라 "코드 생성"을 누르면 코드가 바로 저장돼요. 근무일지
+      작성폼에는 이제 코드 입력창이 없고, 근로자가 프로젝트명을 고르면 여기서 지정해둔 코드가
+      자동으로 표시·저장됩니다 - 코드를 먼저 지정해두고 실제 착수를 시작하는 순서를 권장해요.
     </div>
     <div class="field" style="max-width:360px; margin-bottom:10px;">
       <label for="preRegisterName">사전등록할 프로젝트명</label>
@@ -933,6 +943,44 @@ if ('serviceWorker' in navigator) {
     `;
   }
 
+  // 프로젝트명 하나에 코드를 지정(또는 교체)하고, 이 이름을 쓰는 기존 근무일지 전체에도 즉시
+  // 소급 반영한다("코드 미부여" 도구와 "예정 프로젝트명 사전등록" 도구가 공통으로 쓰는 저장 로직 -
+  // 사전등록 단계에서 미리 코드를 붙여둬도, 혹시 그 전에 이미 이 이름으로 근무일지가 작성된 게
+  // 있다면 그 기존 항목까지 놓치지 않고 같이 맞춰준다).
+  async function assignProjectCode(name, code) {
+    const listRef = db.collection('officialProjects').doc('list');
+    const listDoc = await listRef.get();
+    const existingCodes = (listDoc.exists && listDoc.data().codes) || {};
+    const newCodes = { ...existingCodes, [name]: code };
+    await listRef.set({ codes: newCodes, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    PROJECT_CODES = newCodes;
+
+    const snapshot = await db.collection('workLogs').get();
+    const toUpdate = [];
+    let matchedCount = 0;
+    snapshot.docs.forEach(doc => {
+      const data = doc.data();
+      const projects = data.projects || [];
+      let changed = false;
+      const newProjects = projects.map(p => {
+        const pName = (p['프로젝트'] || '').trim();
+        if (pName !== name) return p;
+        if ((p['프로젝트코드'] || '') === code) return p;
+        changed = true;
+        matchedCount++;
+        return { ...p, '프로젝트코드': code };
+      });
+      if (changed) toUpdate.push({ ref: doc.ref, projects: newProjects });
+    });
+    for (let i = 0; i < toUpdate.length; i += 400) {
+      const chunk = toUpdate.slice(i, i + 400);
+      const batch = db.batch();
+      chunk.forEach(item => batch.update(item.ref, { projects: item.projects }));
+      await batch.commit();
+    }
+    return matchedCount;
+  }
+
   async function loadOfficialProjects(){
     try{
       const doc = await db.collection('officialProjects').doc('list').get();
@@ -983,6 +1031,10 @@ if ('serviceWorker' in navigator) {
 
   // "예정 프로젝트명 사전등록" 목록을 그려준다. 컨테이너가 없는 화면(근로자 계정 등 이 패널이
   // 렌더링되지 않은 상황)에서는 조용히 아무 일도 하지 않는다.
+  // 사전등록된 프로젝트명마다 코드 지정 여부를 같이 보여주고, 아직 코드가 없으면 그 자리에서 바로
+  // 생성/저장까지 할 수 있게 한다("코드 미부여" 도구와 같은 연도+분류 선택 → 코드 생성 방식) - 근무일지
+  // 작성폼에서는 코드 입력 자체를 없앴으므로, 실제 착수 전에 여기서 미리 코드를 붙여두면 근로자가
+  // 프로젝트를 선택하는 순간 코드가 자동으로 같이 채워진다.
   function renderPreRegisteredList() {
     const container = document.getElementById('preRegisteredList');
     if (!container) return;
@@ -990,15 +1042,74 @@ if ('serviceWorker' in navigator) {
       container.innerHTML = `<div style="color:var(--muted);">사전등록된 프로젝트명이 없습니다.</div>`;
       return;
     }
-    container.innerHTML = PRE_REGISTERED_PROJECTS.slice().sort().map(name => {
+    container.innerHTML = PRE_REGISTERED_PROJECTS.slice().sort().map((name, i) => {
       const usedNow = USED_PROJECT_NAMES.includes(name);
+      const code = PROJECT_CODES[name] || '';
+      const safeId = `prereg-${i}`;
+      const codeArea = code
+        ? `<span style="font-family:monospace; background:#eef1ea; border:1px solid var(--line); border-radius:4px; padding:3px 8px; font-size:11.5px;">${esc(code)}</span>`
+        : `
+          <span style="color:#a4453c; font-size:11px; white-space:nowrap;">코드 없음</span>
+          <input type="text" class="prereg-code-input" list="projectCodesDatalist" placeholder="직접 입력" style="width:100px; padding:3px 6px; border:1px solid var(--line); border-radius:4px; font-size:11.5px;">
+          ${codeBuilderHtml(safeId)}
+          <button type="button" class="prereg-code-save-btn" style="font-size:11px; padding:3px 8px; border:1px solid var(--line); border-radius:4px; background:#fff; cursor:pointer; white-space:nowrap;">코드 저장</button>
+        `;
       return `
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:4px 0; border-bottom:1px solid var(--line);">
-          <span>${esc(name)}${usedNow ? ' <span style="color:var(--muted); font-size:11px;">(이미 실사용 시작됨)</span>' : ''}</span>
-          <button type="button" class="pre-register-remove" data-name="${esc(name)}" style="background:none; border:none; color:#a4453c; cursor:pointer; font-size:11.5px; text-decoration:underline; padding:2px 0;">삭제</button>
+        <div class="prereg-row" data-name="${esc(name)}" style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding:6px 0; border-bottom:1px solid var(--line); flex-wrap:wrap;">
+          <div style="flex:1; min-width:150px; padding-top:5px;">
+            <span>${esc(name)}</span>${usedNow ? ' <span style="color:var(--muted); font-size:11px;">(이미 실사용 시작됨)</span>' : ''}
+          </div>
+          <div class="prereg-code-area" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            ${codeArea}
+            <button type="button" class="pre-register-remove" data-name="${esc(name)}" style="background:none; border:none; color:#a4453c; cursor:pointer; font-size:11.5px; text-decoration:underline; padding:2px 0;">삭제</button>
+          </div>
         </div>
       `;
     }).join('');
+
+    container.querySelectorAll('.prereg-row').forEach(row => {
+      const name = row.dataset.name;
+      const codeInput = row.querySelector('.prereg-code-input');
+      if (!codeInput) return; // 이미 코드가 있는 행은 생성/저장 UI 자체가 없음
+
+      row.querySelector('.cb-generate')?.addEventListener('click', () => {
+        const year = row.querySelector('.cb-year').value;
+        const classCode = row.querySelector('.cb-class').value;
+        // 아직 저장 전이라도 이 목록의 다른 행에 이미 입력/생성해둔 코드까지 풀에 포함해야, 한 번에
+        // 여러 프로젝트를 같은 연도-분류로 연달아 생성할 때 서로 같은 일련번호로 겹치지 않는다.
+        const inProgressCodes = Array.from(container.querySelectorAll('.prereg-code-input'))
+          .map(inp => inp.value.trim())
+          .filter(Boolean);
+        const pool = [...Object.values(PROJECT_CODES), ...ALL_WORKLOG_CODES, ...inProgressCodes];
+        const serial = suggestNextSerial(year, classCode, pool);
+        codeInput.value = `${year}-${classCode}-${serial}`;
+      });
+
+      row.querySelector('.prereg-code-save-btn')?.addEventListener('click', async () => {
+        const code = codeInput.value.trim();
+        const resultEl = document.getElementById('preRegisterResult');
+        if (!code) {
+          resultEl.style.color = '#a4453c';
+          resultEl.textContent = '코드를 입력하거나 생성해 주세요.';
+          return;
+        }
+        resultEl.style.color = 'var(--muted)';
+        resultEl.textContent = `"${name}"에 코드 "${code}" 저장 중...`;
+        try {
+          // 사전등록 단계에서는 보통 아직 근무일지에 쓰인 적이 없지만, 혹시 그 사이에 이미 작성된
+          // 항목이 있을 수도 있으므로 동일하게 소급 반영까지 함께 처리한다.
+          const matchedCount = await assignProjectCode(name, code);
+          resultEl.style.color = '#3f6b52';
+          resultEl.textContent = `완료: "${name}" → "${code}" 저장했습니다.` + (matchedCount ? ` (기존 근무일지 ${matchedCount}건에도 반영)` : '');
+          renderPreRegisteredList();
+          renderCodeRefList();
+          renderCodeRegistryList();
+        } catch (err) {
+          resultEl.style.color = '#a4453c';
+          resultEl.textContent = '저장 실패: ' + err.message;
+        }
+      });
+    });
   }
 
   async function updateProjectDatalist() {
@@ -1211,40 +1322,7 @@ if ('serviceWorker' in navigator) {
         resultEl.textContent = `"${name}"에 "${code}" 저장 중...`;
 
         try {
-          // 1) officialProjects/list.codes에 반영 - 다른 페이지(프로젝트 결산 등)와 공유되는
-          // 매핑이라 여기 저장해두면 이후 새 근무일지 작성 시에도 자동으로 붙는다.
-          const listRef = db.collection('officialProjects').doc('list');
-          const listDoc = await listRef.get();
-          const existingCodes = (listDoc.exists && listDoc.data().codes) || {};
-          const newCodes = { ...existingCodes, [name]: code };
-          await listRef.set({ codes: newCodes, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
-          PROJECT_CODES = newCodes;
-
-          // 2) 이 프로젝트명을 쓰는 기존 근무일지 전체에 즉시 소급 반영
-          const snapshot = await db.collection('workLogs').get();
-          const toUpdate = [];
-          let matchedCount = 0;
-          snapshot.docs.forEach(doc => {
-            const data = doc.data();
-            const projects = data.projects || [];
-            let changed = false;
-            const newProjects = projects.map(p => {
-              const pName = (p['프로젝트'] || '').trim();
-              if (pName !== name) return p;
-              if ((p['프로젝트코드'] || '') === code) return p;
-              changed = true;
-              matchedCount++;
-              return { ...p, '프로젝트코드': code };
-            });
-            if (changed) toUpdate.push({ ref: doc.ref, projects: newProjects });
-          });
-          for (let i = 0; i < toUpdate.length; i += 400) {
-            const chunk = toUpdate.slice(i, i + 400);
-            const batch = db.batch();
-            chunk.forEach(item => batch.update(item.ref, { projects: item.projects }));
-            await batch.commit();
-          }
-
+          const matchedCount = await assignProjectCode(name, code);
           resultEl.style.color = '#3f6b52';
           resultEl.textContent = `완료: "${name}" → "${code}" 저장, 근무일지 ${matchedCount}건에 소급 반영했습니다.`;
 
@@ -1910,6 +1988,11 @@ if ('serviceWorker' in navigator) {
     row.dataset.rowId = rowId;
     const p = prefill || {};
     const pTasks = p.tasks || {};
+    // 코드는 이제 근무일지 작성폼에서 직접 입력/생성하지 않는다("예정 프로젝트명 사전등록" 도구에서
+    // 관리자가 미리 지정해둔 코드가 있으면 그 값을 그대로 쓴다) - 기존 항목을 수정할 때는 그 항목에
+    // 실제로 저장되어 있던 코드값(p['프로젝트코드'])을 먼저 보여주고, 없으면 현재 중앙 코드 매핑에서
+    // 찾는다. 프로젝트명을 다른 값으로 바꾸면 그 순간부터는 항상 중앙 매핑 기준으로 갱신된다.
+    const initialCode = (p['프로젝트코드'] || PROJECT_CODES[(p['프로젝트'] || '').trim()] || '').trim();
     row.innerHTML = `
       <div class="project-row-top">
         <div class="field">
@@ -1918,8 +2001,7 @@ if ('serviceWorker' in navigator) {
         </div>
         <div class="field code-field">
           <label>코드</label>
-          <input type="text" class="row-code" list="projectCodesDatalist" placeholder="결산서 등록 전엔 직접 입력" value="${p['프로젝트코드'] || ''}">
-          ${codeBuilderHtml(rowId)}
+          <div class="row-code-display${initialCode ? '' : ' is-empty'}" data-code="${esc(initialCode)}">${initialCode ? esc(initialCode) : '미지정'}</div>
         </div>
         <div class="field hours-field">
           <label>투입시간</label>
@@ -1933,14 +2015,8 @@ if ('serviceWorker' in navigator) {
     `;
     document.getElementById('projectRows').appendChild(row);
 
-    // 프로젝트명을 고르면(결산서와 연결된 이름이면) 코드를 자동으로 채워준다. 프로젝트명을 다른
-    // 것으로 바꿀 때도 코드가 따라 갱신되도록(비어있으면 새 프로젝트 코드로, 매핑이 없으면 다시
-    // 비움), "지금 코드 칸의 값이 방금까지의 프로젝트명에 대한 자동 채움 값과 같았는지"를 기준으로
-    // 판단한다 - 그래야 사용자가 코드 칸에 직접 입력해둔 값(결산서 미등록 진행중 프로젝트 등)은
-    // 프로젝트명이 바뀌어도 실수로 지워지지 않는다.
     const projectInput = row.querySelector('.row-project');
-    const codeInput = row.querySelector('.row-code');
-    let lastProjectName = (p['프로젝트'] || '').trim();
+    const codeDisplay = row.querySelector('.row-code-display');
 
     // 이미 프로젝트명이 채워진 상태에서 드롭다운 화살표(▼)를 눌러도 브라우저가 "지금 입력된 값과
     // 일치하는 항목"으로만 후보를 필터링해서 사실상 아무것도 안 뜨는 것처럼 보이는 문제 - 포커스가
@@ -1957,32 +2033,15 @@ if ('serviceWorker' in navigator) {
       }
     });
 
+    // 프로젝트명을 실제로 바꾸면(자동완성 선택이든 직접 타이핑이든) 코드 표시를 중앙 코드 매핑
+    // 기준으로 다시 맞춘다 - 매핑에 없는 이름이면 "미지정"으로 비워 보여주고, 관리자가 "예정
+    // 프로젝트명 사전등록" 도구에서 코드를 붙여주기 전까지는 그 상태로 제출된다.
     projectInput.addEventListener('change', () => {
       const newName = projectInput.value.trim();
-      const currentCode = codeInput.value.trim();
-      const wasAutoForOldName = !currentCode || currentCode === (PROJECT_CODES[lastProjectName] || '');
-      if (wasAutoForOldName) codeInput.value = PROJECT_CODES[newName] || '';
-      lastProjectName = newName;
-    });
-
-    // 코드분류범례 드롭다운으로 년도+작업분류를 고르고 "코드 생성"을 누르면 해당 조합에서
-    // 아직 쓰이지 않은 다음 일련번호를 자동 제안해서 코드 칸에 채워준다(중복 방지).
-    row.querySelector('.cb-generate').addEventListener('click', () => {
-      const year = row.querySelector('.cb-year').value;
-      const classCode = row.querySelector('.cb-class').value;
-      // 같은 근무일지 안에서 아직 제출 전인 다른 프로젝트 행에 이미 입력/생성해둔 코드까지 풀에
-      // 포함해야, 한 번에 여러 프로젝트를 같은 년도-분류로 연달아 생성할 때 서로 같은 일련번호로
-      // 겹치지 않는다(PROJECT_CODES/ALL_WORKLOG_CODES는 실제 제출 후에만 갱신되기 때문).
-      const inProgressCodes = Array.from(document.querySelectorAll('#projectRows .row-code'))
-        .map(inp => inp.value.trim())
-        .filter(Boolean);
-      const pool = [...Object.values(PROJECT_CODES), ...ALL_WORKLOG_CODES, ...inProgressCodes];
-      const serial = suggestNextSerial(year, classCode, pool);
-      const generated = `${year}-${classCode}-${serial}`;
-      if (codeInput.value.trim() && codeInput.value.trim() !== generated) {
-        if (!confirm(`현재 코드 칸에 "${codeInput.value.trim()}"이(가) 입력되어 있습니다.\n"${generated}"(으)로 덮어쓸까요?`)) return;
-      }
-      codeInput.value = generated;
+      const code = PROJECT_CODES[newName] || '';
+      codeDisplay.dataset.code = code;
+      codeDisplay.textContent = code || '미지정';
+      codeDisplay.classList.toggle('is-empty', !code);
     });
 
     row.querySelector('.remove-project-btn').addEventListener('click', () => {
@@ -2056,6 +2115,13 @@ if ('serviceWorker' in navigator) {
 
     // 오늘 날짜 기본값
     document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
+
+    // 페이지가 처음 열릴 때는 로그인(currentRole 확정)보다 먼저 기본 프로젝트 행 1개가 이미
+    // 그려져 있어서(스크립트 로드 시점 resetProjectRows() 호출), 그 행은 currentRole이 아직
+    // null인 채로 만들어져 "코드 생성" 버튼이 관리자에게도 빠져 있을 수 있다. 로그인 정보가
+    // 막 확정된 지금, 아직 수정 중인 항목이 없는 기본 상태라면 한 번 더 다시 그려서 정확한
+    // 권한 기준으로 코드빌더 노출 여부를 맞춘다.
+    if (editingLogId === null) resetProjectRows();
 
     loadLogs();
     loadOfficialProjects(); // 회계현황 대시보드의 공식 프로젝트 목록 동기화 (완료되면 자동완성 목록을 다시 그림)
@@ -2769,9 +2835,10 @@ if ('serviceWorker' in navigator) {
       if (!name && hours === 0 && !Object.values(tasks).some(Boolean)) return; // 완전히 빈 행은 무시
       if (!name) hasEmptyProjectName = true;
 
-      // 코드 칸에 값이 있으면(결산서와 연결되어 자동으로 채워졌거나, 결산서가 아직 없는 진행중
-      // 프로젝트라 직접 입력한 값) 그 값을 쓰고, 비어있으면 매칭되는 코드를 한 번 더 찾아본다.
-      const code = row.querySelector('.row-code').value.trim() || PROJECT_CODES[name] || '';
+      // 코드는 더 이상 이 폼에서 직접 입력하지 않는다 - 프로젝트명을 고를 때 자동으로 채워진
+      // 표시값(사전등록 단계에서 미리 지정된 코드, 또는 수정 중인 기존 항목의 저장된 코드)을 그대로
+      // 쓰고, 혹시 비어있으면 중앙 코드 매핑에서 한 번 더 찾아본다.
+      const code = (row.querySelector('.row-code-display')?.dataset.code || '').trim() || PROJECT_CODES[name] || '';
       projects.push({ '프로젝트': name, '프로젝트코드': code, '투입시간': hours, tasks });
     });
 
