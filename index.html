@@ -761,6 +761,50 @@ if ('serviceWorker' in navigator) {
                             notifItems.push(`　· ${r['사원명'] || ''} - ${r['중요업무일정']} (${r['중요업무내용'] || '내용 없음'})`);
                         });
                     }
+
+                    // 3. 관리자: 연간 주요직무 준비현황 - 해당 월이 도래하기 7일 전부터, 그 달이 끝날 때까지
+                    // (아직 완료 체크 안 된 항목만) 알려준다. 월만 있고 특정 날짜가 없는 업무라서, "그 달의
+                    // 1일 - 7일"을 알림 시작일로 잡는다. 12월 말에 다음 해 1월 업무를 미리 알려줘야 하는
+                    // 경우가 있어 올해/내년 두 해를 다 검사한다(annual-tasks.html의 주기 계산 로직과 동일한
+                    // 방식을 여기서도 간단히 다시 구현 - 파일이 분리되어 있어 함수를 직접 공유할 수 없음).
+                    const annualTasksSnap = await db.collection('annualTasks').get();
+                    const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                    const upcomingAnnual = [];
+                    annualTasksSnap.docs.forEach(d => {
+                        const t = d.data();
+                        if (!t.month) return;
+                        [todayDate.getFullYear(), todayDate.getFullYear() + 1].forEach(y => {
+                            const monthStart = new Date(y, t.month - 1, 1);
+                            const windowStart = new Date(monthStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+                            const monthEnd = new Date(y, t.month, 0);
+                            if (todayDate < windowStart || todayDate > monthEnd) return;
+
+                            const doneThisYear = !!(t.completedYears && t.completedYears[y]);
+                            if (doneThisYear) return;
+
+                            const cycleYears = Number(t.cycleYears) > 1 ? Number(t.cycleYears) : 1;
+                            if (cycleYears > 1) {
+                                const priorDoneYears = Object.keys(t.completedYears || {})
+                                    .filter(cy => t.completedYears[cy])
+                                    .map(Number)
+                                    .filter(cy => !isNaN(cy) && cy <= y);
+                                if (priorDoneYears.length > 0) {
+                                    const lastDone = Math.max(...priorDoneYears);
+                                    if (y < lastDone + cycleYears) return; // 아직 다음 점검 예정 연도가 안 됨
+                                }
+                            }
+
+                            upcomingAnnual.push({ month: t.month, year: y, task: t.task });
+                        });
+                    });
+
+                    if (upcomingAnnual.length > 0) {
+                        upcomingAnnual.sort((a, b) => (a.year - b.year) || (a.month - b.month));
+                        notifItems.push('🗓 일주일 내 도래하는 연간 주요직무:');
+                        upcomingAnnual.forEach(item => {
+                            notifItems.push(`　· ${item.month}월 - ${item.task}`);
+                        });
+                    }
                 }
 
                 if (notifItems.length > 0) {
