@@ -784,10 +784,15 @@ if ('serviceWorker' in navigator) {
 
                             const cycleYears = Number(t.cycleYears) > 1 ? Number(t.cycleYears) : 1;
                             if (cycleYears > 1) {
+                                // 화면에서 체크한 이력(completedYears) 외에, admin이 등록 시 직접 입력해둔
+                                // "기준연도"(baseYear - 오늘 새로 주기를 지정했지만 실제 마지막 시행은 예전인
+                                // 경우)도 같은 후보로 취급한다 - annual-tasks.html의 계산과 동일한 방식.
                                 const priorDoneYears = Object.keys(t.completedYears || {})
                                     .filter(cy => t.completedYears[cy])
                                     .map(Number)
                                     .filter(cy => !isNaN(cy) && cy <= y);
+                                const baseYear = Number(t.baseYear);
+                                if (!isNaN(baseYear) && baseYear > 0 && baseYear <= y) priorDoneYears.push(baseYear);
                                 if (priorDoneYears.length > 0) {
                                     const lastDone = Math.max(...priorDoneYears);
                                     if (y < lastDone + cycleYears) return; // 아직 다음 점검 예정 연도가 안 됨
