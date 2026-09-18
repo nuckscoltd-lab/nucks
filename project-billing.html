@@ -237,7 +237,7 @@ if ('serviceWorker' in navigator) {
   let searchText = '';
 
   function fmtWon(n){ return (Math.round(n) || 0).toLocaleString() + '원'; }
-  const STATUS_OPTIONS = ['계약체결전', '미청구', '진행중', '완료', '지급완료', '사업연기'];
+  const STATUS_OPTIONS = ['계약체결전', '미청구', '진행중', '지급완료', '완료', '사업연기'];
   function num(v){ return Number(v) || 0; }
   function esc(s){ return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
 
