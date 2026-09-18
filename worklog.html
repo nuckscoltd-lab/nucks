@@ -894,13 +894,16 @@ if ('serviceWorker' in navigator) {
   let LAST_PROJECT_COUNTS = {};
 
   // 작업분류코드 체계: 년도-작업분류-일련번호 (예: 2022-00-02)
+  // 시공(11)은 세부 유형별로 11(1)/11(2)/11(3)으로 세분화되어있다 (예: 2026-11(1)-01).
   const WORK_CLASSIFICATION = [
     { code: '00', label: '대안설계' },
     { code: '01', label: '견본주택설계' },
     { code: '02', label: '세대설계' },
     { code: '03', label: '상업공간설계' },
     { code: '04', label: '관공서설계' },
-    { code: '11', label: '시공' }
+    { code: '11(1)', label: '시공-관공서' },
+    { code: '11(2)', label: '시공-개인APT' },
+    { code: '11(3)', label: '시공-메뉴얼(상업공간)' }
   ];
 
   function getCodeYearOptions() {
