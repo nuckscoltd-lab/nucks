@@ -1,0 +1,2021 @@
+<title>회계현황 대시보드</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;900&family=JetBrains+Mono:wght@500;600;700&display=swap">
+<style>
+:root{
+  --bg:#FBF9F5; --surface:#FFFFFF; --surface-2:#F3EFE7; --line:#E4DDCF;
+  --ink:#2A2621; --ink-2:#5B5548; --muted:#8C8474;
+  --con:#2F6FB0; --con-soft:#EAF1F8;
+  --des:#C97A2E; --des-soft:#FBF1E6;
+  --pos:#0A9797; --neg:#C1443B; --mid:#B7B0A3;
+  --pos-soft:#E4F5F4; --neg-soft:#FBEAE8;
+  --radius:10px; --radius-sm:6px;
+  --shadow:0 1px 2px rgba(42,38,33,.06), 0 8px 24px -12px rgba(42,38,33,.12);
+  /* 계정과목 카테고리 팔레트 (dataviz 스킬 validate_palette.js 통과, light surface #FFFFFF) */
+  --c1:#2F6FB0; --c2:#C97A2E; --c3:#0E93AC; --c4:#B08A2E; --c5:#A8547E; --c6:#5A8C30; --c7:#6B5CA5; --c8:#A24E3D;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#17140F; --surface:#1E1A14; --surface-2:#26211A; --line:#373126;
+    --ink:#F1ECE2; --ink-2:#C7BFAF; --muted:#8F8877;
+    --con:#4A8AC4; --con-soft:#1E2B38;
+    --des:#C17F2E; --des-soft:#2E2417;
+    --pos:#1BA6A6; --neg:#E0665C; --mid:#5C5647;
+    --pos-soft:#12312E; --neg-soft:#341F1C;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    /* 계정과목 팔레트 (dark surface #1E1A14 기준 검증) */
+    --c1:#4A8AC4; --c2:#C17F2E; --c3:#1E9DB4; --c4:#B08327; --c5:#C15C93; --c6:#6B9635; --c7:#8B7BC7; --c8:#C4695A;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#17140F; --surface:#1E1A14; --surface-2:#26211A; --line:#373126;
+  --ink:#F1ECE2; --ink-2:#C7BFAF; --muted:#8F8877;
+  --con:#4A8AC4; --con-soft:#1E2B38;
+  --des:#C17F2E; --des-soft:#2E2417;
+  --pos:#1BA6A6; --neg:#E0665C; --mid:#5C5647;
+  --pos-soft:#12312E; --neg-soft:#341F1C;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  --c1:#4A8AC4; --c2:#C17F2E; --c3:#1E9DB4; --c4:#B08327; --c5:#C15C93; --c6:#6B9635; --c7:#8B7BC7; --c8:#C4695A;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--ink); margin:0;
+  font-family:'Noto Sans KR',-apple-system,'Malgun Gothic',sans-serif;
+  padding:28px 16px 64px;
+}
+a{color:inherit;}
+.num{font-family:'JetBrains Mono','Noto Sans KR',monospace; font-variant-numeric:tabular-nums;}
+.wrap{max-width:980px; margin:0 auto;}
+
+.hd{display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:6px;}
+.hd h1{font-size:22px; font-weight:900; margin:0 0 6px; letter-spacing:-.01em;}
+.hd p{margin:0; color:var(--ink-2); font-size:13.5px; line-height:1.6; max-width:58ch;}
+.sample-badge{
+  display:inline-flex; align-items:center; gap:6px; background:var(--surface-2); border:1px solid var(--line);
+  color:var(--muted); font-size:11.5px; font-weight:600; padding:6px 12px; border-radius:999px; white-space:nowrap;
+}
+.sample-badge::before{content:''; width:6px; height:6px; border-radius:50%; background:var(--des);}
+.note-line{font-size:12px; color:var(--muted); margin:14px 0 22px; padding:10px 14px; background:var(--surface-2); border-radius:var(--radius-sm); border:1px dashed var(--line);}
+
+.tabbar{display:flex; gap:6px; margin-bottom:26px; flex-wrap:wrap; border-bottom:1px solid var(--line); padding-bottom:14px;}
+.tab-btn{font-size:12.5px; font-weight:700; padding:8px 16px; border-radius:999px; border:1px solid var(--line); background:var(--surface); color:var(--ink-2); cursor:pointer; text-decoration:none;}
+.tab-btn:hover{background:var(--surface-2);}
+.tab-btn.on{background:var(--ink); color:var(--bg); border-color:var(--ink);}
+
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; margin-bottom:26px;}
+.kpi{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; box-shadow:var(--shadow);}
+.kpi .lbl{font-size:11.5px; color:var(--muted); font-weight:600; margin-bottom:6px;}
+.kpi .val{font-size:19px; font-weight:700;}
+.kpi .val.pos{color:var(--pos);} .kpi .val.neg{color:var(--neg);}
+.kpi .sub{font-size:11px; color:var(--muted); margin-top:3px;}
+
+section{margin-bottom:28px;}
+.sec-hd{display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:12px; flex-wrap:wrap;}
+.sec-hd h2{font-size:14.5px; font-weight:700; margin:0;}
+.sec-hd .desc{font-size:12px; color:var(--muted);}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow);}
+
+/* 계정과목 가로 막대 */
+.hbar-row{display:flex; align-items:center; gap:12px; padding:8px 0;}
+.hbar-row + .hbar-row{border-top:1px solid var(--line);}
+.hbar-label{width:150px; flex-shrink:0; font-size:12.5px; color:var(--ink); font-weight:600; display:flex; align-items:center; gap:8px;}
+.hbar-dot{width:9px; height:9px; border-radius:3px; flex-shrink:0;}
+.hbar-track{flex:1; height:12px; background:var(--surface-2); border-radius:4px; overflow:hidden;}
+.hbar-fill{height:100%; border-radius:4px;}
+.hbar-val{width:84px; text-align:right; font-size:12.5px; font-weight:600; color:var(--ink-2); flex-shrink:0;}
+.hbar-pct{width:44px; text-align:right; font-size:11px; color:var(--muted); flex-shrink:0;}
+@media (max-width:640px){ .hbar-label{width:104px; font-size:11.5px;} .hbar-val{width:66px; font-size:11.5px;} }
+.hbar-row.clickable{cursor:pointer; border-radius:6px; margin:0 -8px; padding:8px 8px;}
+.hbar-row.clickable:hover{background:var(--surface-2);}
+.hbar-row.clickable .hbar-label::after{content:'상세보기 ›'; font-size:10.5px; font-weight:600; color:var(--muted); margin-left:2px;}
+.hbar-row.excluded{opacity:.65; border-top:1px dashed var(--line); margin-top:6px; padding-top:14px;}
+.hbar-row.excluded .hbar-label{width:auto; flex:1 1 auto; color:var(--muted); font-weight:500; white-space:normal;}
+.hbar-row.excluded .hbar-track{flex:0 0 60px;}
+.excl-badge{font-size:9.5px; font-weight:700; color:var(--muted); background:var(--surface-2); border:1px solid var(--line); border-radius:999px; padding:2px 8px; white-space:nowrap;}
+@media (max-width:640px){ .hbar-row.excluded .hbar-track{display:none;} }
+
+/* 필터 바 */
+.filter-bar{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:20px;}
+.filter-bar label{font-size:11.5px; color:var(--muted); font-weight:600;}
+.seg{display:inline-flex; border:1px solid var(--line); border-radius:999px; padding:2px; background:var(--surface); gap:2px;}
+.seg-btn{font-family:inherit; font-size:11.5px; font-weight:700; padding:6px 14px; border-radius:999px; border:none; background:transparent; color:var(--ink-2); cursor:pointer;}
+.seg-btn:hover{background:var(--surface-2);}
+.seg-btn.on{background:var(--ink); color:var(--bg);}
+.filter-select{
+  font-family:inherit; font-size:12.5px; font-weight:600; color:var(--ink); background:var(--surface);
+  border:1px solid var(--line); border-radius:999px; padding:7px 12px; cursor:pointer;
+}
+
+/* 인건비 상세 팝업 모달 */
+.modal-backdrop{position:fixed; inset:0; background:rgba(20,17,12,.5); display:flex; align-items:center; justify-content:center; z-index:80; padding:20px;}
+.modal-card{background:var(--surface); border:1px solid var(--line); border-radius:14px; max-width:400px; width:100%; padding:20px 22px; box-shadow:0 24px 64px -16px rgba(0,0,0,.4); max-height:82vh; overflow-y:auto;}
+.modal-hd{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px;}
+.modal-title{display:flex; align-items:center; gap:8px; font-size:14.5px; font-weight:700; color:var(--ink);}
+.modal-close{background:var(--surface-2); border:1px solid var(--line); color:var(--ink-2); font-size:15px; cursor:pointer; line-height:1; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.modal-close:hover{background:var(--line);}
+.modal-share{background:var(--surface-2); border-radius:8px; padding:10px 12px; font-size:12px; color:var(--ink-2); margin:10px 0 4px;}
+.modal-share b{color:var(--ink);}
+.modal-sub-hd{display:flex; justify-content:space-between; font-size:11px; color:var(--muted); font-weight:700; margin:16px 0 4px; text-transform:uppercase; letter-spacing:.04em;}
+.modal-row{display:flex; justify-content:space-between; align-items:baseline; padding:8px 0; border-bottom:1px solid var(--line); font-size:13px;}
+.modal-row:last-of-type{border-bottom:none;}
+.modal-row .nm{color:var(--ink); font-weight:600; display:flex; align-items:center; gap:7px;}
+.modal-row .nm .dot{width:8px; height:8px; border-radius:50%; flex-shrink:0;}
+.modal-row .right{display:flex; align-items:baseline; gap:6px;}
+.modal-row .amt{font-weight:700;}
+.modal-row .pct{color:var(--muted); font-size:11px;}
+
+/* 라인/막대 svg 차트 */
+.chart-wrap{position:relative;}
+.chart-svg{width:100%; height:auto; overflow:visible;}
+.gridline{stroke:var(--line); stroke-width:1;}
+.axislabel{fill:var(--muted); font-size:9.5px; font-family:'JetBrains Mono',monospace;}
+.hoverline{stroke:var(--muted); stroke-width:1; stroke-dasharray:3 3; opacity:0;}
+.tooltip{
+  position:absolute; background:var(--ink); color:var(--bg); font-size:11px; padding:7px 10px; border-radius:6px;
+  pointer-events:none; opacity:0; transform:translate(-50%,-112%); white-space:nowrap; z-index:5; font-family:'JetBrains Mono',monospace;
+  transition:opacity .08s; line-height:1.6;
+}
+.chart-legend{display:flex; flex-wrap:wrap; gap:8px 16px; margin-top:12px; font-size:11.5px; color:var(--ink-2);}
+.chart-legend span{display:inline-flex; align-items:center; gap:6px;}
+.chart-legend i{width:10px; height:10px; border-radius:2px; display:inline-block;}
+.chart-legend i.line{width:12px; height:2px; border-radius:1px;}
+
+/* 종합 매출/매입 표 */
+table.fin-table{width:100%; border-collapse:collapse; font-size:12.5px;}
+table.fin-table th{text-align:right; font-size:11px; color:var(--muted); font-weight:600; padding:9px 16px; border-bottom:1px solid var(--line);}
+table.fin-table th:first-child, table.fin-table td:first-child{text-align:left;}
+table.fin-table td{padding:10px 16px; border-bottom:1px solid var(--line); color:var(--ink-2); text-align:right;}
+table.fin-table td:first-child{color:var(--ink); font-weight:600;}
+table.fin-table tr:last-child td{border-bottom:none;}
+table.fin-table tr.ytd td{color:var(--muted); font-style:italic;}
+
+footer{font-size:11.5px; color:var(--muted); line-height:1.7; border-top:1px solid var(--line); padding-top:16px; margin-top:8px;}
+footer b{color:var(--ink-2);}
+
+:root{
+  --bg:#FBF9F5; --surface:#FFFFFF; --surface-2:#F3EFE7; --line:#E4DDCF;
+  --ink:#2A2621; --ink-2:#5B5548; --muted:#8C8474;
+  --con:#2F6FB0; --con-soft:#EAF1F8;
+  --des:#C97A2E; --des-soft:#FBF1E6;
+  --pos:#0A9797; --neg:#C1443B; --mid:#B7B0A3;
+  --pos-soft:#E4F5F4; --neg-soft:#FBEAE8;
+  --radius:10px; --radius-sm:6px;
+  --shadow:0 1px 2px rgba(42,38,33,.06), 0 8px 24px -12px rgba(42,38,33,.12);
+  --c1:#2F6FB0; --c2:#C97A2E; --c3:#0E93AC; --c4:#B08A2E; --c5:#A8547E; --c6:#5A8C30; --c7:#6B5CA5; --c8:#A24E3D;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#17140F; --surface:#1E1A14; --surface-2:#26211A; --line:#373126;
+    --ink:#F1ECE2; --ink-2:#C7BFAF; --muted:#8F8877;
+    --con:#4A8AC4; --con-soft:#1E2B38;
+    --des:#C17F2E; --des-soft:#2E2417;
+    --pos:#1BA6A6; --neg:#E0665C; --mid:#5C5647;
+    --pos-soft:#12312E; --neg-soft:#341F1C;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    --c1:#4A8AC4; --c2:#C17F2E; --c3:#1E9DB4; --c4:#B08327; --c5:#C15C93; --c6:#6B9635; --c7:#8B7BC7; --c8:#C4695A;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#17140F; --surface:#1E1A14; --surface-2:#26211A; --line:#373126;
+  --ink:#F1ECE2; --ink-2:#C7BFAF; --muted:#8F8877;
+  --con:#4A8AC4; --con-soft:#1E2B38;
+  --des:#C17F2E; --des-soft:#2E2417;
+  --pos:#1BA6A6; --neg:#E0665C; --mid:#5C5647;
+  --pos-soft:#12312E; --neg-soft:#341F1C;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  --c1:#4A8AC4; --c2:#C17F2E; --c3:#1E9DB4; --c4:#B08327; --c5:#C15C93; --c6:#6B9635; --c7:#8B7BC7; --c8:#C4695A;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--ink); margin:0;
+  font-family:'Noto Sans KR',-apple-system,'Malgun Gothic',sans-serif;
+  padding:28px 16px 64px;
+}
+a{color:inherit;}
+.num{font-family:'JetBrains Mono','Noto Sans KR',monospace; font-variant-numeric:tabular-nums;}
+.wrap{max-width:1080px; margin:0 auto;}
+
+.hd{display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:6px;}
+.hd h1{font-size:22px; font-weight:900; margin:0 0 6px; letter-spacing:-.01em;}
+.hd p{margin:0; color:var(--ink-2); font-size:13.5px; line-height:1.6; max-width:60ch;}
+.real-badge{
+  display:inline-flex; align-items:center; gap:6px; background:var(--surface-2); border:1px solid var(--line);
+  color:var(--muted); font-size:11.5px; font-weight:600; padding:6px 12px; border-radius:999px; white-space:nowrap;
+}
+.real-badge::before{content:''; width:6px; height:6px; border-radius:50%; background:var(--pos);}
+.note-line{font-size:12px; color:var(--muted); margin:14px 0 22px; padding:10px 14px; background:var(--surface-2); border-radius:var(--radius-sm); border:1px dashed var(--line); line-height:1.7;}
+.note-line b{color:var(--ink-2);}
+
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:28px;}
+.kpi{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; box-shadow:var(--shadow);}
+.kpi .lbl{font-size:11.5px; color:var(--muted); font-weight:600; margin-bottom:6px;}
+.kpi .val{font-size:19px; font-weight:700;}
+.kpi .val.pos{color:var(--pos);} .kpi .val.neg{color:var(--neg);}
+.kpi .sub{font-size:11px; color:var(--muted); margin-top:3px;}
+
+section{margin-bottom:32px;}
+.sec-hd{display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:12px; flex-wrap:wrap;}
+.sec-hd h2{font-size:15px; font-weight:700; margin:0;}
+.sec-hd .desc{font-size:12px; color:var(--muted);}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow);}
+
+/* 필터 바 */
+.filter-bar{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:16px;}
+.filter-bar label{font-size:11.5px; color:var(--muted); font-weight:600;}
+.seg{display:inline-flex; border:1px solid var(--line); border-radius:999px; padding:2px; background:var(--surface); gap:2px;}
+.seg-btn{font-family:inherit; font-size:11.5px; font-weight:700; padding:6px 14px; border-radius:999px; border:none; background:transparent; color:var(--ink-2); cursor:pointer;}
+.seg-btn:hover{background:var(--surface-2);}
+.seg-btn.on{background:var(--ink); color:var(--bg);}
+
+/* mosaic */
+.mosaic{display:flex; flex-direction:column; gap:8px;}
+.maj-row{display:flex; align-items:stretch; gap:8px; flex-wrap:wrap;}
+.maj-label{display:flex; align-items:center; gap:8px; min-width:76px; font-size:13px; font-weight:700;}
+.maj-dot{width:9px; height:9px; border-radius:3px; flex-shrink:0;}
+.maj-tiles{display:flex; gap:6px; flex:1; min-width:240px; flex-wrap:wrap;}
+.tile{
+  position:relative; border-radius:var(--radius-sm); padding:11px 13px;
+  border:1px solid var(--line); flex:1 1 120px; min-width:110px;
+  cursor:pointer; transition:transform .12s ease, box-shadow .12s ease;
+}
+.tile:hover{ transform:translateY(-2px); box-shadow:var(--shadow); }
+.tile.on{ outline:2px solid var(--ink); outline-offset:-2px; }
+.tile .t-name{font-size:12.5px; font-weight:600; color:var(--ink); margin-bottom:4px;}
+.tile .t-rev{font-size:11px; color:var(--ink-2); margin-bottom:2px;}
+.tile .t-rate{font-size:15px; font-weight:700;}
+.tile .t-link{margin-top:7px; font-size:10.5px; font-weight:700; color:var(--ink-2); opacity:0; transition:opacity .12s ease;}
+.tile:hover .t-link{opacity:1;}
+.tile .t-link:hover{text-decoration:underline;}
+.kpi-clear{margin-left:6px; font-size:11px; font-weight:600; color:var(--muted); text-decoration:none;}
+.kpi-clear:hover{color:var(--ink-2); text-decoration:underline;}
+.legend-scale{display:flex; align-items:center; gap:10px; font-size:11px; color:var(--muted); margin-top:12px;}
+.legend-scale .bar{width:120px; height:8px; border-radius:4px; background:linear-gradient(90deg, var(--neg), var(--mid), var(--pos));}
+
+/* trend charts */
+.trend-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+@media (max-width:720px){.trend-grid{grid-template-columns:1fr;}}
+.trend-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px 16px 10px; box-shadow:var(--shadow);}
+.trend-card h3{font-size:13px; margin:0 0 2px; font-weight:700;}
+.trend-card .cap{font-size:11px; color:var(--muted); margin-bottom:8px;}
+.trend-legend{display:flex; flex-wrap:wrap; gap:8px 14px; margin-top:8px; font-size:11px; color:var(--ink-2);}
+.trend-legend span{display:inline-flex; align-items:center; gap:5px;}
+.trend-legend i{width:10px; height:2px; border-radius:1px; display:inline-block;}
+.chart-svg{width:100%; height:auto; overflow:visible;}
+.gridline{stroke:var(--line); stroke-width:1;}
+.axislabel{fill:var(--muted); font-size:9.5px; font-family:'JetBrains Mono',monospace;}
+.hoverline{stroke:var(--muted); stroke-width:1; stroke-dasharray:3 3; opacity:0;}
+.tooltip{
+  position:absolute; background:var(--ink); color:var(--bg); font-size:11px; padding:6px 9px; border-radius:6px;
+  pointer-events:none; opacity:0; transform:translate(-50%,-115%); white-space:nowrap; z-index:5; font-family:'JetBrains Mono',monospace;
+  transition:opacity .08s;
+}
+.chart-wrap{position:relative;}
+
+/* 대분류 요약 카드 */
+.major-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px;}
+.major-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow);}
+.major-card .mc-hd{display:flex; align-items:center; gap:8px; margin-bottom:10px;}
+.major-card .mc-dot{width:10px; height:10px; border-radius:50%;}
+.major-card .mc-title{font-size:13.5px; font-weight:700;}
+.major-card .mc-row{display:flex; justify-content:space-between; font-size:12.5px; color:var(--ink-2); padding:4px 0;}
+.major-card .mc-row b{color:var(--ink); font-weight:600;}
+.major-card .mc-rate{font-size:20px; font-weight:700; margin-top:6px;}
+.row-dot{width:8px; height:8px; border-radius:3px; flex-shrink:0; display:inline-block;}
+
+footer{font-size:11.5px; color:var(--muted); line-height:1.7; border-top:1px solid var(--line); padding-top:16px; margin-top:8px;}
+footer b{color:var(--ink-2);}
+
+/* ── 인라인 프로젝트 상세 패널 (project-detail-real.html 로직 이식) ───────── */
+.crumb{font-size:12px; color:var(--muted); margin-bottom:14px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+.crumb a{color:var(--muted); text-decoration:none; border-bottom:1px dotted var(--muted); cursor:pointer;}
+.crumb a:hover{color:var(--ink-2); border-color:var(--ink-2);}
+.crumb b{color:var(--ink-2); font-weight:600;}
+.kpi .val.pending{color:var(--muted); font-size:14px; font-weight:600;}
+.search-input{
+  font-family:inherit; font-size:12.5px; color:var(--ink); background:var(--surface);
+  border:1px solid var(--line); border-radius:999px; padding:7px 14px; min-width:200px; flex:1; max-width:280px;
+}
+.search-input:focus{outline:2px solid var(--con-soft); border-color:var(--con);}
+.sub-filter-chip{display:inline-flex; align-items:center; gap:8px; font-size:11.5px; font-weight:600; color:var(--ink-2); background:var(--surface-2); border:1px solid var(--line); border-radius:999px; padding:6px 8px 6px 14px;}
+.sub-filter-clear{color:var(--muted); text-decoration:none; font-weight:700; width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;}
+.sub-filter-clear:hover{background:var(--surface); color:var(--ink);}
+.ref-toggle{margin:-10px 0 20px;}
+.ref-toggle summary{cursor:pointer; color:var(--muted); font-weight:600; font-size:12px; padding:6px 2px; list-style:none; display:flex; align-items:center; gap:6px; user-select:none;}
+.ref-toggle summary::-webkit-details-marker{display:none;}
+.ref-toggle summary::before{content:'▸'; font-size:9px; display:inline-block; transition:transform .15s;}
+.ref-toggle[open] summary::before{transform:rotate(90deg);}
+.ref-toggle summary:hover{color:var(--ink-2);}
+.ref-kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; margin-top:8px; padding:12px 14px; background:var(--surface-2); border-radius:var(--radius-sm); border:1px dashed var(--line); max-width:480px;}
+.ref-kpis .rk .l{font-size:10.5px; color:var(--muted); margin-bottom:3px;}
+.ref-kpis .rk .v{font-size:13.5px; font-weight:700; color:var(--ink-2);}
+table.list-table{width:100%; border-collapse:collapse; font-size:12.5px;}
+table.list-table th{text-align:right; font-size:11px; color:var(--muted); font-weight:600; padding:9px 12px; border-bottom:1px solid var(--line); white-space:nowrap;}
+table.list-table th:first-child, table.list-table td:first-child{text-align:left;}
+table.list-table td{padding:10px 12px; border-bottom:1px solid var(--line); color:var(--ink-2); text-align:right; vertical-align:middle;}
+table.list-table tr:last-child td{border-bottom:none;}
+table.list-table tr:hover td{background:var(--surface-2);}
+table.list-table td:first-child{color:var(--ink); font-weight:600;}
+.list-name{display:flex; align-items:center; gap:8px; cursor:pointer;}
+.list-name a{color:var(--ink); text-decoration:none;}
+.list-name a:hover{text-decoration:underline;}
+.major-dot{width:8px; height:8px; border-radius:3px; flex-shrink:0;}
+.status-pill{font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:999px; white-space:nowrap;}
+.status-pill.완료{background:var(--surface-2); color:var(--ink-2);}
+.status-pill.진행중{background:var(--pos-soft); color:var(--pos);}
+.status-pill.청구전{background:var(--warn-soft,var(--surface-2)); color:var(--ink-2);}
+.conf-dot{display:inline-block; width:6px; height:6px; border-radius:50%; margin-left:4px;}
+.conf-dot.ok{background:var(--pos);} .conf-dot.low{background:var(--mid);} .conf-dot.none{background:var(--mid);}
+.list-empty{padding:28px; text-align:center; color:var(--muted); font-size:13px;}
+tr.group-hd td{background:var(--surface-2); padding:8px 12px; border-bottom:1px solid var(--line); text-align:left;}
+tr.group-hd .group-hd-label{font-weight:700; color:var(--ink); font-size:12px;}
+tr.group-hd .group-hd-meta{float:right; color:var(--muted); font-size:11.5px;}
+.tags{display:flex; flex-wrap:wrap; gap:6px;}
+.tag{font-size:11.5px; font-weight:600; padding:4px 10px; border-radius:999px;}
+.tag.type{background:var(--des-soft); color:var(--des);}
+.tag.type.con{background:var(--con-soft); color:var(--con);}
+.tag.status.진행중{background:var(--pos-soft); color:var(--pos);}
+.tag.status.완료{background:var(--surface-2); color:var(--ink-2); border:1px solid var(--line);}
+.tag.status.청구전{background:var(--surface-2); color:var(--ink-2);}
+.tag.code{background:var(--surface-2); color:var(--ink-2); font-family:'JetBrains Mono',monospace; border:1px solid var(--line);}
+.tag.client{background:var(--surface-2); color:var(--ink-2); border:1px solid var(--line);}
+.tag.nocode{background:var(--surface-2); color:var(--muted); border:1px dashed var(--line); font-style:normal;}
+.progress-row{display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:14px;}
+.progress-dates{font-size:12px; color:var(--ink-2); display:flex; gap:18px; flex-wrap:wrap;}
+.progress-dates b{color:var(--ink); font-weight:700;}
+.progress-track{position:relative; height:8px; background:var(--surface-2); border-radius:99px; overflow:hidden;}
+.progress-fill{position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg, var(--des), var(--pos)); border-radius:99px;}
+.progress-today{position:absolute; top:-4px; width:2px; height:16px; background:var(--ink);}
+.progress-today::after{content:attr(data-lbl); position:absolute; top:-20px; left:50%; transform:translateX(-50%); font-size:10.5px; color:var(--ink-2); white-space:nowrap; font-weight:600;}
+.progress-pending{display:flex; align-items:center; gap:10px; padding:14px; background:var(--surface-2); border-radius:var(--radius-sm); border:1px dashed var(--line); color:var(--muted); font-size:12.5px;}
+.progress-track.pending{background:repeating-linear-gradient(135deg, var(--surface-2), var(--surface-2) 6px, var(--line) 6px, var(--line) 7px);}
+.contrib-list{display:flex; flex-direction:column; gap:10px;}
+.contrib-item{display:flex; align-items:center; gap:12px;}
+.contrib-avatar{width:32px; height:32px; border-radius:50%; background:var(--con-soft); color:var(--con); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex-shrink:0;}
+.contrib-mid{flex:1; min-width:0;}
+.contrib-name-row{display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:5px;}
+.contrib-name-row .nm{font-weight:600; color:var(--ink);}
+.contrib-name-row .amt{color:var(--ink-2);}
+.contrib-bar-track{height:6px; background:var(--surface-2); border-radius:99px; overflow:hidden;}
+.contrib-bar-fill{height:100%; background:var(--con); border-radius:99px;}
+.contrib-pct{width:40px; text-align:right; font-size:12px; color:var(--ink-2); font-weight:600;}
+.contrib-empty{font-size:12.5px; color:var(--muted); line-height:1.7; padding:6px 2px;}
+.two-col{display:grid; grid-template-columns:1.15fr .85fr; gap:16px;}
+@media (max-width:760px){.two-col{grid-template-columns:1fr;}}
+.client-row{display:flex; align-items:center; gap:14px; margin-bottom:14px;}
+.client-avatar{width:40px; height:40px; border-radius:10px; background:var(--des-soft); color:var(--des); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; flex-shrink:0;}
+.client-name{font-size:14.5px; font-weight:700;}
+.client-sub{font-size:11.5px; color:var(--muted); margin-top:2px;}
+.stat-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
+.stat-grid .s{background:var(--surface-2); border-radius:var(--radius-sm); padding:10px 12px;}
+.stat-grid .s .l{font-size:10.5px; color:var(--muted); margin-bottom:3px;}
+.stat-grid .s .v{font-size:14px; font-weight:700;}
+.pd-panel-hd{display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:6px;}
+.pd-close{font-size:11.5px; font-weight:700; color:var(--muted); text-decoration:none; background:var(--surface-2); border:1px solid var(--line); border-radius:999px; padding:5px 12px; white-space:nowrap; cursor:pointer;}
+.pd-close:hover{color:var(--ink-2); background:var(--surface);}
+.pd-openfull{font-size:11.5px; color:var(--muted); text-decoration:none; border-bottom:1px dotted var(--muted);}
+.pd-openfull:hover{color:var(--ink-2); border-color:var(--ink-2);}
+
+/* ── 상단 통합 탭바 (재무 현황 / 프로젝트 유형 비교) ───────────────────────────── */
+.top-shell{max-width:1080px; margin:0 auto;}
+.top-tabbar{display:flex; gap:6px; margin:22px 0 30px; border-bottom:2px solid var(--line);}
+.top-tab-btn{font-family:inherit; font-size:14px; font-weight:800; padding:12px 22px; border:none; background:transparent; color:var(--muted); cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; transition:color .12s ease;}
+.top-tab-btn:hover{color:var(--ink-2);}
+.top-tab-btn.on{color:var(--ink); border-bottom-color:var(--ink);}
+.combo-hd p{max-width:70ch;}
+.combo-footer{max-width:1080px; margin:24px auto 0;}
+</style>
+
+<div class="top-shell">
+  <div class="hd combo-hd">
+    <div>
+      <h1>회계현황 대시보드</h1>
+      <p>재무 현황(계정과목별 지출·월별 수입지출·종합 매출매입)과 프로젝트 유형 비교(대분류·소분류·발주처별 손익율 추이, 프로젝트 상세)를 한 화면에서 탭으로 전환하며 확인합니다.</p>
+    </div>
+    <span class="real-badge">통합 대시보드 · 재무 현황 + 프로젝트 유형 비교</span>
+  </div>
+  <div class="top-tabbar" id="topTabbar">
+    <button class="top-tab-btn on" data-toppane="fin" type="button">재무 현황</button>
+    <button class="top-tab-btn" data-toppane="ptc" type="button">프로젝트 유형 비교</button>
+  </div>
+</div>
+
+<div id="pane-fin">
+<div class="wrap">
+  <div class="hd">
+    <div>
+      <h1>재무 현황</h1>
+      <p>계정과목별 지출, 월별 수입·지출, 종합 매출·매입을 한 곳에서 확인하는 재무 리포트 레이아웃 초안입니다. 회계현황 원본데이터(법인통장 거래 + 카드 거래내역)를 그대로 집계합니다.</p>
+    </div>
+    <span class="sample-badge">계정과목·월별은 실제 데이터 · 종합 매출·매입은 2026년만 실제</span>
+  </div>
+  <div class="note-line">계정과목별 지출 · 월별 수입·지출 탭은 회계현황 원본데이터(법인통장·카드 거래내역, 4,022건)를 실제로 집계한 값입니다. 종합 매출·매입 탭은 "법인 분기별매출매입현황" 페이지에서 2026년(1~8월) 실제 매출·매입·일반지출·기타수입을 가져와 반영했고, 2023~2025년은 그 페이지에 매출·매입이 아직 입력되어 있지 않아 예시 수치로 남아 있습니다. 카드대금·미지급금은 결제 시점에 각 계정과목으로 이미 분류되어 있어, 별도 항목으로 다시 더하지 않고 중복 집계를 피했습니다.</div>
+
+  <div class="tabbar" id="finTabbar"></div>
+  <div id="finApp"></div>
+</div>
+</div>
+
+<div id="pane-ptc" style="display:none">
+<div class="wrap">
+  <div class="hd">
+    <div>
+      <h1>프로젝트 유형 비교</h1>
+      <p>기성청구현황·거래내역·근무일지의 실제 데이터를 대분류(공사·설계)와 소분류 단위로 집계해 매출 비중·손익율·연도별 추이를 한 화면에서 비교합니다.</p>
+    </div>
+    <span class="real-badge">실제 데이터 (56건 · 소분류 연결 56건)</span>
+  </div>
+  <div class="note-line"><b>구성·소분류 손익율</b> — 위 모자이크·추이 차트의 소분류별 매출·원가는 "프로젝트 상세" 페이지에서 거래내역 프로젝트 태그와 이름을 정확히 일치시켜 집계한 매입원가·근무일지 배분인건비를 소분류(프로젝트 코드 분류 구간) 단위로 다시 합산한 값입니다. 소분류당 표본이 1~2건뿐인 항목(공사·관공서 2건, 설계·상업공간설계 1건 등)은 손익율 변동폭이 크고 신뢰도가 낮으니 참고용으로만 봐주세요 — 일부는 근무일지 기록이 아직 없어 매입원가·인건비 데이터가 없는 신규 수주 프로젝트가 섞여 있어 손익율이 실제보다 높게 나올 수 있습니다. 아래 "수익성 추정(하한선)" 섹션은 이와 별개로 대분류 단위 실제 지출(거래내역 연도별 집계)·배분인건비 기준으로 계산한 값이라 두 섹션의 수치가 정확히 일치하지는 않습니다.</div>
+
+  <div class="kpis" id="kpiRow"></div>
+
+  <section>
+    <div class="sec-hd">
+      <h2>대분류 · 소분류 구성</h2>
+      <span class="desc">타일 너비 = 매출 비중 · 색 = 손익율 · 클릭하면 위 요약 카드가 그 소분류 기준으로 바뀌고, "프로젝트 상세 →"를 누르면 아래에 해당 소분류의 실제 프로젝트 목록이 펼쳐집니다</span>
+    </div>
+    <div class="mosaic" id="mosaic"></div>
+    <div class="legend-scale">
+      <span>적자</span><span class="bar"></span><span>흑자</span>
+    </div>
+  </section>
+
+  <section id="detailSection" style="display:none;">
+    <div class="pd-panel-hd">
+      <div class="sec-hd" style="margin-bottom:0;">
+        <h2 id="pdHeading">프로젝트 상세</h2>
+        <span class="desc" id="pdDesc"></span>
+      </div>
+      <a href="#" class="pd-close" id="pdCloseBtn">닫기 ✕</a>
+    </div>
+    <div id="detailPanel"></div>
+  </section>
+
+  <section>
+    <div class="sec-hd">
+      <h2>대분류·발주처별 손익율 추이</h2>
+      <span class="desc">계약연도 기준 · 점 크기 = 해당 연도 계약 건수</span>
+    </div>
+    <div class="trend-grid">
+      <div class="trend-card">
+        <h3>공사 · 설계</h3>
+        <div class="cap">"수익성 추정(하한선)" 섹션의 토글에 따라 값이 바뀝니다 · 매출은 계약연도, 비용은 실제 지출·지급연도 기준이라 특정 연도만 보면 손익율이 크게 튈 수 있습니다(전체기간 누계가 더 안정적)</div>
+        <div class="chart-wrap" id="chartMajor"></div>
+      </div>
+      <div class="trend-card">
+        <h3>발주처별 (손익 기여 상위 5곳)</h3>
+        <div class="cap">프로젝트 2건 이상인 발주처 중 손익 기여 상위 5곳만 표시 · 표기가 다른 동일 발주처(예: "에이치디씨 현대산업개발"/"에이치디씨현대산업개발")는 합산했습니다</div>
+        <div class="chart-wrap" id="chartClient"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-hd">
+      <h2>소분류별 손익율 추이</h2>
+      <span class="desc">계약연도 기준 · 점 크기 = 해당 연도 계약 건수</span>
+    </div>
+    <div class="trend-grid">
+      <div class="trend-card">
+        <h3>공사</h3>
+        <div class="cap">소분류 3종 · 관공서 / 개인APT / 메뉴얼(상업공간)</div>
+        <div class="chart-wrap" id="chartCon"></div>
+      </div>
+      <div class="trend-card">
+        <h3>설계</h3>
+        <div class="cap">소분류 4종(관공서설계는 해당 건 없음) · 대안 / 견본주택 / 세대 / 상업공간</div>
+        <div class="chart-wrap" id="chartDes"></div>
+      </div>
+    </div>
+  </section>
+
+  <section style="margin-bottom:8px">
+    <div class="sec-hd"><h2>소분류 비교</h2><span class="desc">프로젝트 코드 분류 구간 기준 · 소분류 연결 56 / 전체 56건(100%)</span></div>
+    <div class="note-line" style="margin:0 0 12px">소분류는 프로젝트 코드의 분류 구간(예: 2025-02-01의 "02")에서 직접 추출한 값으로, 이전 버전처럼 근무일지·계약 시트 간 이름 유사도로 대조한 결과가 아닙니다. 신규 수주 2건(목동1단지, 남성역세권)은 아직 근무일지 기록이 없어 매입원가·인건비가 0으로 집계되지만, 코드 배정 기준으로는 소분류가 확정되어 있어 전체 56건에 포함했습니다.</div>
+    <div class="major-grid" id="subCards"></div>
+  </section>
+
+  <section>
+    <div class="sec-hd"><h2>수익성 추정 (하한선)</h2><span class="desc">전체 기간(2021~2026년 계약 기준) · 직접비+배분인건비 기준</span></div>
+    <div class="filter-bar" style="margin-bottom:10px">
+      <label>설계 매입 · 일반관리 태그</label>
+      <span class="seg">
+        <button class="seg-btn on" data-admin="0">미포함(기본)</button>
+        <button class="seg-btn" data-admin="1">포함</button>
+      </span>
+    </div>
+    <div class="note-line" style="margin:0 0 12px">직접비는 거래내역 시트의 "프로젝트" 컬럼으로 대분류·연도별(실제 거래일자 기준) 실제 지출을 집계한 값입니다. "설계"는 이 컬럼이 회사 전체 자금흐름의 부서코드 역할도 겸하고 있어 보험·세금·대출원리금 같은 회사 공통 재무항목은 원래부터 제외했고, 그중 가장 큰 "일반관리" 태그(회사 카드대금·임차료·4대보험·경영진 급여성 항목 등)는 위 버튼으로 포함/미포함을 바꿔볼 수 있습니다. 단, "일반관리" 안에서도 계정과목이 "임원급여"·"직원급여"인 항목은 급여명세서 기준 배분인건비 계산에 이미 들어가 있어, 포함을 켜도 이 두 항목만은 항상 제외해 배분인건비와 중복 집계되지 않도록 했습니다 — "공사"는 이런 관리성 태그가 아예 없어 토글과 무관하게 항상 동일합니다. 배분인건비는 급여명세서(2021~2026 전체)와 근무일지 투입시간을 바탕으로 직원별 월급여 × 해당월 대분류 투입시간 비중으로 계산했고, 대표·소장 급여와 관리업무 시간은 제외, 근무일지가 없는 달(전체 인건비의 약 27%)은 그해 계약금액 비율로 근사 배분했습니다. 매출은 계약연도, 직접비·인건비는 실제 지출·지급일 기준이라 전체기간 기준이 가장 안정적입니다. 회사 공통관리비(대표·소장 급여, 보험·세금 등)는 포함하지 않아 이익률은 <b>하한선(최소 추정치)</b>입니다.</div>
+    <div class="major-grid" id="profitCards"></div>
+  </section>
+
+  <footer id="footerText"></footer>
+</div>
+</div>
+
+<div class="combo-footer">
+  <footer>이 페이지는 <b>재무 현황</b>과 <b>프로젝트 유형 비교</b> 두 화면을 하나의 대시보드로 묶은 것으로, 위 탭으로 전환할 수 있습니다. 각 화면의 데이터 출처·집계 기준은 화면 안의 안내문에 그대로 남겨두었습니다.</footer>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  var isDark = function(){
+    var t = document.documentElement.getAttribute('data-theme');
+    if(t === 'dark') return true;
+    if(t === 'light') return false;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  };
+  var fmtWon = function(n){
+    var v = Math.round(n);
+    var sign = v < 0 ? '-' : '';
+    v = Math.abs(v);
+    if(v >= 100000000) return sign + (v/100000000).toFixed(1).replace(/\.0$/,'') + '억';
+    if(v >= 10000) return sign + (v/10000).toFixed(0) + '만';
+    return sign + String(v);
+  };
+  var TABS = [
+    {key:'acct', label:'계정과목별 지출'},
+    {key:'monthly', label:'월별 수입·지출'},
+    {key:'trade', label:'종합 매출·매입'}
+  ];
+
+  // ── 실제 데이터 (회계현황 원본 거래내역 4,022건, 키워드 매칭으로 계정과목 산출) ──────────
+  var YEARS = ['2024', '2025', '2026'];
+  var MONTHS_IN_YEAR = {2024:12, 2025:12, 2026:8}; // 2026년은 8월(원본데이터 마지막 완결월)까지
+  var STATE = { acctYear:'2026', acctMonth:'all', monthlyYear:'2026', tradeMode:'year', tradeYear:'2026' };
+
+  // 인건비를 제외한 상위 6개 계정과목 + 기타(25개 소액 계정과목 합산)의 "연간 합계".
+  // 원본 거래내역(거래내역 시트 4,022건)의 계정과목 태그를 그대로 연도별로 합산해 산출했습니다.
+  // "지급수수료"는 원본의 "지급수수료"+"수수료" 두 계정과목을 합친 값입니다.
+  var ACCT_OTHER = [
+    {name:'공사외주비', c:'--c1', y:{2024:883084282, 2025:344227160, 2026:28143360}},
+    {name:'지급수수료', c:'--c3', y:{2024:757787462, 2025:55039073, 2026:23782511}},
+    {name:'원재료(도급)', c:'--c4', y:{2024:223959138, 2025:47300395, 2026:0}},
+    {name:'세금과공과금', c:'--c5', y:{2024:125899580, 2025:69467470, 2026:51927430}},
+    {name:'외주비', c:'--c6', y:{2024:62127997, 2025:78401036, 2026:35531602}},
+    {name:'노무비', c:'--c7', y:{2024:66292155, 2025:50265600, 2026:0}},
+    {name:'기타', c:'--c8', y:{2024:109314585, 2025:141018172, 2026:121920745}, other:true}
+  ];
+  // "기타"를 구성하는 소액 계정과목 25개 — 원본 거래내역의 계정과목 태그를 그대로 연도별 합산한 값으로,
+  // 위 "기타" 행 금액과 정확히 일치합니다(2024:109,314,585 / 2025:141,018,172 / 2026:121,920,745).
+  // "퇴직급여"는 급여명세서 기준 월별 배분인건비 계산(PAYROLL_PEOPLE)에 포함되지 않는 일회성 지급이라 여기 포함했고,
+  // "임원급여"·"직원급여"는 배분인건비와 중복되므로 제외했습니다.
+  var ACCT_OTHER_DETAIL = [
+    {name:'정기보험', c:'--c1', y:{2024:29535200, 2025:36741840, 2026:24494560}},
+    {name:'지급임차료', c:'--c2', y:{2024:19804000, 2025:24701000, 2026:36000000}},
+    {name:'복리후생비', c:'--c3', y:{2024:18466920, 2025:24627800, 2026:32034535}},
+    {name:'퇴직급여', c:'--c4', y:{2024:17687459, 2025:17322956, 2026:0}},
+    {name:'대출이자', c:'--c5', y:{2024:3692126, 2025:11660706, 2026:9912871}},
+    {name:'보험료', c:'--c6', y:{2024:3900500, 2025:9670690, 2026:4675080}},
+    {name:'비품', c:'--c7', y:{2024:2105340, 2025:5431330, 2026:5159180}},
+    {name:'수도광열비', c:'--c8', y:{2024:4960690, 2025:3961440, 2026:2699550}},
+    {name:'소모품비', c:'--c1', y:{2024:3382796, 2025:1974163, 2026:432351}},
+    {name:'차량유지비', c:'--c2', y:{2024:2200000, 2025:445438, 2026:120000}},
+    {name:'수선료', c:'--c3', y:{2024:0, 2025:2575000, 2026:0}},
+    {name:'통신료', c:'--c4', y:{2024:730334, 2025:447629, 2026:1178563}},
+    {name:'기부금', c:'--c5', y:{2024:1360000, 2025:360000, 2026:240000}},
+    {name:'주유비', c:'--c6', y:{2024:0, 2025:0, 2026:1830088}},
+    {name:'접대비', c:'--c7', y:{2024:400000, 2025:560000, 2026:299000}},
+    {name:'여비교통비', c:'--c8', y:{2024:0, 2025:0, 2026:1167500}},
+    {name:'법인세', c:'--c1', y:{2024:829020, 2025:0, 2026:0}},
+    {name:'운반비', c:'--c2', y:{2024:83300, 2025:351380, 2026:73000}},
+    {name:'교통비', c:'--c3', y:{2024:176900, 2025:186800, 2026:132000}},
+    {name:'지급', c:'--c4', y:{2024:0, 2025:0, 2026:480097}},
+    {name:'소모품', c:'--c5', y:{2024:0, 2025:0, 2026:374000}},
+    {name:'일/주차료', c:'--c6', y:{2024:0, 2025:0, 2026:329400}},
+    {name:'부식', c:'--c7', y:{2024:0, 2025:0, 2026:263130}},
+    {name:'주차료', c:'--c8', y:{2024:0, 2025:0, 2026:13800}},
+    {name:'운반료', c:'--c1', y:{2024:0, 2025:0, 2026:12040}}
+  ];
+  // 인건비(직원급여+임원급여) — 급여명세서 원본 레코드를 인당·월별로 그대로 반영했습니다.
+  // 임원 구분은 직책이 아니라 실제 인사 구조상 임원 2인(대표 윤상원·소장 김의석)만 임원급여로 분류되고,
+  // 나머지는 모두 직원급여입니다. "법인 분기별매출매입현황"의 급여 합계 자동집계(payslips)와
+  // 같은 원본을 인당으로 다시 펼친 것으로, 그 페이지의 급여 합계 자체는 바뀌지 않습니다.
+  // ※ "단기대여금(한정식)", "단기대여금(이연경)" 메모 2건은 이름이 포함되어 매칭되었으나
+  //   실제로는 단기 대여금(추후 상환 확인됨)이라 급여 집계에서 제외했습니다.
+  var EXECUTIVE_NAMES = ['김의석', '윤상원'];
+  function isExecutive(p){ return EXECUTIVE_NAMES.indexOf(p.name) !== -1; }
+  var PAYROLL_PEOPLE = [
+    {name:'한정식', title:'직원', c:'--c1', monthly:{'2024-01':3982390, '2024-02':5341690, '2024-03':3652580, '2024-04':3478560, '2024-05':3524060, '2024-06':3478660, '2024-07':3476910, '2024-08':3476910, '2024-09':3603270, '2024-10':3603270, '2024-11':3603270, '2024-12':3603270, '2025-01':3603270, '2025-02':6667430, '2025-03':3606320, '2025-04':3551210, '2025-05':3602210, '2025-06':4101290, '2025-07':4097280, '2025-08':4097280, '2025-09':4432820, '2025-10':4263680, '2025-11':4263680, '2025-12':4263680, '2026-01':2719084, '2026-02':1783650}},
+    {name:'이연경', title:'직원', c:'--c2', monthly:{'2024-04':1455700, '2024-05':1286430, '2024-06':1364190, '2024-07':1891870, '2024-08':1891870, '2024-09':1891870, '2024-10':1891870, '2024-11':1891870, '2024-12':1891870, '2025-01':1891870, '2025-02':2004490, '2025-03':1891870, '2025-04':1856930, '2025-05':1797790, '2025-06':1799410, '2025-07':1806700, '2025-08':1800860, '2025-09':1996010, '2025-10':1800860, '2025-11':1800860, '2025-12':1800860, '2026-01':2795740, '2026-02':2003310, '2026-03':1799020, '2026-04':1699970, '2026-05':1790670, '2026-06':1790670, '2026-07':1783400, '2026-08':1783400}},
+    {name:'유혜정', title:'직원', c:'--c3', monthly:{'2024-07':1151613, '2024-08':1877510, '2024-09':1877510, '2024-10':2077510, '2024-11':2077510, '2024-12':2077510, '2025-01':2077510, '2025-02':2132120, '2025-03':2077510, '2025-04':2115540, '2025-05':2083840, '2025-06':2067800, '2025-07':2166250, '2025-08':2262720, '2025-09':2262720, '2025-10':1201773}},
+    {name:'손영화', title:'직원', c:'--c4', monthly:{'2025-12':3021124, '2026-01':3444560, '2026-02':3520210, '2026-03':3444560, '2026-04':3425820, '2026-05':3452290, '2026-06':3452290, '2026-07':3452290, '2026-08':3452290}},
+    {name:'윤성원', title:'직원', c:'--c5', monthly:{'2025-11':2346587, '2025-12':2415870, '2026-01':2363240, '2026-02':2401760, '2026-03':2363240, '2026-04':2346840, '2026-05':2365630, '2026-06':2365630, '2026-07':2366060, '2026-08':2366060}},
+    {name:'조성채', title:'직원', c:'--c6', monthly:{'2024-01':2077510, '2024-02':2274910, '2024-03':2173980, '2024-04':2173980, '2024-05':2264700, '2024-06':2476930, '2024-07':2459700, '2024-08':2459700, '2024-09':2461820, '2024-10':2361580}},
+    {name:'서은아', title:'직원', c:'--c1', monthly:{'2024-01':4976800, '2024-02':1510290}},
+    {name:'황정석', title:'직원', c:'--c2', monthly:{'2024-05':1324957, '2024-06':1749570}},
+    {name:'정운솔', title:'직원', c:'--c3', monthly:{'2024-05':1324957, '2024-06':1749570}},
+    {name:'윤상원', title:'대표', c:'--c7', monthly:{'2024-01':4059520, '2024-02':6515280, '2024-03':4059520, '2024-04':4288770, '2024-05':4079550, '2024-06':4079550, '2024-07':4042740, '2024-08':4042740, '2024-09':4042740, '2024-10':4042740, '2024-11':4042740, '2024-12':4042740, '2025-01':4042740, '2025-02':6981780, '2025-03':4042740, '2025-04':3842440, '2025-05':4022710, '2025-06':4022710, '2025-07':4001020, '2025-08':4001020, '2025-09':4001020, '2025-10':4001020, '2025-11':4001020, '2025-12':4500000, '2026-01':3988030, '2026-02':6649250, '2026-03':3988030, '2026-04':3927940, '2026-05':3988030, '2026-06':3988030, '2026-07':3987510, '2026-08':3987510}},
+    {name:'김의석', title:'소장', c:'--c8', monthly:{'2024-01':3997910, '2024-02':5883390, '2024-03':3997910, '2024-04':4002740, '2024-05':4002680, '2024-06':4002680, '2024-07':4012220, '2024-08':4012220, '2024-09':4012220, '2024-10':4038990, '2024-11':4011810, '2024-12':4011810, '2025-01':4011810, '2025-02':6952760, '2025-03':4013720, '2025-04':3948970, '2025-05':4007450, '2025-06':4007450, '2025-07':3999710, '2025-08':3999710, '2025-09':3983980, '2025-10':3998500, '2025-11':3998500, '2025-12':3998500, '2026-01':3985430, '2026-02':5950430, '2026-03':3985430, '2026-04':3972680, '2026-05':3986650, '2026-06':3986650, '2026-07':3987510, '2026-08':3987510}}
+  ];
+  function payrollEmployees(){ return PAYROLL_PEOPLE.filter(function(p){ return !isExecutive(p); }); }
+  function payrollExecutives(){ return PAYROLL_PEOPLE.filter(isExecutive); }
+  // 실제 데이터는 인당 월별 지급액이 서로 달라(정기 상여·중도 입퇴사 등) "연 12×월액"으로
+  // 단순화할 수 없으므로, 해당 연도/월에 걸리는 monthly 맵의 값을 그대로 합산합니다.
+  function personAmt(p, year, month){
+    if(month === 'all'){
+      var sum = 0;
+      for(var k in p.monthly){ if(k.indexOf(year+'-') === 0) sum += p.monthly[k]; }
+      return sum;
+    }
+    var key = year + '-' + (month.length===1 ? '0'+month : month);
+    return p.monthly[key] || 0;
+  }
+  function groupTotal(list, year, month){ return list.reduce(function(s,p){return s+personAmt(p,year,month);},0); }
+  function laborTotal(year, month){ return groupTotal(PAYROLL_PEOPLE,year,month); }
+  function otherAmt(cat, year, month){
+    var annual = cat.y[year];
+    return month==='all' ? annual : annual/MONTHS_IN_YEAR[year];
+  }
+  function otherDetailAmt(cat, year, month){ return otherAmt(cat, year, month); }
+  // 법인카드결제대금(미지급금) — 카드사에 대한 결제 시점 정산 항목입니다. 실제 카드 이용내역
+  // (외주비·소모품비·접대비 등)은 거래내역상 각각의 계정과목으로 이미 입력되어 있으므로, 이 항목까지
+  // 총 지출에 더하면 같은 지출이 두 번 집계됩니다 → 계정과목별 지출 합계·비중에서는 제외하고,
+  // 참고용으로만 화면에 따로 표기합니다.
+  var CARD_PAYABLE = {name:'법인카드결제대금(미지급금)', y:{2024:84466046, 2025:50375552, 2026:26548787}};
+  function buildAcctItems(year, month){
+    var items = [{name:'인건비', v:laborTotal(year,month), c:'--c2', labor:true}];
+    ACCT_OTHER.forEach(function(cat){ items.push({name:cat.name, v:otherAmt(cat,year,month), c:cat.c, other:cat.other}); });
+    items.sort(function(a,b){ return b.v-a.v; });
+    return items;
+  }
+  function acctPeriodLabel(year, month){
+    return month==='all' ? year+'년 1~'+MONTHS_IN_YEAR[year]+'월 누계' : year+'년 '+month+'월';
+  }
+
+  // 법인통장거래내역 기준 월별 수입/지출 — 실제 원본데이터(연도별 12개월, 2026년은 8월까지) 집계
+  var MONTHLY_BY_YEAR = {
+    2024: [
+      {m:'1월', inc:445455000, exp:425556869},
+      {m:'2월', inc:710000000, exp:514615722},
+      {m:'3월', inc:22148408, exp:178154517},
+      {m:'4월', inc:939654000, exp:954679740},
+      {m:'5월', inc:50000000, exp:47899965},
+      {m:'6월', inc:286820854, exp:95144739},
+      {m:'7월', inc:79835156, exp:197921420},
+      {m:'8월', inc:95000000, exp:119167863},
+      {m:'9월', inc:73291595, exp:33517141},
+      {m:'10월', inc:146719920, exp:46959680},
+      {m:'11월', inc:20475843, exp:134372078},
+      {m:'12월', inc:102611029, exp:135557513}
+    ],
+    2025: [
+      {m:'1월', inc:44030798, exp:27721289},
+      {m:'2월', inc:240550607, exp:244266835},
+      {m:'3월', inc:200006135, exp:171227463},
+      {m:'4월', inc:282274920, exp:178609777},
+      {m:'5월', inc:50500000, exp:149241287},
+      {m:'6월', inc:56783508, exp:61962321},
+      {m:'7월', inc:71756350, exp:60091387},
+      {m:'8월', inc:213060000, exp:217779886},
+      {m:'9월', inc:208032157, exp:92865414},
+      {m:'10월', inc:60632000, exp:71925027},
+      {m:'11월', inc:190084701, exp:39037194},
+      {m:'12월', inc:7881857, exp:143726555}
+    ],
+    2026: [
+      {m:'1월', inc:154870440, exp:159526666},
+      {m:'2월', inc:770000, exp:85216180},
+      {m:'3월', inc:52878121, exp:42836915},
+      {m:'4월', inc:21388404, exp:50510553},
+      {m:'5월', inc:67470210, exp:48040382},
+      {m:'6월', inc:73696675, exp:94725683},
+      {m:'7월', inc:46149670, exp:49162955},
+      {m:'8월', inc:96000000, exp:76841089}
+    ]
+  };
+
+  // "법인 분기별매출매입현황" 페이지의 예상손익 계산식을 그대로 따릅니다:
+  // 예상손익 = 매출 - 매입 - 일반지출(자동집계) + 기타수입(자동집계)
+  // 매출/매입은 세금계산서·현금영수증·일반계산서 합계(부가세 신고 기준, 수기 입력),
+  // 일반지출은 법인카드·공과금·보험·세금·이자상환·급여명세서를 매달 자동 합산한 값,
+  // 기타수입은 flowType이 "수입"인 자동집계 항목(예: 전문건설배당). 주식·배당(매수 등)은
+  // 회사 영업손익과 무관해 이 계산에서 제외됩니다 — 해당 페이지와 동일한 규칙입니다.
+  // 2023~2025년은 "법인 분기별매출매입현황" 페이지에 매출·매입(세금계산서 등)이 아직 입력되어 있지 않아
+  // 샘플 수치로 남겨뒀습니다. 2026년(1~8월)은 그 페이지에서 콘솔로 직접 뽑은 실제 매출·매입·일반지출·
+  // 기타수입 값입니다.
+  var TRADE = [
+    {y:'2023', rev:2850000000, cost:1780000000, exp:680000000, inc:12000000},
+    {y:'2024', rev:3620000000, cost:2240000000, exp:810000000, inc:18000000},
+    {y:'2025', rev:4850000000, cost:3010000000, exp:970000000, inc:9000000},
+    {y:'2026(8월 누계·실제)', rev:392891400, cost:67290273, exp:317434146, inc:0, ytd:true}
+  ];
+  // 연도별 매출/매입/일반지출/기타수입의 월별 분해 — 2024~2026년만 (계정과목·월별 탭과 같은 YEARS 범위).
+  // 각 연도 12(또는 9)개월 합은 위 TRADE의 해당 연도 값과 정확히 일치합니다. "법인 분기별매출매입현황"
+  // 페이지처럼 연도별/분기별/월별로 볼 수 있도록, 분기·월 집계는 이 월별 데이터를 그대로 합산해 만듭니다.
+  var TRADE_MONTHLY = {
+    2024: [
+      {m:'1월', rev:217200000, cost:134400000, exp:48600000, inc:1080000},
+      {m:'2월', rev:253400000, cost:156800000, exp:56700000, inc:1260000},
+      {m:'3월', rev:253400000, cost:156800000, exp:56700000, inc:1260000},
+      {m:'4월', rev:289600000, cost:179200000, exp:64800000, inc:1440000},
+      {m:'5월', rev:325800000, cost:201600000, exp:72900000, inc:1620000},
+      {m:'6월', rev:362000000, cost:224000000, exp:81000000, inc:1800000},
+      {m:'7월', rev:325800000, cost:201600000, exp:72900000, inc:1620000},
+      {m:'8월', rev:289600000, cost:179200000, exp:64800000, inc:1440000},
+      {m:'9월', rev:325800000, cost:201600000, exp:72900000, inc:1620000},
+      {m:'10월', rev:362000000, cost:224000000, exp:81000000, inc:1800000},
+      {m:'11월', rev:325800000, cost:201600000, exp:72900000, inc:1620000},
+      {m:'12월', rev:289600000, cost:179200000, exp:64800000, inc:1440000}
+    ],
+    2025: [
+      {m:'1월', rev:291000000, cost:180600000, exp:58200000, inc:540000},
+      {m:'2월', rev:339500000, cost:210700000, exp:67900000, inc:630000},
+      {m:'3월', rev:339500000, cost:210700000, exp:67900000, inc:630000},
+      {m:'4월', rev:388000000, cost:240800000, exp:77600000, inc:720000},
+      {m:'5월', rev:436500000, cost:270900000, exp:87300000, inc:810000},
+      {m:'6월', rev:485000000, cost:301000000, exp:97000000, inc:900000},
+      {m:'7월', rev:436500000, cost:270900000, exp:87300000, inc:810000},
+      {m:'8월', rev:388000000, cost:240800000, exp:77600000, inc:720000},
+      {m:'9월', rev:436500000, cost:270900000, exp:87300000, inc:810000},
+      {m:'10월', rev:485000000, cost:301000000, exp:97000000, inc:900000},
+      {m:'11월', rev:436500000, cost:270900000, exp:87300000, inc:810000},
+      {m:'12월', rev:388000000, cost:240800000, exp:77600000, inc:720000}
+    ],
+    // 2026년은 실제 데이터(법인 분기별매출매입현황 페이지에서 직접 추출)
+    2026: [
+      {m:'1월', rev:63800000, cost:11361883, exp:48747149, inc:0},
+      {m:'2월', rev:53631050, cost:15060708, exp:42160807, inc:0},
+      {m:'3월', rev:23320000, cost:4008149, exp:39884993, inc:0},
+      {m:'4월', rev:12120350, cost:2203449, exp:41773423, inc:0},
+      {m:'5월', rev:66550000, cost:10609860, exp:32528606, inc:0},
+      {m:'6월', rev:49720000, cost:11420933, exp:34516583, inc:0},
+      {m:'7월', rev:11000000, cost:7302905, exp:42793623, inc:0},
+      {m:'8월', rev:112750000, cost:5322386, exp:35028962, inc:0}
+    ]
+  };
+  var QUARTERS_DEF = [{label:'1분기', s:1, e:3}, {label:'2분기', s:4, e:6}, {label:'3분기', s:7, e:9}, {label:'4분기', s:10, e:12}];
+  function quartersForYear(year){
+    var maxM = MONTHS_IN_YEAR[year];
+    return QUARTERS_DEF.filter(function(q){ return q.s <= maxM; }).map(function(q){ return {label:q.label, s:q.s, e:Math.min(q.e, maxM)}; });
+  }
+  function rangeTotals(year, s, e){
+    var months = TRADE_MONTHLY[year].filter(function(d,i){ var mo=i+1; return mo>=s && mo<=e; });
+    var t = {rev:0, cost:0, exp:0, inc:0};
+    months.forEach(function(d){ t.rev+=d.rev; t.cost+=d.cost; t.exp+=d.exp; t.inc+=d.inc; });
+    return t;
+  }
+  // 보기단위(연도별/분기별/월별)에 맞는 시리즈를 반환 — 연도별은 기존 TRADE(2023~2026) 그대로,
+  // 분기별·월별은 선택한 한 해를 TRADE_MONTHLY에서 다시 집계합니다.
+  function tradeSeriesFor(mode, year){
+    if(mode === 'quarter'){
+      return quartersForYear(year).map(function(q){
+        var t = rangeTotals(year, q.s, q.e);
+        return {label:q.label, rev:t.rev, cost:t.cost, exp:t.exp, inc:t.inc};
+      });
+    }
+    if(mode === 'month'){
+      return TRADE_MONTHLY[year].map(function(d){ return {label:d.m, rev:d.rev, cost:d.cost, exp:d.exp, inc:d.inc}; });
+    }
+    return TRADE.map(function(d){ return {label:d.y, rev:d.rev, cost:d.cost, exp:d.exp, inc:d.inc, ytd:d.ytd}; });
+  }
+  // 연도별 일반지출의 소스별 구성 — "법인 분기별매출매입현황"의
+  // 자동집계 소스(법인카드·공과금·보험·세금·이자상환) + 급여명세서(payslips) 그대로.
+  // 각 연도의 6개 항목 합은 위 TRADE의 해당 연도 exp 값과 정확히 일치합니다.
+  var EXPENSE_SRC_BY_YEAR = {
+    '2023': [
+      {name:'급여', v:380000000, c:'--c1'}, {name:'법인카드', v:160000000, c:'--c2'},
+      {name:'보험', v:55000000, c:'--c3'}, {name:'공과금', v:32000000, c:'--c4'},
+      {name:'세금', v:25000000, c:'--c5'}, {name:'이자상환', v:28000000, c:'--c6'}
+    ],
+    '2024': [
+      {name:'급여', v:460000000, c:'--c1'}, {name:'법인카드', v:190000000, c:'--c2'},
+      {name:'보험', v:62000000, c:'--c3'}, {name:'공과금', v:38000000, c:'--c4'},
+      {name:'세금', v:28000000, c:'--c5'}, {name:'이자상환', v:32000000, c:'--c6'}
+    ],
+    '2025': [
+      {name:'급여', v:560000000, c:'--c1'}, {name:'법인카드', v:230000000, c:'--c2'},
+      {name:'보험', v:75000000, c:'--c3'}, {name:'공과금', v:45000000, c:'--c4'},
+      {name:'세금', v:35000000, c:'--c5'}, {name:'이자상환', v:25000000, c:'--c6'}
+    ],
+    // 2026년(1~8월)은 실제 데이터 — 급여는 급여명세서(payslips) 지급액계 기준이라, "계정과목별 지출"
+    // 탭의 인건비(거래내역 기준 인당 지급액 합)와는 집계 방식이 달라 금액이 정확히 일치하진 않습니다.
+    '2026': [
+      {name:'급여', v:166246518, c:'--c1'}, {name:'법인카드', v:27103817, c:'--c2'},
+      {name:'보험', v:50593350, c:'--c3'}, {name:'공과금', v:38970400, c:'--c4'},
+      {name:'세금', v:24607190, c:'--c5'}, {name:'이자상환', v:9912871, c:'--c6'}
+    ]
+  };
+  var TRADE_YEARS = ['2023','2024','2025','2026'];
+  function expenseSrcFor(year){
+    if(year === 'all'){
+      var names = EXPENSE_SRC_BY_YEAR['2023'].map(function(i){return {name:i.name, c:i.c};});
+      return names.map(function(n){
+        var sum = TRADE_YEARS.reduce(function(s,y){
+          var row = EXPENSE_SRC_BY_YEAR[y].filter(function(i){return i.name===n.name;})[0];
+          return s + (row ? row.v : 0);
+        }, 0);
+        return {name:n.name, v:sum, c:n.c};
+      });
+    }
+    return EXPENSE_SRC_BY_YEAR[year];
+  }
+
+  function parseTab(){
+    var h = location.hash.replace(/^#/, '');
+    var params = {};
+    h.split('&').forEach(function(pair){
+      var kv = pair.split('=');
+      if(kv[0]) params[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1]||'');
+    });
+    return TABS.some(function(t){return t.key===params.tab;}) ? params.tab : 'acct';
+  }
+
+  function renderTabbar(active){
+    document.getElementById('finTabbar').innerHTML = TABS.map(function(t){
+      return '<a class="tab-btn'+(t.key===active?' on':'')+'" href="#tab='+t.key+'">'+t.label+'</a>';
+    }).join('');
+  }
+
+  // ── 계정과목별 지출 ──────────────────────────────────────────
+  function renderAcct(){
+    var year = STATE.acctYear, month = STATE.acctMonth;
+    var items = buildAcctItems(year, month);
+    var total = items.reduce(function(s,i){return s+i.v;},0);
+    var top = items[0];
+    var maxV = Math.max.apply(null, items.map(function(i){return i.v;}));
+    var rows = items.map(function(it){
+      var pct = total>0 ? it.v/total*100 : 0;
+      var barPct = maxV>0 ? it.v/maxV*100 : 0;
+      return '<div class="hbar-row'+((it.labor||it.other)?' clickable':'')+'"'+(it.labor?' data-open-labor="1"':'')+(it.other?' data-open-other="1"':'')+'>' +
+        '<div class="hbar-label"><span class="hbar-dot" style="background:var('+it.c+')"></span>'+it.name+'</div>' +
+        '<div class="hbar-track"><div class="hbar-fill" style="width:'+barPct+'%; background:var('+it.c+')"></div></div>' +
+        '<div class="hbar-val num">'+fmtWon(it.v)+'원</div>' +
+        '<div class="hbar-pct num">'+pct.toFixed(1)+'%</div>' +
+      '</div>';
+    }).join('');
+
+    var monthOptions = ['<option value="all">전체 (연간 누계)</option>'];
+    for(var m=1; m<=MONTHS_IN_YEAR[year]; m++){ monthOptions.push('<option value="'+m+'"'+(month==String(m)?' selected':'')+'>'+m+'월</option>'); }
+
+    var cardV = otherAmt(CARD_PAYABLE, year, month);
+    var excludedRow =
+      '<div class="hbar-row excluded">' +
+        '<div class="hbar-label">'+CARD_PAYABLE.name+'<span class="excl-badge">합계 제외</span></div>' +
+        '<div class="hbar-track"><div class="hbar-fill" style="width:0%"></div></div>' +
+        '<div class="hbar-val num">'+fmtWon(cardV)+'원</div>' +
+        '<div class="hbar-pct num">—</div>' +
+      '</div>';
+
+    document.getElementById('finApp').innerHTML =
+      '<div class="filter-bar">' +
+        '<label>기간</label>' +
+        '<select class="filter-select" id="acctYearSel">'+YEARS.map(function(y){return '<option value="'+y+'"'+(y===year?' selected':'')+'>'+y+'년</option>';}).join('')+'</select>' +
+        '<select class="filter-select" id="acctMonthSel">'+monthOptions.join('')+'</select>' +
+      '</div>' +
+      '<div class="kpis">' +
+        '<div class="kpi"><div class="lbl">총 지출 ('+acctPeriodLabel(year,month)+')</div><div class="val num">'+fmtWon(total)+'원</div></div>' +
+        '<div class="kpi"><div class="lbl">최대 비중 계정과목</div><div class="val">'+top.name+'</div><div class="sub num">'+(top.v/total*100).toFixed(1)+'% · '+fmtWon(top.v)+'원</div></div>' +
+        '<div class="kpi"><div class="lbl">집계 계정과목</div><div class="val num">'+items.length+'개</div></div>' +
+      '</div>' +
+      '<section style="margin-bottom:8px">' +
+        '<div class="sec-hd"><h2>계정과목별 지출 비중</h2><span class="desc">'+acctPeriodLabel(year,month)+' · 금액 큰 순 · 인건비·기타를 누르면 세부 내역이 열립니다</span></div>' +
+        '<div class="card">'+rows+excludedRow+'</div>' +
+        '<div class="note-line" style="margin-bottom:0">법인카드결제대금(미지급금)은 카드 이용내역이 외주비·소모품비 등 각 계정과목에 이미 반영되어 있어, 총 지출 합계·비중에서 제외했습니다 (중복 집계 방지).</div>' +
+      '</section>';
+
+    document.getElementById('acctYearSel').addEventListener('change', function(e){
+      STATE.acctYear = e.target.value;
+      if(STATE.acctMonth !== 'all' && Number(STATE.acctMonth) > MONTHS_IN_YEAR[STATE.acctYear]) STATE.acctMonth = 'all';
+      renderAcct();
+    });
+    document.getElementById('acctMonthSel').addEventListener('change', function(e){ STATE.acctMonth = e.target.value; renderAcct(); });
+    var laborRow = document.querySelector('[data-open-labor]');
+    if(laborRow){ laborRow.addEventListener('click', function(){ openLaborModal(year, month); }); }
+    var otherRow = document.querySelector('[data-open-other]');
+    if(otherRow){ otherRow.addEventListener('click', function(){ openOtherModal(year, month); }); }
+  }
+
+  // ── 인건비 상세 팝업 (직원급여 + 임원급여, 직원별 지급 내역 + 총지출 중 비중) ──────────────────────────────────────────
+  function openLaborModal(year, month){
+    var items = buildAcctItems(year, month);
+    var total = items.reduce(function(s,i){return s+i.v;},0);
+    var labor = items.filter(function(i){return i.labor;})[0];
+    var laborPct = total>0 ? labor.v/total*100 : 0;
+
+    function section(title, list){
+      var subtotal = groupTotal(list, year, month);
+      // 선택한 기간에 지급 이력이 없는 사람(입사 전·퇴사 후)은 목록에서 숨깁니다.
+      var rows = list.filter(function(p){ return personAmt(p,year,month) > 0; })
+        .sort(function(a,b){ return personAmt(b,year,month)-personAmt(a,year,month); }).map(function(p){
+        var amt = personAmt(p,year,month);
+        var pct = subtotal>0 ? amt/subtotal*100 : 0;
+        return '<div class="modal-row">' +
+          '<span class="nm"><span class="dot" style="background:var('+p.c+')"></span>'+p.name+' <span style="color:var(--muted); font-weight:500; font-size:11px;">'+p.title+'</span></span>' +
+          '<span class="right"><span class="amt num">'+fmtWon(amt)+'원</span><span class="pct num">'+pct.toFixed(1)+'%</span></span>' +
+        '</div>';
+      }).join('');
+      return '<div class="modal-sub-hd"><span>'+title+'</span><span class="num">'+fmtWon(subtotal)+'원</span></div>' + rows;
+    }
+
+    var html =
+      '<div class="modal-backdrop" id="laborBackdrop">' +
+        '<div class="modal-card">' +
+          '<div class="modal-hd">' +
+            '<div class="modal-title">👤 인건비 상세 · '+acctPeriodLabel(year,month)+'</div>' +
+            '<button class="modal-close" id="laborClose">✕</button>' +
+          '</div>' +
+          '<div class="modal-share">이 기간 전체 지출(<b class="num">'+fmtWon(total)+'원</b>) 중 인건비 비중 <b style="color:var(--pos)">'+laborPct.toFixed(1)+'%</b> (<b class="num">'+fmtWon(labor.v)+'원</b>)</div>' +
+          '<div style="font-size:10.5px; color:var(--muted); margin:2px 0 4px;">직원급여·임원급여는 이름 기준으로 나눴습니다(대표 윤상원·소장 김의석 → 임원급여, 나머지 전원 → 직원급여). "법인 분기별매출매입현황"의 급여 합계는 그대로이고, 이 구성만 보여줍니다.</div>' +
+          section('직원급여', payrollEmployees()) +
+          section('임원급여', payrollExecutives()) +
+        '</div>' +
+      '</div>';
+
+    var holder = document.createElement('div');
+    holder.innerHTML = html;
+    document.body.appendChild(holder.firstChild);
+    var backdrop = document.getElementById('laborBackdrop');
+    function close(){ backdrop.remove(); }
+    document.getElementById('laborClose').addEventListener('click', close);
+    backdrop.addEventListener('click', function(e){ if(e.target === backdrop) close(); });
+  }
+
+  // ── 기타 상세 팝업 (소액 계정과목 25개 세부 내역 + 총지출 중 비중) ──────────────────────────────────────────
+  function openOtherModal(year, month){
+    var items = buildAcctItems(year, month);
+    var total = items.reduce(function(s,i){return s+i.v;},0);
+    var other = items.filter(function(i){return i.other;})[0];
+    var otherPct = total>0 ? other.v/total*100 : 0;
+    var subtotal = ACCT_OTHER_DETAIL.reduce(function(s,c){ return s+otherDetailAmt(c,year,month); }, 0);
+
+    var rows = ACCT_OTHER_DETAIL.filter(function(c){ return otherDetailAmt(c,year,month) > 0; })
+      .sort(function(a,b){ return otherDetailAmt(b,year,month)-otherDetailAmt(a,year,month); }).map(function(c){
+      var amt = otherDetailAmt(c,year,month);
+      var pct = subtotal>0 ? amt/subtotal*100 : 0;
+      return '<div class="modal-row">' +
+        '<span class="nm"><span class="dot" style="background:var('+c.c+')"></span>'+c.name+'</span>' +
+        '<span class="right"><span class="amt num">'+fmtWon(amt)+'원</span><span class="pct num">'+pct.toFixed(1)+'%</span></span>' +
+      '</div>';
+    }).join('');
+
+    var html =
+      '<div class="modal-backdrop" id="otherBackdrop">' +
+        '<div class="modal-card">' +
+          '<div class="modal-hd">' +
+            '<div class="modal-title">📎 기타 지출 상세 · '+acctPeriodLabel(year,month)+'</div>' +
+            '<button class="modal-close" id="otherClose">✕</button>' +
+          '</div>' +
+          '<div class="modal-share">이 기간 전체 지출(<b class="num">'+fmtWon(total)+'원</b>) 중 기타 비중 <b style="color:var(--ink-2)">'+otherPct.toFixed(1)+'%</b> (<b class="num">'+fmtWon(other.v)+'원</b>)</div>' +
+          '<div style="font-size:10.5px; color:var(--muted); margin:2px 0 4px;">보험료·지급임차료·복리후생비 등 원본 거래내역의 소액 계정과목 25개를 금액이 큰 순으로 보여줍니다(0원인 항목은 숨김). 임원급여·직원급여는 배분인건비와 중복되어 제외했고, 퇴직급여는 급여명세서 기준 배분인건비에 포함되지 않는 일회성 지급이라 여기 포함했습니다.</div>' +
+          '<div class="modal-sub-hd"><span>세부 계정과목</span><span class="num">'+fmtWon(subtotal)+'원</span></div>' +
+          rows +
+        '</div>' +
+      '</div>';
+
+    var holder = document.createElement('div');
+    holder.innerHTML = html;
+    document.body.appendChild(holder.firstChild);
+    var backdrop = document.getElementById('otherBackdrop');
+    function close(){ backdrop.remove(); }
+    document.getElementById('otherClose').addEventListener('click', close);
+    backdrop.addEventListener('click', function(e){ if(e.target === backdrop) close(); });
+  }
+
+  // ── 월별 수입/지출 ──────────────────────────────────────────
+  function renderMonthly(){
+    var year = STATE.monthlyYear;
+    var data = MONTHLY_BY_YEAR[year];
+    var lastM = data[data.length-1];
+    var netSum = data.reduce(function(s,d){return s+(d.inc-d.exp);},0);
+    document.getElementById('finApp').innerHTML =
+      '<div class="filter-bar">' +
+        '<label>연도</label>' +
+        '<select class="filter-select" id="monthlyYearSel">'+YEARS.map(function(y){return '<option value="'+y+'"'+(y===year?' selected':'')+'>'+y+'년</option>';}).join('')+'</select>' +
+      '</div>' +
+      '<div class="kpis">' +
+        '<div class="kpi"><div class="lbl">최근월 수입 ('+lastM.m+')</div><div class="val num">'+fmtWon(lastM.inc)+'원</div></div>' +
+        '<div class="kpi"><div class="lbl">최근월 지출 ('+lastM.m+')</div><div class="val num">'+fmtWon(lastM.exp)+'원</div></div>' +
+        '<div class="kpi"><div class="lbl">최근월 순현금흐름</div><div class="val num '+((lastM.inc-lastM.exp)>=0?'pos':'neg')+'">'+((lastM.inc-lastM.exp)>=0?'+':'')+fmtWon(lastM.inc-lastM.exp)+'원</div></div>' +
+        '<div class="kpi"><div class="lbl">'+year+'년 누적 순현금흐름</div><div class="val num '+(netSum>=0?'pos':'neg')+'">'+(netSum>=0?'+':'')+fmtWon(netSum)+'원</div></div>' +
+      '</div>' +
+      '<section style="margin-bottom:8px">' +
+        '<div class="sec-hd"><h2>월별 수입 · 지출 · 순현금흐름</h2><span class="desc">'+year+'년 '+data[0].m+' ~ '+lastM.m+' · 법인통장 거래내역 기준</span></div>' +
+        '<div class="card"><div class="chart-wrap" id="monthlyChart"></div></div>' +
+      '</section>';
+    document.getElementById('monthlyYearSel').addEventListener('change', function(e){ STATE.monthlyYear = e.target.value; renderMonthly(); });
+    renderMonthlyChart(data);
+  }
+
+  function renderMonthlyChart(MONTHLY){
+    var W = 900, H = 280, padL = 46, padR = 16, padT = 16, padB = 30;
+    var n = MONTHLY.length;
+    var maxV = Math.max.apply(null, MONTHLY.map(function(d){return Math.max(d.inc,d.exp);})) * 1.15;
+    var minNet = Math.min(0, Math.min.apply(null, MONTHLY.map(function(d){return d.inc-d.exp;})));
+    var groupW = (W-padL-padR)/n;
+    var barW = groupW * 0.32;
+    var x = function(i){ return padL + groupW*i + groupW/2; };
+    var y = function(v){ return padT + (H-padT-padB) * (1 - v/maxV); };
+    var incColor = isDark() ? '#4A8AC4' : '#2F6FB0';
+    var expColor = isDark() ? '#C17F2E' : '#C97A2E';
+    var netColor = isDark() ? '#F1ECE2' : '#2A2621';
+
+    var svg = '<svg class="chart-svg" viewBox="0 0 '+W+' '+H+'" id="monthlySvg">';
+    var steps = 4;
+    for(var s=0;s<=steps;s++){
+      var v = maxV*s/steps, yy=y(v);
+      svg += '<line class="gridline" x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" />';
+      svg += '<text class="axislabel" x="'+(padL-8)+'" y="'+(yy+3)+'" text-anchor="end">'+fmtWon(v)+'</text>';
+    }
+    var zeroY = y(0);
+    MONTHLY.forEach(function(d,i){
+      var cx = x(i);
+      svg += '<rect x="'+(cx-barW-2)+'" y="'+y(d.inc)+'" width="'+barW+'" height="'+(zeroY-y(d.inc))+'" rx="2" fill="'+incColor+'" data-i="'+i+'" data-f="inc" />';
+      svg += '<rect x="'+(cx+2)+'" y="'+y(d.exp)+'" width="'+barW+'" height="'+(zeroY-y(d.exp))+'" rx="2" fill="'+expColor+'" data-i="'+i+'" data-f="exp" />';
+      svg += '<text class="axislabel" x="'+cx+'" y="'+(H-10)+'" text-anchor="middle">'+d.m+'</text>';
+    });
+    // net line (같은 원 단위 축 공유 — 별도 축 아님)
+    var netPts = MONTHLY.map(function(d,i){ return x(i)+','+y(d.inc-d.exp); }).join(' ');
+    svg += '<polyline points="'+netPts+'" fill="none" stroke="'+netColor+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" />';
+    MONTHLY.forEach(function(d,i){
+      var net = d.inc-d.exp;
+      svg += '<circle cx="'+x(i)+'" cy="'+y(net)+'" r="3" fill="'+(net>=0?(isDark()?'#1BA6A6':'#0A9797'):(isDark()?'#E0665C':'#C1443B'))+'" stroke="'+netColor+'" stroke-width="1" data-i="'+i+'" data-f="net" />';
+    });
+    svg += '<line class="hoverline" id="monthlyHl" y1="'+padT+'" y2="'+(H-padB)+'" />';
+    svg += '</svg>';
+
+    var wrap = document.getElementById('monthlyChart');
+    wrap.innerHTML = svg + '<div class="tooltip" id="monthlyTip"></div>' +
+      '<div class="chart-legend">' +
+        '<span><i style="background:'+incColor+'"></i>수입</span>' +
+        '<span><i style="background:'+expColor+'"></i>지출</span>' +
+        '<span><i class="line" style="background:'+netColor+'"></i>순현금흐름</span>' +
+      '</div>';
+
+    var svgEl = document.getElementById('monthlySvg');
+    var tip = document.getElementById('monthlyTip');
+    var hl = document.getElementById('monthlyHl');
+    svgEl.querySelectorAll('rect,circle').forEach(function(el){
+      el.addEventListener('mouseenter', function(){
+        var i = el.getAttribute('data-i'); var d = MONTHLY[i];
+        var cx = x(i);
+        hl.setAttribute('x1', cx); hl.setAttribute('x2', cx); hl.style.opacity=1;
+        tip.style.opacity = 1;
+        tip.innerHTML = d.m + '<br>수입 ' + fmtWon(d.inc) + '원<br>지출 ' + fmtWon(d.exp) + '원<br>순현금흐름 ' + (d.inc-d.exp>=0?'+':'') + fmtWon(d.inc-d.exp) + '원';
+        var rect = svgEl.getBoundingClientRect();
+        var relX = (cx/W) * rect.width;
+        var relY = (y(Math.max(d.inc,d.exp))/H) * rect.height;
+        tip.style.left = relX+'px'; tip.style.top = relY+'px';
+      });
+      el.addEventListener('mouseleave', function(){ hl.style.opacity=0; tip.style.opacity=0; });
+    });
+  }
+
+  // ── 종합 매출/매입 (= "법인 분기별매출매입현황"의 예상손익 구조) ──────────────────────────────────────────
+  function renderTrade(){
+    var mode = STATE.tradeMode, year = STATE.tradeYear;
+    var series = tradeSeriesFor(mode, year);
+    var totalRev = series.reduce(function(s,d){return s+d.rev;},0);
+    var totalCost = series.reduce(function(s,d){return s+d.cost;},0);
+    var totalExp = series.reduce(function(s,d){return s+d.exp;},0);
+    var totalInc = series.reduce(function(s,d){return s+d.inc;},0);
+    var totalProfit = totalRev-totalCost-totalExp+totalInc;
+    var avgRate = totalRev>0 ? totalProfit/totalRev*100 : 0;
+    var periodLabel = mode==='year' ? '2023~2026.08' : (year+'년'+(mode==='quarter'?' 분기별':' 월별'));
+    var colLabel = mode==='year' ? '연도' : (mode==='quarter' ? '분기' : '월');
+    var rows = series.map(function(d){
+      var profit = d.rev-d.cost-d.exp+d.inc, rate = d.rev>0 ? profit/d.rev*100 : 0;
+      return '<tr class="'+(d.ytd?'ytd':'')+'"><td>'+d.label+'</td><td class="num">'+fmtWon(d.rev)+'원</td><td class="num">'+fmtWon(d.cost)+'원</td>' +
+        '<td class="num">'+fmtWon(d.exp)+'원</td><td class="num">'+fmtWon(d.inc)+'원</td>' +
+        '<td class="num" style="color:'+(profit>=0?'var(--pos)':'var(--neg)')+'">'+(profit>=0?'+':'')+fmtWon(profit)+'원</td>' +
+        '<td class="num" style="color:'+(rate>=0?'var(--pos)':'var(--neg)')+'">'+rate.toFixed(1)+'%</td></tr>';
+    }).join('');
+
+    var expYear = mode==='year' ? 'all' : year;
+    var expSrc = expenseSrcFor(expYear);
+    var expLabel = expYear==='all' ? '전체 누적 (2023~2026.08, 2026년만 실제)' : (expYear==='2026' ? '2026년 8월 누계 · 실제' : expYear+'년 · 샘플');
+    var maxExp = Math.max.apply(null, expSrc.map(function(i){return i.v;}));
+    var expTotal = expSrc.reduce(function(s,i){return s+i.v;},0);
+    var expRows = expSrc.map(function(it){
+      var pct = expTotal>0 ? it.v/expTotal*100 : 0;
+      var barPct = maxExp>0 ? it.v/maxExp*100 : 0;
+      return '<div class="hbar-row">' +
+        '<div class="hbar-label"><span class="hbar-dot" style="background:var('+it.c+')"></span>'+it.name+'</div>' +
+        '<div class="hbar-track"><div class="hbar-fill" style="width:'+barPct+'%; background:var('+it.c+')"></div></div>' +
+        '<div class="hbar-val num">'+fmtWon(it.v)+'원</div>' +
+        '<div class="hbar-pct num">'+pct.toFixed(1)+'%</div>' +
+      '</div>';
+    }).join('');
+
+    var kpiPrefix = mode==='year' ? '누적 ' : '';
+    var kpiSuffix = mode==='year' ? ' (2023~2026.08)' : ' ('+year+'년)';
+
+    document.getElementById('finApp').innerHTML =
+      '<div class="note-line" style="margin-top:0">"법인 분기별매출매입현황" 페이지와 같은 계산식을 씁니다 — <b style="color:var(--ink-2)">예상손익 = 매출 − 매입 − 일반지출(자동집계) + 기타수입(자동집계)</b>. 일반지출은 법인카드·공과금·보험·세금·이자상환·급여명세서를 매달 자동 합산한 값이고, 기타수입은 flowType이 "수입"인 자동집계 항목입니다. 주식·배당(매수 등)은 회사 영업손익과 무관해 이 계산에서 제외됩니다. <b style="color:var(--ink-2)">2026년(1~8월)은 그 페이지에서 가져온 실제 값이고, 2023~2025년은 매출·매입이 아직 입력되지 않아 예시 수치입니다.</b></div>' +
+      '<div class="filter-bar">' +
+        '<label>보기</label>' +
+        '<span class="seg">' +
+          '<button class="seg-btn'+(mode==='year'?' on':'')+'" data-mode="year">연도별</button>' +
+          '<button class="seg-btn'+(mode==='quarter'?' on':'')+'" data-mode="quarter">분기별</button>' +
+          '<button class="seg-btn'+(mode==='month'?' on':'')+'" data-mode="month">월별</button>' +
+        '</span>' +
+        (mode!=='year' ? '<select class="filter-select" id="tradeYearSel">'+YEARS.map(function(y){return '<option value="'+y+'"'+(y===year?' selected':'')+'>'+y+'년</option>';}).join('')+'</select>' : '') +
+      '</div>' +
+      '<div class="kpis">' +
+        '<div class="kpi"><div class="lbl">'+kpiPrefix+'매출'+kpiSuffix+'</div><div class="val num">'+fmtWon(totalRev)+'원</div></div>' +
+        '<div class="kpi"><div class="lbl">'+kpiPrefix+'매입'+kpiSuffix+'</div><div class="val num">'+fmtWon(totalCost)+'원</div></div>' +
+        '<div class="kpi"><div class="lbl">'+kpiPrefix+'일반지출'+kpiSuffix+' (자동집계)</div><div class="val num">'+fmtWon(totalExp)+'원</div></div>' +
+        '<div class="kpi"><div class="lbl">'+kpiPrefix+'기타수입'+kpiSuffix+' (자동집계)</div><div class="val num">'+fmtWon(totalInc)+'원</div></div>' +
+        '<div class="kpi"><div class="lbl">'+kpiPrefix+'예상손익'+kpiSuffix+'</div><div class="val num '+(totalProfit>=0?'pos':'neg')+'">'+(totalProfit>=0?'+':'')+fmtWon(totalProfit)+'원</div><div class="sub">매출대비 '+avgRate.toFixed(1)+'%</div></div>' +
+      '</div>' +
+      '<section>' +
+        '<div class="sec-hd"><h2>'+colLabel+'별 매출 · 매입 · 일반지출 · 기타수입 · 예상손익</h2><span class="desc">'+periodLabel+(year==='2026'&&mode!=='year'?' · 8월까지':'')+'</span></div>' +
+        '<div class="card"><div class="chart-wrap" id="tradeChart"></div></div>' +
+      '</section>' +
+      '<section>' +
+        '<div class="sec-hd"><h2>일반지출 구성</h2><span class="desc">'+expLabel+' · 법인카드·공과금·보험·세금·이자상환 자동집계 + 급여명세서</span></div>' +
+        '<div class="card">'+expRows+'</div>' +
+        '<div class="note-line" style="margin-bottom:0">위 "보기" 선택과 같은 기준(연도별이면 전체 누적, 분기별·월별이면 선택한 연도)으로 일반지출 구성을 보여줍니다.</div>' +
+      '</section>' +
+      '<section style="margin-bottom:8px">' +
+        '<div class="sec-hd"><h2>'+colLabel+'별 상세</h2></div>' +
+        '<div class="card" style="padding:0; overflow-x:auto">' +
+          '<table class="fin-table"><thead><tr><th>'+colLabel+'</th><th>매출</th><th>매입</th><th>일반지출</th><th>기타수입</th><th>예상손익</th><th>매출대비</th></tr></thead>' +
+          '<tbody>'+rows+'</tbody></table>' +
+        '</div>' +
+      '</section>';
+
+    document.querySelectorAll('.seg-btn[data-mode]').forEach(function(btn){
+      btn.addEventListener('click', function(){ STATE.tradeMode = btn.getAttribute('data-mode'); renderTrade(); });
+    });
+    var tYearSel = document.getElementById('tradeYearSel');
+    if(tYearSel){ tYearSel.addEventListener('change', function(e){ STATE.tradeYear = e.target.value; renderTrade(); }); }
+    renderTradeChart(series);
+  }
+
+  function renderTradeChart(series){
+    var W = 900, H = 300, padL = 46, padR = 16, padT = 20, padB = 34;
+    var n = series.length;
+    var maxV = Math.max.apply(null, series.map(function(d){return d.rev;})) * 1.15;
+    var minV = Math.min(0, Math.min.apply(null, series.map(function(d){return d.rev-d.cost-d.exp+d.inc;})));
+    var groupW = (W-padL-padR)/n;
+    var barW = groupW * 0.13;
+    var gap = barW * 0.32;
+    var x = function(i){ return padL + groupW*i + groupW/2; };
+    var y = function(v){ return padT + (H-padT-padB) * (1 - (v-minV)/(maxV-minV)); };
+    var baseY = y(0);
+    var revColor = isDark() ? '#4A8AC4' : '#2F6FB0';
+    var costColor = isDark() ? '#C17F2E' : '#C97A2E';
+    var expColor = isDark() ? '#8F8877' : '#8C8474';
+    var incColor = isDark() ? '#B08327' : '#B08A2E';
+    var posColor = isDark() ? '#1BA6A6' : '#0A9797';
+    var negColor = isDark() ? '#E0665C' : '#C1443B';
+
+    var svg = '<svg class="chart-svg" viewBox="0 0 '+W+' '+H+'" id="tradeSvg">';
+    var steps = 4;
+    for(var s=0;s<=steps;s++){
+      var v = minV + (maxV-minV)*s/steps, yy=y(v);
+      svg += '<line class="gridline" x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" />';
+      svg += '<text class="axislabel" x="'+(padL-8)+'" y="'+(yy+3)+'" text-anchor="end">'+fmtWon(v)+'</text>';
+    }
+    series.forEach(function(d,i){
+      var cx = x(i);
+      var profit = d.rev-d.cost-d.exp+d.inc;
+      var bars = [
+        {v:d.rev, f:revColor, key:'rev'},
+        {v:d.cost, f:costColor, key:'cost'},
+        {v:d.exp, f:expColor, key:'exp'},
+        {v:d.inc, f:incColor, key:'inc'},
+        {v:profit, f:(profit>=0?posColor:negColor), key:'profit'}
+      ];
+      var startX = cx - (barW*5 + gap*4)/2;
+      bars.forEach(function(b, bi){
+        var bx = startX + bi*(barW+gap);
+        var top = Math.min(y(b.v), baseY), h = Math.abs(y(b.v)-baseY);
+        svg += '<rect x="'+bx+'" y="'+top+'" width="'+barW+'" height="'+Math.max(h,1)+'" rx="2" fill="'+b.f+'" data-i="'+i+'" data-k="'+b.key+'" />';
+      });
+      svg += '<text class="axislabel" x="'+cx+'" y="'+(H-14)+'" text-anchor="middle">'+d.label+'</text>';
+    });
+    if(minV < 0){ svg += '<line x1="'+padL+'" y1="'+baseY+'" x2="'+(W-padR)+'" y2="'+baseY+'" stroke="var(--ink-2)" stroke-width="1" opacity="0.35" />'; }
+    svg += '<line class="hoverline" id="tradeHl" y1="'+padT+'" y2="'+(H-padB)+'" />';
+    svg += '</svg>';
+
+    var wrap = document.getElementById('tradeChart');
+    wrap.innerHTML = svg + '<div class="tooltip" id="tradeTip"></div>' +
+      '<div class="chart-legend">' +
+        '<span><i style="background:'+revColor+'"></i>매출</span>' +
+        '<span><i style="background:'+costColor+'"></i>매입</span>' +
+        '<span><i style="background:'+expColor+'"></i>일반지출</span>' +
+        '<span><i style="background:'+incColor+'"></i>기타수입</span>' +
+        '<span><i style="background:'+posColor+'"></i>예상손익</span>' +
+      '</div>';
+
+    var svgEl = document.getElementById('tradeSvg');
+    var tip = document.getElementById('tradeTip');
+    var hl = document.getElementById('tradeHl');
+    var LABELS = {rev:'매출', cost:'매입', exp:'일반지출', inc:'기타수입', profit:'예상손익'};
+    svgEl.querySelectorAll('rect').forEach(function(el){
+      el.addEventListener('mouseenter', function(){
+        var i = el.getAttribute('data-i'), k = el.getAttribute('data-k'); var d = series[i];
+        var val = k==='profit' ? (d.rev-d.cost-d.exp+d.inc) : d[k==='rev'?'rev':k==='cost'?'cost':k==='exp'?'exp':'inc'];
+        var cx = x(i);
+        hl.setAttribute('x1', cx); hl.setAttribute('x2', cx); hl.style.opacity=1;
+        tip.style.opacity = 1;
+        tip.innerHTML = d.label + ' · ' + LABELS[k] + '<br>' + (val>=0&&k==='profit'?'+':'') + fmtWon(val) + '원';
+        var rect = svgEl.getBoundingClientRect();
+        tip.style.left = ((cx/W)*rect.width)+'px'; tip.style.top = ((y(val)/H)*rect.height)+'px';
+      });
+      el.addEventListener('mouseleave', function(){ hl.style.opacity=0; tip.style.opacity=0; });
+    });
+  }
+
+  function render(){
+    var tab = parseTab();
+    renderTabbar(tab);
+    if(tab==='acct') renderAcct();
+    else if(tab==='monthly') renderMonthly();
+    else renderTrade();
+
+    var f = document.createElement('footer');
+    f.innerHTML = '<b>다음 단계</b> — 계정과목별 지출·월별 수입·지출 탭은 회계현황 원본데이터(거래내역 4,022건)로, 종합 매출·매입 탭은 2026년(1~8월)만 "법인 분기별매출매입현황" 페이지의 실제 값으로 교체했습니다. 2023~2025년 매출·매입은 그 페이지에 아직 입력되어 있지 않아 예시로 남아 있고, 나중에 입력되면 같은 방식으로 갱신할 수 있습니다 — 방향이 맞으면 "프로젝트 유형 비교"·"프로젝트 상세" 화면과 함께 전체 대시보드의 진입 화면으로 연결할 예정입니다.';
+    document.getElementById('finApp').appendChild(f);
+  }
+
+  render();
+  window.addEventListener('hashchange', render);
+  if(window.matchMedia){ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render); }
+})();
+</script>
+
+<script>
+(function(){
+  'use strict';
+
+  var isDark = function(){
+    var t = document.documentElement.getAttribute('data-theme');
+    if(t === 'dark') return true;
+    if(t === 'light') return false;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  };
+  var fmtWon = function(n){
+    if(n === null || n === undefined) return '-';
+    var v = Math.round(n);
+    var sign = v < 0 ? '-' : '';
+    v = Math.abs(v);
+    if(v >= 100000000) return sign + (v/100000000).toFixed(1).replace(/\.0$/,'') + '억';
+    if(v >= 10000) return sign + (v/10000).toFixed(0) + '만';
+    return sign + String(v);
+  };
+
+  // ── 프로젝트 상세 원본 데이터 (project-detail-real.html과 동일한 56건, 인라인 패널용) ──
+  var PD_PROJECTS = [{"code":"2026-02-02","subCode":"02","subLabel":"세대설계","major":"설계","name":"HS-대명동 공공민간임대 인테리어 설계용역","client":"에이치에스화성 주식회사","contractAmt":79200000,"finalAmt":79200000,"totalClaim":47520000,"totalReceived":7920000,"outstanding":39600000,"start":null,"end":null,"status":"진행중","directCost":24410.0,"directConf":"ok","laborAlloc":8697660,"totalHours":641.3,"contributors":[{"name":"윤성원","hours":424.3,"pct":66.2,"amt":5757851},{"name":"손영화","hours":204.9,"pct":32.0,"amt":2783251},{"name":"이연경","hours":12.1,"pct":1.9,"amt":165256}],"wlConf":"ok","wlSiblingNote":null},{"code":"2026-02-03","subCode":"02","subLabel":"세대설계","major":"설계","name":"HS-청원맨션 소규모재건축사업 인테리어 설계용역","client":"에이치에스화성 주식회사","contractAmt":36300000,"finalAmt":36300000,"totalClaim":21780000,"totalReceived":3630000,"outstanding":18150000,"start":null,"end":null,"status":"진행중","directCost":11190.0,"directConf":"ok","laborAlloc":6072371,"totalHours":447.7,"contributors":[{"name":"손영화","hours":304.1,"pct":67.9,"amt":4123140},{"name":"윤성원","hours":131.5,"pct":29.4,"amt":1785277},{"name":"이연경","hours":12.1,"pct":2.7,"amt":163954}],"wlConf":"ok","wlSiblingNote":null},{"code":"2026-00-01","subCode":"00","subLabel":"대안설계","major":"설계","name":"HS-대치동 비취타운 설계용역","client":"에이치에스화성 주식회사","contractAmt":49720000,"finalAmt":49720000,"totalClaim":49720000,"totalReceived":49720000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":7260000.0,"directConf":"ok","laborAlloc":7565405,"totalHours":557.8,"contributors":[{"name":"손영화","hours":274.1,"pct":49.1,"amt":3714614},{"name":"윤성원","hours":271.2,"pct":48.6,"amt":3676787},{"name":"이연경","hours":12.5,"pct":2.2,"amt":166439}],"wlConf":"ok","wlSiblingNote":null},{"code":"2025-01-01","subCode":"01","subLabel":"견본주택설계","major":"설계","name":"HDC-천안 부성지구 견본주택 설계용역","client":"에이치디씨 현대산업개발","contractAmt":58300000,"finalAmt":58300000,"totalClaim":58300000,"totalReceived":58300000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":12045000.0,"directConf":"ok","laborAlloc":12704671,"totalHours":498.8,"contributors":[{"name":"한정식","hours":247.1,"pct":49.5,"amt":6288812},{"name":"윤성원","hours":168.9,"pct":33.9,"amt":4306883},{"name":"손영화","hours":71.0,"pct":14.2,"amt":1804063},{"name":"이연경","hours":11.9,"pct":2.4,"amt":304912}],"wlConf":"ok","wlSiblingNote":null},{"code":"2025-02-03","subCode":"02","subLabel":"세대설계","major":"설계","name":"HDC-천안 부성지구 단위세대 설계용역","client":"에이치디씨 현대산업개발","contractAmt":213510000,"finalAmt":213510000,"totalClaim":128106000,"totalReceived":128106000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":11470015.0,"directConf":"ok","laborAlloc":68458006,"totalHours":2479.9,"contributors":[{"name":"한정식","hours":985.9,"pct":39.8,"amt":27246286},{"name":"손영화","hours":692.6,"pct":27.9,"amt":19099784},{"name":"윤성원","hours":525.0,"pct":21.2,"amt":14513097},{"name":"하보은","hours":148.8,"pct":6.0,"amt":4107480},{"name":"유혜정","hours":113.3,"pct":4.6,"amt":3149068},{"name":"이연경","hours":14.4,"pct":0.6,"amt":410748}],"wlConf":"ok","wlSiblingNote":null},{"code":"2025-00-02","subCode":"00","subLabel":"대안설계","major":"설계","name":"롯데건설-개포 우성4차 재건축 수주설계 용역","client":"고우건축","contractAmt":79200000,"finalAmt":0,"totalClaim":0,"totalReceived":0,"outstanding":0,"start":null,"end":null,"status":"청구전","directCost":500000.0,"directConf":"ok","laborAlloc":0,"totalHours":0,"contributors":[],"wlConf":"none","wlSiblingNote":null},{"code":"2025-02-02","subCode":"02","subLabel":"세대설계","major":"설계","name":"HS-광명아파트 재건축정비사업 인테리어 설계용역","client":"에이치에스화성 주식회사","contractAmt":137703500,"finalAmt":137703500,"totalClaim":137703500,"totalReceived":137703500,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":11038660.0,"directConf":"ok","laborAlloc":4454267,"totalHours":205.9,"contributors":[{"name":"손영화","hours":142.2,"pct":69.1,"amt":3077898},{"name":"이연경","hours":54.2,"pct":26.3,"amt":1171472},{"name":"윤성원","hours":9.5,"pct":4.6,"amt":204896}],"wlConf":"ok","wlSiblingNote":null},{"code":"2024-00-05","subCode":"00","subLabel":"대안설계","major":"설계","name":"롯데건설-용산 산호아파트 재건축정비사업 대안설계","client":"고우건축","contractAmt":64350000,"finalAmt":64350000,"totalClaim":64350000,"totalReceived":64350000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":null,"directConf":"none","laborAlloc":5427619,"totalHours":215.5,"contributors":[{"name":"한정식","hours":96.8,"pct":44.9,"amt":2437001},{"name":"조성채","hours":68.1,"pct":31.6,"amt":1715128},{"name":"유혜정","hours":50.7,"pct":23.5,"amt":1275490}],"wlConf":"ok","wlSiblingNote":null},{"code":"2025-02-01","subCode":"02","subLabel":"세대설계","major":"설계","name":"HS-만촌 파크드림 에디움 인테리어 설계용역","client":"에이치에스화성 주식회사","contractAmt":24090000,"finalAmt":24090000,"totalClaim":24090000,"totalReceived":24090000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":40237600.0,"directConf":"ok","laborAlloc":2315674,"totalHours":69.9,"contributors":[{"name":"윤성원","hours":43.3,"pct":62.0,"amt":1435718},{"name":"이연경","hours":26.5,"pct":38.0,"amt":879956}],"wlConf":"ok","wlSiblingNote":null},{"code":"2025-02-04","subCode":"02","subLabel":"세대설계","major":"설계","name":"삼성동 89/89-3 고급공동주택 인테리어설계","client":"(주)현대레져","contractAmt":353100000,"finalAmt":353100000,"totalClaim":0,"totalReceived":0,"outstanding":0,"start":null,"end":null,"status":"청구전","directCost":null,"directConf":"none","laborAlloc":0,"totalHours":0,"contributors":[],"wlConf":"none","wlSiblingNote":null},{"code":"2025-00-01","subCode":"00","subLabel":"대안설계","major":"설계","name":"하우드엔지니어링-장위15구역 재건축 대안설계용역","client":"㈜하우드엔지니어링종합건축사사무소","contractAmt":99000000,"finalAmt":99000000,"totalClaim":99000000,"totalReceived":99000000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":null,"directConf":"none","laborAlloc":422667,"totalHours":17.7,"contributors":[{"name":"이연경","hours":17.7,"pct":100.0,"amt":422667}],"wlConf":"ok","wlSiblingNote":null},{"code":"2024-02-01","subCode":"02","subLabel":"세대설계","major":"설계","name":"HDC-안양신한 재개발정비사업 단위세대 인테리어 설계용역","client":"에이치디씨현대산업개발","contractAmt":57640000,"finalAmt":57640000,"totalClaim":57640000,"totalReceived":57640000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":22795020.0,"directConf":"ok","laborAlloc":29929198,"totalHours":1163.3,"contributors":[{"name":"한정식","hours":703.3,"pct":60.5,"amt":18107165},{"name":"유혜정","hours":261.1,"pct":22.4,"amt":6704140},{"name":"조성채","hours":197.5,"pct":17.0,"amt":5087964},{"name":"이연경","hours":1.4,"pct":0.1,"amt":29929}],"wlConf":"ok","wlSiblingNote":null},{"code":"2024-01-01","subCode":"01","subLabel":"견본주택설계","major":"설계","name":"HDC-안양신한 재개발정비사업 모델하우스 인테리어 설계용역","client":"에이치디씨현대산업개발","contractAmt":21340000,"finalAmt":21340000,"totalClaim":21340000,"totalReceived":21340000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":18490490.0,"directConf":"ok","laborAlloc":4601623,"totalHours":128.8,"contributors":[{"name":"한정식","hours":90.0,"pct":69.9,"amt":3216534},{"name":"유혜정","hours":34.3,"pct":26.7,"amt":1228633},{"name":"이연경","hours":4.5,"pct":3.5,"amt":161057}],"wlConf":"ok","wlSiblingNote":null},{"code":"2024-03-01","subCode":"03","subLabel":"상업공간설계","major":"설계","name":"밥장인 고속터미널점 설계용역","client":"밥장인","contractAmt":15400000,"finalAmt":15400000,"totalClaim":15400000,"totalReceived":15400000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":null,"directConf":"none","laborAlloc":0,"totalHours":0,"contributors":[],"wlConf":"shared","wlSiblingNote":"공사/밥장인 고속터미널점"},{"code":"2024-00-01","subCode":"00","subLabel":"대안설계","major":"설계","name":"롯데건설-전농8 재정비 촉진구역 주택재개발 정비사업 대안설계","client":"고우건축","contractAmt":66000000.00000001,"finalAmt":66000000.00000001,"totalClaim":66000000,"totalReceived":66000000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":null,"directConf":"none","laborAlloc":292929,"totalHours":11.6,"contributors":[{"name":"조성채","hours":4.9,"pct":42.3,"amt":123909},{"name":"한정식","hours":3.7,"pct":31.9,"amt":93444},{"name":"정운솔","hours":3.0,"pct":25.8,"amt":75576}],"wlConf":"ok","wlSiblingNote":null},{"code":"2024-02-03","subCode":"02","subLabel":"세대설계","major":"설계","name":"홍천 대상 웰라움 단위세대 설계","client":"대신자산신탁","contractAmt":176000000,"finalAmt":176000000,"totalClaim":176000000,"totalReceived":176000000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":72500000.0,"directConf":"ok","laborAlloc":22433795,"totalHours":976.8,"contributors":[{"name":"한정식","hours":369.8,"pct":37.9,"amt":8502408},{"name":"조성채","hours":351.6,"pct":36.0,"amt":8076166},{"name":"김래정","hours":103.0,"pct":10.5,"amt":2355548},{"name":"신재훈","hours":99.9,"pct":10.2,"amt":2288247},{"name":"정운솔","hours":23.4,"pct":2.4,"amt":538411},{"name":"윤두현","hours":14.6,"pct":1.5,"amt":336507},{"name":"유혜정","hours":14.5,"pct":1.5,"amt":336507}],"wlConf":"ok","wlSiblingNote":null},{"code":"2023-00-05","subCode":"00","subLabel":"대안설계","major":"설계","name":"HDC-광주화정 A1현장 단위세대 마감 트렌드업 인테리어 설계용역","client":"에이치디씨현대산업개발","contractAmt":88000000,"finalAmt":88000000,"totalClaim":88000000,"totalReceived":88000000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":432425.0,"directConf":"ok","laborAlloc":8933086,"totalHours":422.3,"contributors":[{"name":"조성채","hours":240.6,"pct":57.0,"amt":5091859},{"name":"한정식","hours":166.2,"pct":39.4,"amt":3519636},{"name":"윤성원","hours":8.0,"pct":1.9,"amt":169729},{"name":"이연경","hours":7.5,"pct":1.8,"amt":160796}],"wlConf":"ok","wlSiblingNote":null},{"code":"2023-01-02","subCode":"01","subLabel":"견본주택설계","major":"설계","name":"HDC-보문5구역 MH및 단위세대 인테리어 설계용역","client":"에이치디씨현대산업개발","contractAmt":59950000.00000001,"finalAmt":59950000.00000001,"totalClaim":59950000,"totalReceived":59950000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":9830620.0,"directConf":"ok","laborAlloc":39266025,"totalHours":1996.3,"contributors":[{"name":"한정식","hours":1062.1,"pct":53.2,"amt":20889525},{"name":"박시연","hours":752.9,"pct":37.7,"amt":14803291},{"name":"윤두현","hours":132.0,"pct":6.6,"amt":2591558},{"name":"조성채","hours":32.6,"pct":1.6,"amt":628256},{"name":"김래정","hours":14.3,"pct":0.7,"amt":274862},{"name":"손영화","hours":2.4,"pct":0.1,"amt":39266}],"wlConf":"ok","wlSiblingNote":null},{"code":"2023-01-06","subCode":"01","subLabel":"견본주택설계","major":"설계","name":"HDC-익산부송4지구 단위세대 인테리어설계용역","client":"에이치디씨현대산업개발","contractAmt":81070000,"finalAmt":81070000,"totalClaim":81070000,"totalReceived":81070000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":6292000.0,"directConf":"ok","laborAlloc":33620119,"totalHours":1450.8,"contributors":[{"name":"한정식","hours":838.6,"pct":57.8,"amt":19432429},{"name":"조성채","hours":594.5,"pct":41.0,"amt":13784249},{"name":"유혜정","hours":17.7,"pct":1.2,"amt":403441}],"wlConf":"ok","wlSiblingNote":null},{"code":"2023-01-01","subCode":"01","subLabel":"견본주택설계","major":"설계","name":"HDC-익산부송4지구 아이파크 MH 인테리어 설계","client":"에이치디씨현대산업개발","contractAmt":28380000.000000004,"finalAmt":28380000.000000004,"totalClaim":28380000,"totalReceived":28380000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":7700000.0,"directConf":"ok","laborAlloc":0,"totalHours":0,"contributors":[],"wlConf":"shared","wlSiblingNote":"HDC-익산부송4지구 단위세대 인테리어설계용역"},{"code":"2023-00-04","subCode":"00","subLabel":"대안설계","major":"설계","name":"하우드엔지니어링-광주운암구역 재개발정비사업 대안설계","client":"㈜하우드엔지니어링종합건축사사무소","contractAmt":88000000,"finalAmt":88000000,"totalClaim":88000000,"totalReceived":88000000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":2100000.0,"directConf":"ok","laborAlloc":0,"totalHours":0,"contributors":[],"wlConf":"none","wlSiblingNote":null},{"code":"2022-01-03","subCode":"01","subLabel":"견본주택설계","major":"설계","name":"HDC-경산2차 아이파크 M/H 인테리어 설계","client":"에이치디씨현대산업개발","contractAmt":29700000.000000004,"finalAmt":29700000.000000004,"totalClaim":29700000,"totalReceived":29700000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":40701000.0,"directConf":"ok","laborAlloc":0,"totalHours":0,"contributors":[],"wlConf":"shared","wlSiblingNote":"HDC-경산2차 아이파크 단위세대 인테리어 설계용역"},{"code":"2022-00-06","subCode":"00","subLabel":"대안설계","major":"설계","name":"HDC-경산2차 아이파크 단위세대 인테리어 설계용역","client":"에이치디씨현대산업개발","contractAmt":154550000,"finalAmt":154550000,"totalClaim":154550000,"totalReceived":154550000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":2670000.0,"directConf":"ok","laborAlloc":32050348,"totalHours":2260.5,"contributors":[{"name":"윤두현","hours":1061.8,"pct":47.0,"amt":15063664},{"name":"김래정","hours":888.8,"pct":39.3,"amt":12595787},{"name":"신재훈","hours":277.5,"pct":12.3,"amt":3942193},{"name":"박시연","hours":10.8,"pct":0.5,"amt":160252},{"name":"오지은","hours":10.8,"pct":0.5,"amt":160252},{"name":"한정식","hours":10.8,"pct":0.5,"amt":160252}],"wlConf":"ok","wlSiblingNote":null},{"code":"2022-01-02","subCode":"01","subLabel":"견본주택설계","major":"설계","name":"현대엔지니어링-속초 금호동 힐스테이트","client":"㈜ 화승디앤씨","contractAmt":258500000.00000003,"finalAmt":258500000.00000003,"totalClaim":258500000,"totalReceived":258500000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":49984760.0,"directConf":"ok","laborAlloc":55403286,"totalHours":3263.6,"contributors":[{"name":"윤두현","hours":1267.0,"pct":38.8,"amt":21496475},{"name":"김래정","hours":1170.0,"pct":35.8,"amt":19834376},{"name":"신재훈","hours":424.1,"pct":13.0,"amt":7202427},{"name":"한정식","hours":279.0,"pct":8.5,"amt":4709279},{"name":"박시연","hours":66.3,"pct":2.0,"amt":1108066},{"name":"조성채","hours":48.0,"pct":1.5,"amt":831049},{"name":"유혜정","hours":9.2,"pct":0.3,"amt":166210}],"wlConf":"ok","wlSiblingNote":null},{"code":"2024-02-04","subCode":"02","subLabel":"세대설계","major":"설계","name":"(주)동일건축-몽촌토성역세권 장기전세주택 인테리어 설계용역(방이동 역세권 청년주택 인테리어 설계용역)","client":"주)동일건축","contractAmt":110000000.00000001,"finalAmt":110000000.00000001,"totalClaim":99000000,"totalReceived":99000000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":154000.0,"directConf":"ok","laborAlloc":11717094,"totalHours":863.9,"contributors":[{"name":"윤성원","hours":475.1,"pct":55.0,"amt":6444402},{"name":"손영화","hours":367.2,"pct":42.5,"amt":4979765},{"name":"이연경","hours":21.6,"pct":2.5,"amt":292927}],"wlConf":"ok","wlSiblingNote":null},{"code":"2022-01-01","subCode":"01","subLabel":"견본주택설계","major":"설계","name":"장안동 오피스텔 견본주택 설계용역","client":"주식회사 담건축","contractAmt":33000000.000000004,"finalAmt":33000000.000000004,"totalClaim":33000000,"totalReceived":33000000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":462660.0,"directConf":"ok","laborAlloc":0,"totalHours":0,"contributors":[],"wlConf":"none","wlSiblingNote":null},{"code":"2022-02-02","subCode":"02","subLabel":"세대설계","major":"설계","name":"장안동 오피스텔 인테리어설계","client":"주식회사 더보니타","contractAmt":91861000,"finalAmt":91861000,"totalClaim":91861000,"totalReceived":91861000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":957500.0,"directConf":"ok","laborAlloc":0,"totalHours":0,"contributors":[],"wlConf":"none","wlSiblingNote":null},{"code":"2022-00-01","subCode":"00","subLabel":"대안설계","major":"설계","name":"하우드엔지니어링-창원 반지1구역 재건축정비사업 입찰설계 용역","client":"㈜하우드엔지니어링종합건축사사무소","contractAmt":110000000.00000001,"finalAmt":110000000.00000001,"totalClaim":110000000,"totalReceived":110000000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":407000.0,"directConf":"ok","laborAlloc":1912779,"totalHours":134.9,"contributors":[{"name":"김래정","hours":88.1,"pct":65.3,"amt":1249045},{"name":"윤두현","hours":46.8,"pct":34.7,"amt":663734}],"wlConf":"ok","wlSiblingNote":null},{"code":"2022-02-03","subCode":"02","subLabel":"세대설계","major":"설계","name":"행정중심복합도시 6-4 생활권 블럭형주택 커뮤니티 인테리어설계","client":"(주)건영","contractAmt":11000000,"finalAmt":11000000,"totalClaim":11000000,"totalReceived":11000000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":501600.0,"directConf":"ok","laborAlloc":0,"totalHours":0,"contributors":[],"wlConf":"none","wlSiblingNote":null},{"code":"2022-02-01","subCode":"02","subLabel":"세대설계","major":"설계","name":"행정중심복합도시 블록형 단독주택용지 개발사업 인테리어 설게","client":"리실리오 주식회사","contractAmt":165000000,"finalAmt":0,"totalClaim":0,"totalReceived":0,"outstanding":0,"start":null,"end":null,"status":"청구전","directCost":null,"directConf":"none","laborAlloc":8676339,"totalHours":611.9,"contributors":[{"name":"신재훈","hours":222.1,"pct":36.3,"amt":3149511},{"name":"윤두현","hours":209.6,"pct":34.3,"amt":2975984},{"name":"김래정","hours":113.6,"pct":18.6,"amt":1613799},{"name":"오지은","hours":59.5,"pct":9.7,"amt":841605},{"name":"한정식","hours":7.2,"pct":1.2,"amt":104116}],"wlConf":"ok","wlSiblingNote":null},{"code":"2021-01-03","subCode":"01","subLabel":"견본주택설계","major":"설계","name":"HDC-광주운암3단지 MH 설계 용역","client":"에이치디씨현대산업개발","contractAmt":16500000,"finalAmt":16500000,"totalClaim":16500000,"totalReceived":16463863,"outstanding":36137,"start":null,"end":null,"status":"진행중","directCost":null,"directConf":"none","laborAlloc":0,"totalHours":0,"contributors":[],"wlConf":"shared","wlSiblingNote":"HDC-광주운암3단지 아이파크  단위세대 인테리어설계"},{"code":"2021-02-06","subCode":"02","subLabel":"세대설계","major":"설계","name":"HDC-광주운암3단지 아이파크  단위세대 인테리어설계","client":"에이치디씨현대산업개발","contractAmt":42801000,"finalAmt":42801000,"totalClaim":42801000,"totalReceived":42801000,"outstanding":0,"start":"2025-03-24","end":"2025-05-23","status":"완료","directCost":null,"directConf":"none","laborAlloc":2692720,"totalHours":189.9,"contributors":[{"name":"윤두현","hours":108.6,"pct":57.2,"amt":1540236},{"name":"김래정","hours":81.4,"pct":42.8,"amt":1152484}],"wlConf":"ok","wlSiblingNote":null},{"code":"2021-01-01","subCode":"01","subLabel":"견본주택설계","major":"설계","name":"HDC-대전 아이파크시티 오피스텔 M/H 설계용역","client":"에이치디씨현대산업개발","contractAmt":14300000.000000002,"finalAmt":14300000.000000002,"totalClaim":14300000,"totalReceived":14300000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":null,"directConf":"none","laborAlloc":0,"totalHours":0,"contributors":[],"wlConf":"shared","wlSiblingNote":"HDC-대전 아이파크시티 오피스텔 단위세대 인테리어 설계 용역"},{"code":"2021-02-05","subCode":"02","subLabel":"세대설계","major":"설계","name":"HDC-대전 아이파크시티 오피스텔 단위세대 인테리어 설계 용역","client":"에이치디씨현대산업개발","contractAmt":74800000,"finalAmt":74800000,"totalClaim":74800000,"totalReceived":74800000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":68683880.0,"directConf":"ok","laborAlloc":5017659,"totalHours":353.9,"contributors":[{"name":"김래정","hours":210.7,"pct":59.5,"amt":2985507},{"name":"윤두현","hours":143.2,"pct":40.5,"amt":2032152}],"wlConf":"ok","wlSiblingNote":null},{"code":"2022-00-03","subCode":"00","subLabel":"대안설계","major":"설계","name":"극동건설-진주 백년문화공원 극동스타클래스","client":"㈜ 건화디엔씨","contractAmt":82500000,"finalAmt":82500000,"totalClaim":82500000,"totalReceived":82500000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":19237130.0,"directConf":"ok","laborAlloc":29944245,"totalHours":2030.3,"contributors":[{"name":"한정식","hours":866.9,"pct":42.7,"amt":12786193},{"name":"박시연","hours":730.1,"pct":36.0,"amt":10779928},{"name":"신재훈","hours":279.7,"pct":13.8,"amt":4132306},{"name":"김래정","hours":112.4,"pct":5.5,"amt":1646933},{"name":"윤두현","hours":41.2,"pct":2.0,"amt":598885}],"wlConf":"ok","wlSiblingNote":null},{"code":"2021-02-04","subCode":"02","subLabel":"세대설계","major":"설계","name":"극동건설-천안 극동스타클래스 더 퍼스트","client":"(주)가온디에스","contractAmt":104500000.00000001,"finalAmt":104500000.00000001,"totalClaim":104500000,"totalReceived":104500000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":4290000.0,"directConf":"ok","laborAlloc":6645842,"totalHours":365.1,"contributors":[{"name":"오지은","hours":156.9,"pct":43.0,"amt":2857712},{"name":"윤두현","hours":91.7,"pct":25.1,"amt":1668106},{"name":"한정식","hours":66.0,"pct":18.1,"amt":1202897},{"name":"김래정","hours":47.9,"pct":13.1,"amt":870605},{"name":"이연경","hours":2.6,"pct":0.7,"amt":46521}],"wlConf":"ok","wlSiblingNote":null},{"code":"2021-02-07","subCode":"02","subLabel":"세대설계","major":"설계","name":"김포 더 끌리움 오피스텔 인테리어 설계","client":"주식회사 고도아이디","contractAmt":16500000,"finalAmt":16500000,"totalClaim":16500000,"totalReceived":16500000,"outstanding":0,"start":"2025-03-24","end":"2025-05-23","status":"완료","directCost":null,"directConf":"none","laborAlloc":0,"totalHours":0,"contributors":[],"wlConf":"none","wlSiblingNote":null},{"code":"2021-02-05","subCode":"02","subLabel":"세대설계","major":"설계","name":"서대신동3가 ○○아파트 개발사업 인테리어 설계 용역","client":"주식회사본개발","contractAmt":88000000,"finalAmt":17600000,"totalClaim":17600000,"totalReceived":17600000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":null,"directConf":"none","laborAlloc":498647,"totalHours":35.2,"contributors":[{"name":"윤두현","hours":22.5,"pct":63.9,"amt":318635},{"name":"김래정","hours":12.7,"pct":36.1,"amt":180012}],"wlConf":"ok","wlSiblingNote":null},{"code":"2021-00-02","subCode":"00","subLabel":"대안설계","major":"설계","name":"롯데건설-암사 선사아파트 리모델링 대안설계","client":"㈜포르테라인","contractAmt":82500000,"finalAmt":82500000,"totalClaim":82500000,"totalReceived":82500000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":null,"directConf":"none","laborAlloc":927962,"totalHours":65.5,"contributors":[{"name":"김래정","hours":59.8,"pct":91.4,"amt":848157},{"name":"윤두현","hours":5.6,"pct":8.6,"amt":79805}],"wlConf":"ok","wlSiblingNote":null},{"code":"2021-00-03","subCode":"00","subLabel":"대안설계","major":"설계","name":"성수1 주택 재건축 대안설계","client":"가람건축","contractAmt":72600000,"finalAmt":72600000,"totalClaim":72600000,"totalReceived":72600000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":null,"directConf":"none","laborAlloc":0,"totalHours":0,"contributors":[],"wlConf":"none","wlSiblingNote":null},{"code":"2021-00-01","subCode":"00","subLabel":"대안설계","major":"설계","name":"잠원동 힐스테이트 리모델링  대안설계용역","client":"(주)시공그룹 건축사사무소","contractAmt":121000000.00000001,"finalAmt":121000000.00000001,"totalClaim":121000000,"totalReceived":121000000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":989200.0,"directConf":"ok","laborAlloc":233296,"totalHours":12.0,"contributors":[{"name":"박시연","hours":12.0,"pct":100.0,"amt":233296}],"wlConf":"ok","wlSiblingNote":null},{"code":"2026-11(2)-01","subCode":"11(2)","subLabel":"개인APT","major":"공사","name":"공사/넉스빌딩개보수","client":"넉스빌딩(윤상원)","contractAmt":0,"finalAmt":0,"totalClaim":0,"totalReceived":0,"outstanding":0,"start":null,"end":null,"status":"청구전","directCost":27373360.0,"directConf":"ok","laborAlloc":0,"totalHours":0,"contributors":[],"wlConf":"none","wlSiblingNote":null},{"code":"2025-11(3)-05","subCode":"11(3)","subLabel":"메뉴얼(상업공간)","major":"공사","name":"공사/밥장인 고속터미널점","client":"밥장인","contractAmt":286000000,"finalAmt":286000000,"totalClaim":286000000,"totalReceived":286000000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":237037150.0,"directConf":"ok","laborAlloc":8344968,"totalHours":60.3,"contributors":[{"name":"윤성원","hours":44.5,"pct":73.8,"amt":6158586},{"name":"이연경","hours":9.8,"pct":16.3,"amt":1360230},{"name":"유혜정","hours":3.0,"pct":5.0,"amt":417248},{"name":"한정식","hours":3.0,"pct":5.0,"amt":417248}],"wlConf":"ok","wlSiblingNote":null},{"code":"2025-11(1)-02","subCode":"11(1)","subLabel":"관공서","major":"공사","name":"공사/월계초등학교 소강당 공사","client":"서울월계초등학교","contractAmt":149827970,"finalAmt":149827970,"totalClaim":149827970,"totalReceived":149827970,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":132383375.0,"directConf":"ok","laborAlloc":7509522,"totalHours":51.1,"contributors":[{"name":"이연경","hours":51.1,"pct":100.0,"amt":7509522}],"wlConf":"ok","wlSiblingNote":null},{"code":"2025-11(2)-03","subCode":"11(2)","subLabel":"개인APT","major":"공사","name":"공사/잠실 레이크펠리스 아파트 공사","client":"서정수","contractAmt":88000000,"finalAmt":88000000,"totalClaim":88000000,"totalReceived":88000000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":87062531.0,"directConf":"ok","laborAlloc":9835754,"totalHours":66.9,"contributors":[{"name":"이연경","hours":66.9,"pct":100.0,"amt":9835754}],"wlConf":"ok","wlSiblingNote":null},{"code":"2024-11(3)-04","subCode":"11(3)","subLabel":"메뉴얼(상업공간)","major":"공사","name":"공사/밥장인 부산 경성부경대점","client":"밥장인㈜","contractAmt":118800000.00000001,"finalAmt":118800000.00000001,"totalClaim":118800000,"totalReceived":118800000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":93873905.0,"directConf":"ok","laborAlloc":4975665,"totalHours":83.8,"contributors":[{"name":"조성채","hours":70.3,"pct":83.8,"amt":4169607},{"name":"한정식","hours":13.6,"pct":16.2,"amt":806058}],"wlConf":"ok","wlSiblingNote":null},{"code":"2024-11(3)-02","subCode":"11(3)","subLabel":"메뉴얼(상업공간)","major":"공사","name":"공사/밥장인 부산 중앙점","client":"밥장인㈜","contractAmt":198000000.00000003,"finalAmt":198000000.00000003,"totalClaim":198000000,"totalReceived":198000000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":208503230.0,"directConf":"ok","laborAlloc":15997609,"totalHours":295.5,"contributors":[{"name":"조성채","hours":255.0,"pct":86.3,"amt":13805937},{"name":"한정식","hours":40.5,"pct":13.7,"amt":2191672}],"wlConf":"ok","wlSiblingNote":null},{"code":"2024-11(3)-03","subCode":"11(3)","subLabel":"메뉴얼(상업공간)","major":"공사","name":"공사/밥장인 홍대점","client":"이설아","contractAmt":168932500,"finalAmt":168932500,"totalClaim":168932500,"totalReceived":168932500,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":116225930.0,"directConf":"ok","laborAlloc":14469427,"totalHours":243.8,"contributors":[{"name":"조성채","hours":165.9,"pct":68.1,"amt":9853680},{"name":"한정식","hours":32.2,"pct":13.2,"amt":1909964},{"name":"유혜정","hours":29.8,"pct":12.2,"amt":1765270},{"name":"황정석","hours":10.5,"pct":4.3,"amt":622185},{"name":"정운솔","hours":5.4,"pct":2.2,"amt":318327}],"wlConf":"ok","wlSiblingNote":null},{"code":"2023-11(3)-01","subCode":"11(3)","subLabel":"메뉴얼(상업공간)","major":"공사","name":"공사/서초 르니드 홍보관 인테리어 공사","client":"에스앤에이치씨","contractAmt":1727000000.0000002,"finalAmt":1727000000.0000002,"totalClaim":1727000000,"totalReceived":1727000000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":1381907400.0,"directConf":"ok","laborAlloc":13950056,"totalHours":338.2,"contributors":[{"name":"한정식","hours":174.5,"pct":51.6,"amt":7198229},{"name":"박시연","hours":86.8,"pct":25.7,"amt":3585164},{"name":"조성채","hours":76.9,"pct":22.7,"amt":3166663}],"wlConf":"ok","wlSiblingNote":null},{"code":"2022-11(2)-01","subCode":"11(2)","subLabel":"개인APT","major":"공사","name":"공사/넉스빌딩 1층 공용공간 공사","client":"이승자","contractAmt":55000000,"finalAmt":55000000,"totalClaim":55000000,"totalReceived":55000000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":44310945.0,"directConf":"ok","laborAlloc":1312747,"totalHours":106.7,"contributors":[{"name":"윤두현","hours":106.7,"pct":100.0,"amt":1312747}],"wlConf":"ok","wlSiblingNote":null},{"code":"2022-11(2)-02","subCode":"11(2)","subLabel":"개인APT","major":"공사","name":"공사/넉스빌딩 Rooftop","client":"이승자","contractAmt":33000000,"finalAmt":33000000,"totalClaim":33000000,"totalReceived":33000000,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":20943600.0,"directConf":"ok","laborAlloc":4948512,"totalHours":122.6,"contributors":[{"name":"박시연","hours":116.3,"pct":94.8,"amt":4691189},{"name":"한정식","hours":6.3,"pct":5.2,"amt":257323}],"wlConf":"ok","wlSiblingNote":null},{"code":"2023-11(1)-01","subCode":"11(1)","subLabel":"관공서","major":"공사","name":"공사/서서울생활과학고교 환경개선공사","client":"서울시교육청","contractAmt":83134230,"finalAmt":83134230,"totalClaim":83134230,"totalReceived":83134230,"outstanding":0,"start":null,"end":null,"status":"완료","directCost":64121449.0,"directConf":"ok","laborAlloc":9417954,"totalHours":233.3,"contributors":[{"name":"박시연","hours":134.1,"pct":57.5,"amt":5415324},{"name":"신재훈","hours":60.8,"pct":26.0,"amt":2448668},{"name":"한정식","hours":33.3,"pct":14.3,"amt":1346767},{"name":"김래정","hours":5.2,"pct":2.2,"amt":207195}],"wlConf":"ok","wlSiblingNote":null},{"code":"2026-02-01","subCode":"02","subLabel":"세대설계","major":"설계","name":"HDC-김해 부원 스마트지구 단위세대 인테리어 설계용역","client":"에이치디씨현대산업개발","contractAmt":112200000,"finalAmt":0,"totalClaim":0,"totalReceived":0,"outstanding":0,"start":null,"end":null,"status":"청구전","directCost":null,"directConf":"none","laborAlloc":6531484,"totalHours":481.6,"contributors":[{"name":"윤성원","hours":277.4,"pct":57.6,"amt":3762135},{"name":"손영화","hours":204.1,"pct":42.4,"amt":2769349}],"wlConf":"ok","wlSiblingNote":null},{"code":"2026-01-01","subCode":"01","subLabel":"견본주택설계","major":"설계","name":"HDC-김해 부원 스마트지구 모델하우스 인테리어 설계용역","client":"에이치디씨현대산업개발","contractAmt":32340000,"finalAmt":0,"totalClaim":0,"totalReceived":0,"outstanding":0,"start":null,"end":null,"status":"청구전","directCost":null,"directConf":"none","laborAlloc":577249,"totalHours":42.6,"contributors":[{"name":"윤성원","hours":22.4,"pct":52.6,"amt":303633},{"name":"손영화","hours":20.2,"pct":47.4,"amt":273616}],"wlConf":"ok","wlSiblingNote":null},{"code":"2026-00-02","subCode":"00","subLabel":"대안설계","major":"설계","name":"희림건축-목동1단지 아파트 재건축 정비사업 설계용역","client":"희림건축","contractAmt":85800000,"finalAmt":0,"totalClaim":0,"totalReceived":0,"outstanding":0,"start":null,"end":null,"status":"청구전","directCost":null,"directConf":"none","laborAlloc":0,"totalHours":0,"contributors":[],"wlConf":"none","wlSiblingNote":null},{"code":"2026-00-03","subCode":"00","subLabel":"대안설계","major":"설계","name":"정림건축-남성역세권 재개발 수주 설계용역","client":"정림건축","contractAmt":60500000,"finalAmt":0,"totalClaim":0,"totalReceived":0,"outstanding":0,"start":null,"end":null,"status":"청구전","directCost":null,"directConf":"none","laborAlloc":0,"totalHours":0,"contributors":[],"wlConf":"none","wlSiblingNote":null}];
+
+  // ── 소분류 구성/추이 실제 데이터 (프로젝트 상세 페이지, 코드 기준 소분류 56건 집계) ──────────
+  var DATA_RAW = {"공사":[{"key":"관공서","name":"관공서","rev":232962200,"cost":196504824.0,"labor":16927476,"count":2,"trend":[{"year":"2023","rate":11.5,"count":1},{"year":"2025","rate":6.6,"count":1}]},{"key":"개인APT","name":"개인APT","rev":176000000,"cost":179690436.0,"labor":16097013,"count":4,"trend":[{"year":"2022","rate":17.0,"count":1},{"year":"2023","rate":21.5,"count":1},{"year":"2025","rate":-10.1,"count":1},{"year":"2026","rate":0,"count":1}]},{"key":"메뉴얼(상업공간)","name":"메뉴얼(상업공간)","rev":2498732500.0,"cost":2037547615.0,"labor":57737725,"count":5,"trend":[{"year":"2023","rate":19.2,"count":1},{"year":"2024","rate":6.5,"count":3},{"year":"2025","rate":14.2,"count":1}]}],"설계":[{"key":"대안설계","name":"대안설계","rev":1303720000.0,"cost":33595755.0,"labor":87710336,"count":15,"trend":[{"year":"2021","rate":85.7,"count":4},{"year":"2022","rate":86.0,"count":2},{"year":"2023","rate":93.5,"count":2},{"year":"2024","rate":95.6,"count":2},{"year":"2025","rate":99.5,"count":2},{"year":"2026","rate":92.4,"count":3}]},{"key":"견본주택설계","name":"견본주택설계","rev":633380000.0,"cost":145506530.0,"labor":146172973,"count":11,"trend":[{"year":"2021","rate":100.0,"count":2},{"year":"2022","rate":54.4,"count":3},{"year":"2023","rate":42.9,"count":3},{"year":"2024","rate":-8.2,"count":1},{"year":"2025","rate":57.5,"count":1},{"year":"2026","rate":98.2,"count":1}]},{"key":"세대설계","name":"세대설계","rev":1894205500.0,"cost":232663875.0,"labor":184140756,"count":18,"trend":[{"year":"2021","rate":73.1,"count":5},{"year":"2022","rate":94.2,"count":4},{"year":"2024","rate":36.8,"count":2},{"year":"2025","rate":81.1,"count":4},{"year":"2026","rate":90.6,"count":3}]},{"key":"상업공간설계","name":"상업공간설계","rev":15400000,"cost":0,"labor":0,"count":1,"trend":[{"year":"2024","rate":100.0,"count":1}]}]};
+  var DATA = {
+    공사: { color: 'var(--con)', items: DATA_RAW['공사'] },
+    설계: { color: 'var(--des)', items: DATA_RAW['설계'] }
+  };
+  var rate = function(it){ return it.rev > 0 ? ((it.rev - it.cost - it.labor) / it.rev * 100) : 0; };
+  var profit = function(it){ return it.rev - it.cost - it.labor; };
+
+  function rateColor(r){
+    var neg = isDark() ? [224,102,92] : [193,68,59];
+    var mid = [183,176,163];
+    var pos = isDark() ? [27,166,166] : [10,151,151];
+    var t;
+    if(r <= 0){ t = Math.max(0, Math.min(1, (r + 20) / 20)); return mix(neg, mid, t); }
+    t = Math.max(0, Math.min(1, r / 80)); return mix(mid, pos, t);
+  }
+  function mix(a,b,t){
+    var r = Math.round(a[0]+(b[0]-a[0])*t), g = Math.round(a[1]+(b[1]-a[1])*t), bl = Math.round(a[2]+(b[2]-a[2])*t);
+    return 'rgb('+r+','+g+','+bl+')';
+  }
+
+  // ── 수익성 추정(하한선) — 대분류 단위 실제 데이터 (재무 현황·프로젝트 유형 비교 공용 산출식과 동일) ──
+  var YEARS = ['2021','2022','2023','2024','2025','2026'];
+  var MAJORS = ['공사', '설계'];
+  var MAJOR_COLOR = {'공사':'var(--con)', '설계':'var(--des)'};
+  var MAJOR_DATA = {
+    '공사': {
+      2021:{count:0, contractAmount:0},
+      2022:{count:3, contractAmount:171134230},
+      2023:{count:1, contractAmount:1727000000},
+      2024:{count:3, contractAmount:485732500},
+      2025:{count:3, contractAmount:523827970},
+      2026:{count:1, contractAmount:22000000}
+    },
+    '설계': {
+      2021:{count:11, contractAmount:716001000},
+      2022:{count:9, contractAmount:963611000},
+      2023:{count:5, contractAmount:345400000},
+      2024:{count:5, contractAmount:336380000},
+      2025:{count:8, contractAmount:1029253500},
+      2026:{count:7, contractAmount:456060000}
+    }
+  };
+  var DIRECT_BY_YEAR = {
+    '공사': {
+      2021:{base:0, admin:0}, 2022:{base:44310945, admin:0}, 2023:{base:94323409, admin:0},
+      2024:{base:1793528105, admin:0}, 2025:{base:453407236, admin:0}, 2026:{base:28173180, admin:0}
+    },
+    '설계': {
+      2021:{base:68182500, admin:226594878}, 2022:{base:80027740, admin:468465666}, 2023:{base:15489130, admin:437707050},
+      2024:{base:147218370, admin:619689895}, 2025:{base:71477210, admin:418702516}, 2026:{base:29371210, admin:382699184}
+    }
+  };
+  var LABOR_BY_YEAR = {
+    '공사': {2021:0, 2022:1312747, 2023:30651232, 2024:33464074, 2025:25334161, 2026:1077029},
+    '설계': {2021:14621840, 2022:129525777, 2023:103392891, 2024:82639139, 2025:114203301, 2026:76713203}
+  };
+  var STATE = { includeAdmin: false };
+  function directTotal(m, includeAdmin){
+    return YEARS.reduce(function(s,y){ var d=DIRECT_BY_YEAR[m][y]; return s+d.base+(includeAdmin?d.admin:0); }, 0);
+  }
+  function laborTotal(m){ return YEARS.reduce(function(s,y){ return s+LABOR_BY_YEAR[m][y]; }, 0); }
+  function revenueTotal(m){ return YEARS.reduce(function(s,y){ return s+MAJOR_DATA[m][y].contractAmount; }, 0); }
+  function countTotal(m){ return YEARS.reduce(function(s,y){ return s+MAJOR_DATA[m][y].count; }, 0); }
+  function profitCalc(m, includeAdmin){
+    var revenue = revenueTotal(m), direct = directTotal(m, includeAdmin), labor = laborTotal(m);
+    var totalCost = direct + labor, profit = revenue - totalCost;
+    var margin = revenue>0 ? profit/revenue*100 : 0;
+    return {revenue:revenue, direct:direct, labor:labor, totalCost:totalCost, profit:profit, margin:margin};
+  }
+
+  // ── 대분류별 손익율 추이 데이터 — "수익성 추정(하한선)"과 동일한 연도별 실제 지출·배분인건비 기준 ──
+  function majorTrendItems(includeAdmin){
+    return MAJORS.map(function(m){
+      var trend = YEARS.filter(function(y){ return MAJOR_DATA[m][y].count > 0; }).map(function(y){
+        var rev = MAJOR_DATA[m][y].contractAmount;
+        var d = DIRECT_BY_YEAR[m][y];
+        var direct = d.base + (includeAdmin ? d.admin : 0);
+        var labor = LABOR_BY_YEAR[m][y];
+        var rate = rev > 0 ? (rev - direct - labor) / rev * 100 : 0;
+        return { year: y, rate: rate, count: MAJOR_DATA[m][y].count };
+      });
+      return { key: m, name: m, count: countTotal(m), trend: trend };
+    });
+  }
+
+  // ── 발주처별 손익율 추이 데이터 — 코드 연도 기준, 손익 기여 상위 발주처(프로젝트 2건 이상) ──
+  var CLIENT_NORM = {
+    '에이치디씨 현대산업개발': '에이치디씨현대산업개발', // 표기 차이(공백) 통합 — 동일 발주처
+    '밥장인㈜': '밥장인', // 표기 차이(㈜ 위치) 통합 — 동일 발주처(밥장인 프랜차이즈)
+    '이설아': '밥장인' // 공사/밥장인 홍대점 계약상 명의 — 실제로는 밥장인 프랜차이즈 매장이라 동일 발주처로 통합
+  };
+  function normClient(c){ return CLIENT_NORM[c] || c || '발주처 미상'; }
+  var CLIENT_COLOR_SLOTS = ['--c1','--c2','--c3','--c4','--c5'];
+  function topClientTrendItems(topN){
+    var byClient = {};
+    PD_PROJECTS.forEach(function(p){
+      var k = normClient(p.client);
+      byClient[k] = byClient[k] || { rev:0, cost:0, labor:0, count:0, byYear:{} };
+      byClient[k].rev += p.contractAmt;
+      byClient[k].cost += (p.directCost||0);
+      byClient[k].labor += (p.laborAlloc||0);
+      byClient[k].count += 1;
+      var y = p.code ? p.code.slice(0,4) : null;
+      if(y){
+        byClient[k].byYear[y] = byClient[k].byYear[y] || {rev:0,cost:0,labor:0,count:0};
+        byClient[k].byYear[y].rev += p.contractAmt;
+        byClient[k].byYear[y].cost += (p.directCost||0);
+        byClient[k].byYear[y].labor += (p.laborAlloc||0);
+        byClient[k].byYear[y].count += 1;
+      }
+    });
+    var arr = Object.keys(byClient).map(function(k){
+      var v = byClient[k];
+      return { key:k, name:k, count:v.count, profit: v.rev-v.cost-v.labor, byYear:v.byYear };
+    }).filter(function(a){ return a.count>=2; });
+    arr.sort(function(a,b){ return b.profit-a.profit; });
+    var top = arr.slice(0, topN);
+    top.forEach(function(it, idx){
+      it.colorVar = CLIENT_COLOR_SLOTS[idx % CLIENT_COLOR_SLOTS.length];
+      it.trend = Object.keys(it.byYear).sort().map(function(y){
+        var d = it.byYear[y];
+        var rate = d.rev>0 ? (d.rev-d.cost-d.labor)/d.rev*100 : 0;
+        return { year:y, rate:rate, count:d.count };
+      });
+    });
+    return top;
+  }
+
+  // ── 소분류 비교 카드 실제 데이터 (프로젝트 코드 분류 구간 기준, 56건) ──────────────────────
+  var SUB_CARDS = [{"label":"시공-관공서","major":"공사","c":"--c1","count":2,"amt":232962200},{"label":"시공-개인APT","major":"공사","c":"--c2","count":4,"amt":176000000},{"label":"시공-메뉴얼(상업공간)","major":"공사","c":"--c3","count":5,"amt":2498732500.0},{"label":"대안설계","major":"설계","c":"--c4","count":15,"amt":1303720000.0},{"label":"견본주택설계","major":"설계","c":"--c5","count":11,"amt":633380000.0},{"label":"세대설계","major":"설계","c":"--c6","count":18,"amt":1894205500.0},{"label":"상업공간설계","major":"설계","c":"--c7","count":1,"amt":15400000}];
+  var SUBTYPE_MATCHED_COUNT = 56, SUBTYPE_TOTAL_COUNT = 56;
+
+  // ── KPI ──────────────────────────────────────────
+  var selected = null; // {major, key, name}
+
+  function renderKPI(){
+    var el = document.getElementById('kpiRow');
+
+    if(selected){
+      var it = DATA[selected.major].items.filter(function(x){ return x.key===selected.key; })[0];
+      if(it){
+        var r = rate(it), pr = profit(it);
+        el.innerHTML =
+          '<div class="kpi"><div class="lbl">매출 · '+selected.major+' '+it.name+'<a href="#" class="kpi-clear" id="kpiClear"> 전체 보기 ✕</a></div><div class="val num">'+fmtWon(it.rev)+'원</div></div>' +
+          '<div class="kpi"><div class="lbl">손익</div><div class="val num '+(pr>=0?'pos':'neg')+'">'+(pr>=0?'+':'')+fmtWon(pr)+'원</div></div>' +
+          '<div class="kpi"><div class="lbl">손익율</div><div class="val num '+(r>=0?'pos':'neg')+'">'+r.toFixed(1)+'%</div></div>' +
+          '<div class="kpi"><div class="lbl">프로젝트 건수</div><div class="val num">'+it.count+'건</div></div>';
+        var c = document.getElementById('kpiClear');
+        if(c) c.addEventListener('click', function(e){ e.preventDefault(); selected = null; renderKPI(); renderMosaic(); });
+        return;
+      }
+    }
+
+    var totRev = 0, totProfit = 0, totCount = 0;
+    MAJORS.forEach(function(m){
+      var p = profitCalc(m, false);
+      totRev += p.revenue; totProfit += p.profit; totCount += countTotal(m);
+    });
+    var avgRate = totRev > 0 ? (totProfit/totRev*100) : 0;
+    el.innerHTML =
+      '<div class="kpi"><div class="lbl">전체 매출</div><div class="val num">'+fmtWon(totRev)+'원</div></div>' +
+      '<div class="kpi"><div class="lbl">전체 손익(하한선)</div><div class="val num '+(totProfit>=0?'pos':'neg')+'">'+(totProfit>=0?'+':'')+fmtWon(totProfit)+'원</div></div>' +
+      '<div class="kpi"><div class="lbl">평균 손익율(하한선)</div><div class="val num '+(avgRate>=0?'pos':'neg')+'">'+avgRate.toFixed(1)+'%</div></div>' +
+      '<div class="kpi"><div class="lbl">집계 프로젝트</div><div class="val num">'+totCount+'건</div><div class="sub">공사 '+countTotal('공사')+' · 설계 '+countTotal('설계')+'</div></div>';
+  }
+
+  // ── 구성도(모자이크) ──────────────────────────────────────────
+  var PROJECT_DETAIL_URL = 'https://claude.ai/artifact/9pXN6vEuCfGjFiraKWA12E';
+  function detailLinkFor(major, subLabel){
+    return PROJECT_DETAIL_URL + '#major=' + encodeURIComponent(major) + '&sub=' + encodeURIComponent(subLabel);
+  }
+
+  function renderMosaic(){
+    var el = document.getElementById('mosaic');
+    el.innerHTML = '';
+    Object.keys(DATA).forEach(function(g){
+      var group = DATA[g];
+      var totalRev = group.items.reduce(function(s,i){return s+i.rev;},0);
+      var row = document.createElement('div'); row.className = 'maj-row';
+      row.innerHTML = '<div class="maj-label"><span class="maj-dot" style="background:'+group.color+'"></span>'+g+'</div>';
+      var tiles = document.createElement('div'); tiles.className = 'maj-tiles';
+      group.items.forEach(function(it){
+        var share = totalRev > 0 ? it.rev/totalRev : 0;
+        var r = rate(it);
+        var isOn = selected && selected.major===g && selected.key===it.key;
+        var tile = document.createElement('div');
+        tile.className = 'tile' + (isOn ? ' on' : '');
+        tile.style.flexGrow = Math.max(share*10, 0.6);
+        tile.style.background = rateColor(r).replace('rgb', 'rgba').replace(')', ', 0.16)');
+        tile.style.borderColor = rateColor(r);
+        tile.innerHTML =
+          '<div class="t-name">'+it.name+'</div>' +
+          '<div class="t-rev num">매출 '+fmtWon(it.rev)+'원 · '+it.count+'건</div>' +
+          '<div class="t-rate num" style="color:'+rateColor(r)+'">'+(r>=0?'+':'')+r.toFixed(1)+'%</div>' +
+          '<div class="t-link" data-major="'+g+'" data-key="'+it.key+'">프로젝트 상세 →</div>';
+        tile.addEventListener('click', function(e){
+          if(e.target.classList.contains('t-link')) return; // handled separately below
+          selected = isOn ? null : {major:g, key:it.key, name:it.name};
+          renderKPI(); renderMosaic();
+        });
+        tile.querySelector('.t-link').addEventListener('click', function(e){
+          e.stopPropagation();
+          pdOpenPanel(g, it.key);
+        });
+        tiles.appendChild(tile);
+      });
+      row.appendChild(tiles);
+      el.appendChild(row);
+    });
+  }
+
+  // ── 추이 차트 ──────────────────────────────────────────
+  // 소분류별 고정 categorical 색상 — "소분류 비교" 섹션(SUB_CARDS)과 동일한 순서·매핑을 그대로 재사용해
+  // 페이지 전체에서 같은 소분류는 항상 같은 색으로 보이도록 통일(색이 순위가 아니라 정체성을 따르도록).
+  // 같은 계열(파랑 톤끼리, 주황 톤끼리) 명도차만으로 구분하던 기존 방식은 선이 겹칠 때 식별이 어려워
+  // 8개 슬롯(--c1~--c8) 전체를 색상 자체가 다른 고정 순서로 배정했고, dataviz 팔레트 검증(라이트·다크 모드
+  // 모두 CVD 대비 ΔE ≥ 8, 명도·채도·대비 기준)을 통과했습니다.
+  var SUB_COLOR = {
+    '관공서':'--c1', '개인APT':'--c2', '메뉴얼(상업공간)':'--c3',
+    '대안설계':'--c4', '견본주택설계':'--c5', '세대설계':'--c6', '상업공간설계':'--c7',
+    '관공서설계':'--c8'
+  };
+  function colorForSub(key){
+    var v = SUB_COLOR[key];
+    return v ? 'var('+v+')' : 'var(--muted)';
+  }
+
+  function renderTrend(containerId, groupKey, colorFn){
+    var group = typeof groupKey === 'string' ? DATA[groupKey] : groupKey;
+    colorFn = colorFn || colorForSub;
+    var W = 460, H = 220, padL = 34, padT = 14, padB = 26;
+    // 우측 여백은 끝단 라벨(소분류명) 중 가장 긴 글자수에 맞춰 동적으로 계산 — 이름 길이가 바뀌어도 넘치지 않음
+    var showEndLabels = group.items.length <= 4;
+    var maxNameLen = showEndLabels ? Math.max.apply(null, group.items.map(function(it){ return it.name.length; })) : 0;
+    var padR = showEndLabels ? Math.max(14, maxNameLen * 8 + 16) : 14;
+    var allVals = [];
+    group.items.forEach(function(it){ it.trend.forEach(function(p){ allVals.push(p.rate); }); });
+    if(!allVals.length) allVals = [0];
+    var minV = Math.min(0, Math.min.apply(null, allVals));
+    var maxV = Math.max(0, Math.max.apply(null, allVals));
+    var pad = (maxV-minV)*0.15 || 10;
+    minV -= pad; maxV += pad;
+    var x = function(i){ return padL + (W-padL-padR) * (i/(YEARS.length-1)); };
+    var y = function(v){ return padT + (H-padT-padB) * (1 - (v-minV)/(maxV-minV)); };
+    // 연도가 늘어나 x축 눈금이 촘촘해지면(8개 초과) 자동으로 일부만 라벨 표시(데이터·선은 전부 유지, 표시만 솎아냄)
+    var tickEvery = YEARS.length > 8 ? Math.ceil(YEARS.length / 8) : 1;
+
+    var svg = '<svg class="chart-svg" viewBox="0 0 '+W+' '+H+'" id="'+containerId+'-svg">';
+    var steps = 4;
+    for(var s=0;s<=steps;s++){
+      var v = minV + (maxV-minV)*s/steps;
+      var yy = y(v);
+      svg += '<line class="gridline" x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" />';
+      svg += '<text class="axislabel" x="'+(padL-6)+'" y="'+(yy+3)+'" text-anchor="end">'+v.toFixed(0)+'%</text>';
+    }
+    var zeroY = y(0);
+    svg += '<line x1="'+padL+'" y1="'+zeroY+'" x2="'+(W-padR)+'" y2="'+zeroY+'" stroke="var(--ink-2)" stroke-width="1" opacity="0.35" />';
+    YEARS.forEach(function(yr,i){
+      if(i % tickEvery !== 0 && i !== YEARS.length-1) return;
+      svg += '<text class="axislabel" x="'+x(i)+'" y="'+(H-8)+'" text-anchor="middle">'+yr+'</text>';
+    });
+
+    var endLabels = [];
+    group.items.forEach(function(it){
+      var color = colorFn(it.key);
+      var yearIdx = {}; YEARS.forEach(function(yr,i){ yearIdx[yr]=i; });
+      var pts = it.trend.map(function(p){ return {x:x(yearIdx[p.year]), y:y(p.rate), p:p}; });
+      if(pts.length >= 2){
+        var polyPts = pts.map(function(pp){ return pp.x+','+pp.y; }).join(' ');
+        svg += '<polyline points="'+polyPts+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />';
+      }
+      pts.forEach(function(pp){
+        var radius = 2.5 + Math.min(pp.p.count, 6) * 0.9;
+        svg += '<circle class="pt" cx="'+pp.x+'" cy="'+pp.y+'" r="'+radius+'" fill="'+color+'" data-name="'+it.name+'" data-year="'+pp.p.year+'" data-val="'+pp.p.rate+'" data-count="'+pp.p.count+'" />';
+      });
+      if(pts.length && showEndLabels){
+        var last = pts[pts.length-1];
+        endLabels.push({ y: last.y, name: it.name, color: color, x: last.x+7 });
+      }
+    });
+    endLabels.sort(function(a,b){ return a.y-b.y; });
+    var minGap = 12;
+    for(var li=1; li<endLabels.length; li++){
+      if(endLabels[li].y - endLabels[li-1].y < minGap) endLabels[li].y = endLabels[li-1].y + minGap;
+    }
+    endLabels.forEach(function(lb){
+      svg += '<text x="'+lb.x+'" y="'+(lb.y+3)+'" font-size="9.5" fill="'+lb.color+'" font-family="JetBrains Mono, monospace" font-weight="600">'+lb.name+'</text>';
+    });
+    svg += '<line class="hoverline" id="'+containerId+'-hl" y1="'+padT+'" y2="'+(H-padB)+'" />';
+    svg += '</svg>';
+
+    var wrap = document.getElementById(containerId);
+    wrap.innerHTML = svg + '<div class="tooltip" id="'+containerId+'-tip"></div>' +
+      '<div class="trend-legend">' + group.items.map(function(it){
+        return '<span><i style="background:'+colorFn(it.key)+'"></i>'+it.name+' ('+it.count+'건)</span>';
+      }).join('') + '</div>';
+
+    var svgEl = document.getElementById(containerId+'-svg');
+    var tip = document.getElementById(containerId+'-tip');
+    var hl = document.getElementById(containerId+'-hl');
+    svgEl.querySelectorAll('circle.pt').forEach(function(c){
+      c.addEventListener('mouseenter', function(){
+        var cx = c.getAttribute('cx');
+        hl.setAttribute('x1', cx); hl.setAttribute('x2', cx); hl.style.opacity = 1;
+        tip.style.opacity = 1;
+        tip.textContent = c.getAttribute('data-name')+' · '+c.getAttribute('data-year')+' · '+parseFloat(c.getAttribute('data-val')).toFixed(1)+'% ('+c.getAttribute('data-count')+'건)';
+        var rect = svgEl.getBoundingClientRect();
+        var relX = (cx/W) * rect.width;
+        var relY = (c.getAttribute('cy')/H) * rect.height;
+        tip.style.left = relX + 'px';
+        tip.style.top = relY + 'px';
+      });
+      c.addEventListener('mouseleave', function(){ hl.style.opacity = 0; tip.style.opacity = 0; });
+    });
+  }
+
+  // ── 수익성 추정(하한선) 카드 ──────────────────────────────────────
+  function renderProfitCards(){
+    var el = document.getElementById('profitCards');
+    el.innerHTML = MAJORS.map(function(m){
+      var p = profitCalc(m, STATE.includeAdmin);
+      var directLbl = '직접비 (거래내역 태그'+(m==='설계' ? (STATE.includeAdmin ? ' · 일반관리 포함(급여 제외)' : ' · 일반관리 미포함') : '')+')';
+      return '<div class="major-card">' +
+        '<div class="mc-hd"><span class="mc-dot" style="background:'+MAJOR_COLOR[m]+'"></span><span class="mc-title">'+m+'</span></div>' +
+        '<div class="mc-row"><span>매출(계약금액)</span><b class="num">'+fmtWon(p.revenue)+'원</b></div>' +
+        '<div class="mc-row"><span>'+directLbl+'</span><b class="num">'+fmtWon(p.direct)+'원</b></div>' +
+        '<div class="mc-row"><span>배분인건비 <span style="color:var(--muted); font-weight:500;">(2021~2026)</span></span><b class="num">'+fmtWon(p.labor)+'원</b></div>' +
+        '<div class="mc-row"><span>추정 총원가</span><b class="num">'+fmtWon(p.totalCost)+'원</b></div>' +
+        '<div class="mc-row"><span>추정 이익</span><b class="num">'+fmtWon(p.profit)+'원</b></div>' +
+        '<div class="mc-rate" style="color:var(--ink)">'+p.margin.toFixed(1)+'%<span style="font-size:11px; color:var(--muted); font-weight:600;"> 이익률(하한선 추정)</span></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // ── 소분류 비교 카드 ──────────────────────────────────────
+  function renderSubCards(){
+    var el = document.getElementById('subCards');
+    var byMajor = {};
+    SUB_CARDS.forEach(function(s){ (byMajor[s.major] = byMajor[s.major] || []).push(s); });
+    el.innerHTML = MAJORS.filter(function(m){ return byMajor[m]; }).map(function(m){
+      var items = byMajor[m];
+      var subTotalCount = items.reduce(function(s,it){ return s+it.count; }, 0);
+      var subTotalAmt = items.reduce(function(s,it){ return s+it.amt; }, 0);
+      var rows = items.map(function(s){
+        return '<div class="mc-row">' +
+          '<span style="display:inline-flex; align-items:center; gap:6px;"><span class="row-dot" style="background:var('+s.c+')"></span>'+s.label+'</span>' +
+          '<b class="num">'+fmtWon(s.amt)+'원 <span style="color:var(--muted); font-weight:500; font-size:11px;">('+s.count+'건)</span></b>' +
+        '</div>';
+      }).join('');
+      return '<div class="major-card">' +
+        '<div class="mc-hd"><span class="mc-dot" style="background:'+MAJOR_COLOR[m]+'"></span><span class="mc-title">'+m+'</span></div>' +
+        rows +
+        '<div class="mc-row" style="border-top:1px solid var(--line); margin-top:4px; padding-top:8px;"><span style="font-weight:700; color:var(--ink)">소계</span><b class="num">'+fmtWon(subTotalAmt)+'원 <span style="color:var(--muted); font-weight:500; font-size:11px;">('+subTotalCount+'건)</span></b></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // ── 인라인 프로젝트 상세 패널 (project-detail-real.html의 목록/상세 로직을 그대로 이식) ──
+  var pdState = {view:'list', major:'all', q:'', group:'none', sub:'', i:null, cmp:'major'};
+  var pdClaimRate = function(p){ return p.contractAmt>0 ? p.totalClaim/p.contractAmt*100 : 0; };
+  var pdCollectRate = function(p){ return p.totalClaim>0 ? p.totalReceived/p.totalClaim*100 : 0; };
+  var pdHasCost = function(p){ return p.directCost !== null && p.directCost !== undefined; };
+  var pdProfitKnown = function(p){ return pdHasCost(p); };
+  var pdProfit = function(p){ return p.contractAmt - (p.directCost||0) - (p.laborAlloc||0); };
+  var pdMargin = function(p){ return p.contractAmt>0 ? pdProfit(p)/p.contractAmt*100 : 0; };
+
+  function pdOpenPanel(major, sub){
+    pdState = {view:'list', major:major, q:'', group:'none', sub:sub, i:null, cmp:'major'};
+    var section = document.getElementById('detailSection');
+    section.style.display = '';
+    pdRender();
+    section.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+
+  document.getElementById('pdCloseBtn').addEventListener('click', function(e){
+    e.preventDefault();
+    document.getElementById('detailSection').style.display = 'none';
+  });
+
+  function pdHashFor(major, group, q, sub){
+    return {major:major, group:group, q:q, sub:sub};
+  }
+
+  function pdRowHtml(p){
+    var cr = pdClaimRate(p), coR = pdCollectRate(p);
+    return '<tr>' +
+      '<td><div class="list-name"><span class="major-dot" style="background:'+MAJOR_COLOR[p.major]+'"></span>' +
+        '<a href="#" class="pd-open-detail" data-idx="'+p.__idx+'">'+p.name+'</a></div></td>' +
+      '<td style="text-align:left; color:var(--muted);">'+(p.client||'-')+'</td>' +
+      '<td class="num">'+fmtWon(p.contractAmt)+'원</td>' +
+      '<td class="num">'+cr.toFixed(0)+'%</td>' +
+      '<td class="num">'+coR.toFixed(0)+'%</td>' +
+      '<td><span class="status-pill '+p.status+'">'+p.status+'</span></td>' +
+      '<td class="num">'+(p.contributors.length ? p.contributors.length+'명' : '-')+
+        '<span class="conf-dot '+(p.wlConf==='ok'?'ok':p.wlConf==='low'?'low':'none')+'"></span></td>' +
+      '<td class="num">'+(p.code || '<span style="color:var(--muted)">미배정</span>')+'</td>' +
+    '</tr>';
+  }
+  function pdGroupHeaderHtml(label, count, amt, profitStat){
+    var metaExtra = '';
+    if(profitStat){
+      if(profitStat.hasProfit){
+        var sign = profitStat.profitSum>=0 ? '+' : '';
+        var color = profitStat.profitSum>=0 ? 'var(--pos)' : 'var(--neg)';
+        metaExtra = ' · <span class="num" style="color:'+color+'">손익 '+sign+fmtWon(profitStat.profitSum)+'원('+profitStat.marginPct.toFixed(1)+'%)</span>';
+      }else{
+        metaExtra = ' · <span style="color:var(--muted)">손익 데이터 없음</span>';
+      }
+    }
+    return '<tr class="group-hd"><td colspan="8"><span class="group-hd-label">'+label+'</span>' +
+      '<span class="group-hd-meta">'+count+'건 · <span class="num">'+fmtWon(amt)+'원</span>'+metaExtra+'</span></td></tr>';
+  }
+
+  function pdRenderList(){
+    var major = pdState.major, q = pdState.q, group = pdState.group, sub = pdState.sub;
+    var filtered = PD_PROJECTS.filter(function(p, idx){ p.__idx = idx; return true; });
+    if(major !== 'all') filtered = filtered.filter(function(p){ return p.major === major; });
+    if(sub) filtered = filtered.filter(function(p){ return p.subLabel === sub; });
+    if(q) filtered = filtered.filter(function(p){ return (p.name+p.client).toLowerCase().indexOf(q.toLowerCase()) >= 0; });
+
+    var totalAmt = filtered.reduce(function(s,p){ return s+p.contractAmt; }, 0);
+    var withCode = filtered.filter(function(p){ return p.code; }).length;
+    var withWl = filtered.filter(function(p){ return p.wlConf==='ok' || p.wlConf==='low'; }).length;
+    var withCost = filtered.filter(pdHasCost).length;
+    var sumDirectCost = filtered.filter(pdHasCost).reduce(function(s,p){ return s+p.directCost; }, 0);
+    var sumLabor = filtered.reduce(function(s,p){ return s+(p.laborAlloc||0); }, 0);
+    var knownCostItems = filtered.filter(pdHasCost);
+    var sumContractKnown = knownCostItems.reduce(function(s,p){ return s+p.contractAmt; }, 0);
+    var sumProfitKnown = knownCostItems.reduce(function(s,p){ return s+pdProfit(p); }, 0);
+    var marginKnown = sumContractKnown>0 ? sumProfitKnown/sumContractKnown*100 : 0;
+
+    var bodyHtml;
+    if(group === 'client' || group === 'sub'){
+      var keyFn = group === 'client' ? function(p){ return normClient(p.client) || '발주처 미상'; } : function(p){ return p.subLabel || '미분류'; };
+      var groups = {};
+      filtered.forEach(function(p){
+        var k = keyFn(p);
+        (groups[k] = groups[k] || []).push(p);
+      });
+      var groupStats = {};
+      Object.keys(groups).forEach(function(k){
+        var items = groups[k];
+        var amt = items.reduce(function(s,p){ return s+p.contractAmt; }, 0);
+        var known = items.filter(pdHasCost);
+        var knownAmt = known.reduce(function(s,p){ return s+p.contractAmt; }, 0);
+        var profitSum = known.reduce(function(s,p){ return s+pdProfit(p); }, 0);
+        groupStats[k] = { amt:amt, hasProfit: known.length>0, profitSum:profitSum, marginPct: knownAmt>0 ? profitSum/knownAmt*100 : 0 };
+      });
+      var groupKeys = Object.keys(groups).sort(function(a,b){
+        if(a==='미분류') return 1; if(b==='미분류') return -1;
+        if(group === 'client'){
+          var pa = groupStats[a].hasProfit, pb = groupStats[b].hasProfit;
+          if(pa !== pb) return pa ? -1 : 1; // 손익 데이터 없는 발주처는 맨 아래로
+          if(pa && pb && groupStats[a].profitSum !== groupStats[b].profitSum) return groupStats[b].profitSum - groupStats[a].profitSum;
+        }
+        return groupStats[b].amt - groupStats[a].amt;
+      });
+      var itemSort = group === 'client' ? function(a,b){
+        var ka = pdHasCost(a), kb = pdHasCost(b);
+        if(ka !== kb) return ka ? -1 : 1; // 원가(손익) 데이터 없는 프로젝트는 맨 아래로
+        if(ka && kb){ var pa = pdProfit(a), pb = pdProfit(b); if(pa !== pb) return pb - pa; }
+        return b.contractAmt - a.contractAmt;
+      } : function(a,b){ return b.contractAmt - a.contractAmt; };
+      bodyHtml = groupKeys.map(function(k){
+        var items = groups[k].slice().sort(itemSort);
+        var st = groupStats[k];
+        return pdGroupHeaderHtml(k, items.length, st.amt, group==='client' ? st : null) + items.map(pdRowHtml).join('');
+      }).join('');
+    }else{
+      filtered.sort(function(a,b){ return b.contractAmt - a.contractAmt; });
+      bodyHtml = filtered.map(pdRowHtml).join('');
+    }
+
+    document.getElementById('pdHeading').textContent = '프로젝트 상세';
+    document.getElementById('pdDesc').innerHTML = '계약금액·청구/수금·매입원가·인건비·참여인원을 프로젝트 단위로 확인 · <a class="pd-openfull" href="'+PROJECT_DETAIL_URL+'" target="_blank" rel="noopener">전체 페이지에서 열기 →</a>';
+
+    document.getElementById('detailPanel').innerHTML =
+      '<div class="kpis">' +
+        '<div class="kpi"><div class="lbl">표시 중 프로젝트</div><div class="val num">'+filtered.length+'건</div></div>' +
+        '<div class="kpi"><div class="lbl">계약금액 합계</div><div class="val num">'+fmtWon(totalAmt)+'원</div></div>' +
+        '<div class="kpi"><div class="lbl">매입원가 합계</div><div class="val num">'+fmtWon(sumDirectCost)+'원</div></div>' +
+        '<div class="kpi"><div class="lbl">인건비 배분 합계</div><div class="val num">'+fmtWon(sumLabor)+'원</div></div>' +
+        '<div class="kpi"><div class="lbl">손익 / 손익율</div><div class="val num '+(sumProfitKnown>=0?'pos':'neg')+'">'+(sumProfitKnown>=0?'+':'')+fmtWon(sumProfitKnown)+'원 · '+marginKnown.toFixed(1)+'%</div></div>' +
+      '</div>' +
+      '<details class="ref-toggle">' +
+        '<summary>참고 데이터 — 코드 배정·근무일지 매칭·원가 매칭 현황</summary>' +
+        '<div class="ref-kpis">' +
+          '<div class="rk"><div class="l">코드 배정</div><div class="v num">'+withCode+' / '+filtered.length+'건</div></div>' +
+          '<div class="rk"><div class="l">근무일지 매칭</div><div class="v num">'+withWl+' / '+filtered.length+'건</div></div>' +
+          '<div class="rk"><div class="l">원가 매칭</div><div class="v num">'+withCost+' / '+filtered.length+'건</div></div>' +
+        '</div>' +
+      '</details>' +
+      '<div class="filter-bar">' +
+        '<label>대분류</label>' +
+        '<span class="seg">' +
+          '<button class="seg-btn'+(major==='all'?' on':'')+'" data-pd-major="all">전체</button>' +
+          '<button class="seg-btn'+(major==='공사'?' on':'')+'" data-pd-major="공사">공사</button>' +
+          '<button class="seg-btn'+(major==='설계'?' on':'')+'" data-pd-major="설계">설계</button>' +
+        '</span>' +
+        '<label style="margin-left:6px;">보기</label>' +
+        '<span class="seg">' +
+          '<button class="seg-btn'+(group==='none'?' on':'')+'" data-pd-group="none">계약금액순</button>' +
+          '<button class="seg-btn'+(group==='client'?' on':'')+'" data-pd-group="client" title="손익기여(원가 확정분) 큰 발주처순으로 정렬">발주처별</button>' +
+          '<button class="seg-btn'+(group==='sub'?' on':'')+'" data-pd-group="sub">소분류별</button>' +
+        '</span>' +
+        '<input class="search-input" id="pdSearchBox" placeholder="프로젝트명·발주처 검색" value="'+q.replace(/"/g,'&quot;')+'">' +
+        (sub ? '<span class="sub-filter-chip">소분류 · '+sub+' <a href="#" class="sub-filter-clear pd-clear-sub" title="필터 해제">✕</a></span>' : '') +
+      '</div>' +
+      '<div class="card" style="padding:0; overflow-x:auto;">' +
+        (filtered.length ?
+          '<table class="list-table"><thead><tr>' +
+            '<th style="text-align:left">프로젝트명</th><th style="text-align:left">발주처</th><th>계약금액</th><th>청구율</th><th>회수율</th><th>진행상태</th><th>참여인원</th><th>코드</th>' +
+          '</tr></thead><tbody>'+bodyHtml+'</tbody></table>'
+          : '<div class="list-empty">조건에 맞는 프로젝트가 없습니다.</div>') +
+      '</div>';
+
+    document.querySelectorAll('[data-pd-major]').forEach(function(btn){
+      btn.addEventListener('click', function(){ pdState.major = btn.getAttribute('data-pd-major'); pdRender(); });
+    });
+    document.querySelectorAll('[data-pd-group]').forEach(function(btn){
+      btn.addEventListener('click', function(){ pdState.group = btn.getAttribute('data-pd-group'); pdRender(); });
+    });
+    var sb = document.getElementById('pdSearchBox');
+    if(sb){
+      sb.addEventListener('input', function(){ pdState.q = sb.value; pdRender(); });
+      sb.focus(); sb.setSelectionRange(sb.value.length, sb.value.length);
+    }
+    var clearSub = document.querySelector('.pd-clear-sub');
+    if(clearSub) clearSub.addEventListener('click', function(e){ e.preventDefault(); pdState.sub = ''; pdRender(); });
+    document.querySelectorAll('.pd-open-detail').forEach(function(a){
+      a.addEventListener('click', function(e){
+        e.preventDefault();
+        pdState.view = 'detail'; pdState.i = parseInt(a.getAttribute('data-idx'),10); pdState.cmp = 'major';
+        pdRender();
+        document.getElementById('detailSection').scrollIntoView({behavior:'smooth', block:'start'});
+      });
+    });
+  }
+
+  var PD_CMP_MODES = {
+    major: {label:'대분류', peers: function(p){ return PD_PROJECTS.map(function(pp,idx){return {p:pp,idx:idx};}).filter(function(x){ return x.p.major===p.major; }); }, title: function(p){ return '같은 대분류('+p.major+')'; }},
+    client: {label:'발주처', peers: function(p){ return p.client ? PD_PROJECTS.map(function(pp,idx){return {p:pp,idx:idx};}).filter(function(x){ return x.p.client===p.client; }) : []; }, title: function(p){ return '같은 발주처('+(p.client||'-')+')'; }},
+    sub: {label:'소분류', peers: function(p){ return p.subLabel ? PD_PROJECTS.map(function(pp,idx){return {p:pp,idx:idx};}).filter(function(x){ return x.p.subLabel===p.subLabel; }) : []; }, title: function(p){ return '같은 소분류('+(p.subLabel||'미분류')+')'; }},
+  };
+
+  function pdRenderProgressHtml(){
+    return '<div class="progress-row"><div class="progress-dates" id="pdProgDates"></div></div>' +
+      '<div class="progress-track"><div class="progress-fill" id="pdProgFill"></div><div class="progress-today" id="pdProgToday"></div></div>';
+  }
+  function pdBindProgress(p){
+    var TODAY = new Date().toISOString().slice(0,10);
+    var s = new Date(p.start+'T00:00:00'), e = new Date(p.end+'T00:00:00'), t = new Date(TODAY+'T00:00:00');
+    var total = e-s, elapsed = Math.min(Math.max(t-s,0), total);
+    var pct = total>0 ? (elapsed/total*100) : 0;
+    var isDone = p.status === '완료' || t > e;
+    if(isDone) pct = 100;
+    document.getElementById('pdProgFill').style.width = pct.toFixed(1)+'%';
+    var marker = document.getElementById('pdProgToday');
+    marker.style.left = 'calc('+Math.min(pct,100).toFixed(1)+'% - 1px)';
+    marker.setAttribute('data-lbl', isDone ? '종료' : '오늘');
+    var days = Math.round(elapsed/86400000);
+    var totalDays = Math.round(total/86400000);
+    document.getElementById('pdProgDates').innerHTML =
+      '<span>착수 <b>'+p.start+'</b></span><span>종료'+(isDone?'':'(예정)')+' <b>'+p.end+'</b></span><span>경과 <b>'+days+'일 / 총 '+totalDays+'일 ('+pct.toFixed(0)+'%)</b></span>';
+  }
+
+  function pdRenderDetail(){
+    var i = pdState.i, cmpMode = pdState.cmp;
+    var p = PD_PROJECTS[i];
+    if(!PD_CMP_MODES[cmpMode]) cmpMode = pdState.cmp = 'major';
+    var peers = PD_CMP_MODES[cmpMode].peers(p);
+    var maxAbsMargin = peers.length ? Math.max.apply(null, peers.map(function(x){ return pdProfitKnown(x.p) ? Math.abs(pdMargin(x.p)) : 0; })) : 0;
+
+    var known = pdProfitKnown(p);
+    var pr = known ? pdProfit(p) : 0;
+    var mg = known ? pdMargin(p) : 0;
+
+    var clientMatches = PD_PROJECTS.filter(function(pp){ return pp.client === p.client; });
+    var clientHtml;
+    if(!p.client){
+      clientHtml = '<div class="contrib-empty">발주처 정보가 없습니다.</div>';
+    }else{
+      var totalRev = clientMatches.reduce(function(s,pp){ return s+pp.contractAmt; }, 0);
+      clientHtml =
+        '<div class="client-row">' +
+          '<div class="client-avatar">'+p.client.slice(0,1)+'</div>' +
+          '<div><div class="client-name">'+p.client+'</div><div class="client-sub">이 프로젝트를 포함해 '+clientMatches.length+'건의 거래 이력</div></div>' +
+        '</div>' +
+        '<div class="stat-grid">' +
+          '<div class="s"><div class="l">누적 계약</div><div class="v num">'+clientMatches.length+'건</div></div>' +
+          '<div class="s"><div class="l">누적 계약금액</div><div class="v num">'+fmtWon(totalRev)+'</div></div>' +
+          '<div class="s"><div class="l">평균 청구율</div><div class="v num">'+(clientMatches.reduce(function(s,pp){return s+pdClaimRate(pp);},0)/clientMatches.length).toFixed(0)+'%</div></div>' +
+        '</div>';
+    }
+
+    var cmpRows = peers.slice(0, 60).sort(function(a,b){ return b.p.contractAmt - a.p.contractAmt; }).map(function(x){
+      var pp = x.p; var isCur = x.idx === i;
+      var ppKnown = pdProfitKnown(pp), ppPr = ppKnown ? pdProfit(pp) : null, ppMg = ppKnown ? pdMargin(pp) : null;
+      var barPct = (ppKnown && maxAbsMargin>0) ? Math.max(Math.abs(ppMg)/maxAbsMargin*100, 3) : 0;
+      var barColor = ppKnown ? (ppMg>=0 ? 'var(--pos)' : 'var(--neg)') : 'var(--surface-2)';
+      return '<tr class="'+(isCur?'current':'')+'" style="'+(isCur?'background:var(--surface-2)':'')+'">' +
+        '<td style="text-align:left; padding:8px 12px; border-bottom:1px solid var(--line);"><a href="#" class="pd-cmp-link" data-idx="'+x.idx+'" style="color:'+(isCur?'var(--ink)':'var(--ink-2)')+'; text-decoration:none; font-weight:'+(isCur?'700':'500')+';">'+pp.name+'</a></td>' +
+        '<td class="num" style="padding:8px 12px; border-bottom:1px solid var(--line); text-align:right;">'+fmtWon(pp.contractAmt)+'</td>' +
+        '<td class="num" style="padding:8px 12px; border-bottom:1px solid var(--line); text-align:right; color:var(--ink-2);">'+(pdHasCost(pp) ? fmtWon(pp.directCost) : '-')+'</td>' +
+        '<td class="num" style="padding:8px 12px; border-bottom:1px solid var(--line); text-align:right; color:var(--ink-2);">'+fmtWon(pp.laborAlloc)+'</td>' +
+        '<td class="num" style="padding:8px 12px; border-bottom:1px solid var(--line); text-align:right; color:'+(ppKnown ? (ppPr>=0?'var(--pos)':'var(--neg)') : 'var(--muted)')+';">'+(ppKnown ? (ppPr>=0?'+':'')+fmtWon(ppPr) : '-')+'</td>' +
+        '<td class="num" style="padding:8px 12px; border-bottom:1px solid var(--line); text-align:right; color:'+(ppKnown ? (ppMg>=0?'var(--pos)':'var(--neg)') : 'var(--muted)')+';">'+(ppKnown ? ppMg.toFixed(1)+'%' : '-')+'</td>' +
+        '<td style="padding:8px 12px; border-bottom:1px solid var(--line); text-align:right;" title="손익율 크기(흑자/적자) 비교"><div style="display:inline-block; width:56px; height:6px; background:var(--surface-2); border-radius:99px; overflow:hidden; vertical-align:middle;"><div style="height:100%; width:'+barPct+'%; background:'+barColor+';"></div></div></td>' +
+        '<td style="padding:8px 12px; border-bottom:1px solid var(--line); text-align:right;"><span class="status-pill '+pp.status+'">'+pp.status+'</span></td>' +
+      '</tr>';
+    }).join('');
+
+    document.getElementById('pdHeading').textContent = p.name;
+    document.getElementById('pdDesc').innerHTML = '<a class="pd-openfull" href="'+PROJECT_DETAIL_URL+'" target="_blank" rel="noopener">전체 페이지에서 열기 →</a>';
+
+    document.getElementById('detailPanel').innerHTML =
+      '<div class="crumb"><a href="#" class="pd-back">프로젝트 상세 목록</a> <span>›</span> <b>'+p.major+'</b></div>' +
+      '<div class="tags" style="margin-bottom:14px;">' +
+        '<span class="tag type'+(p.major==='공사'?' con':'')+'">'+p.major+'</span>' +
+        (p.subLabel ? '<span class="tag type'+(p.major==='공사'?' con':'')+'" style="opacity:.75">'+p.subLabel+'</span>' : '') +
+        '<span class="tag status '+p.status+'">'+p.status+'</span>' +
+        (p.code ? '<span class="tag code">'+p.code+'</span>' : '<span class="tag nocode">코드 미배정</span>') +
+        '<span class="tag client">발주처 · '+(p.client||'-')+'</span>' +
+      '</div>' +
+      '<div class="kpis">' +
+        '<div class="kpi"><div class="lbl">계약금액(매출)</div><div class="val num">'+fmtWon(p.contractAmt)+'원</div><div class="sub">청구 '+pdClaimRate(p).toFixed(0)+'% · 회수 '+pdCollectRate(p).toFixed(0)+'%</div></div>' +
+        '<div class="kpi"><div class="lbl">매입원가<span class="conf-dot '+(p.directConf==='ok'?'ok':p.directConf==='low'?'low':'none')+'"></span></div>' +
+          (pdHasCost(p) ? '<div class="val num">'+fmtWon(p.directCost)+'원</div>' : '<div class="val pending">데이터 준비 중</div>') +
+          '<div class="sub">거래내역 프로젝트 태그 매칭</div></div>' +
+        '<div class="kpi"><div class="lbl">인건비 배분<span class="conf-dot '+(p.wlConf==='ok'?'ok':p.wlConf==='low'?'low':p.wlConf==='shared'?'low':'none')+'"></span></div>' +
+          (p.totalHours>0 ? '<div class="val num">'+fmtWon(p.laborAlloc)+'원</div><div class="sub">투입 '+p.totalHours.toFixed(0)+'시간 · 근사 배분</div>' : '<div class="val pending">데이터 없음</div><div class="sub">근무일지 매칭 없음</div>') +
+        '</div>' +
+        '<div class="kpi"><div class="lbl">손익 / 손익율</div>' +
+          (known ? '<div class="val num '+(pr>=0?'pos':'neg')+'">'+(pr>=0?'+':'')+fmtWon(pr)+'원 · '+mg.toFixed(1)+'%</div><div class="sub">하한선 추정(원가 미확정분 제외)</div>' : '<div class="val pending">원가 확정 후 계산</div>') +
+        '</div>' +
+      '</div>' +
+      '<section style="margin-bottom:20px">' +
+        '<div class="sec-hd"><h2>진행 기간</h2><span class="desc">착수일 ~ 종료(예정)일 기준</span></div>' +
+        '<div class="card">' +
+          (p.start && p.end ? pdRenderProgressHtml() :
+            '<div class="progress-pending">📋 착수일·종료일 데이터 입력 대기 중입니다. 입력되는 대로 진행률 막대가 자동으로 표시됩니다.</div>' +
+            '<div class="progress-track pending" style="margin-top:12px;"></div>') +
+        '</div>' +
+      '</section>' +
+      '<div class="two-col" style="margin-bottom:20px">' +
+        '<section style="margin-bottom:0">' +
+          '<div class="sec-hd"><h2>참여인원 기여도</h2><span class="desc">근무일지 투입시간 기준</span></div>' +
+          '<div class="card"><div class="contrib-list">' +
+            (p.contributors.length ? p.contributors.map(function(c){
+              return '<div class="contrib-item">' +
+                '<div class="contrib-avatar">'+c.name.slice(0,1)+'</div>' +
+                '<div class="contrib-mid">' +
+                  '<div class="contrib-name-row"><span class="nm">'+c.name+'</span><span class="amt num">'+fmtWon(c.amt)+'원 · '+c.hours.toFixed(0)+'시간</span></div>' +
+                  '<div class="contrib-bar-track"><div class="contrib-bar-fill" style="width:'+c.pct+'%"></div></div>' +
+                '</div>' +
+                '<div class="contrib-pct num">'+c.pct+'%</div>' +
+              '</div>';
+            }).join('') :
+            '<div class="contrib-empty">'+(p.wlConf==='shared' ? '동일 현장의 다른 계약 항목('+(p.wlSiblingNote||'')+')에 근무일지가 통합 기록되어 있어 이 항목만의 참여인원 데이터는 없습니다(중복 집계 방지).' : '근무일지에서 이 프로젝트와 매칭되는 기록을 찾지 못했습니다. 미기록 프로젝트로 분류되어 있으며, 추후 회사 전체 배분인건비 비율로 근사 배분할 예정입니다.')+'</div>') +
+          '</div></div>' +
+        '</section>' +
+        '<section style="margin-bottom:0">' +
+          '<div class="sec-hd"><h2>발주처</h2><span class="desc">'+(p.client||'-')+'과의 거래 이력</span></div>' +
+          '<div class="card">'+clientHtml+'</div>' +
+        '</section>' +
+      '</div>' +
+      '<section style="margin-bottom:0">' +
+        '<div class="sec-hd"><h2>프로젝트 비교</h2><span class="desc">'+PD_CMP_MODES[cmpMode].title(p)+' 내 계약금액 기준 · 프로젝트명을 클릭하면 전환됩니다</span></div>' +
+        '<div class="filter-bar" style="margin-bottom:10px;">' +
+          '<span class="seg">' +
+            '<button class="seg-btn'+(cmpMode==='major'?' on':'')+'" data-pd-cmp="major">대분류</button>' +
+            '<button class="seg-btn'+(cmpMode==='client'?' on':'')+'" data-pd-cmp="client">발주처</button>' +
+            '<button class="seg-btn'+(cmpMode==='sub'?' on':'')+'" data-pd-cmp="sub">소분류</button>' +
+          '</span>' +
+        '</div>' +
+        (peers.length > 1 ?
+        '<div class="card" style="padding:0; max-height:360px; overflow:auto;">' +
+          '<table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr>' +
+            '<th style="text-align:left; padding:8px 12px; color:var(--muted); font-size:11px; border-bottom:1px solid var(--line);">프로젝트명</th>' +
+            '<th style="text-align:right; padding:8px 12px; color:var(--muted); font-size:11px; border-bottom:1px solid var(--line);">계약금액</th>' +
+            '<th style="text-align:right; padding:8px 12px; color:var(--muted); font-size:11px; border-bottom:1px solid var(--line);">매입원가</th>' +
+            '<th style="text-align:right; padding:8px 12px; color:var(--muted); font-size:11px; border-bottom:1px solid var(--line);">인건비</th>' +
+            '<th style="text-align:right; padding:8px 12px; color:var(--muted); font-size:11px; border-bottom:1px solid var(--line);">손익</th>' +
+            '<th style="text-align:right; padding:8px 12px; color:var(--muted); font-size:11px; border-bottom:1px solid var(--line);">손익율</th>' +
+            '<th style="text-align:right; padding:8px 12px; color:var(--muted); font-size:11px; border-bottom:1px solid var(--line);"></th>' +
+            '<th style="text-align:right; padding:8px 12px; color:var(--muted); font-size:11px; border-bottom:1px solid var(--line);">상태</th>' +
+          '</tr></thead><tbody>'+cmpRows+'</tbody></table>' +
+        '</div>' :
+        '<div class="card"><div class="contrib-empty">' +
+          (cmpMode==='client' ? (p.client ? '이 발주처와 비교할 다른 프로젝트가 없습니다.' : '발주처 정보가 없어 비교할 수 없습니다.') :
+           cmpMode==='sub' ? (p.subLabel ? '이 소분류와 비교할 다른 프로젝트가 없습니다.' : '코드가 배정되지 않아 소분류를 알 수 없습니다. 코드 확정 후 비교가 가능합니다.') :
+           '비교할 프로젝트가 없습니다.') +
+        '</div></div>') +
+      '</section>';
+
+    document.querySelector('.pd-back').addEventListener('click', function(e){
+      e.preventDefault(); pdState.view = 'list'; pdRender();
+    });
+    document.querySelectorAll('[data-pd-cmp]').forEach(function(btn){
+      btn.addEventListener('click', function(){ pdState.cmp = btn.getAttribute('data-pd-cmp'); pdRender(); });
+    });
+    document.querySelectorAll('.pd-cmp-link').forEach(function(a){
+      a.addEventListener('click', function(e){
+        e.preventDefault(); pdState.i = parseInt(a.getAttribute('data-idx'),10); pdRender();
+      });
+    });
+
+    if(p.start && p.end) pdBindProgress(p);
+  }
+
+  function pdRender(){
+    if(pdState.view === 'detail') pdRenderDetail();
+    else pdRenderList();
+  }
+
+  function renderAll(){
+    renderKPI();
+    renderMosaic();
+    renderTrend('chartCon', '공사');
+    renderTrend('chartDes', '설계');
+    renderProfitCards();
+    renderSubCards();
+    renderTrend('chartMajor', { items: majorTrendItems(STATE.includeAdmin) }, function(key){ return MAJOR_COLOR[key]; });
+    (function(){
+      var clientItems = topClientTrendItems(5);
+      var clientColorMap = {};
+      clientItems.forEach(function(it){ clientColorMap[it.key] = 'var('+it.colorVar+')'; });
+      renderTrend('chartClient', { items: clientItems }, function(key){ return clientColorMap[key] || 'var(--muted)'; });
+    })();
+    document.getElementById('footerText').innerHTML = '<b>데이터 안내</b> — 대분류(공사/설계) 매출·수익성 추정은 기성청구현황 56건과 거래내역·근무일지 실제 지출을 집계한 값입니다(회사 공통관리비 미포함, 하한선 추정치). 소분류 구성·추이·소분류 비교는 "프로젝트 상세" 페이지에서 프로젝트 코드의 분류 구간으로 확정한 소분류(56/56건)를 기준으로 재집계했습니다. 소분류 표본이 적은 항목은 연도별 변동폭이 크니 참고용으로 봐주세요. 2026년은 계약이 진행 중인 해라 다른 해보다 건수가 적을 수 있습니다.';
+
+    document.querySelectorAll('.seg-btn[data-admin]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        STATE.includeAdmin = btn.getAttribute('data-admin')==='1';
+        document.querySelectorAll('.seg-btn[data-admin]').forEach(function(b){ b.classList.toggle('on', b===btn); });
+        renderProfitCards();
+        renderTrend('chartMajor', { items: majorTrendItems(STATE.includeAdmin) }, function(key){ return MAJOR_COLOR[key]; });
+      });
+    });
+  }
+
+  renderAll();
+  if(window.matchMedia){ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderAll); }
+})();
+</script>
+
+<script>
+(function(){
+  var panes = { fin: document.getElementById('pane-fin'), ptc: document.getElementById('pane-ptc') };
+  document.querySelectorAll('.top-tab-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var key = btn.getAttribute('data-toppane');
+      document.querySelectorAll('.top-tab-btn').forEach(function(b){ b.classList.toggle('on', b===btn); });
+      Object.keys(panes).forEach(function(k){ panes[k].style.display = (k===key ? '' : 'none'); });
+    });
+  });
+})();
+</script>
