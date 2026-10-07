@@ -58,7 +58,7 @@
     width:160px; box-sizing:border-box; padding:9px 10px; border:1px solid var(--line);
     border-radius:4px; font-family:inherit; font-size:13.5px; background:#fff;
   }
-  .field.wide input{ width:260px; }
+  .field.wide input, .field.wide select{ width:260px; }
   .btn-primary{
     padding:10px 22px; background:var(--ink); color:var(--paper);
     border:none; font-size:12.5px; letter-spacing:.03em; cursor:pointer; border-radius:4px; white-space:nowrap;
@@ -91,6 +91,10 @@
   .status-badge{ font-size:11px; padding:3px 9px; border-radius:20px; white-space:nowrap; }
   .status-badge.confirmed{ background:#dfe9e2; color:var(--in-color); }
   .status-badge.pending{ background:var(--pending-bg); color:var(--pending-text); }
+  .link-badge{ display:inline-block; font-size:10.5px; padding:3px 9px; border-radius:20px; white-space:nowrap; }
+  .link-badge.applied{ background:#e3edf7; color:#2f5f8a; }
+  .link-badge.pending{ background:var(--pending-bg); color:var(--pending-text); }
+  .link-badge.none{ background:#f0eee7; color:var(--muted); }
   .row-actions{ display:flex; gap:6px; flex-wrap:wrap; }
   .row-actions button{
     font-size:11px; background:none; border:1px solid var(--line); border-radius:4px;
@@ -235,7 +239,26 @@
         <label for="f-memo">비고 (선택)</label>
         <input type="text" id="f-memo">
       </div>
+      <div class="field" id="f-linkTarget-field" style="display:none;">
+        <label for="f-linkTarget">연동 대상</label>
+        <select id="f-linkTarget">
+          <option value="">연동 안 함</option>
+          <option value="utilities">공과금관리</option>
+          <option value="insurance">보험관리</option>
+          <option value="tax">세금관리</option>
+          <option value="loan">이자상환관리</option>
+        </select>
+      </div>
+      <div class="field wide" id="f-linkCard-field" style="display:none;">
+        <label for="f-linkCard">연동 카드</label>
+        <select id="f-linkCard">
+          <option value="">카드를 선택하세요</option>
+        </select>
+      </div>
       <button class="btn-primary" id="saveEntryBtn">저장</button>
+    </div>
+    <div class="import-help" id="linkHelp" style="display:none;">
+      출금이 "확정" 상태로 저장되는 순간, 선택한 카드의 해당 월(거래일자 기준) 사용액에 이 금액이 자동으로 더해집니다. "예정" 상태로 저장하면 나중에 "확정 처리"를 누르는 시점에 반영돼요.
     </div>
     <div class="status-line" id="entryStatus"></div>
   </div>
@@ -327,7 +350,8 @@
     </div>
     <div class="import-help">
       가져오기용 엑셀은 <b>거래일자 / 구분 / 상태 / 금액 / 내용 / 비고</b> 6개 컬럼 형식이어야 합니다.
-      (구분: 입금 또는 출금 / 상태: 확정 또는 예정, 과거 데이터는 모두 "확정"으로 넣어주세요)
+      (구분: 입금 또는 출금 / 상태: 확정 또는 예정, 과거 데이터는 모두 "확정"으로 넣어주세요)<br>
+      ※ 엑셀로 가져온 항목과 "고정 항목 일괄 추가"로 생성된 항목은 연동 대상이 자동으로 지정되지 않습니다. 필요하면 아래 목록에서 "수정"을 눌러 연동 대상을 직접 지정해주세요.
     </div>
     <div class="status-line" id="importStatus"></div>
   </div>
@@ -346,7 +370,7 @@
     <table id="entryTable" style="display:none;">
       <thead>
         <tr>
-          <th>거래일자</th><th>구분</th><th>상태</th><th>금액</th><th>내용</th><th>잔액</th><th>비고</th><th>관리</th>
+          <th>거래일자</th><th>구분</th><th>상태</th><th>금액</th><th>내용</th><th>잔액</th><th>비고</th><th>연동</th><th>관리</th>
         </tr>
       </thead>
       <tbody id="entryTableBody"></tbody>
@@ -409,8 +433,178 @@
     const isIncome = document.getElementById('f-type').value === '입금';
     document.getElementById('f-incomeType-field').style.display = isIncome ? 'flex' : 'none';
   }
-  document.getElementById('f-type').addEventListener('change', updateIncomeTypeVisibility);
+
+  // ========================================================
+  // 공과금/보험/세금/이자상환 관리 페이지 연동
+  // ========================================================
+  // 이 네 페이지는 "거래 목록"이 아니라 "항목(카드)별 월별 합계"를 관리한다
+  // (문서 하나 = 카드 하나, monthly: { 'YYYY-MM': 금액 }).
+  // 그래서 현금출납부의 출금 거래 하나를 반대쪽에 "새로 추가"하는 게 아니라,
+  // 선택한 카드의 해당 월 금액에 "더해주는" 방식으로 연동한다.
+  const LINK_TARGETS = {
+    utilities: { label: '공과금관리', collection: 'utilityItems', getCardLabel: c => (c.category || '(이름 없음)') + (c.detail ? ' · ' + c.detail : '') },
+    insurance: { label: '보험관리', collection: 'insuranceItems', getCardLabel: c => (c.label || '(이름 없음)') + (c.category ? ' (' + c.category + ')' : '') },
+    tax: { label: '세금관리', collection: 'taxItems', getCardLabel: c => (c.label || '(이름 없음)') + (c.category ? ' (' + c.category + ')' : '') },
+    loan: { label: '이자상환관리', collection: 'loanRepaymentItems', getCardLabel: c => (c.name || '(이름 없음)') + (c.account ? ' · ' + c.account : '') }
+  };
+  const COLLECTION_TO_KIND = Object.fromEntries(Object.entries(LINK_TARGETS).map(([kind, cfg]) => [cfg.collection, kind]));
+  let linkTargetCards = {}; // { utilities: [{id, label}], insurance: [...], tax: [...], loan: [...] }
+
+  async function loadLinkTargetCards(){
+    const entries = await Promise.all(Object.entries(LINK_TARGETS).map(async ([kind, cfg]) => {
+      try {
+        const snap = await db.collection(cfg.collection).orderBy('order', 'asc').get();
+        const cards = snap.docs.map(d => ({ id: d.id, label: cfg.getCardLabel(d.data()) }));
+        return [kind, cards];
+      } catch (err) {
+        console.warn(`${cfg.label} 카드 목록 불러오기 실패:`, err);
+        return [kind, []];
+      }
+    }));
+    linkTargetCards = Object.fromEntries(entries);
+  }
+
+  function populateLinkCardOptions(kind, selectedId){
+    const sel = document.getElementById('f-linkCard');
+    const cards = linkTargetCards[kind] || [];
+    sel.innerHTML = '<option value="">카드를 선택하세요</option>' +
+      cards.map(c => `<option value="${esc(c.id)}">${esc(c.label)}</option>`).join('');
+    sel.value = selectedId || '';
+  }
+
+  function updateLinkFieldVisibility(){
+    const isOutgo = document.getElementById('f-type').value === '출금';
+    const kind = document.getElementById('f-linkTarget').value;
+    document.getElementById('f-linkTarget-field').style.display = isOutgo ? 'flex' : 'none';
+    document.getElementById('f-linkCard-field').style.display = (isOutgo && kind) ? 'flex' : 'none';
+    document.getElementById('linkHelp').style.display = (isOutgo && kind) ? 'block' : 'none';
+    if (!isOutgo) {
+      document.getElementById('f-linkTarget').value = '';
+      populateLinkCardOptions('', '');
+    }
+  }
+
+  document.getElementById('f-type').addEventListener('change', () => {
+    updateIncomeTypeVisibility();
+    updateLinkFieldVisibility();
+  });
+  document.getElementById('f-linkTarget').addEventListener('change', (e) => {
+    populateLinkCardOptions(e.target.value, '');
+    updateLinkFieldVisibility();
+  });
   updateIncomeTypeVisibility();
+
+  function cardLabelFor(e){
+    if (!e.linkTargetCollection) return '';
+    const kind = COLLECTION_TO_KIND[e.linkTargetCollection];
+    return kind ? LINK_TARGETS[kind].label : e.linkTargetCollection;
+  }
+
+  function linkBadgeHtml(e){
+    if (e.type !== '출금') return '';
+    if (e.linkApplied) {
+      return `<span class="link-badge applied" title="${esc(e.linkTargetCardLabel || '')}">🔗 ${esc(cardLabelFor(e))}</span>`;
+    }
+    if (e.linkTargetCollection && e.linkTargetCardId) {
+      return `<span class="link-badge pending" title="${esc(e.linkTargetCardLabel || '')}">연동 예정 · ${esc(cardLabelFor(e))}</span>`;
+    }
+    if (e.status === '확정') {
+      return `<span class="link-badge none">연동 안 됨</span>`;
+    }
+    return '';
+  }
+
+  // 선택된 카드의 월별 합계에 amount를 "더한다" (트랜잭션으로 동시수정 충돌 방지)
+  async function applyLinkIncrement(collection, cardId, ym, amount){
+    if (!collection || !cardId || !ym || !amount) return;
+    const ref = db.collection(collection).doc(cardId);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new Error('연동 대상 카드를 찾을 수 없습니다 (삭제되었을 수 있어요).');
+      const monthly = Object.assign({}, snap.data().monthly || {});
+      monthly[ym] = (Number(monthly[ym]) || 0) + amount;
+      tx.update(ref, { monthly });
+    });
+  }
+
+  // 이미 반영됐던 금액을 되돌린다 (수정/삭제 시 사용). 카드가 이미 삭제됐으면 조용히 건너뛴다.
+  async function reverseLinkIncrement(collection, cardId, ym, amount){
+    if (!collection || !cardId || !ym || !amount) return;
+    const ref = db.collection(collection).doc(cardId);
+    try {
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return;
+        const monthly = Object.assign({}, snap.data().monthly || {});
+        monthly[ym] = (Number(monthly[ym]) || 0) - amount;
+        tx.update(ref, { monthly });
+      });
+    } catch (err) {
+      console.warn('연동 반영분 되돌리기 실패 (카드가 이미 삭제됐을 수 있음):', err);
+    }
+  }
+
+  // 거래 저장(신규/수정) 시 연동 상태를 정리한다.
+  // - 기존에 반영된 연동이 있었다면 먼저 되돌리고,
+  // - 새 상태가 "출금 + 연동카드 선택 + 확정"이면 지금 바로 반영하고,
+  // - "출금 + 연동카드 선택 + 예정"이면 나중에 확정될 때 반영하도록 "연동 예정"만 저장해둔다.
+  async function resolveLinkOnSave(oldEntry, newData){
+    if (oldEntry && oldEntry.linkApplied) {
+      await reverseLinkIncrement(oldEntry.linkTargetCollection, oldEntry.linkTargetCardId, oldEntry.linkAppliedYm, oldEntry.linkAppliedAmount);
+    }
+
+    const kind = newData.type === '출금' ? document.getElementById('f-linkTarget').value : '';
+    const cardId = kind ? document.getElementById('f-linkCard').value : '';
+
+    if (!kind || !cardId) {
+      return Object.assign(newData, {
+        linkTargetCollection: null, linkTargetCardId: null, linkTargetCardLabel: null,
+        linkApplied: false, linkAppliedYm: null, linkAppliedAmount: null
+      });
+    }
+
+    const cfg = LINK_TARGETS[kind];
+    const card = (linkTargetCards[kind] || []).find(c => c.id === cardId);
+    const cardLabel = card ? card.label : '';
+    const ym = (newData.date || '').slice(0, 7);
+
+    if (newData.status === '확정') {
+      await applyLinkIncrement(cfg.collection, cardId, ym, newData.amount);
+      return Object.assign(newData, {
+        linkTargetCollection: cfg.collection, linkTargetCardId: cardId, linkTargetCardLabel: cardLabel,
+        linkApplied: true, linkAppliedYm: ym, linkAppliedAmount: newData.amount
+      });
+    }
+
+    // 예정 상태 - 반영은 나중에, 선택 정보만 저장
+    return Object.assign(newData, {
+      linkTargetCollection: cfg.collection, linkTargetCardId: cardId, linkTargetCardLabel: cardLabel,
+      linkApplied: false, linkAppliedYm: null, linkAppliedAmount: null
+    });
+  }
+
+  // "확정 처리" 버튼 - 상태를 확정으로 바꾸면서, 연동 예정이 지정돼 있었다면 지금 반영한다.
+  async function confirmEntry(id){
+    const e = allEntries.find(x => x.id === id);
+    if (!e) return;
+    const update = { status: '확정' };
+    if (e.type === '출금' && e.linkTargetCollection && e.linkTargetCardId && !e.linkApplied) {
+      const ym = (e.date || '').slice(0, 7);
+      await applyLinkIncrement(e.linkTargetCollection, e.linkTargetCardId, ym, e.amount);
+      Object.assign(update, { linkApplied: true, linkAppliedYm: ym, linkAppliedAmount: e.amount });
+    }
+    await entriesRef.doc(id).update(update);
+    await loadEntries();
+  }
+
+  // 삭제 시, 이미 반영된 연동이 있으면 먼저 되돌린 뒤 삭제한다.
+  async function deleteEntryWithLink(id){
+    const e = allEntries.find(x => x.id === id);
+    if (e && e.linkApplied) {
+      await reverseLinkIncrement(e.linkTargetCollection, e.linkTargetCardId, e.linkAppliedYm, e.linkAppliedAmount);
+    }
+    await entriesRef.doc(id).delete();
+  }
 
   // ---------- 기성청구(project-billing.html) 프로젝트명 연동 ----------
   // worklog.html/project-billing.html/project-settlement.html이 공유하는 officialProjects/list.names를
@@ -595,6 +789,7 @@
         <td>${esc(e.content)}</td>
         <td class="balance">${balanceById[e.id] !== undefined ? fmtWon(balanceById[e.id]) : '-'}</td>
         <td>${esc(e.memo)}</td>
+        <td>${linkBadgeHtml(e)}</td>
         <td>
           <div class="row-actions">
             ${e.status === '예정' ? `<button class="confirm-btn" data-confirm="${e.id}">확정 처리</button>` : ''}
@@ -607,8 +802,8 @@
 
     tbody.querySelectorAll('[data-confirm]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        await entriesRef.doc(btn.dataset.confirm).update({ status: '확정' });
-        await loadEntries();
+        btn.disabled = true;
+        await confirmEntry(btn.dataset.confirm);
       });
     });
     tbody.querySelectorAll('[data-edit]').forEach(btn => {
@@ -619,8 +814,11 @@
     });
     tbody.querySelectorAll('[data-delete]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!confirm('이 거래 내역을 삭제할까요?')) return;
-        await entriesRef.doc(btn.dataset.delete).delete();
+        const entry = allEntries.find(x => x.id === btn.dataset.delete);
+        const linkNote = entry && entry.linkApplied ? `\n\n이 거래는 "${cardLabelFor(entry)}"의 ${entry.linkAppliedYm} 사용액에 ${fmtWon(entry.linkAppliedAmount)}만큼 반영되어 있어요. 삭제하면 그 금액도 함께 되돌립니다.` : '';
+        if (!confirm('이 거래 내역을 삭제할까요?' + linkNote)) return;
+        btn.disabled = true;
+        await deleteEntryWithLink(btn.dataset.delete);
         await loadEntries();
       });
     });
@@ -669,8 +867,8 @@
 
     tbody.querySelectorAll('[data-c-confirm]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        await entriesRef.doc(btn.dataset.cConfirm).update({ status: '확정' });
-        await loadEntries();
+        btn.disabled = true;
+        await confirmEntry(btn.dataset.cConfirm);
       });
     });
     tbody.querySelectorAll('[data-c-edit]').forEach(btn => {
@@ -682,7 +880,8 @@
     tbody.querySelectorAll('[data-c-delete]').forEach(btn => {
       btn.addEventListener('click', async () => {
         if (!confirm('이 예정 수금 내역을 삭제할까요?')) return;
-        await entriesRef.doc(btn.dataset.cDelete).delete();
+        btn.disabled = true;
+        await deleteEntryWithLink(btn.dataset.cDelete);
         await loadEntries();
       });
     });
@@ -698,6 +897,11 @@
     setMoneyInputValue(document.getElementById('f-amount'), entry.amount);
     document.getElementById('f-content').value = entry.content || '';
     document.getElementById('f-memo').value = entry.memo || '';
+
+    const kind = entry.linkTargetCollection ? COLLECTION_TO_KIND[entry.linkTargetCollection] : '';
+    document.getElementById('f-linkTarget').value = kind || '';
+    if (kind) populateLinkCardOptions(kind, entry.linkTargetCardId);
+    updateLinkFieldVisibility();
 
     document.getElementById('entryPanelTitle').textContent = '거래 수정';
     document.getElementById('editBannerText').textContent = `"${entry.date} · ${entry.content}" 내역을 수정 중입니다.`;
@@ -716,6 +920,9 @@
     document.getElementById('f-amount').value = '';
     document.getElementById('f-content').value = '';
     document.getElementById('f-memo').value = '';
+    document.getElementById('f-linkTarget').value = '';
+    populateLinkCardOptions('', '');
+    updateLinkFieldVisibility();
     document.getElementById('entryPanelTitle').textContent = '거래 입력';
     document.getElementById('editBanner').style.display = 'none';
     document.getElementById('saveEntryBtn').textContent = '저장';
@@ -747,17 +954,25 @@
 
     try {
       if (editingId) {
-        await entriesRef.doc(editingId).update({ date, type, status, amount, content, memo, incomeType });
+        const oldEntry = allEntries.find(x => x.id === editingId);
+        let data = { date, type, status, amount, content, memo, incomeType };
+        data = await resolveLinkOnSave(oldEntry, data);
+        await entriesRef.doc(editingId).update(data);
         statusEl.className = 'status-line ok';
         statusEl.textContent = '수정되었습니다.';
         cancelEdit();
       } else {
-        await entriesRef.add({ date, type, status, amount, content, memo, incomeType, order: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        let data = { date, type, status, amount, content, memo, incomeType, order: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+        data = await resolveLinkOnSave(null, data);
+        await entriesRef.add(data);
         statusEl.className = 'status-line ok';
         statusEl.textContent = '저장되었습니다.';
         document.getElementById('f-amount').value = '';
         document.getElementById('f-content').value = '';
         document.getElementById('f-memo').value = '';
+        document.getElementById('f-linkTarget').value = '';
+        populateLinkCardOptions('', '');
+        updateLinkFieldVisibility();
       }
       await loadEntries();
     } catch (err) {
@@ -917,13 +1132,15 @@
         batch.set(entriesRef.doc(), {
           date, type: r.type, status: '예정', amount: r.amount, content: r.content, memo: r.memo,
           recurringId: r.id, order: Date.now() + i,
+          linkTargetCollection: null, linkTargetCardId: null, linkTargetCardLabel: null,
+          linkApplied: false, linkAppliedYm: null, linkAppliedAmount: null,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
       });
       await batch.commit();
 
       statusEl.className = 'status-line ok';
-      statusEl.textContent = `${toAdd.length}건 추가되었습니다.${already.size ? ` (이미 있던 ${already.size}건은 건너뜀)` : ''}`;
+      statusEl.textContent = `${toAdd.length}건 추가되었습니다.${already.size ? ` (이미 있던 ${already.size}건은 건너뜀)` : ''} 연동 대상은 자동으로 지정되지 않으니, 필요하면 목록에서 직접 지정해주세요.`;
       await loadEntries();
     } catch (err) {
       statusEl.className = 'status-line err';
@@ -975,6 +1192,8 @@
         toImport.push({
           date, type, status: (status === '예정' ? '예정' : '확정'),
           amount, content, memo, order: Date.now() + toImport.length,
+          linkTargetCollection: null, linkTargetCardId: null, linkTargetCardLabel: null,
+          linkApplied: false, linkAppliedYm: null, linkAppliedAmount: null,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
       }
@@ -997,7 +1216,7 @@
       }
 
       statusEl.className = 'status-line ok';
-      statusEl.textContent = `${toImport.length}건 가져오기 완료.`;
+      statusEl.textContent = `${toImport.length}건 가져오기 완료. (연동 대상은 자동 지정되지 않으니 필요하면 직접 지정해주세요)`;
       fileInput.value = '';
       await loadEntries();
     } catch (err) {
@@ -1013,7 +1232,9 @@
     const statusEl = document.getElementById('importStatus');
     if (allEntries.length === 0) { statusEl.className = 'status-line err'; statusEl.textContent = '삭제할 내역이 없습니다.'; return; }
 
-    const first = confirm(`현재 등록된 거래 내역 ${allEntries.length}건을 전부 삭제할까요?\n\n(이월잔액 설정값은 그대로 남습니다. 이 작업은 되돌릴 수 없습니다.)`);
+    const linkedCount = allEntries.filter(e => e.linkApplied).length;
+    const linkNote = linkedCount ? `\n\n이 중 ${linkedCount}건은 공과금/보험/세금/이자상환관리 쪽에 금액이 반영되어 있어요. 삭제하면 그쪽 금액도 함께 되돌립니다.` : '';
+    const first = confirm(`현재 등록된 거래 내역 ${allEntries.length}건을 전부 삭제할까요?${linkNote}\n\n(이월잔액 설정값은 그대로 남습니다. 이 작업은 되돌릴 수 없습니다.)`);
     if (!first) return;
     const second = confirm('정말로 전체 삭제하시겠습니까? 마지막 확인입니다.');
     if (!second) return;
@@ -1021,9 +1242,17 @@
     const btn = document.getElementById('clearAllBtn');
     btn.disabled = true;
     statusEl.className = 'status-line';
-    statusEl.textContent = '삭제 중...';
+    statusEl.textContent = '연동 반영분을 되돌리는 중...';
 
     try {
+      const linked = allEntries.filter(e => e.linkApplied);
+      for (let i = 0; i < linked.length; i++) {
+        const e = linked[i];
+        statusEl.textContent = `연동 반영분을 되돌리는 중... (${i + 1}/${linked.length})`;
+        await reverseLinkIncrement(e.linkTargetCollection, e.linkTargetCardId, e.linkAppliedYm, e.linkAppliedAmount);
+      }
+
+      statusEl.textContent = '거래 내역 삭제 중...';
       const snap = await entriesRef.get();
       const ids = snap.docs.map(d => d.id);
       const chunkSize = 400;
@@ -1048,7 +1277,8 @@
   document.getElementById('exportBtn').addEventListener('click', () => {
     const rows = allEntries.map(e => ({
       '거래일자': e.date, '구분': e.type, '상태': e.status,
-      '금액': e.amount, '내용': e.content, '비고': e.memo
+      '금액': e.amount, '내용': e.content, '비고': e.memo,
+      '연동대상': cardLabelFor(e) || '', '연동카드': e.linkTargetCardLabel || '', '연동반영여부': e.linkApplied ? 'O' : ''
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -1058,6 +1288,7 @@
 
   (async function init(){
     await loadConfig();
+    await loadLinkTargetCards();
     await loadEntries();
     await loadRecurring();
     loadProjectNames(); // 자동완성용이라 다른 로딩을 막지 않도록 await하지 않음
