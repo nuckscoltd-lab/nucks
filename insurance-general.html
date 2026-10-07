@@ -155,6 +155,24 @@ if ('serviceWorker' in navigator) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   }
 
+  // ── 현금출납부 연동 안전장치 ──
+  // cashbook.html에서 출금을 이 카드의 특정 달에 연동(반영)할 때마다, 그 카드 문서에
+  // linkedContributions: { 'YYYY-MM': { 현금출납부거래ID: 금액, ... } } 형태로 "누가 얼마나 보탰는지"를
+  // 같이 남겨둔다. 여기서는 그 정보를 읽기만 해서, 이미 연동된 달을 여기서 직접 고치거나 지우려고 할 때
+  // 미리 경고해준다 (현금출납부 쪽 숫자와 어긋나는 걸 막기 위함 - 실제 되돌리기는 항상 cashbook.html 쪽에서).
+  function monthLinkedTotal(c, ym){
+    const contrib = (c.linkedContributions || {})[ym] || {};
+    return Object.values(contrib).reduce((s, v) => s + (Number(v) || 0), 0);
+  }
+  function cardLinkedTotal(c){
+    return Object.keys(c.linkedContributions || {}).reduce((s, ym) => s + monthLinkedTotal(c, ym), 0);
+  }
+  function linkedWarningText(c, ym){
+    const total = monthLinkedTotal(c, ym);
+    if (!total) return '';
+    return `\n\n⚠ 이 달 금액에는 현금출납부와 연동된 ${fmtWon(total)}이 포함되어 있습니다. 여기서 직접 고치면 현금출납부 쪽 기록과 어긋날 수 있어요. 가능하면 현금출납부에서 해당 거래를 수정/삭제해 주세요.`;
+  }
+
   // ── 경영인정기보험(환급형) 만기 분석 ──
   // 월별 납입 데이터가 "환급율이 가장 높은 시점"까지만 입력되어 있다는 전제 하에,
   // 입력된 마지막 달을 만기(기준시점)로 보고 잔여 개월/만기시 수령액을 추정한다.
@@ -381,7 +399,7 @@ if ('serviceWorker' in navigator) {
             ${displayMonths.map(([ym, amt]) => `
               <tr>
                 <td>${ym}</td>
-                <td>${fmtWon(amt)}</td>
+                <td>${fmtWon(amt)}${monthLinkedTotal(c, ym) ? `<div style="font-size:10.5px; color:#2f5f8a; margin-top:2px;">🔗 현금출납부 연동 ${fmtWon(monthLinkedTotal(c, ym))} 포함</div>` : ''}</td>
                 <td>
                   <button class="row-btn" data-month-edit="${c.id}:${ym}">수정</button>
                   <button class="row-btn danger" data-month-del="${c.id}:${ym}">삭제</button>
@@ -452,7 +470,7 @@ if ('serviceWorker' in navigator) {
 
   async function editMonth(id, ym){
     const c = allCards.find(x => x.id === id);
-    const newVal = prompt(`${ym} 사용액`, c.monthly[ym]);
+    const newVal = prompt(`${ym} 사용액${linkedWarningText(c, ym)}`, c.monthly[ym]);
     if (newVal === null) return;
     const monthly = Object.assign({}, c.monthly, { [ym]: Number(newVal) || 0 });
     await cardsRef.doc(id).update({ monthly });
@@ -462,8 +480,8 @@ if ('serviceWorker' in navigator) {
   }
 
   async function deleteMonth(id, ym){
-    if (!confirm(`${ym} 사용액 기록을 삭제할까요?`)) return;
     const c = allCards.find(x => x.id === id);
+    if (!confirm(`${ym} 사용액 기록을 삭제할까요?${linkedWarningText(c, ym)}`)) return;
     const monthly = Object.assign({}, c.monthly);
     delete monthly[ym];
     await cardsRef.doc(id).update({ monthly });
@@ -493,7 +511,9 @@ if ('serviceWorker' in navigator) {
 
   async function deleteCard(id){
     const c = allCards.find(x => x.id === id);
-    if (!confirm(`"${c.label}" 항목을 삭제할까요? 월별 사용액 기록이 모두 함께 삭제됩니다.`)) return;
+    const linkedTotal = cardLinkedTotal(c);
+    const linkedNote = linkedTotal ? `\n\n⚠ 이 항목에는 현금출납부와 연동된 금액이 총 ${fmtWon(linkedTotal)} 포함되어 있습니다. 삭제하면 현금출납부 쪽 연동 기록과 어긋나게 됩니다.` : '';
+    if (!confirm(`"${c.label}" 항목을 삭제할까요? 월별 사용액 기록이 모두 함께 삭제됩니다.${linkedNote}`)) return;
     await cardsRef.doc(id).delete();
     openIds.delete(id);
     await loadCards();

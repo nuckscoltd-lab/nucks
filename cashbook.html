@@ -514,30 +514,47 @@
     return '';
   }
 
-  // 선택된 카드의 월별 합계에 amount를 "더한다" (트랜잭션으로 동시수정 충돌 방지)
-  async function applyLinkIncrement(collection, cardId, ym, amount){
-    if (!collection || !cardId || !ym || !amount) return;
+  // 선택된 카드의 월별 합계에 amount를 "더한다" (트랜잭션으로 동시수정 충돌 방지).
+  // 동시에 카드 문서에 linkedContributions: { ym: { 이거래ID: amount } } 를 같이 남겨서,
+  // 공과금/보험/세금/이자상환관리 페이지에서 "이 달 금액 중 현금출납부 연동분이 얼마인지"
+  // 알아보고 직접 수정·삭제하기 전에 경고할 수 있게 한다 (각 페이지의 linkedWarningText 참고).
+  async function applyLinkIncrement(collection, cardId, ym, amount, entryId){
+    if (!collection || !cardId || !ym || !amount || !entryId) return;
     const ref = db.collection(collection).doc(cardId);
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) throw new Error('연동 대상 카드를 찾을 수 없습니다 (삭제되었을 수 있어요).');
-      const monthly = Object.assign({}, snap.data().monthly || {});
+      const cardData = snap.data();
+      const monthly = Object.assign({}, cardData.monthly || {});
       monthly[ym] = (Number(monthly[ym]) || 0) + amount;
-      tx.update(ref, { monthly });
+      const linkedContributions = Object.assign({}, cardData.linkedContributions || {});
+      const monthContrib = Object.assign({}, linkedContributions[ym] || {});
+      monthContrib[entryId] = amount;
+      linkedContributions[ym] = monthContrib;
+      tx.update(ref, { monthly, linkedContributions });
     });
   }
 
   // 이미 반영됐던 금액을 되돌린다 (수정/삭제 시 사용). 카드가 이미 삭제됐으면 조용히 건너뛴다.
-  async function reverseLinkIncrement(collection, cardId, ym, amount){
+  // linkedContributions에서도 이 거래의 기여분을 함께 지워서, 남은 기록이 실제 반영 상태와 어긋나지 않게 한다.
+  async function reverseLinkIncrement(collection, cardId, ym, amount, entryId){
     if (!collection || !cardId || !ym || !amount) return;
     const ref = db.collection(collection).doc(cardId);
     try {
       await db.runTransaction(async (tx) => {
         const snap = await tx.get(ref);
         if (!snap.exists) return;
-        const monthly = Object.assign({}, snap.data().monthly || {});
+        const cardData = snap.data();
+        const monthly = Object.assign({}, cardData.monthly || {});
         monthly[ym] = (Number(monthly[ym]) || 0) - amount;
-        tx.update(ref, { monthly });
+        const linkedContributions = Object.assign({}, cardData.linkedContributions || {});
+        if (entryId && linkedContributions[ym]) {
+          const monthContrib = Object.assign({}, linkedContributions[ym]);
+          delete monthContrib[entryId];
+          if (Object.keys(monthContrib).length) linkedContributions[ym] = monthContrib;
+          else delete linkedContributions[ym];
+        }
+        tx.update(ref, { monthly, linkedContributions });
       });
     } catch (err) {
       console.warn('연동 반영분 되돌리기 실패 (카드가 이미 삭제됐을 수 있음):', err);
@@ -548,9 +565,10 @@
   // - 기존에 반영된 연동이 있었다면 먼저 되돌리고,
   // - 새 상태가 "출금 + 연동카드 선택 + 확정"이면 지금 바로 반영하고,
   // - "출금 + 연동카드 선택 + 예정"이면 나중에 확정될 때 반영하도록 "연동 예정"만 저장해둔다.
-  async function resolveLinkOnSave(oldEntry, newData){
+  // entryId는 이 거래 문서의 ID (신규 저장 시에도 미리 만들어둔 ID를 넘겨받는다 - 아래 saveEntryBtn 참고).
+  async function resolveLinkOnSave(oldEntry, newData, entryId){
     if (oldEntry && oldEntry.linkApplied) {
-      await reverseLinkIncrement(oldEntry.linkTargetCollection, oldEntry.linkTargetCardId, oldEntry.linkAppliedYm, oldEntry.linkAppliedAmount);
+      await reverseLinkIncrement(oldEntry.linkTargetCollection, oldEntry.linkTargetCardId, oldEntry.linkAppliedYm, oldEntry.linkAppliedAmount, entryId);
     }
 
     const kind = newData.type === '출금' ? document.getElementById('f-linkTarget').value : '';
@@ -569,7 +587,7 @@
     const ym = (newData.date || '').slice(0, 7);
 
     if (newData.status === '확정') {
-      await applyLinkIncrement(cfg.collection, cardId, ym, newData.amount);
+      await applyLinkIncrement(cfg.collection, cardId, ym, newData.amount, entryId);
       return Object.assign(newData, {
         linkTargetCollection: cfg.collection, linkTargetCardId: cardId, linkTargetCardLabel: cardLabel,
         linkApplied: true, linkAppliedYm: ym, linkAppliedAmount: newData.amount
@@ -590,7 +608,7 @@
     const update = { status: '확정' };
     if (e.type === '출금' && e.linkTargetCollection && e.linkTargetCardId && !e.linkApplied) {
       const ym = (e.date || '').slice(0, 7);
-      await applyLinkIncrement(e.linkTargetCollection, e.linkTargetCardId, ym, e.amount);
+      await applyLinkIncrement(e.linkTargetCollection, e.linkTargetCardId, ym, e.amount, id);
       Object.assign(update, { linkApplied: true, linkAppliedYm: ym, linkAppliedAmount: e.amount });
     }
     await entriesRef.doc(id).update(update);
@@ -601,7 +619,7 @@
   async function deleteEntryWithLink(id){
     const e = allEntries.find(x => x.id === id);
     if (e && e.linkApplied) {
-      await reverseLinkIncrement(e.linkTargetCollection, e.linkTargetCardId, e.linkAppliedYm, e.linkAppliedAmount);
+      await reverseLinkIncrement(e.linkTargetCollection, e.linkTargetCardId, e.linkAppliedYm, e.linkAppliedAmount, id);
     }
     await entriesRef.doc(id).delete();
   }
@@ -956,15 +974,18 @@
       if (editingId) {
         const oldEntry = allEntries.find(x => x.id === editingId);
         let data = { date, type, status, amount, content, memo, incomeType };
-        data = await resolveLinkOnSave(oldEntry, data);
+        data = await resolveLinkOnSave(oldEntry, data, editingId);
         await entriesRef.doc(editingId).update(data);
         statusEl.className = 'status-line ok';
         statusEl.textContent = '수정되었습니다.';
         cancelEdit();
       } else {
+        // 연동 반영(linkedContributions) 시 이 거래 문서의 ID가 필요하므로,
+        // add() 대신 doc()으로 ID를 먼저 만들어두고 set()으로 저장한다.
+        const newRef = entriesRef.doc();
         let data = { date, type, status, amount, content, memo, incomeType, order: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp() };
-        data = await resolveLinkOnSave(null, data);
-        await entriesRef.add(data);
+        data = await resolveLinkOnSave(null, data, newRef.id);
+        await newRef.set(data);
         statusEl.className = 'status-line ok';
         statusEl.textContent = '저장되었습니다.';
         document.getElementById('f-amount').value = '';
@@ -1249,7 +1270,7 @@
       for (let i = 0; i < linked.length; i++) {
         const e = linked[i];
         statusEl.textContent = `연동 반영분을 되돌리는 중... (${i + 1}/${linked.length})`;
-        await reverseLinkIncrement(e.linkTargetCollection, e.linkTargetCardId, e.linkAppliedYm, e.linkAppliedAmount);
+        await reverseLinkIncrement(e.linkTargetCollection, e.linkTargetCardId, e.linkAppliedYm, e.linkAppliedAmount, e.id);
       }
 
       statusEl.textContent = '거래 내역 삭제 중...';
