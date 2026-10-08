@@ -558,6 +558,14 @@ if ('serviceWorker' in navigator) {
           const memo = prompt(`"${newStatus}" 사유를 입력해 주세요 (선택사항, 직원에게도 표시됩니다):`, sel.dataset.memo || '');
           if (memo === null) { sel.value = prevStatus; return; }
           updateStatus(sel.dataset.id, newStatus, memo.trim());
+        } else if (newStatus === '승인완료') {
+          // 실수로(클릭/키보드 오조작 등) 승인완료가 잘못 선택되는 걸 막기 위한 확인 단계.
+          // 승인완료는 선택 즉시 저장되고 신청자에게 알림까지 나가므로, 보류/반려와 마찬가지로
+          // 한 번 더 확인을 받고 취소하면 반영하지 않고 드롭다운을 원래 값으로 되돌린다.
+          const row = allRows.find(r => r.id === sel.dataset.id);
+          const label = row ? `${row['사원명'] || ''} 님의 "${row['날짜'] || ''} · ${row['연차구분'] || ''}"` : '이';
+          if (!confirm(`${label} 건을 "승인완료"로 처리하시겠습니까?`)) { sel.value = prevStatus; return; }
+          updateStatus(sel.dataset.id, newStatus);
         } else {
           // 보류/반려가 아닌 상태로 바꿀 때는 승인메모 필드를 건드리지 않는다(과거 사유 기록 보존) -
           // 어차피 보류/반려일 때만 화면에 표시되므로 다른 상태에서는 자연히 안 보인다.
