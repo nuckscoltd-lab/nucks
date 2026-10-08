@@ -329,8 +329,36 @@ if ('serviceWorker' in navigator) {
       if (currentRole === 'admin') populateEmployeeFilter();
       renderSummary();
       renderTable();
+      await checkMyDecisionNotifications();
     } catch (err) {
       emptyMsg.textContent = '불러오기 실패: ' + err.message;
+    }
+  }
+
+  // ── 승인 결과 알림 ──
+  // 내 연차 신청 중에, 아직 내가 "확인 안 한" 승인완료/보류/반려 결정이 있으면 팝업으로 알려준다.
+  // admin이 승인상태를 바꿀 때 decisionSeen:false를 같이 남겨두고(아래 updateStatus 참고),
+  // 신청자 본인이 이 페이지를 열 때(=loadLeaves가 돌 때) 그걸 찾아서 보여주고 바로 true로 바꿔
+  // 다음에 또 뜨지 않게 한다. 본인 소유 문서(row.uid === currentUser.uid)만 대상이라 admin이
+  // 남의 결정까지 알림받는 일은 없다 - 관리자 자신이 신청한 연차가 있다면 그것도 똑같이 뜬다.
+  async function checkMyDecisionNotifications() {
+    const mine = allRows.filter(r => r.uid === currentUser.uid && r.decisionSeen === false);
+    if (!mine.length) return;
+
+    const lines = mine.map(r => {
+      const status = r['승인상태'] || '';
+      const memoNote = (['보류', '반려'].includes(status) && r['승인메모']) ? ` (사유: ${r['승인메모']})` : '';
+      return `· ${r['날짜'] || ''} · ${r['연차구분'] || ''} → "${status}"${memoNote}`;
+    });
+    alert(`연차 신청 처리 결과 안내\n\n${lines.join('\n')}`);
+
+    try {
+      const batch = db.batch();
+      mine.forEach(r => batch.update(db.collection('leaves').doc(r.id), { decisionSeen: true }));
+      await batch.commit();
+      mine.forEach(r => { r.decisionSeen = true; }); // 화면에 들고 있는 값도 같이 갱신
+    } catch (err) {
+      console.warn('알림 확인 처리 실패 (다음에 다시 뜰 수 있음):', err);
     }
   }
 
@@ -561,7 +589,14 @@ if ('serviceWorker' in navigator) {
       // memo가 명시적으로 전달된 경우(보류/반려로 바꿀 때)만 승인메모 필드를 갱신한다 - 그 외
       // 상태로 바꿀 때는 이 필드를 그대로 둔다(과거 사유 기록 보존, 화면에는 보류/반려일 때만 표시됨).
       if (memo !== undefined) payload['승인메모'] = memo;
+      // 승인완료/보류/반려처럼 실제 "결정"이 내려진 경우에만 신청자용 알림 표시를 "안 읽음"으로
+      // 남겨둔다 - 신청자가 본인 화면을 다시 열면 checkMyDecisionNotifications()가 이걸 보고
+      // 팝업을 띄워준다 (위쪽 참고).
+      if (['승인완료', '보류', '반려'].includes(newStatus)) payload['decisionSeen'] = false;
       await db.collection('leaves').doc(docId).update(payload);
+      if (row) {
+        alert(`정상적으로 처리되었습니다.\n\n${row['사원명'] || ''} 님의 "${row['날짜'] || ''} · ${row['연차구분'] || ''}" 신청 건이 "${newStatus}"(으)로 처리되었습니다.`);
+      }
       await loadLeaves();
     } catch (err) {
       alert('상태 변경 실패: ' + err.message);
