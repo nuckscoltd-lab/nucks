@@ -74,6 +74,33 @@ if ('serviceWorker' in navigator) {
     border:none; font-size:12.5px; letter-spacing:.05em; cursor:pointer; border-radius:4px;
   }
 
+  /* 상태 다중선택 드롭다운 */
+  .ms-filter{ position:relative; }
+  .ms-trigger{
+    padding:8px 10px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13px; background:#fff; cursor:pointer;
+    color:var(--ink); white-space:nowrap;
+  }
+  .ms-trigger:hover{ border-color:var(--ink); }
+  .ms-panel{
+    position:absolute; top:calc(100% + 4px); left:0; z-index:20;
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:10px 12px; min-width:170px; max-height:260px; overflow-y:auto;
+    box-shadow:0 4px 14px rgba(0,0,0,.08);
+  }
+  .ms-option{ display:flex; align-items:center; gap:7px; font-size:12.5px; padding:5px 2px; cursor:pointer; white-space:nowrap; }
+  .ms-option input{ margin:0; }
+  .ms-sep{ height:1px; background:var(--line); margin:6px 0; }
+
+  /* 청구/수금금액 - 공급가액+세액 자동산출 입력그룹 */
+  .amt-group{ border:1px solid var(--line); border-radius:4px; padding:10px 12px; background:#fff; }
+  .amt-group-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+  .amt-group-label{ font-size:11.5px; color:var(--muted); font-weight:500; }
+  .amt-direct-toggle{ display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted); cursor:pointer; white-space:nowrap; }
+  .amt-direct-toggle input{ margin:0; }
+  .amt-auto-fields, .amt-direct-fields{ display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
+  .amt-total-display{ background:#f4f2ec !important; color:var(--muted); }
+
   .project-card{
     background:#fff; border:1px solid var(--line); border-radius:6px;
     margin-bottom:12px; overflow:hidden;
@@ -230,7 +257,8 @@ if ('serviceWorker' in navigator) {
   let openIds = new Set();
   let showDatesFor = new Set();
   let editingProjectId = null;
-  let activeStatus = '전체';
+  let editingRound = null; // { pid, idx } 또는 null - 회차 인라인 수정 상태
+  let activeStatuses = new Set(); // 비어있으면 "전체" - 상태 다중선택 필터
   let activeCategory = '전체';
   let startMonth = '';
   let endMonth = '';
@@ -371,15 +399,44 @@ if ('serviceWorker' in navigator) {
     renderAll();
   }
 
+  // ---------- 상태 다중선택 필터 드롭다운 ----------
+  function renderStatusFilterPanel(){
+    const panel = document.getElementById('statusFilterPanel');
+    if (!panel) return;
+    const statuses = [...new Set(allProjects.map(p => p.status).filter(Boolean))].sort();
+    panel.innerHTML = `
+      <label class="ms-option"><input type="checkbox" id="ms-status-all" ${activeStatuses.size === 0 ? 'checked' : ''}> 전체</label>
+      <div class="ms-sep"></div>
+      ${statuses.map(s => `<label class="ms-option"><input type="checkbox" class="ms-status-opt" value="${esc(s)}" ${activeStatuses.has(s) ? 'checked' : ''}> ${esc(s)}</label>`).join('')}
+    `;
+    updateStatusFilterTriggerLabel();
+  }
+
+  function updateStatusFilterTriggerLabel(){
+    const trigger = document.getElementById('statusFilterTrigger');
+    if (!trigger) return;
+    if (activeStatuses.size === 0) { trigger.textContent = '전체 상태'; return; }
+    const arr = [...activeStatuses];
+    trigger.textContent = arr.length <= 2 ? `상태: ${arr.join(', ')}` : `상태: ${arr.length}개 선택`;
+  }
+
+  // 드롭다운 바깥을 클릭하면 패널을 닫는다 (한 번만 등록 - renderAll이 매번 DOM을 새로 그려도 유효)
+  document.addEventListener('click', (e) => {
+    if (e.target.closest && e.target.closest('#statusFilterWrap')) return;
+    const panel = document.getElementById('statusFilterPanel');
+    if (panel) panel.style.display = 'none';
+  });
+
   function renderAll(){
     const main = document.getElementById('mainArea');
     main.innerHTML = `
       <div class="summary-bar" id="summaryBar"></div>
       <div class="panel" style="padding:16px 18px;">
         <div class="toolbar">
-          <select id="statusFilter">
-            <option value="전체">전체 상태</option>
-          </select>
+          <div class="ms-filter" id="statusFilterWrap">
+            <button type="button" class="ms-trigger" id="statusFilterTrigger">전체 상태</button>
+            <div class="ms-panel" id="statusFilterPanel" style="display:none;"></div>
+          </div>
           <select id="categoryFilter">
             <option value="전체">전체 구분</option>
             <option value="공사">공사</option>
@@ -399,17 +456,41 @@ if ('serviceWorker' in navigator) {
       <div class="empty" id="emptyMsg" style="display:none;">조건에 맞는 프로젝트가 없습니다.</div>
     `;
 
-    // 상태 옵션 동적 채우기
-    const statuses = [...new Set(allProjects.map(p => p.status).filter(Boolean))].sort();
-    document.getElementById('statusFilter').innerHTML =
-      '<option value="전체">전체 상태</option>' + statuses.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
-    document.getElementById('statusFilter').value = activeStatus;
+    // 상태 다중선택 드롭다운 채우기
+    renderStatusFilterPanel();
+    document.getElementById('statusFilterTrigger').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const panel = document.getElementById('statusFilterPanel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    });
+    document.getElementById('statusFilterPanel').addEventListener('change', (e) => {
+      // 체크박스를 하나 누를 때마다 패널 전체를 새로 그리면(innerHTML 재생성) 연속으로 여러 개를
+      // 빠르게 클릭할 때 직전 요소가 떼어져나가(detached) 다음 클릭이 반영 안 될 수 있어서,
+      // "전체" 체크박스 상태와 트리거 글자만 직접 갱신하고 나머지 체크박스는 그대로 둔다.
+      if (e.target.id === 'ms-status-all') {
+        if (e.target.checked) {
+          activeStatuses.clear();
+          document.querySelectorAll('.ms-status-opt').forEach(cb => { cb.checked = false; });
+          updateStatusFilterTriggerLabel();
+          renderList();
+        } else {
+          e.target.checked = true; // "전체"는 직접 해제 불가 - 개별 상태를 선택하면 자동으로 꺼짐
+        }
+        return;
+      }
+      if (e.target.classList.contains('ms-status-opt')) {
+        if (e.target.checked) activeStatuses.add(e.target.value); else activeStatuses.delete(e.target.value);
+        const allChk = document.getElementById('ms-status-all');
+        if (allChk) allChk.checked = activeStatuses.size === 0;
+        updateStatusFilterTriggerLabel();
+        renderList();
+      }
+    });
     document.getElementById('categoryFilter').value = activeCategory;
     document.getElementById('startMonthFilter').value = startMonth;
     document.getElementById('endMonthFilter').value = endMonth;
     document.getElementById('searchInput').value = searchText;
 
-    document.getElementById('statusFilter').addEventListener('change', (e) => { activeStatus = e.target.value; renderList(); });
     document.getElementById('categoryFilter').addEventListener('change', (e) => { activeCategory = e.target.value; renderList(); });
     document.getElementById('startMonthFilter').addEventListener('change', (e) => { startMonth = e.target.value; renderList(); });
     document.getElementById('endMonthFilter').addEventListener('change', (e) => { endMonth = e.target.value; renderList(); });
@@ -427,7 +508,7 @@ if ('serviceWorker' in navigator) {
 
   function getFilteredProjects(){
     let rows = allProjects;
-    if (activeStatus !== '전체') rows = rows.filter(p => p.status === activeStatus);
+    if (activeStatuses.size) rows = rows.filter(p => activeStatuses.has(p.status));
     if (activeCategory !== '전체') rows = rows.filter(p => (p.category || '').includes(activeCategory));
     if (startMonth) rows = rows.filter(p => (p.contractDate || '').slice(0, 7) >= startMonth);
     if (endMonth) rows = rows.filter(p => (p.contractDate || '').slice(0, 7) <= endMonth);
@@ -533,6 +614,20 @@ if ('serviceWorker' in navigator) {
         <div class="field"><label>청구일자</label><input type="date" id="nr-claimdate-${p.id}"></div>
         <div class="field"><label>수금일자</label><input type="date" id="nr-collectdate-${p.id}"></div>` : '';
 
+    const roundAddFields = `
+      <div class="inline-add">
+        <div class="field"><label>회차</label><input type="number" id="nr-round-${p.id}" style="width:60px;" value="${(p.rounds && p.rounds.length || 0) + 1}"></div>
+        ${dateAddFields}
+      </div>
+      <div class="inline-add" style="margin-top:10px;">
+        ${renderAmountGroup(`nr-claim-${p.id}`, '청구금액', { mode: 'auto' })}
+        ${renderAmountGroup(`nr-collect-${p.id}`, '수금금액', { mode: 'auto' })}
+      </div>
+      <div style="margin-top:10px;">
+        <button data-round-add="${p.id}">회차 추가</button>
+      </div>
+    `;
+
     const roundsHtml = (p.rounds || []).length ? `
       <div class="subsection-title" style="display:flex; align-items:center; justify-content:space-between;">
         <span>회차별 청구 / 수금</span>
@@ -541,39 +636,32 @@ if ('serviceWorker' in navigator) {
       <table class="mini">
         <thead><tr><th>회차</th><th>청구금액</th><th>수금금액</th>${dateHeaders}<th>관리</th></tr></thead>
         <tbody id="rounds-${p.id}">
-          ${p.rounds.map((r, i) => `
+          ${p.rounds.map((r, i) => {
+            if (editingRound && editingRound.pid === p.id && editingRound.idx === i) {
+              return renderRoundEditRow(p, i, showDates);
+            }
+            return `
             <tr>
               <td>${r.round}차</td>
-              <td>${fmtWon(r.claimAmount)}</td>
-              <td>${fmtWon(r.collectAmount)}</td>
+              <td>${fmtWon(r.claimAmount)}${r.claimMode === 'auto' ? `<div style="font-size:10.5px; color:var(--muted); margin-top:2px;">공급 ${fmtWon(r.claimSupply)} · 세액 ${fmtWon(r.claimTax)}</div>` : ''}</td>
+              <td>${fmtWon(r.collectAmount)}${r.collectMode === 'auto' ? `<div style="font-size:10.5px; color:var(--muted); margin-top:2px;">공급 ${fmtWon(r.collectSupply)} · 세액 ${fmtWon(r.collectTax)}</div>` : ''}</td>
               ${showDates ? `<td>${esc(r.claimDate || '-')}</td><td>${esc(r.collectDate || '-')}</td>` : ''}
               <td>
                 <button class="row-btn" data-round-edit="${p.id}:${i}">수정</button>
                 <button class="row-btn danger" data-round-del="${p.id}:${i}">삭제</button>
               </td>
             </tr>
-          `).join('')}
+          `;
+          }).join('')}
         </tbody>
       </table>
-      <div class="inline-add">
-        <div class="field"><label>회차</label><input type="number" id="nr-round-${p.id}" style="width:60px;" value="${(p.rounds.length || 0) + 1}"></div>
-        <div class="field"><label>청구금액</label><input type="text" inputmode="numeric" id="nr-claim-${p.id}" class="money-in" style="width:120px;" placeholder="0"></div>
-        <div class="field"><label>수금금액</label><input type="text" inputmode="numeric" id="nr-collect-${p.id}" class="money-in" style="width:120px;" placeholder="0"></div>
-        ${dateAddFields}
-        <button data-round-add="${p.id}">회차 추가</button>
-      </div>
+      ${roundAddFields}
     ` : `
       <div class="subsection-title" style="display:flex; align-items:center; justify-content:space-between;">
         <span>회차별 청구 / 수금 (없음)</span>
         <button class="row-btn" data-round-date-toggle="${p.id}" style="text-transform:none; letter-spacing:normal;">${showDates ? '날짜 숨기기' : '청구·수금일자 표시'}</button>
       </div>
-      <div class="inline-add">
-        <div class="field"><label>회차</label><input type="number" id="nr-round-${p.id}" style="width:60px;" value="1"></div>
-        <div class="field"><label>청구금액</label><input type="text" inputmode="numeric" id="nr-claim-${p.id}" class="money-in" style="width:120px;" placeholder="0"></div>
-        <div class="field"><label>수금금액</label><input type="text" inputmode="numeric" id="nr-collect-${p.id}" class="money-in" style="width:120px;" placeholder="0"></div>
-        ${dateAddFields}
-        <button data-round-add="${p.id}">회차 추가</button>
-      </div>
+      ${roundAddFields}
     `;
 
     const linkedNames = p.workLogProjectNames || [];
@@ -632,7 +720,20 @@ if ('serviceWorker' in navigator) {
     document.querySelectorAll(`[data-round-edit^="${p.id}:"]`).forEach(btn => {
       btn.addEventListener('click', () => {
         const idx = Number(btn.dataset.roundEdit.split(':')[1]);
-        editRoundPrompt(p.id, idx);
+        editingRound = { pid: p.id, idx };
+        renderList();
+      });
+    });
+    document.querySelectorAll(`[data-round-save^="${p.id}:"]`).forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.roundSave.split(':')[1]);
+        saveRoundEdit(p.id, idx);
+      });
+    });
+    document.querySelectorAll(`[data-round-cancel^="${p.id}:"]`).forEach(btn => {
+      btn.addEventListener('click', () => {
+        editingRound = null;
+        renderList();
       });
     });
 
@@ -647,14 +748,152 @@ if ('serviceWorker' in navigator) {
     return Number(String(el.value || '').replace(/[^\d]/g, '')) || 0;
   }
 
+  // ---------- 청구/수금금액 입력그룹: 공급가액+세액(기본) ↔ 직접입력 ----------
+  // prefix: 이 그룹에 속한 입력칸들을 구분하는 고유 문자열(예: nr-claim-<id>, er-collect-<id>-<idx>)
+  // initial: { mode: 'auto'|'direct', supply, tax, amount }
+  function renderAmountGroup(prefix, label, initial){
+    initial = initial || {};
+    const isDirect = initial.mode === 'direct';
+    const supply = initial.supply || 0;
+    const tax = initial.tax || 0;
+    const amount = initial.amount || 0;
+    return `
+      <div class="amt-group" data-amt-group="${prefix}">
+        <div class="amt-group-head">
+          <span class="amt-group-label">${esc(label)}</span>
+          <label class="amt-direct-toggle">
+            <input type="checkbox" class="amt-direct-chk" data-amt-direct="${prefix}" ${isDirect ? 'checked' : ''}>
+            직접입력
+          </label>
+        </div>
+        <div class="amt-auto-fields" data-amt-auto-fields="${prefix}" style="${isDirect ? 'display:none;' : ''}">
+          <div class="field"><label>공급가액</label><input type="text" inputmode="numeric" class="money-in amt-supply" data-amt-supply="${prefix}" value="${supply ? supply.toLocaleString('ko-KR') : ''}" placeholder="0" style="width:120px;"></div>
+          <div class="field"><label>세액</label><input type="text" inputmode="numeric" class="money-in amt-tax" data-amt-tax="${prefix}" data-tax-auto="1" value="${tax ? tax.toLocaleString('ko-KR') : ''}" placeholder="0" style="width:100px;"></div>
+          <div class="field"><label>합계</label><input type="text" class="amt-total-display" data-amt-total-display="${prefix}" value="${fmtWon(supply + tax)}" readonly style="width:120px;"></div>
+        </div>
+        <div class="amt-direct-fields" data-amt-direct-group="${prefix}" style="${isDirect ? '' : 'display:none;'}">
+          <div class="field"><label>총액</label><input type="text" inputmode="numeric" class="money-in amt-direct-amount" data-amt-direct-amount="${prefix}" value="${amount ? amount.toLocaleString('ko-KR') : ''}" placeholder="0" style="width:140px;"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  // 화면에 그려진 amt-group에서 현재 값을 읽어온다 - 직접입력 모드면 총액 그대로, 아니면 공급가액+세액을 더한다.
+  function readAmountGroup(prefix){
+    const directChk = document.querySelector(`[data-amt-direct="${prefix}"]`);
+    const isDirect = !!(directChk && directChk.checked);
+    if (isDirect) {
+      const amountEl = document.querySelector(`[data-amt-direct-amount="${prefix}"]`);
+      const amount = amountEl ? parseMoney(amountEl) : 0;
+      return { amount, supply: null, tax: null, mode: 'direct' };
+    }
+    const supplyEl = document.querySelector(`[data-amt-supply="${prefix}"]`);
+    const taxEl = document.querySelector(`[data-amt-tax="${prefix}"]`);
+    const supply = supplyEl ? parseMoney(supplyEl) : 0;
+    const tax = taxEl ? parseMoney(taxEl) : 0;
+    return { amount: supply + tax, supply, tax, mode: 'auto' };
+  }
+
+  // amt-group 안의 입력들은 이벤트 위임(document 레벨)으로 한 번만 연결해둔다 - renderList()가 매번
+  // DOM을 새로 그려도 별도로 다시 연결할 필요가 없다.
+  document.addEventListener('input', (e) => {
+    const el = e.target;
+    if (el.classList.contains('amt-supply')) {
+      const prefix = el.dataset.amtSupply;
+      const taxEl = document.querySelector(`[data-amt-tax="${prefix}"]`);
+      const supply = parseMoney(el);
+      let tax = taxEl ? parseMoney(taxEl) : 0;
+      if (taxEl && taxEl.dataset.taxAuto !== '0') {
+        tax = Math.round(supply * 0.1);
+        taxEl.value = tax ? tax.toLocaleString('ko-KR') : '';
+      }
+      const totalEl = document.querySelector(`[data-amt-total-display="${prefix}"]`);
+      if (totalEl) totalEl.value = fmtWon(supply + tax);
+    } else if (el.classList.contains('amt-tax')) {
+      el.dataset.taxAuto = '0'; // 사용자가 세액을 직접 고쳤으니, 공급가액이 바뀌어도 더는 자동으로 덮어쓰지 않는다
+      const prefix = el.dataset.amtTax;
+      const supplyEl = document.querySelector(`[data-amt-supply="${prefix}"]`);
+      const supply = supplyEl ? parseMoney(supplyEl) : 0;
+      const tax = parseMoney(el);
+      const totalEl = document.querySelector(`[data-amt-total-display="${prefix}"]`);
+      if (totalEl) totalEl.value = fmtWon(supply + tax);
+    }
+  });
+
+  document.addEventListener('change', (e) => {
+    const el = e.target;
+    if (!el.classList.contains('amt-direct-chk')) return;
+    const prefix = el.dataset.amtDirect;
+    const autoFields = document.querySelector(`[data-amt-auto-fields="${prefix}"]`);
+    const directFields = document.querySelector(`[data-amt-direct-group="${prefix}"]`);
+    const supplyEl = document.querySelector(`[data-amt-supply="${prefix}"]`);
+    const taxEl = document.querySelector(`[data-amt-tax="${prefix}"]`);
+    const directEl = document.querySelector(`[data-amt-direct-amount="${prefix}"]`);
+    if (el.checked) {
+      // 공급가액+세액 -> 직접입력: 비어있으면 지금까지의 합계를 그대로 채워준다
+      if (directEl && !directEl.value.trim()) {
+        const supply = supplyEl ? parseMoney(supplyEl) : 0;
+        const tax = taxEl ? parseMoney(taxEl) : 0;
+        const total = supply + tax;
+        if (total) directEl.value = total.toLocaleString('ko-KR');
+      }
+      if (autoFields) autoFields.style.display = 'none';
+      if (directFields) directFields.style.display = '';
+    } else {
+      // 직접입력 -> 공급가액+세액: 공급가액이 비어있으면 기존 총액을 10% 부가세 기준으로 역산해 채워준다
+      if (supplyEl && !supplyEl.value.trim()) {
+        const total = directEl ? parseMoney(directEl) : 0;
+        if (total) {
+          const supply = Math.round(total / 1.1);
+          const tax = total - supply;
+          supplyEl.value = supply.toLocaleString('ko-KR');
+          if (taxEl) { taxEl.value = tax.toLocaleString('ko-KR'); taxEl.dataset.taxAuto = '1'; }
+          const totalEl = document.querySelector(`[data-amt-total-display="${prefix}"]`);
+          if (totalEl) totalEl.value = fmtWon(supply + tax);
+        }
+      }
+      if (autoFields) autoFields.style.display = '';
+      if (directFields) directFields.style.display = 'none';
+    }
+  });
+
+  function renderRoundEditRow(p, idx, showDates){
+    const r = p.rounds[idx];
+    const colspan = 4 + (showDates ? 2 : 0);
+    return `
+      <tr>
+        <td colspan="${colspan}" style="background:#fcfbf9; padding:14px 8px;">
+          <div class="inline-add" style="margin-top:0;">
+            <div class="field"><label>회차</label><input type="number" id="er-round-${p.id}-${idx}" style="width:60px;" value="${r.round}"></div>
+            ${showDates ? `
+            <div class="field"><label>청구일자</label><input type="date" id="er-claimdate-${p.id}-${idx}" value="${r.claimDate || ''}"></div>
+            <div class="field"><label>수금일자</label><input type="date" id="er-collectdate-${p.id}-${idx}" value="${r.collectDate || ''}"></div>` : ''}
+          </div>
+          <div class="inline-add" style="margin-top:10px;">
+            ${renderAmountGroup(`er-claim-${p.id}-${idx}`, '청구금액', { mode: r.claimMode || 'direct', supply: r.claimSupply, tax: r.claimTax, amount: r.claimAmount })}
+            ${renderAmountGroup(`er-collect-${p.id}-${idx}`, '수금금액', { mode: r.collectMode || 'direct', supply: r.collectSupply, tax: r.collectTax, amount: r.collectAmount })}
+          </div>
+          <div style="margin-top:12px;">
+            <button class="add-btn" data-round-save="${p.id}:${idx}" style="padding:7px 14px; font-size:11.5px;">저장</button>
+            <button class="row-btn" data-round-cancel="${p.id}:${idx}" style="margin-left:8px;">취소</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+
   async function addRound(id){
     const p = allProjects.find(x => x.id === id);
     const round = Number(document.getElementById(`nr-round-${id}`).value) || (p.rounds.length + 1);
-    const claimAmount = parseMoney(document.getElementById(`nr-claim-${id}`));
-    const collectAmount = parseMoney(document.getElementById(`nr-collect-${id}`));
+    const claim = readAmountGroup(`nr-claim-${id}`);
+    const collect = readAmountGroup(`nr-collect-${id}`);
     const claimDateEl = document.getElementById(`nr-claimdate-${id}`);
     const collectDateEl = document.getElementById(`nr-collectdate-${id}`);
-    const newRound = { round, claimAmount, collectAmount };
+    const newRound = {
+      round,
+      claimAmount: claim.amount, claimSupply: claim.supply, claimTax: claim.tax, claimMode: claim.mode,
+      collectAmount: collect.amount, collectSupply: collect.supply, collectTax: collect.tax, collectMode: collect.mode
+    };
     if (claimDateEl && claimDateEl.value) newRound.claimDate = claimDateEl.value;
     if (collectDateEl && collectDateEl.value) newRound.collectDate = collectDateEl.value;
     const rounds = [...(p.rounds || []), newRound];
@@ -666,30 +905,31 @@ if ('serviceWorker' in navigator) {
     if (!confirm('이 회차를 삭제할까요?')) return;
     const p = allProjects.find(x => x.id === id);
     const rounds = p.rounds.filter((_, i) => i !== idx);
+    if (editingRound && editingRound.pid === id) editingRound = null; // 인덱스가 밀리므로 열려있던 수정 폼은 닫는다
     await projectsRef.doc(id).update({ rounds });
     await loadProjects();
   }
 
-  async function editRoundPrompt(id, idx){
+  async function saveRoundEdit(id, idx){
     const p = allProjects.find(x => x.id === id);
     const r = p.rounds[idx];
-    const newClaim = prompt('청구금액', r.claimAmount);
-    if (newClaim === null) return;
-    const newCollect = prompt('수금금액', r.collectAmount);
-    if (newCollect === null) return;
-    const newClaimDate = prompt('청구일자 (YYYY-MM-DD, 없으면 비워두기)', r.claimDate || '');
-    if (newClaimDate === null) return;
-    const newCollectDate = prompt('수금일자 (YYYY-MM-DD, 없으면 비워두기)', r.collectDate || '');
-    if (newCollectDate === null) return;
+    const roundEl = document.getElementById(`er-round-${id}-${idx}`);
+    const round = (roundEl && Number(roundEl.value)) || r.round;
+    const claim = readAmountGroup(`er-claim-${id}-${idx}`);
+    const collect = readAmountGroup(`er-collect-${id}-${idx}`);
+    const claimDateEl = document.getElementById(`er-claimdate-${id}-${idx}`);
+    const collectDateEl = document.getElementById(`er-collectdate-${id}-${idx}`);
     const rounds = [...p.rounds];
     rounds[idx] = {
-      round: r.round,
-      claimAmount: Number(newClaim) || 0,
-      collectAmount: Number(newCollect) || 0,
-      claimDate: newClaimDate.trim() || null,
-      collectDate: newCollectDate.trim() || null
+      round,
+      claimAmount: claim.amount, claimSupply: claim.supply, claimTax: claim.tax, claimMode: claim.mode,
+      collectAmount: collect.amount, collectSupply: collect.supply, collectTax: collect.tax, collectMode: collect.mode,
+      // 청구·수금일자 입력칸이 화면에 없으면(날짜 숨김 상태) 기존 값을 그대로 유지한다
+      claimDate: claimDateEl ? (claimDateEl.value || null) : (r.claimDate || null),
+      collectDate: collectDateEl ? (collectDateEl.value || null) : (r.collectDate || null)
     };
     await projectsRef.doc(id).update({ rounds });
+    editingRound = null;
     await loadProjects();
   }
 
