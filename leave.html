@@ -330,6 +330,7 @@ if ('serviceWorker' in navigator) {
       renderSummary();
       renderTable();
       await checkMyDecisionNotifications();
+      await checkNewApprovalRequestNotifications();
     } catch (err) {
       emptyMsg.textContent = '불러오기 실패: ' + err.message;
     }
@@ -359,6 +360,32 @@ if ('serviceWorker' in navigator) {
       mine.forEach(r => { r.decisionSeen = true; }); // 화면에 들고 있는 값도 같이 갱신
     } catch (err) {
       console.warn('알림 확인 처리 실패 (다음에 다시 뜰 수 있음):', err);
+    }
+  }
+
+  // ── 새 승인요청 알림 (역방향) ──
+  // 근로자가 연차를 새로 등록하면 approverSeen:false로 남는다(아래 submitBtn 핸들러 참고).
+  // 이 연차의 담당 승인권자(또는 담당자 미지정 부서면 admin 누구나)가 페이지에 들어왔을 때
+  // 아직 안 본 신규 승인요청이 있으면 팝업으로 알려주고 바로 true로 바꿔 중복 알림을 막는다.
+  async function checkNewApprovalRequestNotifications() {
+    if (currentRole !== 'admin') return;
+    const pending = allRows.filter(r =>
+      r['승인상태'] === '승인요청' && r.approverSeen === false && canApproveRow(r)
+    );
+    if (!pending.length) return;
+
+    const lines = pending.map(r =>
+      `· ${r['사원명'] || ''} - ${r['날짜'] || ''} · ${r['연차구분'] || ''}${r['비고'] ? ` (${r['비고']})` : ''}`
+    );
+    alert(`새로운 연차 승인요청이 있습니다\n\n${lines.join('\n')}`);
+
+    try {
+      const batch = db.batch();
+      pending.forEach(r => batch.update(db.collection('leaves').doc(r.id), { approverSeen: true }));
+      await batch.commit();
+      pending.forEach(r => { r.approverSeen = true; });
+    } catch (err) {
+      console.warn('승인요청 알림 확인 처리 실패 (다음에 다시 뜰 수 있음):', err);
     }
   }
 
@@ -662,6 +689,7 @@ if ('serviceWorker' in navigator) {
           '연차구분': type,
           '승인상태': '승인요청',
           '비고': note,
+          approverSeen: false,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         statusEl.style.color = '#3f6b52';

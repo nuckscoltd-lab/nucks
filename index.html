@@ -674,6 +674,7 @@ if ('serviceWorker' in navigator) {
                 if (role === 'worker' || role === 'admin') {
                     checkNotifications(user, role);
                     checkMyLeaveDecisionNotifications(user);
+                    checkNewApprovalRequestNotifications(user, role);
                 }
             },
             () => {
@@ -849,6 +850,58 @@ if ('serviceWorker' in navigator) {
                 await batch.commit();
             } catch (err) {
                 console.warn('연차 결과 알림 확인 실패:', err);
+            }
+        }
+
+        // ---------- 알림: 새 연차 승인요청 (역방향) ----------
+        // leave.html의 DEPARTMENT_APPROVERS와 반드시 같은 내용으로 유지할 것
+        // (담당자를 바꾸거나 부서를 추가/변경하면 여기와 leave.html 둘 다 같이 고쳐야 함)
+        const DEPARTMENT_APPROVERS = {
+            '설계부': '김의석',
+            '디자인연구부': '김의석',
+            '경영관리부': '윤상원'
+        };
+
+        // 근로자가 새 연차를 등록하면 approverSeen:false로 남는다(leave.html 참고). 담당 승인권자가
+        // (또는 담당자 미지정 부서면 admin 누구나) 홈에 먼저 들어와도 바로 알 수 있도록, 위 checkMyLeaveDecisionNotifications와
+        // 같은 방식으로 sessionStorage 제한 없이 즉시 alert로 알려주고 approverSeen을 true로 바꾼다.
+        async function checkNewApprovalRequestNotifications(user, role) {
+            if (role !== 'admin') return;
+            try {
+                if (typeof db === 'undefined') return;
+
+                const userDoc = await db.collection('users').doc(user.uid).get();
+                const myDisplayName = userDoc.data()?.displayName || user.email;
+
+                const usersSnap = await db.collection('users').get();
+                const departmentByName = {};
+                usersSnap.docs.forEach(d => {
+                    const data = d.data();
+                    if (data.displayName) departmentByName[data.displayName] = data.department || '';
+                });
+
+                const leavesSnap = await db.collection('leaves').get();
+                const pending = leavesSnap.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .filter(r => r['승인상태'] === '승인요청' && r.approverSeen === false)
+                    .filter(r => {
+                        const dept = departmentByName[r['사원명']] || '';
+                        const designated = DEPARTMENT_APPROVERS[dept];
+                        return !designated || designated === myDisplayName;
+                    });
+
+                if (!pending.length) return;
+
+                const lines = pending.map(r =>
+                    `· ${r['사원명'] || ''} - ${r['날짜'] || ''} · ${r['연차구분'] || ''}${r['비고'] ? ` (${r['비고']})` : ''}`
+                );
+                alert(`새로운 연차 승인요청이 있습니다\n\n${lines.join('\n')}`);
+
+                const batch = db.batch();
+                pending.forEach(r => batch.update(db.collection('leaves').doc(r.id), { approverSeen: true }));
+                await batch.commit();
+            } catch (err) {
+                console.warn('승인요청 알림 확인 실패:', err);
             }
         }
 
