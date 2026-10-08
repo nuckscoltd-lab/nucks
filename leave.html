@@ -91,10 +91,15 @@ if ('serviceWorker' in navigator) {
     display:inline-block; font-size:11px; padding:2px 9px; border-radius:12px;
     background:#ece9e2; color:#7a766c;
   }
+  .dept-tag{
+    display:inline-block; font-size:10.5px; padding:2px 8px; border-radius:10px;
+    background:#eef0ea; color:#5b6350; margin-left:6px; white-space:nowrap;
+  }
   .status-select{
     padding:5px 8px; border:1px solid var(--line); border-radius:4px;
     font-family:inherit; font-size:12px; background:#fff;
   }
+  .approver-note{ font-size:10.5px; color:var(--muted); margin-top:4px; }
   .row-btn{
     font-size:12px; background:none; border:none; cursor:pointer;
     text-decoration:underline; color:var(--muted); margin-right:8px;
@@ -214,6 +219,17 @@ if ('serviceWorker' in navigator) {
   // 보류/반려는 승인완료가 아니므로 renderSummary/calcRemainingForName/buildRunningRemainingMap의
   // "승인상태 === '승인완료'" 필터에 의해 자동으로 사용량 카운팅에서 제외된다 - 별도 처리 불필요.
 
+  // 부서별 승인권한자 - 회원관리(admin.html)의 "인사정보 > 부서" 값과 정확히 일치해야 매칭된다.
+  // 여기 지정된 부서의 연차 요청은 해당 담당자 본인만 승인상태(승인완료/보류/반려)를 바꿀 수 있고,
+  // 다른 admin 계정에는 읽기 전용으로(담당자 이름과 함께) 표시된다.
+  // 여기 없는 부서(또는 부서 미지정)는 기존처럼 admin 권한을 가진 누구나 승인 처리할 수 있다.
+  // 담당자를 추가/변경하려면 아래 객체만 고치면 된다 - 이름은 회원관리에 등록된 표시이름과 정확히 같아야 함.
+  const DEPARTMENT_APPROVERS = {
+    '설계부': '김의석',
+    '디자인연구부': '김의석',
+    '경영관리부': '윤상원'
+  };
+
   function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
@@ -221,9 +237,11 @@ if ('serviceWorker' in navigator) {
   let currentRole = null;
   let currentDisplayName = '';
   let currentHireDate = null;
+  let currentDepartment = '';
   let allRows = [];
   let hireDateByName = {}; // 관리자용: 사원명 -> 입사일 매핑
   let uidByName = {}; // 관리자용: 사원명 -> uid 매핑 (다른 사원 대신 등록할 때 사용)
+  let departmentByName = {}; // 관리자용: 사원명 -> 부서 매핑 (목록 표시 + 승인권한 판단에 사용)
 
   // 근로기준법 기준 총연차 자동 계산 (employee.html과 동일한 로직)
   // 근로기준법 기준 총연차 자동 계산 (employee.html과 동일한 로직)
@@ -246,6 +264,18 @@ if ('serviceWorker' in navigator) {
     return Math.min(15 + extra, 25);
   }
 
+  // 이 연차 요청(사원명 기준 부서)을 지금 로그인한 관리자가 승인상태를 바꿀 수 있는지 판단.
+  // - admin이 아니면 애초에 불가
+  // - 부서가 DEPARTMENT_APPROVERS에 지정돼 있으면, 그 담당자 본인(표시이름 일치)만 가능
+  // - 지정 안 된 부서(또는 부서 정보 없음)는 기존처럼 admin 누구나 가능
+  function canApproveRow(row) {
+    if (currentRole !== 'admin') return false;
+    const dept = departmentByName[row['사원명']] || '';
+    const designatedApprover = DEPARTMENT_APPROVERS[dept];
+    if (!designatedApprover) return true;
+    return designatedApprover === currentDisplayName;
+  }
+
   auth.onAuthStateChanged(async (user) => {
     if (!user) return;
     currentUser = user;
@@ -255,13 +285,14 @@ if ('serviceWorker' in navigator) {
     const userData = userDoc.data() || {};
     currentDisplayName = userData.displayName || user.email;
     currentHireDate = userData.hireDate || null;
+    currentDepartment = userData.department || '';
 
     document.getElementById('employeeFilter').style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
     document.getElementById('f-employee-wrap').style.display = (currentRole === 'admin') ? 'flex' : 'none';
     document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
 
-    // 관리자는 전체 사원의 입사일/uid를 미리 확보해서 사원별 잔여연차 계산 및
-    // "다른 사원 대신 등록" 기능에 사용
+    // 관리자는 전체 사원의 입사일/uid/부서를 미리 확보해서 사원별 잔여연차 계산, 목록의 부서 표시,
+    // 부서별 승인권한 판단, "다른 사원 대신 등록" 기능에 사용
     if (currentRole === 'admin') {
       const usersSnap = await db.collection('users').get();
       usersSnap.docs.forEach(d => {
@@ -269,6 +300,7 @@ if ('serviceWorker' in navigator) {
         if (data.displayName) {
           hireDateByName[data.displayName] = data.hireDate || null;
           uidByName[data.displayName] = d.id;
+          departmentByName[data.displayName] = data.department || '';
         }
       });
       populateEmployeeSelect();
@@ -424,16 +456,21 @@ if ('serviceWorker' in navigator) {
     rows.forEach(row => {
       const canManage = (row.uid === currentUser.uid) || (currentRole === 'admin');
       const remaining = remainingByDocId[row.id] ?? calcRemainingForName(row['사원명']);
+      const dept = (currentRole === 'admin') ? (departmentByName[row['사원명']] || '') : currentDepartment;
+      const canApprove = canApproveRow(row);
+      const designatedApprover = DEPARTMENT_APPROVERS[dept];
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td data-label="사원명">${row['사원명'] || ''}</td>
+        <td data-label="사원명">${row['사원명'] || ''}${dept ? `<span class="dept-tag">${esc(dept)}</span>` : ''}</td>
         <td data-label="날짜">${row['날짜'] || ''}</td>
         <td data-label="사용량">${row['사용량'] ?? ''}</td>
         <td data-label="구분"><span class="tag">${row['연차구분'] || ''}</span></td>
         <td data-label="잔여연차">${remaining}일</td>
         <td data-label="승인상태">
           ${currentRole === 'admin'
-            ? `<select class="status-select" data-id="${row.id}" data-memo="${esc(row['승인메모'] || '')}">${STATUS_OPTIONS.map(s => `<option ${s === row['승인상태'] ? 'selected' : ''}>${s}</option>`).join('')}</select>`
+            ? (canApprove
+                ? `<select class="status-select" data-id="${row.id}" data-memo="${esc(row['승인메모'] || '')}">${STATUS_OPTIONS.map(s => `<option ${s === row['승인상태'] ? 'selected' : ''}>${s}</option>`).join('')}</select>`
+                : `${row['승인상태'] || '승인요청'}${designatedApprover ? `<div class="approver-note">담당: ${esc(designatedApprover)}</div>` : ''}`)
             : (row['승인상태'] || '승인요청')}
           ${['보류', '반려'].includes(row['승인상태']) && row['승인메모']
             ? `<div style="font-size:11px; color:var(--muted); margin-top:4px;">사유: ${esc(row['승인메모'])}</div>`
@@ -513,6 +550,12 @@ if ('serviceWorker' in navigator) {
   });
 
   async function updateStatus(docId, newStatus, memo) {
+    const row = allRows.find(r => r.id === docId);
+    if (row && !canApproveRow(row)) {
+      alert('이 사원의 부서는 담당 승인권자만 승인상태를 변경할 수 있습니다.');
+      await loadLeaves();
+      return;
+    }
     try {
       const payload = { '승인상태': newStatus };
       // memo가 명시적으로 전달된 경우(보류/반려로 바꿀 때)만 승인메모 필드를 갱신한다 - 그 외
