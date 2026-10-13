@@ -706,6 +706,45 @@
     renderCollectionsForecast();
   }
 
+  // ---------- 고정 항목 기준 "아직 등록 안 된" 미래 발생 예상치 ----------
+  // 고정 항목(allRecurring)은 "이 달에 일괄 추가" 버튼을 눌러야 비로소 cashbookEntries에
+  // 실제 문서(예정 상태)로 등록된다. 그런데 예상잔고 기준일을 몇 달 뒤로 잡아도, 그 먼 달까지
+  // 미리 "일괄 추가"를 안 눌러두면 그 달의 고정지출/고정수입이 전혀 집계가 안 되는 문제가 있었다.
+  // 그래서 예상잔고 계산 시에는, 실제로 등록된 예정 항목 외에 "등록 안 됐지만 고정 항목 규칙상
+  // 이 기간에 발생할 것으로 예상되는" 가상의 항목들도 함께 더해준다 (실제 DB에는 저장하지 않음).
+  function getRecurringOccurrences(fromDate, toDate){
+    const occurrences = [];
+    if (!fromDate || !toDate || fromDate > toDate || allRecurring.length === 0) return occurrences;
+
+    const start = new Date(fromDate);
+    const end = new Date(toDate);
+    let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    const endCursor = new Date(end.getFullYear(), end.getMonth(), 1);
+
+    while (cursor <= endCursor) {
+      const y = cursor.getFullYear();
+      const m = cursor.getMonth();
+      allRecurring.forEach(r => {
+        const day = Math.min(28, Math.max(1, Number(r.day) || 1));
+        const occDate = new Date(y, m, day).toISOString().slice(0, 10);
+        if (occDate >= fromDate && occDate <= toDate) {
+          occurrences.push({ recurringId: r.id, date: occDate, type: r.type, amount: r.amount, content: r.content, memo: r.memo });
+        }
+      });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    return occurrences;
+  }
+
+  // 이미 "일괄 추가"로 실제 등록된(같은 고정항목ID + 같은 달) 발생분은 중복 집계되지 않도록 제외한다.
+  function getUnmaterializedRecurringOccurrences(fromDate, toDate){
+    const occurrences = getRecurringOccurrences(fromDate, toDate);
+    const materializedKeys = new Set(
+      allEntries.filter(e => e.recurringId).map(e => `${e.recurringId}_${(e.date || '').slice(0, 7)}`)
+    );
+    return occurrences.filter(o => !materializedKeys.has(`${o.recurringId}_${o.date.slice(0, 7)}`));
+  }
+
   function renderSummary(){
     // 기준일 잔액에는 기준일 당일 거래까지 이미 반영돼 있으므로, 집계는 기준일 "이후"(당일 제외)부터
     const confirmedAfterStart = allEntries.filter(e => e.status === '확정' && (!config.startDate || e.date > config.startDate));
@@ -725,15 +764,28 @@
       (!config.startDate || e.date > config.startDate) &&
       e.date && e.date <= forecastDate
     );
-    const pendingNet = pendingUntilDate.reduce((sum, e) => sum + (e.type === '입금' ? e.amount : -e.amount), 0);
-    const forecast = actual + pendingNet;
 
-    // 수금예정(입금)/지출예정(출금)을 나눠서 별도로 보여줌 - 지출만 보이던 예상현황에 수금 쪽도 함께
-    const pendingIn = pendingUntilDate.filter(e => e.type === '입금').reduce((sum, e) => sum + e.amount, 0);
-    const pendingOut = pendingUntilDate.filter(e => e.type === '출금').reduce((sum, e) => sum + e.amount, 0);
+    // 기준일이 오늘 이후라면, 아직 "일괄 추가"로 등록 안 된 고정 항목의 미래 발생분도 가상으로
+    // 함께 계산해준다 - 그래야 먼 미래로 기준일을 잡아도 등록을 깜빡한 달의 고정지출/고정수입이
+    // 누락되지 않는다 (오늘 이전 달은 "이미 지났는데 안 찍은 것"이라 예상치 산정 대상이 아님).
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const projectedOccurrences = (forecastDate >= todayStr)
+      ? getUnmaterializedRecurringOccurrences(todayStr, forecastDate)
+      : [];
+
+    const pendingNet = pendingUntilDate.reduce((sum, e) => sum + (e.type === '입금' ? e.amount : -e.amount), 0);
+    const projectedNet = projectedOccurrences.reduce((sum, o) => sum + (o.type === '입금' ? o.amount : -o.amount), 0);
+    const forecast = actual + pendingNet + projectedNet;
+
+    // 수금예정(입금)/지출예정(출금)을 나눠서 별도로 보여줌 - 등록된 예정 + 고정항목 기준 예상(미등록) 합산
+    const pendingIn = pendingUntilDate.filter(e => e.type === '입금').reduce((sum, e) => sum + e.amount, 0)
+      + projectedOccurrences.filter(o => o.type === '입금').reduce((sum, o) => sum + o.amount, 0);
+    const pendingOut = pendingUntilDate.filter(e => e.type === '출금').reduce((sum, e) => sum + e.amount, 0)
+      + projectedOccurrences.filter(o => o.type === '출금').reduce((sum, o) => sum + o.amount, 0);
     document.getElementById('forecastBreakdown').innerHTML = `
       <div class="chip in">수금예정 +${fmtWon(pendingIn)}</div>
       <div class="chip out">지출예정 -${fmtWon(pendingOut)}</div>
+      ${projectedOccurrences.length ? `<div class="chip" title="아직 &quot;일괄 추가&quot;로 등록되지 않은, 고정 항목 규칙상 발생할 것으로 보이는 예상분입니다.">+ 고정항목 기준 예상 ${projectedOccurrences.length}건 (미등록)</div>` : ''}
     `;
 
     document.getElementById('actualBalance').textContent = fmtWon(actual);
@@ -741,10 +793,10 @@
 
     document.getElementById('forecastLabel').textContent = `예상잔고 (${forecastDate} 기준)`;
     document.getElementById('forecastBalance').textContent = fmtWon(forecast);
-    document.getElementById('forecastBalanceSub').textContent = `확정 잔액 + ${forecastDate}까지의 예정 입출금 ${pendingUntilDate.length}건 반영`;
+    document.getElementById('forecastBalanceSub').textContent = `확정 잔액 + ${forecastDate}까지의 예정 입출금 ${pendingUntilDate.length}건 + 고정항목 기준 예상 ${projectedOccurrences.length}건 반영`;
 
-    document.getElementById('pendingCount').textContent = pendingUntilDate.length + '건';
-    document.getElementById('pendingCountSub').textContent = `${forecastDate}까지, 아직 확정되지 않은 건수`;
+    document.getElementById('pendingCount').textContent = (pendingUntilDate.length + projectedOccurrences.length) + '건';
+    document.getElementById('pendingCountSub').textContent = `${forecastDate}까지 (등록된 예정 ${pendingUntilDate.length}건 + 고정항목 기준 예상 ${projectedOccurrences.length}건)`;
   }
 
   document.getElementById('forecastDate').addEventListener('change', renderSummary);
@@ -1021,6 +1073,7 @@
     const snap = await recurringRef.orderBy('order', 'asc').get();
     allRecurring = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderRecurringTable();
+    renderSummary(); // 고정 항목이 바뀌면 예상잔고 계산(미등록분 예상치)에도 바로 반영
   }
 
   function renderRecurringTable(){
@@ -1310,8 +1363,10 @@
   (async function init(){
     await loadConfig();
     await loadLinkTargetCards();
-    await loadEntries();
+    // loadRecurring()을 loadEntries()보다 먼저 불러야, loadEntries()가 renderAll()을 호출할 때
+    // allRecurring이 이미 채워져 있어서 예상잔고 계산에 고정항목 예상치가 처음부터 반영된다.
     await loadRecurring();
+    await loadEntries();
     loadProjectNames(); // 자동완성용이라 다른 로딩을 막지 않도록 await하지 않음
   })();
 </script>
