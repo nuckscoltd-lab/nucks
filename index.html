@@ -751,16 +751,29 @@ if ('serviceWorker' in navigator) {
                         });
                     }
 
+                    // 근무일지 한 건에 중요업무일정을 여러 건 적을 수 있게 되면서(배열 필드
+                    // importantTasks), 문서 하나가 아니라 그 안의 각 일정 건별로 펼쳐서 검사한다.
+                    // 이 기능 이전에 저장된 기존 문서는 단일 필드(중요업무일정/중요업무내용)만
+                    // 갖고 있으므로, 배열 필드가 없으면 그 단일 필드를 1건으로 간주해 그대로 쓴다.
                     const workLogsSnap = await db.collection('workLogs').get();
-                    const upcomingTasks = workLogsSnap.docs
-                        .map(d => d.data())
-                        .filter(r => r['중요업무일정'] && r['중요업무일정'] >= todayStr && r['중요업무일정'] <= weekLaterStr);
+                    const allImportantTasks = [];
+                    workLogsSnap.docs.forEach(d => {
+                        const r = d.data();
+                        const tasks = Array.isArray(r.importantTasks)
+                            ? r.importantTasks
+                            : (r['중요업무일정'] ? [{ '날짜': r['중요업무일정'], '내용': r['중요업무내용'] || '' }] : []);
+                        tasks.forEach(t => {
+                            if (t && t['날짜']) allImportantTasks.push({ '사원명': r['사원명'], '날짜': t['날짜'], '내용': t['내용'] });
+                        });
+                    });
+                    const upcomingTasks = allImportantTasks
+                        .filter(t => t['날짜'] >= todayStr && t['날짜'] <= weekLaterStr);
 
                     if (upcomingTasks.length > 0) {
-                        upcomingTasks.sort((a, b) => (a['중요업무일정'] || '').localeCompare(b['중요업무일정'] || ''));
+                        upcomingTasks.sort((a, b) => (a['날짜'] || '').localeCompare(b['날짜'] || ''));
                         notifItems.push('📌 일주일 내 중요업무일정:');
-                        upcomingTasks.forEach(r => {
-                            notifItems.push(`　· ${r['사원명'] || ''} - ${r['중요업무일정']} (${r['중요업무내용'] || '내용 없음'})`);
+                        upcomingTasks.forEach(t => {
+                            notifItems.push(`　· ${t['사원명'] || ''} - ${t['날짜']} (${t['내용'] || '내용 없음'})`);
                         });
                     }
 

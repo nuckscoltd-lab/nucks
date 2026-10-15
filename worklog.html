@@ -128,6 +128,11 @@ if ('serviceWorker' in navigator) {
     font-size:12.5px; color:var(--muted); cursor:pointer;
   }
   .add-project-btn:hover{ border-color:var(--ink); color:var(--ink); }
+  .important-row{
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:8px;
+  }
+  .important-row input[type="date"]{ max-width:180px; }
+  .important-row input[type="text"]{ flex:1; min-width:220px; }
   .submit-btn{
     padding:10px 22px; background:var(--ink); color:var(--paper);
     border:none; font-size:12.5px; letter-spacing:.05em; text-transform:uppercase;
@@ -656,12 +661,10 @@ if ('serviceWorker' in navigator) {
 
     <div class="field" style="margin-bottom:16px;">
       <label>중요업무일정 (선택 - 마감/예정일이 있는 중요 업무만 적어주세요)</label>
-      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-start;">
-        <input type="date" id="f-importantDate" style="max-width:180px;" title="예정일">
-        <input type="text" id="f-importantTask" placeholder="예: 힐스테이트장위 마감스펙 제출" style="flex:1; min-width:220px;">
-      </div>
-      <div style="font-size:11.5px; color:var(--muted); margin-top:4px;">
-        입력하면 예정일 기준 일주일 전부터 관리자 로그인 시 알림으로 표시됩니다.
+      <div id="importantRows" style="margin-top:4px;"></div>
+      <button class="add-project-btn" id="addImportantBtn" type="button" style="align-self:flex-start;">+ 중요업무일정 추가</button>
+      <div style="font-size:11.5px; color:var(--muted); margin-top:6px;">
+        입력하면 예정일 기준 일주일 전부터 관리자 로그인 시 알림으로 표시됩니다. 여러 건이 있으면 "추가"를 눌러 더 적을 수 있어요.
       </div>
     </div>
 
@@ -2137,6 +2140,49 @@ if ('serviceWorker' in navigator) {
   document.getElementById('addProjectBtn').addEventListener('click', () => createProjectRow());
   resetProjectRows();
 
+  // 중요업무일정 반복 행 관리 - 프로젝트별 업무 내역과 동일한 방식으로, 마감/예정일이 있는
+  // 중요 업무를 여러 건 적을 수 있게 "+ 추가" 버튼으로 행을 늘렸다 줄였다 할 수 있다.
+  // 선택 입력 항목이라 프로젝트 행과 달리 최소 1개를 강제하지 않고, 0개(빈 상태)도 허용한다.
+  //
+  // 이 기능을 추가하기 전까지는 근무일지 한 건당 중요업무일정을 1개만(단일 '중요업무일정'/
+  // '중요업무내용' 필드) 저장했다. 그 이전에 저장된 기존 근무일지에는 여전히 그 단일 필드만
+  // 들어있으므로, 새 배열 필드(importantTasks)가 없는 기존 문서는 단일 필드를 1건짜리
+  // 배열로 변환해서 보여준다(수정해서 다시 저장하면 그때부터 배열 필드로 전환된다).
+  function getImportantTasksForRow(row) {
+    if (Array.isArray(row.importantTasks)) return row.importantTasks;
+    if (row['중요업무일정']) return [{ '날짜': row['중요업무일정'], '내용': row['중요업무내용'] || '' }];
+    return [];
+  }
+
+  let importantRowCount = 0;
+
+  function createImportantRow(prefill) {
+    importantRowCount++;
+    const rowId = importantRowCount;
+    const row = document.createElement('div');
+    row.className = 'important-row';
+    row.dataset.rowId = rowId;
+    const p = prefill || {};
+    row.innerHTML = `
+      <input type="date" class="row-important-date" title="예정일" value="${esc(p['날짜'] || '')}">
+      <input type="text" class="row-important-task" placeholder="예: 힐스테이트장위 마감스펙 제출" value="${esc(p['내용'] || '')}">
+      <button type="button" class="remove-project-btn remove-important-btn" data-row-id="${rowId}">삭제</button>
+    `;
+    document.getElementById('importantRows').appendChild(row);
+
+    row.querySelector('.remove-important-btn').addEventListener('click', () => {
+      row.remove();
+    });
+  }
+
+  function resetImportantRows() {
+    document.getElementById('importantRows').innerHTML = '';
+    importantRowCount = 0;
+  }
+
+  document.getElementById('addImportantBtn').addEventListener('click', () => createImportantRow());
+  resetImportantRows();
+
   // 출근~퇴근 기준 총 근무시간 자동계산 (점심시간 제외 전, 순수 시간차)
   function calcHoursDiffRaw(checkin, checkout) {
     if (!checkin || !checkout) return 0;
@@ -2622,9 +2668,9 @@ if ('serviceWorker' in navigator) {
       `;
     }).filter(Boolean).join('');
 
-    const importantHtml = row['중요업무일정']
-      ? `${row['중요업무일정']}${row['중요업무내용'] ? `<br><span style="color:var(--muted); font-size:11.5px;">${row['중요업무내용']}</span>` : ''}`
-      : '';
+    const importantHtml = getImportantTasksForRow(row)
+      .map(t => `${t['날짜'] || ''}${t['내용'] ? `<br><span style="color:var(--muted); font-size:11.5px;">${t['내용']}</span>` : ''}`)
+      .join('<hr style="margin:6px 0; border:none; border-top:1px solid var(--line);">');
 
     const extraRows = [
       projectHtml ? `<div class="log-card-row"><div class="log-card-row-label">프로젝트별 내역</div>${projectHtml}</div>` : '',
@@ -2767,8 +2813,8 @@ if ('serviceWorker' in navigator) {
     document.getElementById('f-checkout').value = row['퇴근시간'] || '';
     updateTotalHoursDisplay();
     document.getElementById('f-detail').value = row['상세내용'] || '';
-    document.getElementById('f-importantDate').value = row['중요업무일정'] || '';
-    document.getElementById('f-importantTask').value = row['중요업무내용'] || '';
+    resetImportantRows();
+    getImportantTasksForRow(row).forEach(t => createImportantRow(t));
 
     document.getElementById('projectRows').innerHTML = '';
     projectRowCount = 0;
@@ -2793,8 +2839,7 @@ if ('serviceWorker' in navigator) {
     document.getElementById('f-checkout').value = '';
     updateTotalHoursDisplay();
     document.getElementById('f-detail').value = '';
-    document.getElementById('f-importantDate').value = '';
-    document.getElementById('f-importantTask').value = '';
+    resetImportantRows();
     document.getElementById('f-file').value = '';
     resetProjectRows();
   });
@@ -2884,8 +2929,18 @@ if ('serviceWorker' in navigator) {
     const checkin = document.getElementById('f-checkin').value;
     const checkout = document.getElementById('f-checkout').value;
     const detail = document.getElementById('f-detail').value.trim();
-    const importantDate = document.getElementById('f-importantDate').value;
-    const importantTask = document.getElementById('f-importantTask').value.trim();
+
+    // 중요업무일정 행들을 수집 - 예정일이 있어야 의미가 있는 항목이라(알림도 예정일 기준으로
+    // 뜸) 예정일이 비어있는 행은 내용만 적혀 있어도 저장하지 않고 조용히 건너뛴다. (단일 필드
+    // 시절에도 날짜 없이 저장하면 알림에 전혀 반영되지 않던 것과 동일한 동작.)
+    const importantTasks = [];
+    document.querySelectorAll('.important-row').forEach(row => {
+      const d = row.querySelector('.row-important-date').value;
+      const t = row.querySelector('.row-important-task').value.trim();
+      if (!d) return;
+      importantTasks.push({ '날짜': d, '내용': t });
+    });
+
     const fileInput = document.getElementById('f-file');
 
     if (!date) {
@@ -2987,8 +3042,11 @@ if ('serviceWorker' in navigator) {
           '총근무시간': totalHours,
           projects: projects,
           '상세내용': detail,
-          '중요업무일정': importantDate,
-          '중요업무내용': importantTask
+          importantTasks: importantTasks,
+          // 단일 필드 시절(수정 전)에 저장되어 있던 값이 남아 새 배열 필드와 헷갈리지 않도록,
+          // 수정해서 다시 저장하는 시점에 옛 필드는 지운다. 그 뒤로는 importantTasks 배열만 본다.
+          '중요업무일정': firebase.firestore.FieldValue.delete(),
+          '중요업무내용': firebase.firestore.FieldValue.delete()
         };
       } else {
         docData = {
@@ -3000,8 +3058,7 @@ if ('serviceWorker' in navigator) {
           '총근무시간': totalHours,
           projects: projects,
           '상세내용': detail,
-          '중요업무일정': importantDate,
-          '중요업무내용': importantTask,
+          importantTasks: importantTasks,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
       }
@@ -3028,8 +3085,7 @@ if ('serviceWorker' in navigator) {
       editingLogId = null;
       document.getElementById('editBanner').style.display = 'none';
       document.getElementById('f-detail').value = '';
-      document.getElementById('f-importantDate').value = '';
-      document.getElementById('f-importantTask').value = '';
+      resetImportantRows();
       document.getElementById('f-file').value = '';
       resetProjectRows();
 
