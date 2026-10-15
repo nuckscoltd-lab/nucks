@@ -247,6 +247,7 @@
           <option value="insurance">보험관리</option>
           <option value="tax">세금관리</option>
           <option value="loan">이자상환관리</option>
+          <option value="stock">주식·배당관리</option>
         </select>
       </div>
       <div class="field wide" id="f-linkCard-field" style="display:none;">
@@ -441,11 +442,15 @@
   // (문서 하나 = 카드 하나, monthly: { 'YYYY-MM': 금액 }).
   // 그래서 현금출납부의 출금 거래 하나를 반대쪽에 "새로 추가"하는 게 아니라,
   // 선택한 카드의 해당 월 금액에 "더해주는" 방식으로 연동한다.
+  // directions: 이 연동 대상을 "구분"(입금/출금) 어느 쪽 거래에서 고를 수 있는지. 생략하면 출금 전용
+  // (공과금·보험·세금·이자상환은 전부 우리가 내는 돈이라 출금만). 주식·배당은 매수(출금)뿐 아니라
+  // 배당금 수령(입금)도 있어서 두 방향 다 연동 가능하게 열어둔다.
   const LINK_TARGETS = {
-    utilities: { label: '공과금관리', collection: 'utilityItems', getCardLabel: c => (c.category || '(이름 없음)') + (c.detail ? ' · ' + c.detail : '') },
-    insurance: { label: '보험관리', collection: 'insuranceItems', getCardLabel: c => (c.label || '(이름 없음)') + (c.category ? ' (' + c.category + ')' : '') },
-    tax: { label: '세금관리', collection: 'taxItems', getCardLabel: c => (c.label || '(이름 없음)') + (c.category ? ' (' + c.category + ')' : '') },
-    loan: { label: '이자상환관리', collection: 'loanRepaymentItems', getCardLabel: c => (c.name || '(이름 없음)') + (c.account ? ' · ' + c.account : '') }
+    utilities: { label: '공과금관리', collection: 'utilityItems', directions: ['출금'], getCardLabel: c => (c.category || '(이름 없음)') + (c.detail ? ' · ' + c.detail : '') },
+    insurance: { label: '보험관리', collection: 'insuranceItems', directions: ['출금'], getCardLabel: c => (c.label || '(이름 없음)') + (c.category ? ' (' + c.category + ')' : '') },
+    tax: { label: '세금관리', collection: 'taxItems', directions: ['출금'], getCardLabel: c => (c.label || '(이름 없음)') + (c.category ? ' (' + c.category + ')' : '') },
+    loan: { label: '이자상환관리', collection: 'loanRepaymentItems', directions: ['출금'], getCardLabel: c => (c.name || '(이름 없음)') + (c.account ? ' · ' + c.account : '') },
+    stock: { label: '주식·배당관리', collection: 'stockItems', directions: ['출금', '입금'], getCardLabel: c => (c.name || '(이름 없음)') + (c.category ? ' (' + c.category + ')' : '') }
   };
   const COLLECTION_TO_KIND = Object.fromEntries(Object.entries(LINK_TARGETS).map(([kind, cfg]) => [cfg.collection, kind]));
   let linkTargetCards = {}; // { utilities: [{id, label}], insurance: [...], tax: [...], loan: [...] }
@@ -472,16 +477,32 @@
     sel.value = selectedId || '';
   }
 
+  // 현재 구분(입금/출금)에서 고를 수 있는 연동 대상 kind 목록 (LINK_TARGETS의 directions 기준).
+  function availableLinkKinds(type){
+    return Object.entries(LINK_TARGETS).filter(([, cfg]) => (cfg.directions || ['출금']).includes(type)).map(([k]) => k);
+  }
+
+  // f-linkTarget 드롭다운 내용을 현재 구분에 맞게 다시 그린다 (예: 입금이면 주식·배당관리만 남김).
+  // 이전에 골라둔 kind가 새 구분에서도 유효하면 유지하고, 아니면 "연동 안 함"으로 초기화한다.
+  function populateLinkTargetOptions(type, selectedKind){
+    const sel = document.getElementById('f-linkTarget');
+    const kinds = availableLinkKinds(type);
+    sel.innerHTML = '<option value="">연동 안 함</option>' +
+      kinds.map(k => `<option value="${esc(k)}">${esc(LINK_TARGETS[k].label)}</option>`).join('');
+    sel.value = kinds.includes(selectedKind) ? selectedKind : '';
+  }
+
   function updateLinkFieldVisibility(){
-    const isOutgo = document.getElementById('f-type').value === '출금';
+    const type = document.getElementById('f-type').value;
+    const prevKind = document.getElementById('f-linkTarget').value;
+    populateLinkTargetOptions(type, prevKind);
     const kind = document.getElementById('f-linkTarget').value;
-    document.getElementById('f-linkTarget-field').style.display = isOutgo ? 'flex' : 'none';
-    document.getElementById('f-linkCard-field').style.display = (isOutgo && kind) ? 'flex' : 'none';
-    document.getElementById('linkHelp').style.display = (isOutgo && kind) ? 'block' : 'none';
-    if (!isOutgo) {
-      document.getElementById('f-linkTarget').value = '';
-      populateLinkCardOptions('', '');
-    }
+    const linkable = availableLinkKinds(type).length > 0;
+    document.getElementById('f-linkTarget-field').style.display = linkable ? 'flex' : 'none';
+    document.getElementById('f-linkCard-field').style.display = (linkable && kind) ? 'flex' : 'none';
+    document.getElementById('linkHelp').style.display = (linkable && kind) ? 'block' : 'none';
+    if (kind) populateLinkCardOptions(kind, document.getElementById('f-linkCard').value);
+    else populateLinkCardOptions('', '');
   }
 
   document.getElementById('f-type').addEventListener('change', () => {
@@ -493,6 +514,7 @@
     updateLinkFieldVisibility();
   });
   updateIncomeTypeVisibility();
+  updateLinkFieldVisibility();
 
   function cardLabelFor(e){
     if (!e.linkTargetCollection) return '';
@@ -501,14 +523,16 @@
   }
 
   function linkBadgeHtml(e){
-    if (e.type !== '출금') return '';
     if (e.linkApplied) {
       return `<span class="link-badge applied" title="${esc(e.linkTargetCardLabel || '')}">🔗 ${esc(cardLabelFor(e))}</span>`;
     }
     if (e.linkTargetCollection && e.linkTargetCardId) {
       return `<span class="link-badge pending" title="${esc(e.linkTargetCardLabel || '')}">연동 예정 · ${esc(cardLabelFor(e))}</span>`;
     }
-    if (e.status === '확정') {
+    // "연동 안 됨" 안내는 출금에만 띄운다 - 출금은 늘 공과금·보험·세금·이자상환·주식매수 중 하나로
+    // 연동될 수 있는 지출성 거래라 안내가 의미 있지만, 입금은 매출입금처럼 연동 대상이 아예 없는
+    // 거래가 대부분이라 전부에 "연동 안 됨"을 띄우면 불필요한 잡음이 된다 (배당금 입금만 예외적으로 연동 가능).
+    if (e.type === '출금' && e.status === '확정') {
       return `<span class="link-badge none">연동 안 됨</span>`;
     }
     return '';
@@ -571,7 +595,8 @@
       await reverseLinkIncrement(oldEntry.linkTargetCollection, oldEntry.linkTargetCardId, oldEntry.linkAppliedYm, oldEntry.linkAppliedAmount, entryId);
     }
 
-    const kind = newData.type === '출금' ? document.getElementById('f-linkTarget').value : '';
+    const rawKind = document.getElementById('f-linkTarget').value;
+    const kind = availableLinkKinds(newData.type).includes(rawKind) ? rawKind : '';
     const cardId = kind ? document.getElementById('f-linkCard').value : '';
 
     if (!kind || !cardId) {
@@ -606,7 +631,7 @@
     const e = allEntries.find(x => x.id === id);
     if (!e) return;
     const update = { status: '확정' };
-    if (e.type === '출금' && e.linkTargetCollection && e.linkTargetCardId && !e.linkApplied) {
+    if (e.linkTargetCollection && e.linkTargetCardId && !e.linkApplied) {
       const ym = (e.date || '').slice(0, 7);
       await applyLinkIncrement(e.linkTargetCollection, e.linkTargetCardId, ym, e.amount, id);
       Object.assign(update, { linkApplied: true, linkAppliedYm: ym, linkAppliedAmount: e.amount });
