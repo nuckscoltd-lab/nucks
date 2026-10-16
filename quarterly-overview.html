@@ -164,6 +164,9 @@ if ('serviceWorker' in navigator) {
   // Firestore에 데이터가 없어 연도 목록(getAllYears)에 아예 안 잡히므로, 직접 범위를 지정하게 해둔다.
   let xlsxFromMonth = `${new Date().getFullYear() - 3}-01`;
   let xlsxToMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+  // 엑셀 가져오기/내보내기 패널은 평소엔 안 쓰는 관리자용 기능이라 기본은 접어두고, 펼친 상태는
+  // renderAll()이 다시 그려질 때도(연도/보기모드 전환, 가져오기 완료 후 등) 유지되게 변수로 들고 있는다.
+  let xlsxPanelOpen = false;
 
   function fmtWon(n){ return (Math.round(n) || 0).toLocaleString() + '원'; }
   function esc(s){ return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
@@ -288,7 +291,11 @@ if ('serviceWorker' in navigator) {
         </div>
       </div>
       <div class="panel" id="xlsxPanel">
-        <div class="panel-title">엑셀 일괄 입력 / 내보내기 (세금계산서·현금영수증·일반계산서)</div>
+        <div id="xlsxPanelToggle" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none;">
+          <div class="panel-title" style="margin-bottom:0;">엑셀 일괄 입력 / 내보내기 (세금계산서·현금영수증·일반계산서)</div>
+          <span id="xlsxPanelToggleIcon" style="font-size:12.5px; color:var(--muted); white-space:nowrap; margin-left:12px;">${xlsxPanelOpen ? '접기 ▲' : '펼치기 ▾'}</span>
+        </div>
+        <div id="xlsxPanelBody" style="display:${xlsxPanelOpen ? 'block' : 'none'}; margin-top:14px;">
         <div class="import-help">
           과거 데이터를 화면에서 월별로 하나씩 입력하기 번거로울 때 쓰는 기능이에요. 먼저 "템플릿 다운로드"로 원하는 기간의 엑셀을 받으면
           월×증빙유형(세금계산서/현금영수증/일반계산서)별로 행이 이미 만들어져 있고, 이미 입력된 달은 기존 값도 채워져 있어요.
@@ -331,6 +338,7 @@ if ('serviceWorker' in navigator) {
           </div>
           <div class="status-line" id="homtaxCashReceiptStatus"></div>
         </div>
+        </div>
       </div>
 
       <div class="summary-bar" id="summaryBar"></div>
@@ -357,6 +365,11 @@ if ('serviceWorker' in navigator) {
     document.getElementById('yearFilter').addEventListener('change', (e) => { activeYear = e.target.value; renderAll(); });
     document.getElementById('viewQuarterBtn').addEventListener('click', () => { viewMode = 'quarter'; renderAll(); });
     document.getElementById('viewMonthBtn').addEventListener('click', () => { viewMode = 'month'; renderAll(); });
+    document.getElementById('xlsxPanelToggle').addEventListener('click', () => {
+      xlsxPanelOpen = !xlsxPanelOpen;
+      document.getElementById('xlsxPanelBody').style.display = xlsxPanelOpen ? 'block' : 'none';
+      document.getElementById('xlsxPanelToggleIcon').textContent = xlsxPanelOpen ? '접기 ▲' : '펼치기 ▾';
+    });
     document.getElementById('xlsx-fromMonth').addEventListener('change', (e) => { xlsxFromMonth = e.target.value; });
     document.getElementById('xlsx-toMonth').addEventListener('change', (e) => { xlsxToMonth = e.target.value; });
     document.getElementById('xlsxTemplateBtn').addEventListener('click', downloadSalesPurchaseTemplate);
