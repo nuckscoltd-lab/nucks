@@ -1636,14 +1636,13 @@ tr.group-hd .group-hd-meta{float:right; color:var(--muted); font-size:11.5px;}
   var pdCollectRate = function(p){ return p.totalClaim>0 ? p.totalReceived/p.totalClaim*100 : 0; };
   var pdHasCost = function(p){ return p.directCost !== null && p.directCost !== undefined; };
   var pdProfitKnown = function(p){ return pdHasCost(p); };
-  // ── 프로젝트별 일반관리비 배분 (2026-10 추가) ──────────────────────────────
+  // ── 프로젝트별 일반관리비 배분 (2026-10 추가, 2026-10-16 공사 제외로 수정) ──────────────────
   // 기존에는 "대분류별 공사/설계 수익성추정(하한선)" 집계(위 STATE.includeAdmin 토글)에만 일반관리비가
-  // 반영되고, 공사/설계 양쪽 다 100% 설계 쪽에만 들어가 있었습니다. 요청에 따라 이제 개별 프로젝트
-  // 손익에도 일반관리비를 반영하되, ① 공사·설계 양쪽에 그 해 계약금액 비율로 먼저 나누고 ② 그 대분류
-  // 안에서 다시 개별 프로젝트 계약금액 비율로 나누는 2단계 방식을 쓰기로 했습니다(사용자 확인 완료).
-  // 수학적으로 ①→② 계약금액 비율 배분을 연속으로 적용하면 중간의 대분류 몫이 약분되어, 결과적으로
-  // "그 해 공사+설계 전체 계약금액 대비 이 프로젝트 계약금액 비율"로 한 번에 배분한 것과 완전히 같습니다
-  // (아래 pdAdminAlloc은 이 약분된 식을 그대로 구현한 것이며, 별도 근사치가 아닙니다).
+  // 반영되고, 공사/설계 양쪽 다 100% 설계 쪽에만 들어가 있었습니다(DIRECT_BY_YEAR.공사[연도].admin이
+  // 항상 0이기 때문). 처음엔 개별 프로젝트 손익에도 일반관리비를 반영하면서 공사·설계 양쪽에 그 해
+  // 계약금액 비율로 나누는 2단계 방식을 썼었는데, 이후 요청에 따라 공사 쪽은 완전히 제외하고 설계
+  // 프로젝트에만(그 해 설계 전체 계약금액 대비 이 프로젝트 계약금액 비율로) 반영하도록 되돌렸습니다 —
+  // 결과적으로 위 대분류별 집계와 같은 "일반관리비는 설계만" 원칙으로 다시 일치시킨 것입니다.
   // 일반관리비 풀 자체(DIRECT_BY_YEAR.설계[연도].admin)는 회사 전체 일반관리 태그 거래 합계이고,
   // 배분인건비와의 중복을 피하기 위해 임원급여/직원급여는 이미 제외되어 있습니다(위 수익성추정 섹션과 동일 소스).
   // 프로젝트의 귀속 연도는 코드(예: "2025-11(3)-05") 맨 앞 4자리를 사용하며, 코드가 없거나 집계 연도
@@ -1653,19 +1652,16 @@ tr.group-hd .group-hd-meta{float:right; color:var(--muted); font-size:11.5px;}
     var y = p.code ? String(p.code).slice(0,4) : null;
     return (y && YEARS.indexOf(y) >= 0) ? y : null;
   }
-  function pdYearTotalContract(y){
-    return (MAJOR_DATA['공사'][y] ? MAJOR_DATA['공사'][y].contractAmount : 0) +
-           (MAJOR_DATA['설계'][y] ? MAJOR_DATA['설계'][y].contractAmount : 0);
-  }
   function pdAdminPoolForYear(y){
     return DIRECT_BY_YEAR['설계'][y] ? DIRECT_BY_YEAR['설계'][y].admin : 0;
   }
   var pdAdminAlloc = function(p){
+    if(p.major !== '설계') return 0; // 일반관리비는 설계 프로젝트에만 반영 — 공사는 항상 0
     var y = pdProjectYear(p);
     if(!y) return 0;
-    var total = pdYearTotalContract(y);
-    if(total <= 0) return 0;
-    return pdAdminPoolForYear(y) * (p.contractAmt||0) / total;
+    var designTotal = MAJOR_DATA['설계'][y] ? MAJOR_DATA['설계'][y].contractAmount : 0;
+    if(designTotal <= 0) return 0;
+    return pdAdminPoolForYear(y) * (p.contractAmt||0) / designTotal;
   };
   var pdProfit = function(p, includeAdmin){
     var inc = (includeAdmin===undefined) ? pdState.includeAdmin : includeAdmin;
@@ -1976,7 +1972,7 @@ tr.group-hd .group-hd-meta{float:right; color:var(--muted); font-size:11.5px;}
           (p.totalHours>0 ? '<div class="val num">'+fmtWon(p.laborAlloc)+'원</div><div class="sub">투입 '+p.totalHours.toFixed(0)+'시간 · 근사 배분</div>' : '<div class="val pending">데이터 없음</div><div class="sub">근무일지 매칭 없음</div>') +
         '</div>' +
         '<div class="kpi"><div class="lbl">일반관리비 배분</div><div class="val num">'+fmtWon(pdAdminAlloc(p))+'원</div>' +
-          '<div class="sub">'+(pdState.includeAdmin ? '손익 계산에 포함됨 · ' : '현재 손익 계산에서 제외됨 · ')+'그 해 계약금액 비율 근사배분</div>' +
+          '<div class="sub">'+(p.major!=='설계' ? '설계 프로젝트만 해당(공사 제외)' : (pdState.includeAdmin ? '손익 계산에 포함됨 · ' : '현재 손익 계산에서 제외됨 · ')+'그 해 설계 계약금액 비율 근사배분') +'</div>' +
         '</div>' +
         '<div class="kpi"><div class="lbl">손익 / 손익율</div>' +
           (known ? '<div class="val num '+(pr>=0?'pos':'neg')+'">'+(pr>=0?'+':'')+fmtWon(pr)+'원 · '+mg.toFixed(1)+'%</div><div class="sub">하한선 추정'+(pdState.includeAdmin?' · 일반관리비 포함':'')+'(원가 미확정분 제외)</div>' : '<div class="val pending">원가 확정 후 계산</div>') +
