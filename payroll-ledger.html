@@ -21,6 +21,7 @@ if ('serviceWorker' in navigator) {
     --muted:#8a8578;
     --pos:#3f6b52;
     --neg:#a4453c;
+    --total-bg:#ece4d3;
   }
   *{box-sizing:border-box;}
   body{
@@ -104,6 +105,38 @@ if ('serviceWorker' in navigator) {
   .cell-link:hover{ color:var(--neg); }
   .net-cell{ text-align:right; }
   .pivot-name-col{ position:sticky; left:0; background:#fff; z-index:1; }
+  .pv-col-total{ background:var(--total-bg) !important; font-weight:700; }
+  tr.pv-row-total td, tr.pv-row-total th{ background:var(--total-bg) !important; font-weight:700; }
+
+  .emp-filter-wrap{ position:relative; }
+  .emp-filter-panel{
+    position:absolute; top:calc(100% + 6px); left:0; z-index:50; min-width:220px; max-height:280px;
+    overflow-y:auto; background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:12px 14px; box-shadow:0 10px 28px rgba(0,0,0,.14);
+  }
+  .emp-filter-actions{ display:flex; gap:12px; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid var(--line); }
+  .emp-filter-panel label{
+    display:flex; align-items:center; gap:7px; font-size:13px; padding:4px 0; cursor:pointer; white-space:nowrap;
+  }
+
+  #printArea{ display:none; }
+  @media print {
+    body > *:not(#printArea){ display:none !important; }
+    #printArea{ display:block !important; width:100%; padding:0; margin:0; }
+    @page{ size:A4 landscape; margin:12mm 14mm; }
+  }
+  .print-ledger{ font-family:'Pretendard', -apple-system, sans-serif; color:#141414; }
+  .print-ledger .pl-header{ text-align:center; margin-bottom:14px; }
+  .print-ledger .pl-title{ font-size:20px; font-weight:700; letter-spacing:.2em; }
+  .print-ledger .pl-sub{ font-size:12px; color:#666; margin-top:4px; }
+  .print-ledger .pl-table{ width:100%; border-collapse:collapse; }
+  .print-ledger .pl-table th, .print-ledger .pl-table td{
+    border:1px solid #333; padding:5px 8px; font-size:11px; text-align:right;
+  }
+  .print-ledger .pl-table th:first-child, .print-ledger .pl-table td:first-child{ text-align:left; }
+  .print-ledger .pl-table thead th{ background:#f2f0eb; }
+  .print-ledger .pl-table tfoot th, .print-ledger .pl-table tfoot td{ background:#f2f0eb; font-weight:700; }
+  .print-ledger .pl-date{ text-align:right; font-size:11px; color:#555; margin-top:12px; }
 
   /* 모달 */
   .modal-overlay{
@@ -177,6 +210,17 @@ if ('serviceWorker' in navigator) {
       <div class="panel-desc">행은 직원, 열은 월이고 셀은 그 달 차인지급액입니다. 숫자를 클릭하면 상세 내역과 수정 바로가기를 볼 수 있습니다.</div>
       <div class="toolbar">
         <select id="pvYearSelect"></select>
+        <div class="emp-filter-wrap">
+          <button type="button" class="ghost-btn" id="pvEmpFilterBtn" style="margin:0; padding:8px 14px;">직원 선택 (전체)</button>
+          <div class="emp-filter-panel" id="pvEmpFilterPanel" style="display:none;">
+            <div class="emp-filter-actions">
+              <button type="button" class="row-btn" id="pvEmpSelectAll">전체 선택</button>
+              <button type="button" class="row-btn" id="pvEmpSelectNone">전체 해제</button>
+            </div>
+            <div id="pvEmpCheckList"></div>
+          </div>
+        </div>
+        <button type="button" class="submit-btn" id="pvPrintBtn" style="margin:0; padding:8px 16px;">선택 직원 월별 인쇄(저장)</button>
       </div>
       <div id="pivotWrap" style="overflow-x:auto;">
         <table id="pvTable"></table>
@@ -185,6 +229,9 @@ if ('serviceWorker' in navigator) {
     </div>
   </div>
 </main>
+
+<!-- 인쇄 전용 영역 -->
+<div id="printArea"></div>
 
 <!-- 상세수정 모달 (일괄 생성 초안 편집) -->
 <div class="modal-overlay" id="draftModal" style="display:none;">
@@ -253,6 +300,7 @@ if ('serviceWorker' in navigator) {
   let bulkDrafts = [];
   let pivotData = {}; // name -> month(YYYY-MM) -> { net, slips:[] }
   let editingDraftIdx = null;
+  let pivotSelectedNames = null; // null = 전체 표시, Set이면 그 사원들만
 
   auth.onAuthStateChanged(async (user) => {
     if (!user) return;
@@ -484,6 +532,11 @@ if ('serviceWorker' in navigator) {
     sel.value = thisYear;
     sel.addEventListener('change', renderPivot);
 
+    buildPivotData();
+    setupEmpFilter();
+
+    document.getElementById('pvPrintBtn').addEventListener('click', printPivot);
+
     renderPivot();
   }
 
@@ -504,21 +557,92 @@ if ('serviceWorker' in navigator) {
     });
   }
 
+  function allPivotNames() {
+    return Object.keys(pivotData).sort((a, b) => a.localeCompare(b, 'ko'));
+  }
+
+  function visiblePivotNames() {
+    const names = allPivotNames();
+    return pivotSelectedNames ? names.filter(n => pivotSelectedNames.has(n)) : names;
+  }
+
+  // ---------- 직원 선택 필터 ----------
+  function setupEmpFilter() {
+    const btn = document.getElementById('pvEmpFilterBtn');
+    const panel = document.getElementById('pvEmpFilterPanel');
+
+    btn.addEventListener('click', () => {
+      const show = panel.style.display === 'none';
+      panel.style.display = show ? 'block' : 'none';
+      if (show) renderEmpCheckList();
+    });
+    document.addEventListener('click', (e) => {
+      if (!panel.contains(e.target) && e.target !== btn && panel.style.display !== 'none') {
+        panel.style.display = 'none';
+      }
+    });
+
+    document.getElementById('pvEmpSelectAll').addEventListener('click', () => {
+      pivotSelectedNames = null;
+      renderEmpCheckList();
+      updateEmpFilterBtnLabel();
+      renderPivot();
+    });
+    document.getElementById('pvEmpSelectNone').addEventListener('click', () => {
+      pivotSelectedNames = new Set();
+      renderEmpCheckList();
+      updateEmpFilterBtnLabel();
+      renderPivot();
+    });
+  }
+
+  function renderEmpCheckList() {
+    const names = allPivotNames();
+    const listEl = document.getElementById('pvEmpCheckList');
+    listEl.innerHTML = names.map(name => {
+      const checked = pivotSelectedNames === null || pivotSelectedNames.has(name);
+      return `<label><input type="checkbox" data-pv-emp="${name}" ${checked ? 'checked' : ''}> ${name}</label>`;
+    }).join('');
+
+    listEl.querySelectorAll('[data-pv-emp]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        // 처음 체크 하나를 풀 때, "전체 선택" 상태(null)를 실제 전체 이름 집합으로 바꿔준 뒤 거기서 제외/포함한다.
+        if (pivotSelectedNames === null) pivotSelectedNames = new Set(names);
+        if (cb.checked) pivotSelectedNames.add(cb.dataset.pvEmp);
+        else pivotSelectedNames.delete(cb.dataset.pvEmp);
+        updateEmpFilterBtnLabel();
+        renderPivot();
+      });
+    });
+  }
+
+  function updateEmpFilterBtnLabel() {
+    const btn = document.getElementById('pvEmpFilterBtn');
+    const total = allPivotNames().length;
+    if (pivotSelectedNames === null) {
+      btn.textContent = '직원 선택 (전체)';
+    } else {
+      btn.textContent = `직원 선택 (${pivotSelectedNames.size}/${total}명)`;
+    }
+  }
+
   function renderPivot() {
     buildPivotData();
 
     const year = document.getElementById('pvYearSelect').value;
     const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
-    const names = Object.keys(pivotData).sort((a, b) => a.localeCompare(b, 'ko'));
+    const names = visiblePivotNames();
 
     const wrap = document.getElementById('pivotWrap');
     const table = document.getElementById('pvTable');
     const emptyMsg = document.getElementById('pivotEmpty');
 
-    const hasAnyDataThisYear = names.some(n => months.some(m => pivotData[n][m]));
     if (names.length === 0) {
       wrap.style.display = 'none';
       emptyMsg.style.display = 'block';
+      emptyMsg.textContent = (pivotSelectedNames && pivotSelectedNames.size === 0)
+        ? '선택된 직원이 없습니다. "직원 선택"에서 표시할 직원을 골라주세요.'
+        : '표시할 급여 데이터가 없습니다.';
       return;
     }
     wrap.style.display = 'block';
@@ -533,7 +657,7 @@ if ('serviceWorker' in navigator) {
         return `<td class="net-cell cell-link" data-cell-name="${name}" data-cell-month="${m}">${cell.net.toLocaleString()}</td>`;
       }).join('');
       const yearTotal = months.reduce((s, m) => s + (pivotData[name][m]?.net || 0), 0);
-      return `<tr><td class="pivot-name-col" style="font-weight:600;">${name}</td>${cells}<td class="net-cell" style="font-weight:700;">${yearTotal.toLocaleString()}</td></tr>`;
+      return `<tr><td class="pivot-name-col" style="font-weight:600;">${name}</td>${cells}<td class="net-cell pv-col-total">${yearTotal.toLocaleString()}</td></tr>`;
     }).join('');
 
     const monthTotals = months.map(m => names.reduce((s, n) => s + (pivotData[n][m]?.net || 0), 0));
@@ -542,21 +666,59 @@ if ('serviceWorker' in navigator) {
 
     table.innerHTML = `
       <thead>
-        <tr><th class="pivot-name-col">사원명</th>${theadMonths}<th style="text-align:right;">연간 합계</th></tr>
+        <tr><th class="pivot-name-col">사원명</th>${theadMonths}<th class="pv-col-total" style="text-align:right;">연간 합계</th></tr>
       </thead>
       <tbody>${bodyRows}</tbody>
       <tfoot>
-        <tr style="font-weight:700;"><td class="pivot-name-col">전체 합계</td>${totalCells}<td class="net-cell">${grandTotal.toLocaleString()}</td></tr>
+        <tr class="pv-row-total"><td class="pivot-name-col">전체 합계${pivotSelectedNames ? ` (선택 ${names.length}명)` : ''}</td>${totalCells}<td class="net-cell">${grandTotal.toLocaleString()}</td></tr>
       </tfoot>
     `;
-
-    if (!hasAnyDataThisYear) {
-      // 데이터가 전혀 없는 연도라도 직원 목록/구조는 그대로 보여주되, 안내만 살짝 덧붙임
-    }
 
     table.querySelectorAll('[data-cell-name]').forEach(td => {
       td.addEventListener('click', () => openCellModal(td.dataset.cellName, td.dataset.cellMonth));
     });
+  }
+
+  // ---------- 선택 직원 월별 인쇄(저장) ----------
+  function printPivot() {
+    const year = document.getElementById('pvYearSelect').value;
+    const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
+    const names = visiblePivotNames();
+
+    if (!names.length) { alert('인쇄할 직원이 없습니다. "직원 선택"에서 먼저 골라주세요.'); return; }
+
+    const theadMonths = months.map(m => `<th>${Number(m.slice(5))}월</th>`).join('');
+    const bodyRows = names.map(name => {
+      const cells = months.map(m => {
+        const cell = pivotData[name][m];
+        return `<td>${cell ? cell.net.toLocaleString() + '원' : '-'}</td>`;
+      }).join('');
+      const yearTotal = months.reduce((s, m) => s + (pivotData[name][m]?.net || 0), 0);
+      return `<tr><td>${name}</td>${cells}<td>${yearTotal.toLocaleString()}원</td></tr>`;
+    }).join('');
+
+    const monthTotals = months.map(m => names.reduce((s, n) => s + (pivotData[n][m]?.net || 0), 0));
+    const grandTotal = monthTotals.reduce((a, b) => a + b, 0);
+    const totalCells = monthTotals.map(v => `<td>${v.toLocaleString()}원</td>`).join('');
+    const today = new Date().toISOString().slice(0, 10);
+
+    const html = `
+      <div class="print-ledger">
+        <div class="pl-header">
+          <div class="pl-title">급 여 대 장</div>
+          <div class="pl-sub">${year}년 · 대상 ${names.length}명 · 발행일 ${today}</div>
+        </div>
+        <table class="pl-table">
+          <thead><tr><th>사원명</th>${theadMonths}<th>연간 합계</th></tr></thead>
+          <tbody>${bodyRows}</tbody>
+          <tfoot><tr><th>전체 합계</th>${totalCells}<th>${grandTotal.toLocaleString()}원</th></tr></tfoot>
+        </table>
+        <div class="pl-date">NUCKS Co.,Ltd</div>
+      </div>
+    `;
+
+    document.getElementById('printArea').innerHTML = html;
+    window.print();
   }
 
   function openCellModal(name, month) {
@@ -593,6 +755,11 @@ if ('serviceWorker' in navigator) {
   function closeCellModal() {
     document.getElementById('cellModal').style.display = 'none';
   }
+
+  window.addEventListener('afterprint', () => {
+    const area = document.getElementById('printArea');
+    if (area) area.innerHTML = '';
+  });
 
   document.getElementById('logoutBtn').addEventListener('click', async (e) => {
     e.preventDefault();
