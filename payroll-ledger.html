@@ -136,6 +136,9 @@ if ('serviceWorker' in navigator) {
   .print-ledger .pl-table th:first-child, .print-ledger .pl-table td:first-child{ text-align:left; }
   .print-ledger .pl-table thead th{ background:#f2f0eb; }
   .print-ledger .pl-table tfoot th, .print-ledger .pl-table tfoot td{ background:#f2f0eb; font-weight:700; }
+  .print-ledger .pl-table-dense th, .print-ledger .pl-table-dense td{
+    padding:4px 5px; font-size:9px; white-space:nowrap;
+  }
   .print-ledger .pl-date{ text-align:right; font-size:11px; color:#555; margin-top:12px; }
 
   /* 모달 */
@@ -220,7 +223,8 @@ if ('serviceWorker' in navigator) {
             <div id="pvEmpCheckList"></div>
           </div>
         </div>
-        <button type="button" class="submit-btn" id="pvPrintBtn" style="margin:0; padding:8px 16px;">선택 직원 월별 인쇄(저장)</button>
+        <select id="pvPrintScopeSelect"><option value="year">연간 전체</option></select>
+        <button type="button" class="submit-btn" id="pvPrintBtn" style="margin:0; padding:8px 16px;">선택 직원 인쇄(저장)</button>
       </div>
       <div id="pivotWrap" style="overflow-x:auto;">
         <table id="pvTable"></table>
@@ -530,14 +534,29 @@ if ('serviceWorker' in navigator) {
     const sel = document.getElementById('pvYearSelect');
     sel.innerHTML = years.map(y => `<option value="${y}">${y}년</option>`).join('');
     sel.value = thisYear;
-    sel.addEventListener('change', renderPivot);
+    sel.addEventListener('change', () => { updatePrintScopeOptions(); renderPivot(); });
 
     buildPivotData();
     setupEmpFilter();
+    updatePrintScopeOptions();
 
     document.getElementById('pvPrintBtn').addEventListener('click', printPivot);
 
     renderPivot();
+  }
+
+  // 인쇄 범위 선택지(연간 전체 / 선택 연도의 월별)를 연도 선택에 맞춰 다시 채운다.
+  function updatePrintScopeOptions() {
+    const year = document.getElementById('pvYearSelect').value;
+    const scopeSel = document.getElementById('pvPrintScopeSelect');
+    const prevValue = scopeSel.value;
+    const monthOptions = Array.from({ length: 12 }, (_, i) => {
+      const m = `${year}-${String(i + 1).padStart(2, '0')}`;
+      return `<option value="${m}">${i + 1}월만</option>`;
+    }).join('');
+    scopeSel.innerHTML = `<option value="year">연간 전체</option>${monthOptions}`;
+    // 같은 월 값이 새 연도에도 있으면 유지, 아니면 "연간 전체"로 되돌림
+    scopeSel.value = [...scopeSel.options].some(o => o.value === prevValue) ? prevValue : 'year';
   }
 
   function buildPivotData() {
@@ -681,11 +700,21 @@ if ('serviceWorker' in navigator) {
 
   // ---------- 선택 직원 월별 인쇄(저장) ----------
   function printPivot() {
+    const names = visiblePivotNames();
+    if (!names.length) { alert('인쇄할 직원이 없습니다. "직원 선택"에서 먼저 골라주세요.'); return; }
+
+    const scope = document.getElementById('pvPrintScopeSelect').value;
+    const html = (scope === 'year') ? buildYearPrintHtml(names) : buildMonthPrintHtml(names, scope);
+
+    document.getElementById('printArea').innerHTML = html;
+    window.print();
+  }
+
+  // 연간 전체(월별 차인지급액만) 인쇄용 HTML - 기존 피벗 표와 같은 구성
+  function buildYearPrintHtml(names) {
     const year = document.getElementById('pvYearSelect').value;
     const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
-    const names = visiblePivotNames();
-
-    if (!names.length) { alert('인쇄할 직원이 없습니다. "직원 선택"에서 먼저 골라주세요.'); return; }
+    const today = new Date().toISOString().slice(0, 10);
 
     const theadMonths = months.map(m => `<th>${Number(m.slice(5))}월</th>`).join('');
     const bodyRows = names.map(name => {
@@ -700,9 +729,8 @@ if ('serviceWorker' in navigator) {
     const monthTotals = months.map(m => names.reduce((s, n) => s + (pivotData[n][m]?.net || 0), 0));
     const grandTotal = monthTotals.reduce((a, b) => a + b, 0);
     const totalCells = monthTotals.map(v => `<td>${v.toLocaleString()}원</td>`).join('');
-    const today = new Date().toISOString().slice(0, 10);
 
-    const html = `
+    return `
       <div class="print-ledger">
         <div class="pl-header">
           <div class="pl-title">급 여 대 장</div>
@@ -716,9 +744,76 @@ if ('serviceWorker' in navigator) {
         <div class="pl-date">NUCKS Co.,Ltd</div>
       </div>
     `;
+  }
 
-    document.getElementById('printArea').innerHTML = html;
-    window.print();
+  // 특정 월 하나만 - 지급/공제 항목까지 다 펼친 "급여대장" 표준 양식으로 인쇄
+  function buildMonthPrintHtml(names, month) {
+    const today = new Date().toISOString().slice(0, 10);
+
+    // 그 달에 해당 직원 명세서가 2건 이상(중복 등)이면 항목별로 합산해서 한 줄로 보여준다.
+    const rows = names.map(name => {
+      const cell = pivotData[name][month];
+      if (!cell) return null;
+      const pay = {}; PAY_KEYS.forEach(k => { pay[k] = 0; });
+      const ded = {}; DED_KEYS.forEach(k => { ded[k] = 0; });
+      let payTotal = 0, dedTotal = 0;
+      cell.slips.forEach(s => {
+        PAY_KEYS.forEach(k => { pay[k] += (s.pay?.[k] || 0); });
+        DED_KEYS.forEach(k => { ded[k] += (s.deductions?.[k] || 0); });
+        payTotal += (s['지급액계'] || 0);
+        dedTotal += (s['공제액계'] || 0);
+      });
+      return { name, pay, ded, payTotal, dedTotal, net: cell.net };
+    }).filter(Boolean);
+
+    if (!rows.length) {
+      return `
+        <div class="print-ledger">
+          <div class="pl-header">
+            <div class="pl-title">급 여 대 장</div>
+            <div class="pl-sub">${month} · 발행일 ${today}</div>
+          </div>
+          <div style="text-align:center; padding:30px; color:#666;">선택한 직원 중 ${month}에 등록된 급여명세서가 없습니다.</div>
+        </div>
+      `;
+    }
+
+    const payHeaders = PAY_KEYS.map(k => `<th>${k}</th>`).join('');
+    const dedHeaders = DED_KEYS.map(k => `<th>${k}</th>`).join('');
+
+    const bodyRows = rows.map(r => {
+      const payCells = PAY_KEYS.map(k => `<td>${(r.pay[k] || 0).toLocaleString()}</td>`).join('');
+      const dedCells = DED_KEYS.map(k => `<td>${(r.ded[k] || 0).toLocaleString()}</td>`).join('');
+      return `<tr><td>${r.name}</td>${payCells}<td>${r.payTotal.toLocaleString()}</td>${dedCells}<td>${r.dedTotal.toLocaleString()}</td><td>${r.net.toLocaleString()}</td></tr>`;
+    }).join('');
+
+    const sumPay = PAY_KEYS.map(k => rows.reduce((s, r) => s + (r.pay[k] || 0), 0));
+    const sumDed = DED_KEYS.map(k => rows.reduce((s, r) => s + (r.ded[k] || 0), 0));
+    const sumPayTotal = rows.reduce((s, r) => s + r.payTotal, 0);
+    const sumDedTotal = rows.reduce((s, r) => s + r.dedTotal, 0);
+    const sumNet = rows.reduce((s, r) => s + r.net, 0);
+
+    const sumPayCells = sumPay.map(v => `<td>${v.toLocaleString()}</td>`).join('');
+    const sumDedCells = sumDed.map(v => `<td>${v.toLocaleString()}</td>`).join('');
+
+    return `
+      <div class="print-ledger">
+        <div class="pl-header">
+          <div class="pl-title">급 여 대 장</div>
+          <div class="pl-sub">${month} · 대상 ${rows.length}명 · 발행일 ${today}</div>
+        </div>
+        <table class="pl-table pl-table-dense">
+          <thead>
+            <tr><th>사원명</th>${payHeaders}<th>지급액계</th>${dedHeaders}<th>공제액계</th><th>차인지급액</th></tr>
+          </thead>
+          <tbody>${bodyRows}</tbody>
+          <tfoot>
+            <tr><th>합계</th>${sumPayCells}<th>${sumPayTotal.toLocaleString()}</th>${sumDedCells}<th>${sumDedTotal.toLocaleString()}</th><th>${sumNet.toLocaleString()}</th></tr>
+          </tfoot>
+        </table>
+        <div class="pl-date">NUCKS Co.,Ltd</div>
+      </div>
+    `;
   }
 
   function openCellModal(name, month) {
