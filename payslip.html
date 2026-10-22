@@ -195,6 +195,7 @@ if ('serviceWorker' in navigator) {
     <h1>급여명세서</h1>
   </div>
   <div class="header-right">
+    <a href="payroll-ledger.html" id="payrollLedgerLink" style="display:none;">급여대장</a>
     <a href="index.html">Home</a>
     <a href="#" id="logoutBtn">Logout</a>
   </div>
@@ -604,13 +605,37 @@ if ('serviceWorker' in navigator) {
       document.getElementById('adminOnlyPanel').style.display = 'block';
       document.getElementById('importPanel').style.display = 'block';
       document.getElementById('dupCheckPanel').style.display = 'block';
+      document.getElementById('payrollLedgerLink').style.display = 'inline-block';
       await init();
     } else {
       document.getElementById('adminOnlyPanel').style.display = 'none';
       document.getElementById('listEmployeeFilter').style.display = 'none';
       await loadSlips();
+      applyQueryFilters();
     }
   });
+
+  // 급여대장 페이지의 셀/행에서 "?employee=이름&month=YYYY-MM" 형태로 넘어온 경우
+  // 목록을 그 직원·그 달로 바로 필터링해서 보여준다 (급여대장 ↔ 급여명세서 이동용).
+  function applyQueryFilters() {
+    const params = new URLSearchParams(window.location.search);
+    const emp = params.get('employee');
+    const month = params.get('month');
+    let changed = false;
+
+    if (emp && currentRole === 'admin') {
+      const sel = document.getElementById('listEmployeeFilter');
+      if ([...sel.options].some(o => o.value === emp)) { sel.value = emp; changed = true; }
+    }
+    if (month) {
+      startMonth = month;
+      endMonth = month;
+      document.getElementById('startMonthFilter').value = month;
+      document.getElementById('endMonthFilter').value = month;
+      changed = true;
+    }
+    if (changed) renderList();
+  }
 
   async function init() {
     const snapshot = await db.collection('users').get();
@@ -635,7 +660,8 @@ if ('serviceWorker' in navigator) {
 
     document.getElementById('listEmployeeFilter').addEventListener('change', renderList);
 
-    loadSlips();
+    await loadSlips();
+    applyQueryFilters();
   }
 
   function prefillEmployeeInfo() {
@@ -824,9 +850,16 @@ if ('serviceWorker' in navigator) {
 
     const snapshot = await query.get();
     allSlips = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-    // 지급일이 같은 경우(같은 날짜로 여러 명을 연달아 저장한 경우), Firestore가 반환하는 순서는
-    // 저장 순서와 무관할 수 있어서 createdAt을 2차 기준으로 써서 실제 저장한 순서를 유지한다.
+    // 문서번호 내림차순 정렬 - 매달 지급일 기준으로 다시 묶이면서 생기는 들쭉날쭉한 순서 대신,
+    // 채번된 순서(= 등록된 순서) 그대로 항상 같은 기준으로 쌓이게 한다.
+    // 가져오기(CSV/엑셀) 등으로 문서번호가 없는 옛 건은 맨 뒤로 보내고, 그 안에서는
+    // 예전 방식(지급일 desc, createdAt asc)으로 보조 정렬한다.
     allSlips.sort((a, b) => {
+      const an = a.docNumber || '';
+      const bn = b.docNumber || '';
+      if (an && bn) return bn.localeCompare(an);
+      if (!!an !== !!bn) return an ? -1 : 1;
+
       const dateCompare = (b['지급일'] || '').localeCompare(a['지급일'] || '');
       if (dateCompare !== 0) return dateCompare;
       const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
@@ -1111,7 +1144,7 @@ if ('serviceWorker' in navigator) {
         Papa.parse(file, {
           header: true,
           skipEmptyLines: true,
-          transformHeader: (h) => h.replace(/^\uFEFF/, '').trim(),
+          transformHeader: (h) => h.replace(/^﻿/, '').trim(),
           complete: (results) => resolve(results.data),
           error: reject
         });

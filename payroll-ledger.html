@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#141414">
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+</script>
+<title>급여대장 | NUCKS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Pretendard:wght@400;500&display=swap');
+
+  :root{
+    --ink:#141414;
+    --paper:#f7f6f3;
+    --line:#d8d5cd;
+    --muted:#8a8578;
+    --pos:#3f6b52;
+    --neg:#a4453c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background:var(--paper);
+    font-family:'Pretendard', -apple-system, sans-serif; color:var(--ink);
+  }
+  header{
+    padding:28px 48px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;
+  }
+  .eyebrow{
+    font-size:11px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:6px;
+  }
+  h1{
+    font-family:'Cormorant Garamond', serif; font-weight:500;
+    font-size:32px; margin:0; letter-spacing:.01em;
+  }
+  .header-right{ display:flex; align-items:center; gap:24px; flex-wrap:wrap; }
+  .header-right a{
+    font-size:13px; color:var(--muted); text-decoration:none;
+    border-bottom:1px solid var(--muted); cursor:pointer;
+  }
+  main{ max-width:1180px; margin:0 auto; padding:40px 48px; }
+
+  .write-panel{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:28px; margin-bottom:36px;
+  }
+  .panel-title{
+    font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:12px;
+  }
+  .panel-desc{ font-size:12.5px; color:var(--muted); line-height:1.6; margin-bottom:18px; }
+  .grid{ display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; }
+  .field{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .field label{ font-size:11px; color:var(--muted); }
+  .field input, .field select{
+    width:100%; box-sizing:border-box;
+    padding:8px 9px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13px; background:#fff;
+  }
+  .submit-btn{
+    margin-top:16px; padding:10px 24px; background:var(--ink); color:var(--paper);
+    border:none; font-size:12.5px; letter-spacing:.05em; text-transform:uppercase;
+    cursor:pointer; border-radius:4px;
+  }
+  .submit-btn:disabled{ opacity:.5; cursor:default; }
+  .ghost-btn{
+    margin-top:16px; margin-left:10px; padding:10px 20px; background:none; color:var(--ink);
+    border:1px solid var(--line); font-size:12.5px; letter-spacing:.03em;
+    cursor:pointer; border-radius:4px;
+  }
+  .status-line{ font-size:13px; margin-top:10px; min-height:18px; }
+  .toolbar{ display:flex; gap:12px; margin-bottom:16px; align-items:center; flex-wrap:wrap; }
+  .toolbar select{
+    padding:7px 10px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13px; background:#fff;
+  }
+  table{ width:100%; border-collapse:collapse; }
+  th{
+    text-align:left; font-size:11.5px; color:var(--muted); font-weight:500;
+    padding:8px 9px; border-bottom:1px solid var(--line); white-space:nowrap;
+  }
+  td{ padding:9px 9px; font-size:13px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  .row-btn{
+    font-size:12px; background:none; border:none; cursor:pointer;
+    text-decoration:underline; color:var(--ink);
+  }
+  .badge{
+    display:inline-block; font-size:11px; padding:2px 7px; border-radius:99px;
+    background:var(--paper); color:var(--muted); margin-left:6px;
+  }
+  .badge.dup{ background:#fbe4e2; color:var(--neg); }
+  .badge.new{ background:#e8f0ea; color:var(--pos); }
+  .empty{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:28px; text-align:center; color:var(--muted); font-size:13.5px;
+  }
+  .cell-link{ cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px; }
+  .cell-link:hover{ color:var(--neg); }
+  .net-cell{ text-align:right; }
+  .pivot-name-col{ position:sticky; left:0; background:#fff; z-index:1; }
+
+  /* 모달 */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(20,20,20,.45); z-index:200;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .modal-box{
+    background:#fff; border-radius:8px; max-width:640px; width:100%;
+    max-height:88vh; overflow-y:auto; padding:26px 28px;
+  }
+  .modal-box h3{ font-family:'Cormorant Garamond', serif; font-size:22px; margin:0 0 16px; }
+  .modal-close{
+    float:right; background:none; border:none; font-size:18px; cursor:pointer; color:var(--muted);
+  }
+  .modal-section-label{ font-size:12px; font-weight:600; margin:16px 0 10px; }
+  .modal-section-label:first-of-type{ margin-top:0; }
+
+  @media (max-width: 760px) {
+    header{ padding:20px !important; }
+    main{ padding:20px 14px !important; }
+    h1{ font-size:24px !important; }
+    .write-panel{ padding:18px 16px !important; }
+    .grid{ grid-template-columns:1fr 1fr !important; gap:10px !important; }
+    table{ font-size:12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">NUCKS · Secret Mode</div>
+    <h1>급여대장</h1>
+  </div>
+  <div class="header-right">
+    <a href="payslip.html">급여명세서</a>
+    <a href="index.html">Home</a>
+    <a href="#" id="logoutBtn">Logout</a>
+  </div>
+</header>
+
+<main>
+  <div id="notAdminMsg" class="empty" style="display:none;">관리자만 볼 수 있는 페이지입니다.</div>
+
+  <div id="pageBody" style="display:none;">
+    <div class="write-panel">
+      <div class="panel-title">이번 달 급여명세서 일괄 생성</div>
+      <div class="panel-desc">
+        지급일을 고르고 "전 직원 불러오기"를 누르면, 등록된 모든 직원(게스트 제외)의 <b>가장 최근 급여명세서</b> 지급·공제 항목을 그대로 불러와서 이번 지급일 기준 초안을 한 번에 만들어줍니다.
+        직원별로 "상세수정"에서 금액을 고친 뒤, 필요한 사람만 체크해서 한꺼번에 저장하세요. 같은 사원·같은 지급일로 이미 등록된 명세서가 있으면 자동으로 제외 표시됩니다.
+      </div>
+      <div class="grid" style="grid-template-columns:repeat(4,1fr); max-width:600px;">
+        <div class="field">
+          <label for="bc-payDate">지급일</label>
+          <input type="date" id="bc-payDate">
+        </div>
+      </div>
+      <button class="submit-btn" id="bcLoadBtn">전 직원 불러오기</button>
+      <div class="status-line" id="bcLoadStatus"></div>
+
+      <div id="bcTableWrap" style="display:none; margin-top:18px; overflow-x:auto;">
+        <table id="bcTable"></table>
+        <button class="submit-btn" id="bcSaveAllBtn">선택한 직원 일괄 저장</button>
+        <button class="ghost-btn" id="bcCancelBtn" type="button">취소</button>
+        <div class="status-line" id="bcSaveStatus"></div>
+      </div>
+    </div>
+
+    <div class="write-panel">
+      <div class="panel-title">전체 직원 급여 현황 (한눈에 보기)</div>
+      <div class="panel-desc">행은 직원, 열은 월이고 셀은 그 달 차인지급액입니다. 숫자를 클릭하면 상세 내역과 수정 바로가기를 볼 수 있습니다.</div>
+      <div class="toolbar">
+        <select id="pvYearSelect"></select>
+      </div>
+      <div id="pivotWrap" style="overflow-x:auto;">
+        <table id="pvTable"></table>
+      </div>
+      <div class="empty" id="pivotEmpty" style="display:none;">표시할 급여 데이터가 없습니다.</div>
+    </div>
+  </div>
+</main>
+
+<!-- 상세수정 모달 (일괄 생성 초안 편집) -->
+<div class="modal-overlay" id="draftModal" style="display:none;">
+  <div class="modal-box">
+    <button class="modal-close" id="draftModalClose">✕</button>
+    <h3 id="draftModalTitle">상세수정</h3>
+
+    <div class="grid" style="grid-template-columns:repeat(2,1fr);">
+      <div class="field"><label>부서명</label><input type="text" id="dm-dept"></div>
+      <div class="field"><label>직급</label><input type="text" id="dm-pos"></div>
+      <div class="field">
+        <label>근무형태구분</label>
+        <select id="dm-type"><option value="정규">정규</option><option value="외주">외주</option><option value="일용">일용</option></select>
+      </div>
+      <div class="field"><label>프로젝트</label><input type="text" id="dm-project"></div>
+    </div>
+
+    <div class="modal-section-label">지급 항목</div>
+    <div class="grid" style="grid-template-columns:repeat(3,1fr);" id="dm-pay-grid"></div>
+
+    <div class="modal-section-label">공제 항목</div>
+    <div class="grid" style="grid-template-columns:repeat(3,1fr);" id="dm-ded-grid"></div>
+
+    <button class="submit-btn" id="dmApplyBtn" type="button">이 내용으로 반영</button>
+    <button class="ghost-btn" id="dmCancelBtn" type="button">취소</button>
+  </div>
+</div>
+
+<!-- 피벗 셀 상세보기 모달 -->
+<div class="modal-overlay" id="cellModal" style="display:none;">
+  <div class="modal-box">
+    <button class="modal-close" id="cellModalClose">✕</button>
+    <h3 id="cellModalTitle"></h3>
+    <div id="cellModalBody"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+  requireRole(['admin']);
+
+  const PAY_KEYS = ['기본급', '식대', '자기계발비', '차량유지비', '기타'];
+  const DED_KEYS = ['국민연금', '건강보험', '장기요양보험료', '고용보험료', '소득세', '지방소득세', '기타공제액', '국민연금지원', '고용보험지원', '연말정산소득세', '연말정산지방소득세'];
+
+  // 급여명세서와 완전히 동일한 채번 방식 - 같은 docCounters/급여명세서 카운터를 공유하므로
+  // 두 페이지 어디서 저장하든 문서번호가 겹치지 않는다.
+  async function getNextDocNumber(type) {
+    const year = new Date().getFullYear();
+    const counterRef = db.collection('docCounters').doc(type);
+    const seq = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(counterRef);
+      const current = snap.exists ? (snap.data().seq || 0) : 0;
+      const next = current + 1;
+      tx.set(counterRef, { seq: next }, { merge: true });
+      return next;
+    });
+    return `급여-${year}-${String(seq).padStart(4, '0')}`;
+  }
+
+  let employees = [];
+  let allSlips = [];
+  let bulkDrafts = [];
+  let pivotData = {}; // name -> month(YYYY-MM) -> { net, slips:[] }
+  let editingDraftIdx = null;
+
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) return;
+    const role = await getCurrentUserRole();
+    if (role !== 'admin') {
+      document.getElementById('notAdminMsg').style.display = 'block';
+      return;
+    }
+    document.getElementById('pageBody').style.display = 'block';
+    await init();
+  });
+
+  async function init() {
+    const usnap = await db.collection('users').get();
+    employees = usnap.docs.map(d => ({ uid: d.id, ...d.data() })).filter(e => e.role !== 'guest');
+
+    await reloadSlips();
+
+    document.getElementById('bc-payDate').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('bcLoadBtn').addEventListener('click', loadBulkDrafts);
+    document.getElementById('bcCancelBtn').addEventListener('click', () => {
+      bulkDrafts = [];
+      document.getElementById('bcTableWrap').style.display = 'none';
+      document.getElementById('bcLoadStatus').textContent = '';
+    });
+    document.getElementById('bcSaveAllBtn').addEventListener('click', saveBulkDrafts);
+
+    document.getElementById('draftModalClose').addEventListener('click', closeDraftModal);
+    document.getElementById('dmCancelBtn').addEventListener('click', closeDraftModal);
+    document.getElementById('dmApplyBtn').addEventListener('click', applyDraftModal);
+
+    document.getElementById('cellModalClose').addEventListener('click', closeCellModal);
+    document.getElementById('cellModal').addEventListener('click', (e) => { if (e.target.id === 'cellModal') closeCellModal(); });
+    document.getElementById('draftModal').addEventListener('click', (e) => { if (e.target.id === 'draftModal') closeDraftModal(); });
+
+    setupPivot();
+  }
+
+  async function reloadSlips() {
+    const psnap = await db.collection('payslips').get();
+    allSlips = psnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+
+  function empDisplayName(e) { return e.displayName || e.email || ''; }
+
+  function latestSlipFor(uid, name) {
+    const mine = allSlips.filter(s => (uid && s.uid === uid) || s['사원명'] === name);
+    if (!mine.length) return null;
+    return [...mine].sort((a, b) => (b['지급일'] || '').localeCompare(a['지급일'] || ''))[0];
+  }
+
+  // ---------- 일괄 생성 ----------
+  function loadBulkDrafts() {
+    const payDate = document.getElementById('bc-payDate').value;
+    const statusEl = document.getElementById('bcLoadStatus');
+    if (!payDate) { statusEl.style.color = 'var(--neg)'; statusEl.textContent = '지급일을 선택해 주세요.'; return; }
+
+    const existingKeys = new Set(allSlips.map(s => `${s['사원명']}__${s['지급일']}`));
+
+    bulkDrafts = employees.map(emp => {
+      const name = empDisplayName(emp);
+      const prev = latestSlipFor(emp.uid, name);
+      const isDup = existingKeys.has(`${name}__${payDate}`);
+      return {
+        uid: emp.uid,
+        name,
+        dept: emp.department || prev?.['부서명'] || '',
+        pos: (emp.positionTags || []).filter(t => t !== '근무중').join(', ') || prev?.['직급'] || '',
+        type: prev?.['근무형태구분'] || '정규',
+        project: prev?.['프로젝트'] || '',
+        payDate,
+        pay: Object.fromEntries(PAY_KEYS.map(k => [k, prev?.pay?.[k] || 0])),
+        deductions: Object.fromEntries(DED_KEYS.map(k => [k, prev?.deductions?.[k] || 0])),
+        hasHistory: !!prev,
+        prevPayDate: prev?.['지급일'] || null,
+        isDup,
+        include: !isDup
+      };
+    });
+
+    statusEl.textContent = '';
+    document.getElementById('bcTableWrap').style.display = 'block';
+    renderBulkTable();
+  }
+
+  function draftTotals(d) {
+    const payTotal = PAY_KEYS.reduce((s, k) => s + (Number(d.pay[k]) || 0), 0);
+    const dedTotal = DED_KEYS.reduce((s, k) => s + (Number(d.deductions[k]) || 0), 0);
+    return { payTotal, dedTotal, net: payTotal - dedTotal };
+  }
+
+  function renderBulkTable() {
+    const table = document.getElementById('bcTable');
+    const rows = bulkDrafts.map((d, idx) => {
+      const { payTotal, dedTotal, net } = draftTotals(d);
+      const badge = d.isDup
+        ? `<span class="badge dup">같은 지급일로 이미 등록됨</span>`
+        : (d.hasHistory ? `<span class="badge">${d.prevPayDate} 기준 불러옴</span>` : `<span class="badge new">이전 내역 없음</span>`);
+      return `
+        <tr>
+          <td><input type="checkbox" data-bc-include="${idx}" ${d.include ? 'checked' : ''}></td>
+          <td>${d.name}${badge}</td>
+          <td><input type="date" data-bc-paydate="${idx}" value="${d.payDate}" style="padding:4px 6px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:12.5px;"></td>
+          <td style="text-align:right;">${payTotal.toLocaleString()}</td>
+          <td style="text-align:right;">${dedTotal.toLocaleString()}</td>
+          <td style="text-align:right; font-weight:600;">${net.toLocaleString()}</td>
+          <td><button type="button" class="row-btn" data-bc-detail="${idx}">상세수정</button></td>
+        </tr>
+      `;
+    }).join('');
+
+    table.innerHTML = `
+      <thead>
+        <tr><th>포함</th><th>사원명</th><th>지급일</th><th style="text-align:right;">지급액계</th><th style="text-align:right;">공제액계</th><th style="text-align:right;">차인지급액</th><th>상세</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    `;
+
+    table.querySelectorAll('[data-bc-include]').forEach(cb => {
+      cb.addEventListener('change', () => { bulkDrafts[+cb.dataset.bcInclude].include = cb.checked; });
+    });
+    table.querySelectorAll('[data-bc-paydate]').forEach(inp => {
+      inp.addEventListener('change', () => { bulkDrafts[+inp.dataset.bcPaydate].payDate = inp.value; renderBulkTable(); });
+    });
+    table.querySelectorAll('[data-bc-detail]').forEach(btn => {
+      btn.addEventListener('click', () => openDraftModal(+btn.dataset.bcDetail));
+    });
+  }
+
+  function openDraftModal(idx) {
+    editingDraftIdx = idx;
+    const d = bulkDrafts[idx];
+    document.getElementById('draftModalTitle').textContent = `상세수정 - ${d.name}`;
+    document.getElementById('dm-dept').value = d.dept;
+    document.getElementById('dm-pos').value = d.pos;
+    document.getElementById('dm-type').value = d.type;
+    document.getElementById('dm-project').value = d.project;
+
+    document.getElementById('dm-pay-grid').innerHTML = PAY_KEYS.map(k =>
+      `<div class="field"><label>${k}</label><input type="number" data-dm-pay="${k}" value="${d.pay[k]}"></div>`
+    ).join('');
+    document.getElementById('dm-ded-grid').innerHTML = DED_KEYS.map(k =>
+      `<div class="field"><label>${k}</label><input type="number" data-dm-ded="${k}" value="${d.deductions[k]}"></div>`
+    ).join('');
+
+    document.getElementById('draftModal').style.display = 'flex';
+  }
+
+  function closeDraftModal() {
+    document.getElementById('draftModal').style.display = 'none';
+    editingDraftIdx = null;
+  }
+
+  function applyDraftModal() {
+    if (editingDraftIdx === null) return;
+    const d = bulkDrafts[editingDraftIdx];
+    d.dept = document.getElementById('dm-dept').value.trim();
+    d.pos = document.getElementById('dm-pos').value.trim();
+    d.type = document.getElementById('dm-type').value;
+    d.project = document.getElementById('dm-project').value.trim();
+    document.querySelectorAll('[data-dm-pay]').forEach(inp => { d.pay[inp.dataset.dmPay] = Number(inp.value) || 0; });
+    document.querySelectorAll('[data-dm-ded]').forEach(inp => { d.deductions[inp.dataset.dmDed] = Number(inp.value) || 0; });
+    closeDraftModal();
+    renderBulkTable();
+  }
+
+  async function saveBulkDrafts() {
+    const toSave = bulkDrafts.filter(d => d.include);
+    const statusEl = document.getElementById('bcSaveStatus');
+    if (!toSave.length) { statusEl.style.color = 'var(--neg)'; statusEl.textContent = '저장할 항목이 없습니다 (모두 제외됨).'; return; }
+    if (!confirm(`${toSave.length}명의 급여명세서를 저장합니다. 계속할까요?`)) return;
+
+    const btn = document.getElementById('bcSaveAllBtn');
+    btn.disabled = true;
+    btn.textContent = '저장 중...';
+    statusEl.style.color = 'var(--ink)';
+    statusEl.textContent = '';
+
+    let okCount = 0;
+    const failList = [];
+
+    for (const d of toSave) {
+      try {
+        const { payTotal, dedTotal, net } = draftTotals(d);
+        const docNumber = await getNextDocNumber('급여명세서');
+        await db.collection('payslips').add({
+          uid: d.uid,
+          '사원명': d.name,
+          '지급일': d.payDate,
+          '부서명': d.dept,
+          '직급': d.pos,
+          '근무형태구분': d.type,
+          '프로젝트': d.project,
+          pay: { ...d.pay },
+          deductions: { ...d.deductions },
+          '지급액계': payTotal,
+          '공제액계': dedTotal,
+          '차인지급액': net,
+          docNumber,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        okCount++;
+      } catch (err) {
+        failList.push(`${d.name}: ${err.message}`);
+      }
+    }
+
+    btn.disabled = false;
+    btn.textContent = '선택한 직원 일괄 저장';
+
+    statusEl.style.color = failList.length ? 'var(--neg)' : 'var(--pos)';
+    statusEl.textContent = `${okCount}건 저장 완료.` + (failList.length ? ` 실패 ${failList.length}건: ${failList.join(', ')}` : '');
+
+    bulkDrafts = [];
+    document.getElementById('bcTableWrap').style.display = 'none';
+
+    await reloadSlips();
+    renderPivot();
+  }
+
+  // ---------- 피벗 (전체 직원 급여 현황) ----------
+  function setupPivot() {
+    const years = [...new Set(allSlips.map(s => (s['지급일'] || '').slice(0, 4)).filter(Boolean))].sort().reverse();
+    const thisYear = String(new Date().getFullYear());
+    if (!years.includes(thisYear)) years.unshift(thisYear);
+
+    const sel = document.getElementById('pvYearSelect');
+    sel.innerHTML = years.map(y => `<option value="${y}">${y}년</option>`).join('');
+    sel.value = thisYear;
+    sel.addEventListener('change', renderPivot);
+
+    renderPivot();
+  }
+
+  function buildPivotData() {
+    pivotData = {};
+    // 현재 등록된 직원은 급여 이력이 없어도 한 줄로 먼저 보이게 함
+    employees.forEach(e => { pivotData[empDisplayName(e)] = pivotData[empDisplayName(e)] || {}; });
+
+    allSlips.forEach(s => {
+      const name = s['사원명'];
+      if (!name) return;
+      const month = (s['지급일'] || '').slice(0, 7);
+      if (!month) return;
+      pivotData[name] = pivotData[name] || {};
+      pivotData[name][month] = pivotData[name][month] || { net: 0, slips: [] };
+      pivotData[name][month].net += (s['차인지급액'] || 0);
+      pivotData[name][month].slips.push(s);
+    });
+  }
+
+  function renderPivot() {
+    buildPivotData();
+
+    const year = document.getElementById('pvYearSelect').value;
+    const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
+    const names = Object.keys(pivotData).sort((a, b) => a.localeCompare(b, 'ko'));
+
+    const wrap = document.getElementById('pivotWrap');
+    const table = document.getElementById('pvTable');
+    const emptyMsg = document.getElementById('pivotEmpty');
+
+    const hasAnyDataThisYear = names.some(n => months.some(m => pivotData[n][m]));
+    if (names.length === 0) {
+      wrap.style.display = 'none';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    wrap.style.display = 'block';
+    emptyMsg.style.display = 'none';
+
+    const theadMonths = months.map(m => `<th style="text-align:right;">${Number(m.slice(5))}월</th>`).join('');
+
+    const bodyRows = names.map(name => {
+      const cells = months.map(m => {
+        const cell = pivotData[name][m];
+        if (!cell) return `<td class="net-cell" style="color:var(--muted);">-</td>`;
+        return `<td class="net-cell cell-link" data-cell-name="${name}" data-cell-month="${m}">${cell.net.toLocaleString()}</td>`;
+      }).join('');
+      const yearTotal = months.reduce((s, m) => s + (pivotData[name][m]?.net || 0), 0);
+      return `<tr><td class="pivot-name-col" style="font-weight:600;">${name}</td>${cells}<td class="net-cell" style="font-weight:700;">${yearTotal.toLocaleString()}</td></tr>`;
+    }).join('');
+
+    const monthTotals = months.map(m => names.reduce((s, n) => s + (pivotData[n][m]?.net || 0), 0));
+    const grandTotal = monthTotals.reduce((a, b) => a + b, 0);
+    const totalCells = monthTotals.map(v => `<td class="net-cell">${v.toLocaleString()}</td>`).join('');
+
+    table.innerHTML = `
+      <thead>
+        <tr><th class="pivot-name-col">사원명</th>${theadMonths}<th style="text-align:right;">연간 합계</th></tr>
+      </thead>
+      <tbody>${bodyRows}</tbody>
+      <tfoot>
+        <tr style="font-weight:700;"><td class="pivot-name-col">전체 합계</td>${totalCells}<td class="net-cell">${grandTotal.toLocaleString()}</td></tr>
+      </tfoot>
+    `;
+
+    if (!hasAnyDataThisYear) {
+      // 데이터가 전혀 없는 연도라도 직원 목록/구조는 그대로 보여주되, 안내만 살짝 덧붙임
+    }
+
+    table.querySelectorAll('[data-cell-name]').forEach(td => {
+      td.addEventListener('click', () => openCellModal(td.dataset.cellName, td.dataset.cellMonth));
+    });
+  }
+
+  function openCellModal(name, month) {
+    const cell = pivotData[name]?.[month];
+    if (!cell) return;
+    document.getElementById('cellModalTitle').textContent = `${name} · ${month}`;
+
+    const rowsHtml = cell.slips.map(s => {
+      const payLines = PAY_KEYS.filter(k => (s.pay?.[k] || 0) !== 0)
+        .map(k => `<tr><td style="color:var(--muted);">${k}</td><td style="text-align:right;">${(s.pay[k] || 0).toLocaleString()}원</td></tr>`).join('');
+      const dedLines = DED_KEYS.filter(k => (s.deductions?.[k] || 0) !== 0)
+        .map(k => `<tr><td style="color:var(--muted);">${k}</td><td style="text-align:right;">${(s.deductions[k] || 0).toLocaleString()}원</td></tr>`).join('');
+      return `
+        <div style="border:1px solid var(--line); border-radius:6px; padding:14px 16px; margin-bottom:12px;">
+          <div style="font-size:12.5px; color:var(--muted); margin-bottom:8px;">
+            문서번호 ${s.docNumber || '-'} · 지급일 ${s['지급일'] || ''} · 근무형태 ${s['근무형태구분'] || '-'}${s['프로젝트'] ? ' · ' + s['프로젝트'] : ''}
+          </div>
+          <table>${payLines}${dedLines}</table>
+          <div style="margin-top:8px; text-align:right; font-weight:700;">차인지급액 ${(s['차인지급액'] || 0).toLocaleString()}원</div>
+        </div>
+      `;
+    }).join('');
+
+    const link = `payslip.html?employee=${encodeURIComponent(name)}&month=${encodeURIComponent(month)}`;
+
+    document.getElementById('cellModalBody').innerHTML = `
+      ${rowsHtml}
+      <a class="row-btn" href="${link}" target="_blank" rel="noopener">급여명세서 페이지에서 수정하기 →</a>
+    `;
+
+    document.getElementById('cellModal').style.display = 'flex';
+  }
+
+  function closeCellModal() {
+    document.getElementById('cellModal').style.display = 'none';
+  }
+
+  document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await logOut();
+    window.location.href = 'login.html';
+  });
+</script>
+</body>
+</html>
