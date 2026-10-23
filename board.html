@@ -78,6 +78,69 @@ if ('serviceWorker' in navigator) {
     padding:36px; text-align:center; color:var(--muted); font-size:13.5px;
   }
 
+  .panel{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:24px; margin-bottom:24px;
+  }
+  .panel-title-row{ display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px; }
+  .panel-title{
+    font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted);
+  }
+  .panel-desc{ font-size:12.5px; color:var(--muted); line-height:1.6; margin-bottom:14px; }
+
+  .wstat-row{ display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .wstat-row:last-child{ border-bottom:none; }
+  .wstat-name{ font-weight:600; font-size:14px; min-width:66px; }
+  .wstat-badge{
+    display:inline-block; font-size:12px; padding:3px 10px; border-radius:20px;
+    background:#ece9e2; color:#7a766c; white-space:nowrap;
+  }
+  .wstat-badge[data-status="외근"]{ background:#e3edf7; color:#2f5f8a; }
+  .wstat-badge[data-status="외출"]{ background:#faeedd; color:#a9671c; }
+  .wstat-badge[data-status="부재"]{ background:#fbe4e2; color:#a4453c; }
+  .wstat-badge[data-status="기타"]{ background:#ece9e2; color:#7a766c; }
+  .wstat-note{ font-size:12.5px; color:var(--muted); flex:1; min-width:120px; }
+  .wstat-actions{ display:flex; gap:10px; margin-left:auto; }
+  .wstat-actions button{
+    font-size:12px; background:none; border:none; cursor:pointer;
+    text-decoration:underline; color:var(--ink); white-space:nowrap;
+  }
+  .wstat-edit-form, .handoff-form{
+    display:none; gap:8px; align-items:flex-start; flex-wrap:wrap; margin-top:4px; width:100%;
+  }
+  .wstat-edit-form.show, .handoff-form.show{ display:flex; }
+  .wstat-edit-form select, .wstat-edit-form input{
+    padding:7px 9px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:12.5px; background:#fff;
+  }
+  .wstat-edit-form input[type=text]{ flex:1; min-width:160px; }
+  .handoff-form textarea{
+    flex:1; min-width:200px; min-height:52px; padding:8px 10px; border:1px solid var(--line);
+    border-radius:4px; font-family:inherit; font-size:12.5px; background:#fff; resize:vertical;
+  }
+  .handoff-form-btns{ display:flex; flex-direction:column; gap:6px; }
+  .mini-btn{
+    padding:7px 14px; background:var(--ink); color:var(--paper); border:none;
+    font-size:12px; cursor:pointer; border-radius:4px; white-space:nowrap;
+  }
+  .mini-cancel{
+    padding:7px 14px; background:none; color:var(--muted); border:none;
+    font-size:12px; cursor:pointer; white-space:nowrap;
+  }
+
+  .handoff-filter{
+    padding:7px 10px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:12.5px; background:#fff;
+  }
+  .handoff-item{ padding:10px 0; border-bottom:1px solid var(--line); font-size:13px; }
+  .handoff-item:last-child{ border-bottom:none; }
+  .handoff-meta{ font-size:11.5px; color:var(--muted); margin-bottom:3px; }
+  .handoff-unread{
+    display:inline-block; width:6px; height:6px; border-radius:50%;
+    background:#a4453c; margin-right:5px; vertical-align:middle;
+  }
+  .handoff-body{ white-space:pre-wrap; }
+
   .write-panel{
     background:#fff; border:1px solid var(--line); border-radius:6px;
     padding:24px; margin-bottom:24px; display:none;
@@ -142,6 +205,8 @@ if ('serviceWorker' in navigator) {
     .tabs{ gap:6px !important; }
     .post-card-top{ flex-direction:column; align-items:flex-start !important; gap:6px; }
     .comment-form{ flex-direction:column; align-items:stretch !important; }
+    .wstat-row{ align-items:flex-start !important; }
+    .wstat-actions{ margin-left:0 !important; width:100%; }
   }
 </style>
 </head>
@@ -159,6 +224,23 @@ if ('serviceWorker' in navigator) {
 </header>
 
 <main>
+  <div class="panel" id="statusPanel">
+    <div class="panel-title-row">
+      <div class="panel-title">직원 근무상태</div>
+    </div>
+    <div class="panel-desc">누가 지금 외근·외출·부재 중인지 한눈에 볼 수 있습니다. 본인 상태는 직접 바꿀 수 있고(관리자는 전체 변경 가능), 자리를 비운 직원에게는 "전달사항 남기기"로 대리업무 수행 내용이나 전달할 내용을 남겨두면 그 직원이 다음 로그인할 때 바로 안내됩니다.</div>
+    <div id="statusList"></div>
+  </div>
+
+  <div class="panel" id="handoffPanel">
+    <div class="panel-title-row">
+      <div class="panel-title">전달사항 이력</div>
+      <select class="handoff-filter" id="handoffFilter"><option value="전체">전체 대상</option></select>
+    </div>
+    <div id="handoffList"></div>
+    <div class="empty" id="handoffEmpty" style="display:none; padding:20px;">등록된 전달사항이 없습니다.</div>
+  </div>
+
   <div id="listView">
     <div class="tabs" id="tabs"></div>
     <button class="new-post-btn" id="newPostBtn">+ 새 글 작성</button>
@@ -226,6 +308,7 @@ if ('serviceWorker' in navigator) {
 
   const storage = firebase.storage();
   const CATEGORIES = ['전체', '일반공지', '안전위험성요인', '기타'];
+  const STATUS_OPTIONS = ['정상근무', '외근', '외출', '부재', '기타'];
 
   let currentUser = null;
   let currentRole = null;
@@ -233,6 +316,10 @@ if ('serviceWorker' in navigator) {
   let allPosts = [];
   let activeCategory = '전체';
   let currentPostId = null;
+
+  let employees = [];
+  let workStatusMap = {}; // uid -> { status, note, updatedAt, updatedBy }
+  let handoffNotes = [];
 
   auth.onAuthStateChanged(async (user) => {
     if (!user) return;
@@ -250,6 +337,13 @@ if ('serviceWorker' in navigator) {
 
     renderTabs();
     loadPosts();
+
+    await loadEmployees();
+    await loadWorkStatus();
+    renderStatusList();
+    document.getElementById('handoffFilter').addEventListener('change', renderHandoffList);
+    await loadHandoffNotes();
+    renderHandoffList();
   });
 
   function renderTabs() {
@@ -482,6 +576,175 @@ if ('serviceWorker' in navigator) {
     } catch (err) {
       alert('삭제 실패: ' + err.message);
     }
+  }
+
+  // ---------- 직원 근무상태 ----------
+  async function loadEmployees() {
+    const snap = await db.collection('users').get();
+    employees = snap.docs.map(d => ({ uid: d.id, ...d.data() })).filter(e => e.role !== 'guest');
+  }
+
+  function empName(e) { return e.displayName || e.email || ''; }
+
+  async function loadWorkStatus() {
+    const snap = await db.collection('workStatus').get();
+    workStatusMap = {};
+    snap.docs.forEach(d => { workStatusMap[d.id] = d.data(); });
+  }
+
+  function renderStatusList() {
+    const listEl = document.getElementById('statusList');
+    const sorted = [...employees].sort((a, b) => empName(a).localeCompare(empName(b), 'ko'));
+
+    listEl.innerHTML = sorted.map(emp => {
+      const name = empName(emp);
+      const st = workStatusMap[emp.uid] || {};
+      const status = st.status || '정상근무';
+      const canEdit = (emp.uid === currentUser.uid) || (currentRole === 'admin');
+      const updatedStr = st.updatedAt?.toDate ? st.updatedAt.toDate().toLocaleString('ko-KR') : '';
+
+      return `
+        <div class="wstat-row" data-uid="${emp.uid}">
+          <div class="wstat-name">${name}</div>
+          <span class="wstat-badge" data-status="${status}">${status}</span>
+          <span class="wstat-note">${st.note ? st.note : ''}${(st.note && updatedStr) ? ' · ' : ''}${updatedStr}</span>
+          <div class="wstat-actions">
+            ${canEdit ? `<button type="button" data-edit-status="${emp.uid}">상태변경</button>` : ''}
+            <button type="button" data-leave-note="${emp.uid}">전달사항 남기기</button>
+          </div>
+          <div class="wstat-edit-form" id="editForm-${emp.uid}">
+            <select id="editStatusSel-${emp.uid}">
+              ${STATUS_OPTIONS.map(s => `<option value="${s}" ${s === status ? 'selected' : ''}>${s}</option>`).join('')}
+            </select>
+            <input type="text" id="editStatusNote-${emp.uid}" placeholder="메모 (예: 16시 복귀 예정)" value="${(st.note || '').replace(/"/g, '&quot;')}">
+            <button type="button" class="mini-btn" data-save-status="${emp.uid}">저장</button>
+            <button type="button" class="mini-cancel" data-cancel-status="${emp.uid}">취소</button>
+          </div>
+          <div class="handoff-form" id="handoffForm-${emp.uid}">
+            <textarea id="handoffText-${emp.uid}" placeholder="${name}님에게 남길 전달사항 (대리업무 수행 내용, 전달 필요한 내용 등)"></textarea>
+            <div class="handoff-form-btns">
+              <button type="button" class="mini-btn" data-submit-handoff="${emp.uid}">등록</button>
+              <button type="button" class="mini-cancel" data-cancel-handoff="${emp.uid}">취소</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    listEl.querySelectorAll('[data-edit-status]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.wstat-edit-form.show').forEach(f => f.classList.remove('show'));
+        document.getElementById('editForm-' + btn.dataset.editStatus).classList.add('show');
+      });
+    });
+    listEl.querySelectorAll('[data-cancel-status]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.getElementById('editForm-' + btn.dataset.cancelStatus).classList.remove('show');
+      });
+    });
+    listEl.querySelectorAll('[data-save-status]').forEach(btn => {
+      btn.addEventListener('click', () => saveStatus(btn.dataset.saveStatus));
+    });
+    listEl.querySelectorAll('[data-leave-note]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.handoff-form.show').forEach(f => f.classList.remove('show'));
+        document.getElementById('handoffForm-' + btn.dataset.leaveNote).classList.add('show');
+      });
+    });
+    listEl.querySelectorAll('[data-cancel-handoff]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.getElementById('handoffForm-' + btn.dataset.cancelHandoff).classList.remove('show');
+      });
+    });
+    listEl.querySelectorAll('[data-submit-handoff]').forEach(btn => {
+      btn.addEventListener('click', () => submitHandoff(btn.dataset.submitHandoff));
+    });
+  }
+
+  async function saveStatus(uid) {
+    const sel = document.getElementById('editStatusSel-' + uid);
+    const noteInput = document.getElementById('editStatusNote-' + uid);
+    const status = sel.value;
+    const note = noteInput.value.trim();
+
+    try {
+      await db.collection('workStatus').doc(uid).set({
+        uid,
+        status,
+        note,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: currentDisplayName
+      }, { merge: true });
+      await loadWorkStatus();
+      renderStatusList();
+    } catch (err) {
+      alert('상태 저장 실패: ' + err.message);
+    }
+  }
+
+  async function submitHandoff(toUid) {
+    const emp = employees.find(e => e.uid === toUid);
+    const toName = emp ? empName(emp) : '';
+    const textarea = document.getElementById('handoffText-' + toUid);
+    const text = textarea.value.trim();
+    if (!text) { alert('내용을 입력해 주세요.'); return; }
+
+    try {
+      await db.collection('handoffNotes').add({
+        toUid,
+        toName,
+        fromUid: currentUser.uid,
+        fromName: currentDisplayName,
+        text,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        readByRecipient: false
+      });
+      textarea.value = '';
+      document.getElementById('handoffForm-' + toUid).classList.remove('show');
+      await loadHandoffNotes();
+      renderHandoffList();
+    } catch (err) {
+      alert('전달사항 등록 실패: ' + err.message);
+    }
+  }
+
+  // ---------- 전달사항 이력 ----------
+  async function loadHandoffNotes() {
+    const snap = await db.collection('handoffNotes').orderBy('createdAt', 'desc').get();
+    handoffNotes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    const filterSel = document.getElementById('handoffFilter');
+    const names = [...new Set(employees.map(e => empName(e)))].filter(Boolean).sort((a, b) => a.localeCompare(b, 'ko'));
+    const current = filterSel.value;
+    filterSel.innerHTML = '<option value="전체">전체 대상</option>' + names.map(n => `<option value="${n}">${n}</option>`).join('');
+    if (names.includes(current)) filterSel.value = current;
+  }
+
+  function renderHandoffList() {
+    const listEl = document.getElementById('handoffList');
+    const emptyMsg = document.getElementById('handoffEmpty');
+    const filterVal = document.getElementById('handoffFilter').value;
+    const rows = filterVal === '전체' ? handoffNotes : handoffNotes.filter(n => n.toName === filterVal);
+
+    if (rows.length === 0) {
+      listEl.innerHTML = '';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+
+    listEl.innerHTML = rows.map(n => {
+      const dateStr = n.createdAt?.toDate ? n.createdAt.toDate().toLocaleString('ko-KR') : '';
+      return `
+        <div class="handoff-item">
+          <div class="handoff-meta">
+            ${!n.readByRecipient ? '<span class="handoff-unread" title="아직 안 읽음"></span>' : ''}
+            ${n.toName || ''}님에게 · ${n.fromName || ''}님이 남김 · ${dateStr}
+          </div>
+          <div class="handoff-body">${n.text || ''}</div>
+        </div>
+      `;
+    }).join('');
   }
 
   document.getElementById('logoutBtn').addEventListener('click', async (e) => {
