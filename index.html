@@ -735,7 +735,8 @@ if ('serviceWorker' in navigator) {
 
                 // 1.5 전체: 현재 근무상태(외근/외출/부재 등)가 설정된 직원 간이 안내
                 // (게시판 "직원 근무상태" 패널과 같은 workSchedules 컬렉션을 그대로 읽는다 - board.html 참고.
-                // 각 일정은 시작일~종료일로 등록되므로, "오늘"이 그 구간에 들어오는 일정만 뽑아서 보여준다)
+                // 각 일정은 날짜(date) 하나 + 선택적 시간(time)으로 등록되므로, 날짜가 "오늘"과
+                // 같은 일정만 뽑아서 보여준다)
                 // workSchedules는 새로 추가된 컬렉션이라 Firestore 보안 규칙이 아직 안 걸려있으면
                 // permission-denied로 실패할 수 있는데, 그 경우에도 아래 연차/중요업무 등 기존
                 // 알림까지 같이 묻히지 않도록 이 부분만 따로 try/catch로 감싼다.
@@ -744,12 +745,13 @@ if ('serviceWorker' in navigator) {
                     const todayStr = new Date().toISOString().slice(0, 10);
                     const outOfOffice = scheduleSnap.docs
                         .map(d => d.data())
-                        .filter(s => s.status && s.startDate <= todayStr && s.endDate >= todayStr);
+                        .filter(s => s.status && s.date === todayStr);
                     if (outOfOffice.length > 0) {
                         notifItems.push('👥 현재 근무상태:');
                         outOfOffice.forEach(s => {
                             const name = s.name || s.createdBy || '';
-                            notifItems.push(`　· ${name} - ${s.status}${s.note ? ` (${s.note})` : ''}`);
+                            const timeNote = s.time ? `${s.time}${s.note ? ' ' : ''}` : '';
+                            notifItems.push(`　· ${name} - ${s.status}${(timeNote || s.note) ? ` (${timeNote}${s.note || ''})` : ''}`);
                         });
                     }
                 } catch (err) {

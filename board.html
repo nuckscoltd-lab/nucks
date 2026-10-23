@@ -98,6 +98,7 @@ if ('serviceWorker' in navigator) {
   .wstat-badge[data-status="외근"]{ background:#e3edf7; color:#2f5f8a; }
   .wstat-badge[data-status="외출"]{ background:#faeedd; color:#a9671c; }
   .wstat-badge[data-status="부재"]{ background:#fbe4e2; color:#a4453c; }
+  .wstat-badge[data-status="회의"]{ background:#eee6f5; color:#6b4f96; }
   .wstat-badge[data-status="기타"]{ background:#ece9e2; color:#7a766c; }
   .wstat-note{ font-size:12.5px; color:var(--muted); flex:1; min-width:120px; }
   .wstat-actions{ display:flex; gap:10px; margin-left:auto; }
@@ -105,17 +106,19 @@ if ('serviceWorker' in navigator) {
     font-size:12px; background:none; border:none; cursor:pointer;
     text-decoration:underline; color:var(--ink); white-space:nowrap;
   }
+  /* 상태변경 폼: 상태/메모/일자/시간/저장/취소를 전부 같은 한 줄에 나란히 두기 위해, 메모
+     입력칸을 flex:1로 두지 않고 고정 너비로 줘서 뒤 항목들이 밀려 줄바꿈되지 않게 한다. */
   .wstat-edit-form, .handoff-form{
-    display:none; gap:8px; align-items:flex-start; flex-wrap:wrap; margin-top:4px; width:100%;
+    display:none; gap:8px; align-items:center; flex-wrap:wrap; margin-top:4px; width:100%;
   }
   .wstat-edit-form.show, .handoff-form.show{ display:flex; }
   .wstat-edit-form select, .wstat-edit-form input{
     padding:7px 9px; border:1px solid var(--line); border-radius:4px;
     font-family:inherit; font-size:12.5px; background:#fff;
   }
-  .wstat-edit-form input[type=text]{ flex:1; min-width:160px; }
-  .wstat-edit-form .date-field{ display:flex; flex-direction:column; gap:3px; }
-  .wstat-edit-form .date-field label{ font-size:10.5px; color:var(--muted); }
+  .wstat-edit-form input[type=text]{ width:190px; }
+  .wstat-edit-form input[type=date]{ width:138px; }
+  .wstat-edit-form input[type=time]{ width:98px; }
   .wstat-period{ font-size:11.5px; color:var(--muted); }
 
   .upcoming-row{ display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
@@ -330,10 +333,21 @@ if ('serviceWorker' in navigator) {
 
   const storage = firebase.storage();
   const CATEGORIES = ['전체', '일반공지', '안전위험성요인', '기타'];
-  const STATUS_OPTIONS = ['정상근무', '외근', '외출', '부재', '기타'];
+  const STATUS_OPTIONS = ['정상근무', '외근', '외출', '부재', '회의', '기타'];
   // "정상근무"는 일정을 따로 등록하는 상태가 아니라 "현재 걸려있는 일정이 없을 때"의 기본값이라,
   // 상태변경 폼의 선택지에서는 빼고 실제 등록 가능한 상태만 보여준다.
   const EDITABLE_STATUS_OPTIONS = STATUS_OPTIONS.filter(s => s !== '정상근무');
+
+  // 전달사항(handoffNotes)은 모두에게 공개하지 않고, 받는 사람의 부서 기준으로 정해진 명단만
+  // 볼 수 있게 한다 - 메모에 민감한 내용이 있을 수 있어서다. firestore.rules의 deptViewers()
+  // 함수와 반드시 같은 내용으로 유지할 것 (한쪽만 고치면 화면에 보이는 것과 실제 읽기 권한이
+  // 어긋난다). "경영관리부" 외 나머지 전부(설계부 자신, 디자인연구부, 부서 미지정 등)는
+  // 설계부 명단과 동일하게 취급한다 - deptGroupFor() 참고.
+  const DEPT_VIEWERS = {
+    '설계부': ['윤상원', '김의석', '손영화', '윤성원'],
+    '경영관리부': ['윤상원', '김의석', '이연경']
+  };
+  function deptGroupFor(dept) { return dept === '경영관리부' ? '경영관리부' : '설계부'; }
 
   let currentUser = null;
   let currentRole = null;
@@ -639,32 +653,26 @@ if ('serviceWorker' in navigator) {
   // UTC 기준 YYYY-MM-DD를 쓴다 - 이 저장소 전체에서 일관되게 쓰이는 방식.
   function todayStr() { return new Date().toISOString().slice(0, 10); }
 
-  function fmtMD(dateStr) {
-    const parts = (dateStr || '').split('-');
-    if (parts.length !== 3) return dateStr || '';
-    return `${Number(parts[1])}/${Number(parts[2])}`;
-  }
-
   async function loadWorkSchedules() {
     const snap = await db.collection('workSchedules').get();
     workSchedules = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   }
 
-  // 그 직원의 "오늘" 기준으로 걸려있는 일정(시작일<=오늘<=종료일)을 찾는다. 기간이 겹치는
-  // 일정이 여러 개 있으면(거의 없겠지만) 가장 최근에 등록한 것을 우선한다.
+  // 그 직원의 "오늘" 일정(날짜가 오늘과 같은 것)을 찾는다. 같은 날짜로 여러 번 등록했으면
+  // (상태를 바꿔 다시 등록한 경우 등) 가장 최근에 등록한 것을 우선한다.
   function currentScheduleFor(uid) {
     const today = todayStr();
-    const matches = workSchedules.filter(s => s.uid === uid && s.startDate <= today && s.endDate >= today);
+    const matches = workSchedules.filter(s => s.uid === uid && s.date === today);
     if (!matches.length) return null;
     return matches.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))[0];
   }
 
-  // 아직 시작 안 된(시작일이 오늘보다 뒤인) 일정만 따로 모아 시작일 순으로 정렬.
+  // 아직 시작 안 된(날짜가 오늘보다 뒤인) 일정만 따로 모아 날짜·시간 순으로 정렬.
   function upcomingSchedules() {
     const today = todayStr();
     return workSchedules
-      .filter(s => s.startDate > today)
-      .sort((a, b) => a.startDate.localeCompare(b.startDate) || a.name.localeCompare(b.name, 'ko'));
+      .filter(s => s.date > today)
+      .sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || '') || a.name.localeCompare(b.name, 'ko'));
   }
 
   function renderStatusList() {
@@ -677,13 +685,13 @@ if ('serviceWorker' in navigator) {
       const cur = currentScheduleFor(emp.uid);
       const status = cur ? cur.status : '정상근무';
       const canEdit = (emp.uid === currentUser.uid) || (currentRole === 'admin');
-      const periodStr = (cur && cur.endDate > today) ? `~${fmtMD(cur.endDate)}까지` : '';
+      const timeStr = cur?.time ? cur.time : '';
 
       return `
         <div class="wstat-row" data-uid="${emp.uid}">
           <div class="wstat-name">${name}</div>
           <span class="wstat-badge" data-status="${status}">${status}</span>
-          <span class="wstat-note">${cur?.note ? cur.note : ''}${(cur?.note && periodStr) ? ' · ' : ''}${periodStr}</span>
+          <span class="wstat-note">${timeStr ? timeStr + ' · ' : ''}${cur?.note ? cur.note : ''}</span>
           <div class="wstat-actions">
             ${(canEdit && cur) ? `<button type="button" data-end-status="${cur.id}">현재 상태 종료</button>` : ''}
             ${canEdit ? `<button type="button" data-edit-status="${emp.uid}">상태변경</button>` : ''}
@@ -694,14 +702,8 @@ if ('serviceWorker' in navigator) {
               ${EDITABLE_STATUS_OPTIONS.map(s => `<option value="${s}" ${s === status ? 'selected' : ''}>${s}</option>`).join('')}
             </select>
             <input type="text" id="editStatusNote-${emp.uid}" placeholder="메모 (예: 16시 복귀 예정)" value="${(cur?.note || '').replace(/"/g, '&quot;')}">
-            <div class="date-field">
-              <label for="editStatusStart-${emp.uid}">시작일</label>
-              <input type="date" id="editStatusStart-${emp.uid}" value="${today}">
-            </div>
-            <div class="date-field">
-              <label for="editStatusEnd-${emp.uid}">종료일</label>
-              <input type="date" id="editStatusEnd-${emp.uid}" value="${today}">
-            </div>
+            <input type="date" id="editStatusDate-${emp.uid}" title="일자" value="${today}">
+            <input type="time" id="editStatusTime-${emp.uid}" title="시간">
             <button type="button" class="mini-btn" data-save-status="${emp.uid}">저장</button>
             <button type="button" class="mini-cancel" data-cancel-status="${emp.uid}">취소</button>
           </div>
@@ -753,11 +755,10 @@ if ('serviceWorker' in navigator) {
     const emp = employees.find(e => e.uid === uid);
     const status = document.getElementById('editStatusSel-' + uid).value;
     const note = document.getElementById('editStatusNote-' + uid).value.trim();
-    const startDate = document.getElementById('editStatusStart-' + uid).value;
-    let endDate = document.getElementById('editStatusEnd-' + uid).value || startDate;
+    const date = document.getElementById('editStatusDate-' + uid).value;
+    const time = document.getElementById('editStatusTime-' + uid).value || null;
 
-    if (!startDate) { alert('시작일을 선택해 주세요.'); return; }
-    if (endDate < startDate) { alert('종료일은 시작일보다 빠를 수 없습니다.'); return; }
+    if (!date) { alert('일자를 선택해 주세요.'); return; }
 
     try {
       await db.collection('workSchedules').add({
@@ -765,8 +766,8 @@ if ('serviceWorker' in navigator) {
         name: emp ? empName(emp) : '',
         status,
         note,
-        startDate,
-        endDate,
+        date,
+        time,
         createdByUid: currentUser.uid,
         createdBy: currentDisplayName,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -811,7 +812,7 @@ if ('serviceWorker' in navigator) {
 
     listEl.innerHTML = rows.map(s => {
       const canEdit = (s.uid === currentUser.uid) || (currentRole === 'admin');
-      const periodStr = s.startDate === s.endDate ? s.startDate : `${s.startDate} ~ ${s.endDate}`;
+      const periodStr = s.time ? `${s.date} ${s.time}` : s.date;
       return `
         <div class="upcoming-row" data-id="${s.id}">
           <div class="upcoming-name">${s.name || ''}</div>
@@ -833,6 +834,7 @@ if ('serviceWorker' in navigator) {
   async function submitHandoff(toUid) {
     const emp = employees.find(e => e.uid === toUid);
     const toName = emp ? empName(emp) : '';
+    const toGroup = deptGroupFor(emp?.department);
     const textarea = document.getElementById('handoffText-' + toUid);
     const text = textarea.value.trim();
     if (!text) { alert('내용을 입력해 주세요.'); return; }
@@ -841,6 +843,7 @@ if ('serviceWorker' in navigator) {
       await db.collection('handoffNotes').add({
         toUid,
         toName,
+        toGroup,
         fromUid: currentUser.uid,
         fromName: currentDisplayName,
         text,
@@ -857,12 +860,28 @@ if ('serviceWorker' in navigator) {
   }
 
   // ---------- 전달사항 이력 ----------
+  // 민감한 내용이 있을 수 있어서 전체 공개가 아니라, (1) 받는 사람의 부서 그룹(DEPT_VIEWERS)에
+  // 속한 사람, (2) 받는 사람 본인, (3) 작성자 본인만 볼 수 있다. firestore.rules도 이 세 가지
+  // 경로를 그대로 반영하고 있어서, 쿼리도 그 세 경로에 맞춰 따로따로 날린 뒤 합친다 - Firestore
+  // 보안 규칙은 "어떤 쿼리를 날렸을 때 그 결과 전체가 규칙을 통과하는지"를 보기 때문에, 권한이
+  // 섞인 하나의 쿼리로는 통과시킬 수 없다.
   async function loadHandoffNotes() {
-    const snap = await db.collection('handoffNotes').orderBy('createdAt', 'desc').get();
-    handoffNotes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const allowedGroups = Object.keys(DEPT_VIEWERS).filter(g => DEPT_VIEWERS[g].includes(currentDisplayName));
+    const byId = {};
+    const addDocs = (snap) => snap.docs.forEach(d => { byId[d.id] = { id: d.id, ...d.data() }; });
 
+    if (allowedGroups.length) {
+      addDocs(await db.collection('handoffNotes').where('toGroup', 'in', allowedGroups).get());
+    }
+    addDocs(await db.collection('handoffNotes').where('toUid', '==', currentUser.uid).get());
+    addDocs(await db.collection('handoffNotes').where('fromUid', '==', currentUser.uid).get());
+
+    handoffNotes = Object.values(byId).sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+
+    // 대상자 필터는 지금 이 사람이 볼 수 있는 전달사항에 등장하는 이름만으로 구성한다
+    // (어차피 못 보는 사람을 필터에 보여줘봐야 의미가 없다).
     const filterSel = document.getElementById('handoffFilter');
-    const names = [...new Set(employees.map(e => empName(e)))].filter(Boolean).sort((a, b) => a.localeCompare(b, 'ko'));
+    const names = [...new Set(handoffNotes.map(n => n.toName))].filter(Boolean).sort((a, b) => a.localeCompare(b, 'ko'));
     const current = filterSel.value;
     filterSel.innerHTML = '<option value="전체">전체 대상</option>' + names.map(n => `<option value="${n}">${n}</option>`).join('');
     if (names.includes(current)) filterSel.value = current;
