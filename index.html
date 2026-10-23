@@ -735,19 +735,26 @@ if ('serviceWorker' in navigator) {
 
                 // 1.5 전체: 현재 근무상태(외근/외출/부재 등)가 설정된 직원 간이 안내
                 // (게시판 "직원 근무상태" 패널과 같은 workStatus 컬렉션을 그대로 읽는다 - board.html 참고)
-                const workStatusSnap = await db.collection('workStatus').get();
-                const outOfOffice = workStatusSnap.docs
-                    .map(d => d.data())
-                    .filter(s => s.status && s.status !== '정상근무');
-                if (outOfOffice.length > 0) {
-                    const usersSnap2 = await db.collection('users').get();
-                    const nameByUid = {};
-                    usersSnap2.docs.forEach(d => { nameByUid[d.id] = d.data()?.displayName; });
-                    notifItems.push('👥 현재 근무상태:');
-                    outOfOffice.forEach(s => {
-                        const name = nameByUid[s.uid] || s.updatedBy || '';
-                        notifItems.push(`　· ${name} - ${s.status}${s.note ? ` (${s.note})` : ''}`);
-                    });
+                // workStatus는 새로 추가된 컬렉션이라 Firestore 보안 규칙이 아직 안 걸려있으면
+                // permission-denied로 실패할 수 있는데, 그 경우에도 아래 연차/중요업무 등 기존
+                // 알림까지 같이 묻히지 않도록 이 부분만 따로 try/catch로 감싼다.
+                try {
+                    const workStatusSnap = await db.collection('workStatus').get();
+                    const outOfOffice = workStatusSnap.docs
+                        .map(d => d.data())
+                        .filter(s => s.status && s.status !== '정상근무');
+                    if (outOfOffice.length > 0) {
+                        const usersSnap2 = await db.collection('users').get();
+                        const nameByUid = {};
+                        usersSnap2.docs.forEach(d => { nameByUid[d.id] = d.data()?.displayName; });
+                        notifItems.push('👥 현재 근무상태:');
+                        outOfOffice.forEach(s => {
+                            const name = nameByUid[s.uid] || s.updatedBy || '';
+                            notifItems.push(`　· ${name} - ${s.status}${s.note ? ` (${s.note})` : ''}`);
+                        });
+                    }
+                } catch (err) {
+                    console.warn('근무상태 알림 확인 실패:', err);
                 }
 
                 // 2. 관리자: 앞으로 7일 이내 예정된 연차 + 중요업무일정 확인
