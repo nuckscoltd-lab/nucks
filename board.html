@@ -873,15 +873,21 @@ if ('serviceWorker' in navigator) {
   // 보안 규칙은 "어떤 쿼리를 날렸을 때 그 결과 전체가 규칙을 통과하는지"를 보기 때문에, 권한이
   // 섞인 하나의 쿼리로는 통과시킬 수 없다.
   async function loadHandoffNotes() {
-    const allowedGroups = Object.keys(DEPT_VIEWERS).filter(g => DEPT_VIEWERS[g].includes(currentDisplayName));
     const byId = {};
     const addDocs = (snap) => snap.docs.forEach(d => { byId[d.id] = { id: d.id, ...d.data() }; });
 
-    if (allowedGroups.length) {
-      addDocs(await db.collection('handoffNotes').where('toGroup', 'in', allowedGroups).get());
+    if (currentRole === 'admin') {
+      // 관리자는 부서 명단(DEPT_VIEWERS)과 무관하게 전체를 본다 - firestore.rules의
+      // handoffNotes read 규칙에 admin 전체허용 조건이 있어서 제한 없는 조회가 그대로 통과된다.
+      addDocs(await db.collection('handoffNotes').get());
+    } else {
+      const allowedGroups = Object.keys(DEPT_VIEWERS).filter(g => DEPT_VIEWERS[g].includes(currentDisplayName));
+      if (allowedGroups.length) {
+        addDocs(await db.collection('handoffNotes').where('toGroup', 'in', allowedGroups).get());
+      }
+      addDocs(await db.collection('handoffNotes').where('toUid', '==', currentUser.uid).get());
+      addDocs(await db.collection('handoffNotes').where('fromUid', '==', currentUser.uid).get());
     }
-    addDocs(await db.collection('handoffNotes').where('toUid', '==', currentUser.uid).get());
-    addDocs(await db.collection('handoffNotes').where('fromUid', '==', currentUser.uid).get());
 
     handoffNotes = Object.values(byId).sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
 
