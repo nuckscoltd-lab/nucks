@@ -259,17 +259,55 @@ if ('serviceWorker' in navigator) {
         }
         }
         .hide { display: none !important; }
+
+        /* 알림: 종류별 "스티커메모" 카드가 하나씩 아래로 드롭다운되며 쌓이는 스택 */
+        #notifStack {
+            position: fixed; top: 24px; right: 24px; z-index: 9999;
+            display: flex; flex-direction: column; gap: 10px;
+            max-width: 340px;
+        }
+        .notif-card {
+            background: rgb(255, 255, 255);
+            border: 1px solid rgb(216, 213, 205);
+            border-radius: 8px;
+            box-shadow: rgba(0, 0, 0, 0.12) 0px 8px 28px;
+            padding: 16px 18px;
+            font-family: Pretendard, -apple-system, sans-serif;
+            opacity: 0;
+            transform: translateY(-14px);
+            animation: notifDrop .32s ease forwards;
+        }
+        .notif-card.notif-card-hide {
+            animation: notifHide .18s ease forwards;
+        }
+        @keyframes notifDrop {
+            from { opacity: 0; transform: translateY(-14px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes notifHide {
+            from { opacity: 1; transform: translateY(0); max-height: 200px; }
+            to   { opacity: 0; transform: translateY(-8px); max-height: 0; }
+        }
+        .notif-card-head {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 8px;
+        }
+        .notif-card-title {
+            font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #8a8578;
+        }
+        .notif-card-close {
+            background: none; border: none; cursor: pointer; font-size: 14px; color: #8a8578;
+        }
+        .notif-card-body {
+            font-size: 13.5px; line-height: 1.7; color: #141414;
+        }
+        .notif-card-body div { margin-bottom: 6px; }
+        .notif-card-body div:last-child { margin-bottom: 0; }
     </style>
 </head>
 <body>
 
-    <div id="notifPopup" style="display: none; position: fixed; top: 24px; right: 24px; z-index: 9999; max-width: 340px; background: rgb(255, 255, 255); border: 1px solid rgb(216, 213, 205); border-radius: 8px; box-shadow: rgba(0, 0, 0, 0.12) 0px 8px 28px; padding: 20px; font-family: Pretendard, -apple-system, sans-serif;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <div style="font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#8a8578;">알림</div>
-            <button id="notifCloseBtn" style="background:none; border:none; cursor:pointer; font-size:14px; color:#8a8578;">✕</button>
-        </div>
-        <div id="notifBody" style="font-size:13.5px; line-height:1.7; color:#141414;"></div>
-    </div>
+    <div id="notifStack"></div>
 
     <header>
         <a href="about.html" class="logo"><img src="nuckslogo1.png" alt="Logo" style="height: 25px;"></a>
@@ -714,9 +752,14 @@ if ('serviceWorker' in navigator) {
             }
         );
 
-        // ---------- 알림: 게시판 새 글 + 다가오는 연차(일주일 이내) ----------
+        // ---------- 알림: 게시판 새 글 + 근무상태 + 다가오는 연차(일주일 이내) 등 ----------
+        // 예전에는 이 모든 알림을 한 줄씩 이어 붙여서 팝업 하나에 다 몰아넣었는데, 종류가 늘면서
+        // (게시판/근무상태/연차/중요업무/연간주요직무) 한 박스 안에 너무 많은 내용이 쌓여 읽기
+        // 어려워졌다. 그래서 "sections" 배열(종류별로 제목+내용 줄을 따로 묶음)을 만들고,
+        // showNotifStack()이 그 배열을 받아 포스트잇처럼 카드를 하나씩 쌓아 보여주게 바꿨다 -
+        // 종류별로 따로 닫을 수 있어서 한눈에 읽기 쉽다.
         async function checkNotifications(user, role) {
-            const notifItems = [];
+            const sections = [];
 
             try {
                 // 1. 게시판 새 글 여부 확인 (본인이 마지막으로 게시판을 확인한 시각 이후 글이 있는지)
@@ -729,7 +772,7 @@ if ('serviceWorker' in navigator) {
                     const isNew = !lastSeenBoard || (latestPost.createdAt && latestPost.createdAt.toMillis() > lastSeenBoard.toMillis());
                     if (isNew) {
                         document.getElementById('boardBadge').style.display = 'block';
-                        notifItems.push(`📋 게시판에 새 글이 있습니다: "${latestPost.title}"`);
+                        sections.push({ icon: '📋', title: '게시판에 새 글', lines: [`"${latestPost.title}"`] });
                     }
                 }
 
@@ -747,12 +790,14 @@ if ('serviceWorker' in navigator) {
                         .map(d => d.data())
                         .filter(s => s.status && s.date === todayStr);
                     if (outOfOffice.length > 0) {
-                        notifItems.push('👥 현재 근무상태:');
-                        outOfOffice.forEach(s => {
-                            const name = s.name || s.createdBy || '';
-                            const timeRange = s.startTime ? (s.startTime + (s.endTime ? `~${s.endTime}` : '')) : '';
-                            const timeNote = timeRange ? `${timeRange}${s.note ? ' ' : ''}` : '';
-                            notifItems.push(`　· ${name} - ${s.status}${(timeNote || s.note) ? ` (${timeNote}${s.note || ''})` : ''}`);
+                        sections.push({
+                            icon: '👥', title: '현재 근무상태',
+                            lines: outOfOffice.map(s => {
+                                const name = s.name || s.createdBy || '';
+                                const timeRange = s.startTime ? (s.startTime + (s.endTime ? `~${s.endTime}` : '')) : '';
+                                const timeNote = timeRange ? `${timeRange}${s.note ? ' ' : ''}` : '';
+                                return `${name} - ${s.status}${(timeNote || s.note) ? ` (${timeNote}${s.note || ''})` : ''}`;
+                            })
                         });
                     }
                 } catch (err) {
@@ -773,9 +818,9 @@ if ('serviceWorker' in navigator) {
 
                     if (upcoming.length > 0) {
                         upcoming.sort((a, b) => (a['날짜'] || '').localeCompare(b['날짜'] || ''));
-                        notifItems.push('🏖 일주일 내 예정된 연차:');
-                        upcoming.forEach(l => {
-                            notifItems.push(`　· ${l['사원명'] || ''} - ${l['날짜']} (${l['연차구분'] || '연차'})`);
+                        sections.push({
+                            icon: '🏖', title: '일주일 내 예정된 연차',
+                            lines: upcoming.map(l => `${l['사원명'] || ''} - ${l['날짜']} (${l['연차구분'] || '연차'})`)
                         });
                     }
 
@@ -799,9 +844,9 @@ if ('serviceWorker' in navigator) {
 
                     if (upcomingTasks.length > 0) {
                         upcomingTasks.sort((a, b) => (a['날짜'] || '').localeCompare(b['날짜'] || ''));
-                        notifItems.push('📌 일주일 내 중요업무일정:');
-                        upcomingTasks.forEach(t => {
-                            notifItems.push(`　· ${t['사원명'] || ''} - ${t['날짜']} (${t['내용'] || '내용 없음'})`);
+                        sections.push({
+                            icon: '📌', title: '일주일 내 중요업무일정',
+                            lines: upcomingTasks.map(t => `${t['사원명'] || ''} - ${t['날짜']} (${t['내용'] || '내용 없음'})`)
                         });
                     }
 
@@ -848,15 +893,15 @@ if ('serviceWorker' in navigator) {
 
                     if (upcomingAnnual.length > 0) {
                         upcomingAnnual.sort((a, b) => (a.year - b.year) || (a.month - b.month));
-                        notifItems.push('🗓 일주일 내 도래하는 연간 주요직무:');
-                        upcomingAnnual.forEach(item => {
-                            notifItems.push(`　· ${item.month}월 - ${item.task}`);
+                        sections.push({
+                            icon: '🗓', title: '일주일 내 도래하는 연간 주요직무',
+                            lines: upcomingAnnual.map(item => `${item.month}월 - ${item.task}`)
                         });
                     }
                 }
 
-                if (notifItems.length > 0) {
-                    showNotifPopup(notifItems);
+                if (sections.length > 0) {
+                    showNotifStack(sections);
                 }
             } catch (err) {
                 console.error('알림 확인 실패:', err);
@@ -977,20 +1022,39 @@ if ('serviceWorker' in navigator) {
             }
         }
 
-        function showNotifPopup(items) {
+        // 종류별(게시판/근무상태/연차/중요업무/연간주요직무) sections 배열을 받아, 스티커메모처럼
+        // 카드를 하나씩 쌓아 보여준다. 카드마다 ✕로 따로 닫을 수 있고, 등장 애니메이션은
+        // animation-delay로 살짝씩 어긋나게(stagger) 줘서 "하나씩 드롭다운"되는 느낌을 준다.
+        function showNotifStack(sections) {
             // 세션당 한 번만 팝업 (새로고침마다 계속 뜨지 않도록)
             if (sessionStorage.getItem('notifShown')) return;
             sessionStorage.setItem('notifShown', '1');
 
-            const popup = document.getElementById('notifPopup');
-            const body = document.getElementById('notifBody');
-            body.innerHTML = items.map(i => `<div style="margin-bottom:6px;">${i}</div>`).join('');
-            popup.style.display = 'block';
-        }
+            const stack = document.getElementById('notifStack');
+            stack.innerHTML = '';
 
-        document.getElementById('notifCloseBtn').addEventListener('click', () => {
-            document.getElementById('notifPopup').style.display = 'none';
-        });
+            sections.forEach((section, idx) => {
+                const card = document.createElement('div');
+                card.className = 'notif-card';
+                card.style.animationDelay = `${idx * 0.12}s`;
+
+                const bodyHtml = section.lines.map(line => `<div>${line}</div>`).join('');
+                card.innerHTML = `
+                    <div class="notif-card-head">
+                        <div class="notif-card-title">${section.icon ? section.icon + ' ' : ''}${section.title}</div>
+                        <button type="button" class="notif-card-close">✕</button>
+                    </div>
+                    <div class="notif-card-body">${bodyHtml}</div>
+                `;
+
+                card.querySelector('.notif-card-close').addEventListener('click', () => {
+                    card.classList.add('notif-card-hide');
+                    card.addEventListener('animationend', () => card.remove(), { once: true });
+                });
+
+                stack.appendChild(card);
+            });
+        }
     </script>
 
 </body></html>
