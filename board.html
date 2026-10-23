@@ -119,6 +119,7 @@ if ('serviceWorker' in navigator) {
   .wstat-edit-form input[type=text]{ width:190px; }
   .wstat-edit-form input[type=date]{ width:138px; }
   .wstat-edit-form input[type=time]{ width:98px; }
+  .wstat-edit-form .time-sep{ font-size:12.5px; color:var(--muted); }
   .wstat-period{ font-size:11.5px; color:var(--muted); }
 
   .upcoming-row{ display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
@@ -672,7 +673,7 @@ if ('serviceWorker' in navigator) {
     const today = todayStr();
     return workSchedules
       .filter(s => s.date > today)
-      .sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || '') || a.name.localeCompare(b.name, 'ko'));
+      .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || '') || a.name.localeCompare(b.name, 'ko'));
   }
 
   function renderStatusList() {
@@ -685,7 +686,7 @@ if ('serviceWorker' in navigator) {
       const cur = currentScheduleFor(emp.uid);
       const status = cur ? cur.status : '정상근무';
       const canEdit = (emp.uid === currentUser.uid) || (currentRole === 'admin');
-      const timeStr = cur?.time ? cur.time : '';
+      const timeStr = cur?.startTime ? (cur.startTime + (cur.endTime ? `~${cur.endTime}` : '')) : '';
 
       return `
         <div class="wstat-row" data-uid="${emp.uid}">
@@ -703,7 +704,9 @@ if ('serviceWorker' in navigator) {
             </select>
             <input type="text" id="editStatusNote-${emp.uid}" placeholder="메모 (예: 16시 복귀 예정)" value="${(cur?.note || '').replace(/"/g, '&quot;')}">
             <input type="date" id="editStatusDate-${emp.uid}" title="일자" value="${today}">
-            <input type="time" id="editStatusTime-${emp.uid}" title="시간">
+            <input type="time" id="editStatusStartTime-${emp.uid}" title="시작시간">
+            <span class="time-sep">~</span>
+            <input type="time" id="editStatusEndTime-${emp.uid}" title="종료시간">
             <button type="button" class="mini-btn" data-save-status="${emp.uid}">저장</button>
             <button type="button" class="mini-cancel" data-cancel-status="${emp.uid}">취소</button>
           </div>
@@ -756,9 +759,11 @@ if ('serviceWorker' in navigator) {
     const status = document.getElementById('editStatusSel-' + uid).value;
     const note = document.getElementById('editStatusNote-' + uid).value.trim();
     const date = document.getElementById('editStatusDate-' + uid).value;
-    const time = document.getElementById('editStatusTime-' + uid).value || null;
+    const startTime = document.getElementById('editStatusStartTime-' + uid).value || null;
+    const endTime = document.getElementById('editStatusEndTime-' + uid).value || null;
 
     if (!date) { alert('일자를 선택해 주세요.'); return; }
+    if (startTime && endTime && endTime < startTime) { alert('종료시간은 시작시간보다 빠를 수 없습니다.'); return; }
 
     try {
       await db.collection('workSchedules').add({
@@ -767,7 +772,8 @@ if ('serviceWorker' in navigator) {
         status,
         note,
         date,
-        time,
+        startTime,
+        endTime,
         createdByUid: currentUser.uid,
         createdBy: currentDisplayName,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -812,7 +818,8 @@ if ('serviceWorker' in navigator) {
 
     listEl.innerHTML = rows.map(s => {
       const canEdit = (s.uid === currentUser.uid) || (currentRole === 'admin');
-      const periodStr = s.time ? `${s.date} ${s.time}` : s.date;
+      const timeStr = s.startTime ? (s.startTime + (s.endTime ? `~${s.endTime}` : '')) : '';
+      const periodStr = timeStr ? `${s.date} ${timeStr}` : s.date;
       return `
         <div class="upcoming-row" data-id="${s.id}">
           <div class="upcoming-name">${s.name || ''}</div>

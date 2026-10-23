@@ -750,7 +750,8 @@ if ('serviceWorker' in navigator) {
                         notifItems.push('👥 현재 근무상태:');
                         outOfOffice.forEach(s => {
                             const name = s.name || s.createdBy || '';
-                            const timeNote = s.time ? `${s.time}${s.note ? ' ' : ''}` : '';
+                            const timeRange = s.startTime ? (s.startTime + (s.endTime ? `~${s.endTime}` : '')) : '';
+                            const timeNote = timeRange ? `${timeRange}${s.note ? ' ' : ''}` : '';
                             notifItems.push(`　· ${name} - ${s.status}${(timeNote || s.note) ? ` (${timeNote}${s.note || ''})` : ''}`);
                         });
                     }
