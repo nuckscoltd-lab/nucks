@@ -44,18 +44,47 @@ if ('serviceWorker' in navigator) {
   }
   main{ max-width:900px; margin:0 auto; padding:40px 48px; }
 
-  .tabs{ display:flex; gap:8px; margin-bottom:24px; flex-wrap:wrap; }
+  .tabs{ display:flex; gap:8px; margin-bottom:24px; flex-wrap:wrap; align-items:center; }
   .tab{
     padding:7px 16px; border-radius:20px; border:1px solid var(--line);
     background:#fff; font-size:13px; color:var(--muted); cursor:pointer;
   }
   .tab.active{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
   .tab.safety.active{ background:#a4453c; border-color:#a4453c; }
+  .cat-manage-btn{
+    padding:7px 14px; border-radius:20px; border:1px dashed var(--line);
+    background:none; font-size:12.5px; color:var(--muted); cursor:pointer;
+  }
 
   .new-post-btn{
     padding:9px 18px; background:var(--ink); color:var(--paper);
     border:none; font-size:12.5px; letter-spacing:.05em; text-transform:uppercase;
     cursor:pointer; border-radius:4px; margin-bottom:24px;
+  }
+
+  .cat-manage-panel{
+    background:#fff; border:1px solid var(--line); border-radius:6px;
+    padding:20px 22px; margin-bottom:24px; display:none;
+  }
+  .cat-manage-panel.show{ display:block; }
+  .cat-manage-title{ font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin-bottom:14px; }
+  .cat-manage-list{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+  .cat-manage-chip{
+    display:flex; align-items:center; gap:7px; padding:6px 8px 6px 14px;
+    border-radius:20px; background:#ece9e2; color:#55514a; font-size:13px;
+  }
+  .cat-manage-chip button{
+    width:18px; height:18px; border-radius:50%; border:none; background:#fff;
+    color:#a4453c; font-size:12px; cursor:pointer; line-height:1; padding:0;
+  }
+  .cat-manage-add{ display:flex; gap:8px; }
+  .cat-manage-add input{
+    flex:1; max-width:220px; padding:8px 10px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13px;
+  }
+  .cat-manage-add button{
+    padding:8px 16px; background:var(--ink); color:var(--paper); border:none;
+    border-radius:4px; font-size:12.5px; cursor:pointer;
   }
 
   .post-card{
@@ -170,6 +199,14 @@ if ('serviceWorker' in navigator) {
     font-family:inherit; font-size:14px; background:#fff;
   }
   .field textarea{ min-height:140px; resize:vertical; }
+  .file-list{ margin-top:8px; display:flex; flex-direction:column; gap:4px; }
+  .file-list-item{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    font-size:12.5px; color:var(--muted); padding:5px 9px; background:#f2f0ea; border-radius:4px;
+  }
+  .file-list-item button{
+    background:none; border:none; cursor:pointer; color:#a4453c; font-size:12px;
+  }
   .submit-btn{
     padding:10px 22px; background:var(--ink); color:var(--paper);
     border:none; font-size:12.5px; letter-spacing:.05em; text-transform:uppercase;
@@ -192,7 +229,7 @@ if ('serviceWorker' in navigator) {
   }
   .detail-title{ font-size:20px; font-weight:600; margin:10px 0; }
   .detail-body{ font-size:14.5px; line-height:1.8; white-space:pre-wrap; margin:20px 0; }
-  .detail-attach{ font-size:13px; margin-bottom:16px; }
+  .detail-attach{ font-size:13px; margin-bottom:16px; display:flex; flex-direction:column; gap:6px; }
   .detail-attach a{ color:var(--ink); border-bottom:1px solid var(--ink); text-decoration:none; }
   .detail-actions{ margin-top:16px; }
   .detail-actions button{
@@ -269,16 +306,20 @@ if ('serviceWorker' in navigator) {
 
   <div id="listView">
     <div class="tabs" id="tabs"></div>
+    <div class="cat-manage-panel" id="catManagePanel">
+      <div class="cat-manage-title">카테고리 관리</div>
+      <div class="cat-manage-list" id="catManageList"></div>
+      <div class="cat-manage-add">
+        <input type="text" id="catManageInput" placeholder="새 카테고리 이름">
+        <button type="button" id="catManageAddBtn">추가</button>
+      </div>
+    </div>
     <button class="new-post-btn" id="newPostBtn">+ 새 글 작성</button>
 
     <div class="write-panel" id="writePanel">
       <div class="field">
         <label for="f-category">카테고리</label>
-        <select id="f-category">
-          <option value="일반공지">일반공지</option>
-          <option value="안전위험성요인">안전위험성요인</option>
-          <option value="기타">기타</option>
-        </select>
+        <select id="f-category"></select>
       </div>
       <div class="field">
         <label for="f-title">제목</label>
@@ -289,8 +330,9 @@ if ('serviceWorker' in navigator) {
         <textarea id="f-body"></textarea>
       </div>
       <div class="field" style="max-width:320px;">
-        <label for="f-file">파일첨부 (선택)</label>
-        <input type="file" id="f-file">
+        <label for="f-file">파일첨부 (선택, 여러 개 가능)</label>
+        <input type="file" id="f-file" multiple>
+        <div class="file-list" id="fileList"></div>
       </div>
       <button class="submit-btn" id="submitPostBtn">등록</button>
       <button class="cancel-btn" id="cancelPostBtn">취소</button>
@@ -333,7 +375,11 @@ if ('serviceWorker' in navigator) {
   requireRole(['worker', 'admin']);
 
   const storage = firebase.storage();
-  const CATEGORIES = ['전체', '일반공지', '안전위험성요인', '기타'];
+  // 카테고리는 이제 고정값이 아니라 Firestore(boardConfig/categories 문서)에 저장해두고
+  // 관리자가 화면에서 직접 추가/삭제할 수 있다. '전체' 탭은 항상 맨 앞에 고정으로 붙는
+  // 가상의 카테고리라서 Firestore에는 저장하지 않고, 화면에 그릴 때만 맨 앞에 붙여준다.
+  let customCategories = ['일반공지', '안전위험성요인', '기타']; // Firestore 로드 전 기본값(최초 1회 생성용)
+  let CATEGORIES = ['전체', ...customCategories];
   const STATUS_OPTIONS = ['정상근무', '외근', '외출', '부재', '회의', '기타'];
   // "정상근무"는 일정을 따로 등록하는 상태가 아니라 "현재 걸려있는 일정이 없을 때"의 기본값이라,
   // 상태변경 폼의 선택지에서는 빼고 실제 등록 가능한 상태만 보여준다.
@@ -356,6 +402,7 @@ if ('serviceWorker' in navigator) {
   let allPosts = [];
   let activeCategory = '전체';
   let currentPostId = null;
+  let selectedFiles = []; // 새 글 작성 시 첨부할 파일들(File[]) - 여러 개 선택 가능
 
   let employees = [];
   let workSchedules = []; // [{id, uid, name, status, note, startDate, endDate, createdByUid, createdBy, createdAt}, ...]
@@ -375,7 +422,17 @@ if ('serviceWorker' in navigator) {
       });
     } catch (e) { /* 무시 */ }
 
+    try {
+      await loadCategories();
+    } catch (err) {
+      console.error('카테고리 로드 실패:', err);
+      // 로드에 실패해도(예: 규칙 미반영) 위에서 넣어둔 기본값으로는 계속 동작하게 둔다.
+    }
     renderTabs();
+    renderCategorySelect();
+    if (currentRole === 'admin') {
+      renderCatManageList();
+    }
     loadPosts();
 
     // workStatus/handoffNotes는 Firestore 보안 규칙에 새로 추가해야 하는 컬렉션이라, 규칙이
@@ -405,6 +462,80 @@ if ('serviceWorker' in navigator) {
     }
   });
 
+  // ---------- 카테고리 관리 ----------
+  // boardConfig/categories 문서 하나에 배열로 저장해둔다. 문서가 아직 없으면(최초 1회) 지금
+  // 코드에 박혀있던 기본값(일반공지/안전위험성요인/기타)으로 새로 만들어 둔다.
+  async function loadCategories() {
+    const ref = db.collection('boardConfig').doc('categories');
+    const snap = await ref.get();
+    if (snap.exists && Array.isArray(snap.data().list)) {
+      customCategories = snap.data().list;
+    } else if (currentRole === 'admin') {
+      await ref.set({ list: customCategories });
+    }
+    CATEGORIES = ['전체', ...customCategories];
+  }
+
+  async function saveCategories() {
+    await db.collection('boardConfig').doc('categories').set({ list: customCategories });
+    CATEGORIES = ['전체', ...customCategories];
+  }
+
+  function renderCategorySelect() {
+    const sel = document.getElementById('f-category');
+    sel.innerHTML = customCategories.map(c => `<option value="${c}">${c}</option>`).join('');
+  }
+
+  function renderCatManageList() {
+    const listEl = document.getElementById('catManageList');
+    listEl.innerHTML = customCategories.map(c => `
+      <span class="cat-manage-chip">${c}<button type="button" data-remove-cat="${c}" title="삭제">✕</button></span>
+    `).join('');
+    listEl.querySelectorAll('[data-remove-cat]').forEach(btn => {
+      btn.addEventListener('click', () => removeCategory(btn.dataset.removeCat));
+    });
+  }
+
+  async function addCategory() {
+    const input = document.getElementById('catManageInput');
+    const name = input.value.trim();
+    if (!name) return;
+    if (customCategories.includes(name)) { alert('이미 있는 카테고리입니다.'); return; }
+    customCategories = [...customCategories, name];
+    try {
+      await saveCategories();
+      input.value = '';
+      renderTabs();
+      renderCategorySelect();
+      renderCatManageList();
+    } catch (err) {
+      customCategories = customCategories.filter(c => c !== name);
+      alert('카테고리 추가 실패: ' + err.message);
+    }
+  }
+
+  async function removeCategory(name) {
+    if (!confirm(`"${name}" 카테고리를 삭제할까요? (이미 이 카테고리로 등록된 글은 그대로 남아있고, 탭과 새 글 작성 목록에서만 사라집니다)`)) return;
+    const prev = customCategories;
+    customCategories = customCategories.filter(c => c !== name);
+    try {
+      await saveCategories();
+      if (activeCategory === name) { activeCategory = '전체'; }
+      renderTabs();
+      renderCategorySelect();
+      renderCatManageList();
+      renderPostList();
+    } catch (err) {
+      customCategories = prev;
+      alert('카테고리 삭제 실패: ' + err.message);
+    }
+  }
+
+  document.getElementById('catManageAddBtn').addEventListener('click', addCategory);
+  document.getElementById('catManageInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addCategory(); }
+  });
+
   function renderTabs() {
     const tabsEl = document.getElementById('tabs');
     tabsEl.innerHTML = '';
@@ -419,6 +550,24 @@ if ('serviceWorker' in navigator) {
       });
       tabsEl.appendChild(btn);
     });
+    // 관리자 전용 "카테고리 관리" 토글 버튼 - 탭 끄트머리에 붙여둔다.
+    if (currentRole === 'admin') {
+      const manageBtn = document.createElement('button');
+      manageBtn.type = 'button';
+      manageBtn.id = 'catManageBtn';
+      manageBtn.className = 'cat-manage-btn';
+      manageBtn.textContent = '+ 카테고리 관리';
+      manageBtn.addEventListener('click', () => {
+        document.getElementById('catManagePanel').classList.toggle('show');
+      });
+      tabsEl.appendChild(manageBtn);
+    } else {
+      // placeholder - admin 체크 전에도 요소가 존재해야 위 auth 핸들러의 style 참조가 안전함
+      const hidden = document.createElement('button');
+      hidden.id = 'catManageBtn';
+      hidden.style.display = 'none';
+      tabsEl.appendChild(hidden);
+    }
   }
 
   async function loadPosts() {
@@ -467,6 +616,32 @@ if ('serviceWorker' in navigator) {
     document.getElementById('writePanel').classList.remove('show');
   });
 
+  // 여러 파일을 한 번에 선택할 수 있게 하고, 고른 파일들을 selectedFiles에 모아두고
+  // 목록으로 보여준다 - 파일 선택창(input[type=file])은 선택할 때마다 내용을 통째로
+  // 새로 받으므로, 사용자가 실수로 하나만 다시 고르면 기존 선택이 날아가는 걸 막기 위해
+  // 실제 첨부 목록은 selectedFiles 배열로 따로 들고 있고, 각 파일마다 "✕" 삭제 버튼을 둔다.
+  document.getElementById('f-file').addEventListener('change', (e) => {
+    selectedFiles = [...selectedFiles, ...Array.from(e.target.files)];
+    e.target.value = ''; // 같은 파일을 다시 선택해도 change가 또 발생하도록 비워둠
+    renderFileList();
+  });
+
+  function renderFileList() {
+    const listEl = document.getElementById('fileList');
+    listEl.innerHTML = selectedFiles.map((f, idx) => `
+      <div class="file-list-item">
+        <span>📎 ${f.name}</span>
+        <button type="button" data-remove-file="${idx}">✕</button>
+      </div>
+    `).join('');
+    listEl.querySelectorAll('[data-remove-file]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedFiles.splice(Number(btn.dataset.removeFile), 1);
+        renderFileList();
+      });
+    });
+  }
+
   document.getElementById('submitPostBtn').addEventListener('click', async () => {
     const statusEl = document.getElementById('submitStatus');
     const btn = document.getElementById('submitPostBtn');
@@ -474,7 +649,6 @@ if ('serviceWorker' in navigator) {
     const category = document.getElementById('f-category').value;
     const title = document.getElementById('f-title').value.trim();
     const body = document.getElementById('f-body').value.trim();
-    const fileInput = document.getElementById('f-file');
 
     if (!title || !body) {
       statusEl.style.color = '#a4453c';
@@ -485,7 +659,7 @@ if ('serviceWorker' in navigator) {
     btn.disabled = true;
     btn.textContent = '등록 중...';
     statusEl.style.color = 'var(--muted)';
-    statusEl.textContent = '등록 중입니다...';
+    statusEl.textContent = selectedFiles.length ? `등록 중입니다... (첨부파일 ${selectedFiles.length}개 업로드 중)` : '등록 중입니다...';
 
     try {
       const docData = {
@@ -497,13 +671,15 @@ if ('serviceWorker' in navigator) {
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       };
 
-      if (fileInput.files[0]) {
-        const file = fileInput.files[0];
-        const path = `board/${currentUser.uid}/${Date.now()}_${file.name}`;
-        const ref = storage.ref(path);
-        await ref.put(file);
-        const url = await ref.getDownloadURL();
-        docData.attachment = { name: file.name, url };
+      if (selectedFiles.length) {
+        const uploads = selectedFiles.map(async (file, idx) => {
+          const path = `board/${currentUser.uid}/${Date.now()}_${idx}_${file.name}`;
+          const ref = storage.ref(path);
+          await ref.put(file);
+          const url = await ref.getDownloadURL();
+          return { name: file.name, url };
+        });
+        docData.attachments = await Promise.all(uploads);
       }
 
       await db.collection('posts').add(docData);
@@ -513,6 +689,8 @@ if ('serviceWorker' in navigator) {
       document.getElementById('f-title').value = '';
       document.getElementById('f-body').value = '';
       document.getElementById('f-file').value = '';
+      selectedFiles = [];
+      renderFileList();
       document.getElementById('writePanel').classList.remove('show');
 
       await loadPosts();
@@ -541,10 +719,10 @@ if ('serviceWorker' in navigator) {
     document.getElementById('detailMeta').textContent = `${post.authorName || ''} · ${dateStr}`;
     document.getElementById('detailBody').textContent = post.body;
 
+    // attachments(여러 개, 새 글) 또는 레거시 attachment(한 개, 예전 글) 둘 다 지원.
     const attachEl = document.getElementById('detailAttach');
-    attachEl.innerHTML = post.attachment
-      ? `<a href="${post.attachment.url}" target="_blank" rel="noopener">📎 ${post.attachment.name}</a>`
-      : '';
+    const attachments = Array.isArray(post.attachments) ? post.attachments : (post.attachment ? [post.attachment] : []);
+    attachEl.innerHTML = attachments.map(a => `<a href="${a.url}" target="_blank" rel="noopener">📎 ${a.name}</a>`).join('');
 
     const canManage = (post.uid === currentUser.uid) || (currentRole === 'admin');
     document.getElementById('detailActions').innerHTML = canManage
