@@ -350,6 +350,13 @@ if ('serviceWorker' in navigator) {
 
   function empDisplayName(e) { return e.displayName || e.email || ''; }
 
+  // 퇴사자(admin.html에서 "재직상태"를 퇴사로 바꾼 사람)와 로그인 없는 가상 프로필(워크로그
+  // 가져오기용)은 매달 새로 작성하는 급여명세서 후보 목록/현황판에서 제외한다. 다만 과거에
+  // 실제로 저장된 급여명세서 기록은 그대로 남아있으므로, 해당 기간에 지급 이력이 있으면
+  // buildPivotData()가 allSlips를 그대로 훑으면서 자동으로 다시 보여준다 - 완전히 숨기는 게
+  // 아니라 "매번 새로 체크 해제할 필요가 없게" 하는 것.
+  function isActiveEmployee(e) { return e.employmentStatus !== '퇴사' && !e.isPlaceholder; }
+
   function latestSlipFor(uid, name) {
     const mine = allSlips.filter(s => (uid && s.uid === uid) || s['사원명'] === name);
     if (!mine.length) return null;
@@ -364,7 +371,7 @@ if ('serviceWorker' in navigator) {
 
     const existingKeys = new Set(allSlips.map(s => `${s['사원명']}__${s['지급일']}`));
 
-    bulkDrafts = employees.map(emp => {
+    bulkDrafts = employees.filter(isActiveEmployee).map(emp => {
       const name = empDisplayName(emp);
       const prev = latestSlipFor(emp.uid, name);
       const isDup = existingKeys.has(`${name}__${payDate}`);
@@ -411,7 +418,10 @@ if ('serviceWorker' in navigator) {
           <td style="text-align:right;">${payTotal.toLocaleString()}</td>
           <td style="text-align:right;">${dedTotal.toLocaleString()}</td>
           <td style="text-align:right; font-weight:600;">${net.toLocaleString()}</td>
-          <td><button type="button" class="row-btn" data-bc-detail="${idx}">상세수정</button></td>
+          <td>
+            <button type="button" class="row-btn" data-bc-detail="${idx}">상세수정</button>
+            <button type="button" class="row-btn" style="color:var(--neg);" data-bc-retire="${idx}">퇴사 처리</button>
+          </td>
         </tr>
       `;
     }).join('');
@@ -432,6 +442,27 @@ if ('serviceWorker' in navigator) {
     table.querySelectorAll('[data-bc-detail]').forEach(btn => {
       btn.addEventListener('click', () => openDraftModal(+btn.dataset.bcDetail));
     });
+    table.querySelectorAll('[data-bc-retire]').forEach(btn => {
+      btn.addEventListener('click', () => markRetired(+btn.dataset.bcRetire));
+    });
+  }
+
+  // 목록에 뜬 직원을 바로 퇴사 처리 - 이후부터는 매달 일괄생성 목록에 다시 나타나지 않는다.
+  // (admin.html의 "회원 관리 > 인사정보"에서도 같은 상태를 다시 재직으로 되돌릴 수 있음)
+  async function markRetired(idx) {
+    const d = bulkDrafts[idx];
+    if (!confirm(`"${d.name}"님을 퇴사 처리할까요?\n이후 급여대장 일괄생성 목록에 더 이상 나타나지 않습니다. (이전에 저장된 급여명세서 기록은 그대로 남습니다)\n잘못 눌렀다면 회원 관리 페이지의 인사정보에서 "재직중"으로 되돌릴 수 있습니다.`)) return;
+
+    try {
+      await db.collection('users').doc(d.uid).update({ employmentStatus: '퇴사' });
+      const emp = employees.find(e => e.uid === d.uid);
+      if (emp) emp.employmentStatus = '퇴사';
+      bulkDrafts.splice(idx, 1);
+      renderBulkTable();
+      renderPivot();
+    } catch (err) {
+      alert('퇴사 처리 실패: ' + err.message);
+    }
   }
 
   function openDraftModal(idx) {
@@ -561,8 +592,9 @@ if ('serviceWorker' in navigator) {
 
   function buildPivotData() {
     pivotData = {};
-    // 현재 등록된 직원은 급여 이력이 없어도 한 줄로 먼저 보이게 함
-    employees.forEach(e => { pivotData[empDisplayName(e)] = pivotData[empDisplayName(e)] || {}; });
+    // 현재 재직중인 직원은 급여 이력이 없어도 한 줄로 먼저 보이게 함 (퇴사자는 미리 빈 줄을
+    // 만들지 않음 - 아래 allSlips 처리에서 실제 지급 이력이 있는 달은 그대로 다시 나타난다)
+    employees.filter(isActiveEmployee).forEach(e => { pivotData[empDisplayName(e)] = pivotData[empDisplayName(e)] || {}; });
 
     allSlips.forEach(s => {
       const name = s['사원명'];
