@@ -734,22 +734,21 @@ if ('serviceWorker' in navigator) {
                 }
 
                 // 1.5 전체: 현재 근무상태(외근/외출/부재 등)가 설정된 직원 간이 안내
-                // (게시판 "직원 근무상태" 패널과 같은 workStatus 컬렉션을 그대로 읽는다 - board.html 참고)
-                // workStatus는 새로 추가된 컬렉션이라 Firestore 보안 규칙이 아직 안 걸려있으면
+                // (게시판 "직원 근무상태" 패널과 같은 workSchedules 컬렉션을 그대로 읽는다 - board.html 참고.
+                // 각 일정은 시작일~종료일로 등록되므로, "오늘"이 그 구간에 들어오는 일정만 뽑아서 보여준다)
+                // workSchedules는 새로 추가된 컬렉션이라 Firestore 보안 규칙이 아직 안 걸려있으면
                 // permission-denied로 실패할 수 있는데, 그 경우에도 아래 연차/중요업무 등 기존
                 // 알림까지 같이 묻히지 않도록 이 부분만 따로 try/catch로 감싼다.
                 try {
-                    const workStatusSnap = await db.collection('workStatus').get();
-                    const outOfOffice = workStatusSnap.docs
+                    const scheduleSnap = await db.collection('workSchedules').get();
+                    const todayStr = new Date().toISOString().slice(0, 10);
+                    const outOfOffice = scheduleSnap.docs
                         .map(d => d.data())
-                        .filter(s => s.status && s.status !== '정상근무');
+                        .filter(s => s.status && s.startDate <= todayStr && s.endDate >= todayStr);
                     if (outOfOffice.length > 0) {
-                        const usersSnap2 = await db.collection('users').get();
-                        const nameByUid = {};
-                        usersSnap2.docs.forEach(d => { nameByUid[d.id] = d.data()?.displayName; });
                         notifItems.push('👥 현재 근무상태:');
                         outOfOffice.forEach(s => {
-                            const name = nameByUid[s.uid] || s.updatedBy || '';
+                            const name = s.name || s.createdBy || '';
                             notifItems.push(`　· ${name} - ${s.status}${s.note ? ` (${s.note})` : ''}`);
                         });
                     }
