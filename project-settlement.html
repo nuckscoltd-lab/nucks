@@ -278,7 +278,12 @@ if ('serviceWorker' in navigator) {
     `;
   }
 
-  let activeOrderer = '전체';
+  let activeConstructor = '전체';
+  // 발주처(orderer)가 비어있는 건이 많아서, 카드에 늘 보이는 배찌(=건설사)를 기준으로 필터링한다.
+  // 건설사도 비어있으면 발주처로, 그마저 없으면 "(미지정)"으로 대신 표시/매칭한다.
+  function constructorLabel(p){
+    return p.partners?.constructor?.company || p.partners?.orderer?.company || '(미지정)';
+  }
   let searchText = '';
   let startMonth = '';
   let endMonth = '';
@@ -380,7 +385,7 @@ if ('serviceWorker' in navigator) {
 
   function getFilteredSettlements(){
     let rows = allSettlements;
-    if (activeOrderer !== '전체') rows = rows.filter(p => (p.partners?.orderer?.company || '(미지정)') === activeOrderer);
+    if (activeConstructor !== '전체') rows = rows.filter(p => constructorLabel(p) === activeConstructor);
     if (startMonth) rows = rows.filter(p => (p.startDate || '').slice(0, 7) >= startMonth);
     if (endMonth) rows = rows.filter(p => (p.startDate || '').slice(0, 7) <= endMonth);
     if (searchText) {
@@ -396,7 +401,7 @@ if ('serviceWorker' in navigator) {
       <div class="summary-bar" id="summaryBar"></div>
       <div class="panel" style="padding:16px 18px;">
         <div class="toolbar">
-          <select id="ordererFilter"><option value="전체">전체 발주처</option></select>
+          <select id="constructorFilter"><option value="전체">전체 건설사</option></select>
           <span style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted);">
             <input type="month" id="startMonthFilter" style="padding:7px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px; background:#fff;">
             ~
@@ -411,15 +416,15 @@ if ('serviceWorker' in navigator) {
       <div class="empty" id="emptyMsg" style="display:none;">조건에 맞는 결산서가 없습니다.</div>
     `;
 
-    const orderers = [...new Set(allSettlements.map(p => p.partners?.orderer?.company || '(미지정)').filter(Boolean))].sort();
-    document.getElementById('ordererFilter').innerHTML =
-      '<option value="전체">전체 발주처</option>' + orderers.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
-    document.getElementById('ordererFilter').value = activeOrderer;
+    const constructors = [...new Set(allSettlements.map(p => constructorLabel(p)).filter(Boolean))].sort();
+    document.getElementById('constructorFilter').innerHTML =
+      '<option value="전체">전체 건설사</option>' + constructors.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    document.getElementById('constructorFilter').value = activeConstructor;
     document.getElementById('startMonthFilter').value = startMonth;
     document.getElementById('endMonthFilter').value = endMonth;
     document.getElementById('searchInput').value = searchText;
 
-    document.getElementById('ordererFilter').addEventListener('change', (e) => { activeOrderer = e.target.value; renderList(); });
+    document.getElementById('constructorFilter').addEventListener('change', (e) => { activeConstructor = e.target.value; renderList(); });
     document.getElementById('startMonthFilter').addEventListener('change', (e) => { startMonth = e.target.value; renderList(); });
     document.getElementById('endMonthFilter').addEventListener('change', (e) => { endMonth = e.target.value; renderList(); });
     document.getElementById('clearMonthRangeBtn').addEventListener('click', () => {
@@ -491,7 +496,7 @@ if ('serviceWorker' in navigator) {
           <div class="proj-meta">
             <div class="m-item">기간<b>${p.startDate || '-'} ~ ${p.endDate || '-'}</b></div>
             <div class="m-item">발주처<b>${esc(p.partners?.orderer?.company || '-')}</b></div>
-            <span class="tag">${esc(p.partners?.constructor?.company || p.partners?.orderer?.company || '-')}</span>
+            <span class="tag">${esc(constructorLabel(p))}</span>
           </div>
         </div>
         <div class="proj-body ${isOpen ? 'open' : ''}" data-body="${p.id}">
