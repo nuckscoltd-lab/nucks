@@ -269,6 +269,62 @@ if ('serviceWorker' in navigator) {
   function num(v){ return Number(v) || 0; }
   function esc(s){ return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
 
+  // ---------- 작업분류코드(officialProjects/list.codes 체계) ----------
+  // 기존 "코드"(D/C-계약연도, 위의 STATUS_OPTIONS 근처 구분과 별개)와는 완전히 다른, 근무일지(worklog.html)·
+  // 프로젝트 결산(project-settlement.html)에서 쓰는 상세 작업분류코드(예: 2024-13-02)를 기성청구 쪽에도
+  // 추가로 보여주고 지정할 수 있게 한다. 두 코드 체계는 서로 무관하며 이 필드는 projCode로 따로 저장한다.
+  // worklog.html/project-settlement.html과 동일한 분류표를 유지해야 "코드 생성" 결과가 서로 어긋나지 않는다.
+  const WORK_CLASSIFICATION = [
+    { code: '00', label: '대안설계' },
+    { code: '01', label: '견본주택설계' },
+    { code: '02', label: '세대설계' },
+    { code: '03', label: '상업공간설계' },
+    { code: '04', label: '관공서설계' },
+    { code: '11', label: '시공-관공서' },
+    { code: '12', label: '시공-개인APT' },
+    { code: '13', label: '시공-메뉴얼(상업공간)' }
+  ];
+
+  function getCodeYearOptions() {
+    const nowYear = new Date().getFullYear();
+    const years = [];
+    for (let y = nowYear + 1; y >= 2018; y--) years.push(y);
+    return years;
+  }
+
+  function suggestNextSerial(year, classCode, existingCodesPool) {
+    const prefix = `${year}-${classCode}-`;
+    let maxSerial = 0;
+    (existingCodesPool || []).forEach(code => {
+      if (!code) return;
+      const c = String(code).trim();
+      if (!c.startsWith(prefix)) return;
+      const rest = c.slice(prefix.length);
+      const n = parseInt(rest, 10);
+      if (!isNaN(n) && n > maxSerial) maxSerial = n;
+    });
+    return String(maxSerial + 1).padStart(2, '0');
+  }
+
+  function codeBuilderHtml(idPrefix) {
+    const years = getCodeYearOptions();
+    const nowYear = new Date().getFullYear();
+    return `
+      <div class="code-builder" style="display:flex; gap:4px; margin-top:6px; flex-wrap:wrap;">
+        <select class="cb-year" data-id="${idPrefix}" style="padding:4px 4px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:11px; background:#fff; flex:1; min-width:0;">
+          ${years.map(y => `<option value="${y}" ${y === nowYear ? 'selected' : ''}>${y}</option>`).join('')}
+        </select>
+        <select class="cb-class" data-id="${idPrefix}" style="padding:4px 4px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:11px; background:#fff; flex:1; min-width:0;">
+          ${WORK_CLASSIFICATION.map(c => `<option value="${c.code}">${c.code} ${c.label}</option>`).join('')}
+        </select>
+        <button type="button" class="cb-generate" data-id="${idPrefix}" style="padding:4px 8px; border:1px solid var(--line); border-radius:4px; background:#fff; color:var(--muted); font-size:11px; cursor:pointer; white-space:nowrap;">코드 생성</button>
+      </div>
+    `;
+  }
+
+  // officialProjects/list.codes 매핑 - 이름을 알면 근무일지/결산 쪽 작업분류코드를 바로 참고/선제안할 수 있다.
+  let OFFICIAL_PROJECT_CODES = {};
+
   // ---------- 근무일지 프로젝트명 동기화 ----------
   // 근무일지(worklog.html)에서 실제로 쓰는 프로젝트명 자동완성 후보 - "근무일지 프로젝트명 연결"
   // 입력칸에서 참고용 자동완성으로 보여준다(직접 타이핑도 항상 가능).
@@ -280,6 +336,7 @@ if ('serviceWorker' in navigator) {
       const names = doc.data().names || [];
       const excluded = doc.data().excluded || [];
       WORKLOG_PROJECT_NAMES = names.filter(n => !excluded.includes(n)).sort();
+      OFFICIAL_PROJECT_CODES = doc.data().codes || {};
       const dl = document.getElementById('worklogProjectNameList');
       if (dl) dl.innerHTML = WORKLOG_PROJECT_NAMES.map(n => `<option value="${esc(n)}">`).join('');
       // 이미 목록이 그려진 뒤 로드가 끝났을 수도 있으니, 연결 필요 여부(⚠) 표시를 다시 갱신
@@ -306,9 +363,27 @@ if ('serviceWorker' in navigator) {
       // 채워 넣지 않는다 - 안 그러면 기성청구 문서 자체의 name 필드가 옛 표기 그대로인 경우, 페이지를
       // 열 때마다 그 옛 이름이 officialProjects/list.names에 계속 되살아나 목록이 지저분해진다.
       const newOnes = names.filter(n => !excluded.includes(n));
-      if (!newOnes.length) return;
+
+      // 작업분류코드(projCode)도 함께 동기화 - 프로젝트 결산(project-settlement.html)과 동일한
+      // "마지막 값 우선" 방식. 근무일지 프로젝트명 연결(workLogProjectNames)이 있으면 그 이름들을
+      // 기준으로, 없으면 계약명(name) 자체를 기준으로 codes에 써넣는다. projCode가 비어있는
+      // 프로젝트는 건드리지 않는다(기존 코드를 지우지 않음).
+      const existingCodes = (doc.exists && doc.data().codes) || {};
+      const codes = { ...existingCodes };
+      let codesChanged = false;
+      (projects || []).forEach(p => {
+        const code = (p.projCode || '').trim();
+        if (!code) return;
+        const linked = (p.workLogProjectNames || []).map(n => (n || '').trim()).filter(Boolean);
+        const targets = linked.length ? linked : [(p.name || '').trim()].filter(Boolean);
+        targets.forEach(nm => {
+          if (codes[nm] !== code) { codes[nm] = code; codesChanged = true; }
+        });
+      });
+
+      if (!newOnes.length && !codesChanged) return;
       const merged = [...new Set([...existing, ...newOnes])].sort();
-      await ref.set({ names: merged, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      await ref.set({ names: merged, codes, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
     }catch(err){
       console.error('프로젝트명 동기화 실패:', err);
     }
@@ -684,6 +759,8 @@ if ('serviceWorker' in navigator) {
               <td style="color:var(--muted); width:100px;">착수일</td><td>${p.startDate || '-'}</td></tr>
           <tr><td style="color:var(--muted);">코드</td><td>${esc(p.code || '-')}</td>
               <td style="color:var(--muted);">종료일</td><td>${p.endDate || '-'}</td></tr>
+          <tr><td style="color:var(--muted);">작업분류코드</td><td>${esc(p.projCode || '-')}</td>
+              <td></td><td></td></tr>
         </tbody>
       </table>
     `;
@@ -959,6 +1036,11 @@ if ('serviceWorker' in navigator) {
               <button type="button" class="row-btn" id="ep-code-auto-${id}" style="white-space:nowrap; padding:7px 8px; border:1px solid var(--line); border-radius:4px; text-decoration:none;">자동채우기</button>
             </div>
           </div>
+          <div class="field" style="min-width:220px;"><label>작업분류코드</label>
+            <input type="text" id="ep-projCode-${id}" value="${esc(p.projCode)}" placeholder="예: 2024-13-02" style="min-width:130px;">
+            ${codeBuilderHtml(`ep-projCode-${id}`)}
+            <div id="ep-projCode-hint-${id}" style="font-size:11px; color:var(--muted); margin-top:4px;"></div>
+          </div>
         </div>
         <div class="form-row">
           <div class="field"><label>계약일자</label><input type="date" id="ep-contractDate-${id}" value="${p.contractDate || ''}"></div>
@@ -1006,6 +1088,37 @@ if ('serviceWorker' in navigator) {
       }
       codeInput.value = generated;
     });
+
+    // 작업분류코드 "코드 생성" - 근무일지/결산 페이지와 같은 년도+분류 드롭다운으로 다음 일련번호를
+    // 자동 제안한다(기존 기성청구 프로젝트들의 projCode 전체를 풀로 삼아 중복을 피한다).
+    const projCodeInput = document.getElementById(`ep-projCode-${id}`);
+    const cbGenerateBtn = document.querySelector(`.cb-generate[data-id="ep-projCode-${id}"]`);
+    if (cbGenerateBtn) {
+      cbGenerateBtn.addEventListener('click', () => {
+        const year = document.querySelector(`.cb-year[data-id="ep-projCode-${id}"]`).value;
+        const classCode = document.querySelector(`.cb-class[data-id="ep-projCode-${id}"]`).value;
+        const pool = [...allProjects.map(pr => pr.projCode).filter(Boolean), ...Object.values(OFFICIAL_PROJECT_CODES)];
+        const serial = suggestNextSerial(year, classCode, pool);
+        const generated = `${year}-${classCode}-${serial}`;
+        if (projCodeInput.value.trim() && projCodeInput.value.trim() !== generated) {
+          if (!confirm(`현재 작업분류코드 칸에 "${projCodeInput.value.trim()}"이(가) 입력되어 있습니다.\n"${generated}"(으)로 덮어쓸까요?`)) return;
+        }
+        projCodeInput.value = generated;
+      });
+    }
+
+    // 비어있으면 officialProjects/list.codes(근무일지·결산 쪽 매핑)에서 이미 알고 있는 코드가
+    // 있는지 찾아 "제안"으로 보여준다 - 연결된 근무일지 프로젝트명 또는 계약명(name) 기준.
+    if (!p.projCode && projCodeInput) {
+      const linked = (p.workLogProjectNames || []).map(n => (n || '').trim()).filter(Boolean);
+      const candidates = linked.length ? linked : [(p.name || '').trim()].filter(Boolean);
+      const suggested = candidates.map(nm => OFFICIAL_PROJECT_CODES[nm]).find(Boolean);
+      const hintEl = document.getElementById(`ep-projCode-hint-${id}`);
+      if (suggested && hintEl) {
+        hintEl.innerHTML = `근무일지/결산 쪽에 등록된 코드 "${esc(suggested)}"가 있어요. <button type="button" id="ep-projCode-apply-${id}" style="background:none; border:none; color:var(--ink); text-decoration:underline; cursor:pointer; font-size:11px; padding:0;">적용</button>`;
+        document.getElementById(`ep-projCode-apply-${id}`)?.addEventListener('click', () => { projCodeInput.value = suggested; hintEl.textContent = ''; });
+      }
+    }
   }
 
   async function saveProjectEdit(id){
@@ -1015,6 +1128,7 @@ if ('serviceWorker' in navigator) {
       client: document.getElementById(`ep-client-${id}`).value.trim(),
       category: document.getElementById(`ep-category-${id}`).value,
       code: document.getElementById(`ep-code-${id}`).value.trim(),
+      projCode: document.getElementById(`ep-projCode-${id}`).value.trim(),
       status: document.getElementById(`ep-status-${id}`).value.trim(),
       contractDate: document.getElementById(`ep-contractDate-${id}`).value || null,
       startDate: document.getElementById(`ep-startDate-${id}`).value || null,
@@ -1044,7 +1158,7 @@ if ('serviceWorker' in navigator) {
     const name = prompt('새 프로젝트의 계약명을 입력하세요');
     if (!name) return;
     await projectsRef.add({
-      source: 'manual', name, client: '', category: '공사', status: '진행중', code: '',
+      source: 'manual', name, client: '', category: '공사', status: '진행중', code: '', projCode: '',
       contractDate: null, startDate: null, endDate: null, contractAmount: 0,
       note: '', content: '', rounds: [], finalCost: 0, workLogProjectNames: [],
       order: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp()
