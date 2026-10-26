@@ -621,6 +621,31 @@ if ('serviceWorker' in navigator) {
     </div>
     <div id="uncodedProjectsList" style="max-height:320px; overflow-y:auto; border:1px solid var(--line); border-radius:4px; padding:12px; margin-bottom:12px; background:#fff;"></div>
     <div id="uncodedCodeResult" style="margin-top:10px; font-size:13px;"></div>
+
+    <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
+
+    <div class="panel-title">사무업무 코드(연도별 자동 부여)</div>
+    <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
+      OA 관리업무·마케팅업무처럼 결산 대상 없이 매일 계속 작성되는 사내 공통업무는, 코드 하나를
+      고정으로 지정하는 대신 <b>분류 번호만</b> 등록해두면 돼요. 그러면 근무일지를 저장할 때마다
+      그 근무일지의 날짜를 기준으로 "연도-분류-01" 코드가 자동으로 계산돼요(2026년에 작성하면
+      2026-20-01, 2027년에 작성하면 2027-20-01처럼 해마다 저절로 바뀌어요 - 나중에 연도별로 나눠
+      봐야 할 때를 대비한 방식이에요). 등록하는 즉시 이미 작성되어 있던 과거 근무일지에도 각자의
+      날짜 기준으로 소급 반영돼요.
+    </div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:12px;">
+      <div class="field" style="flex:1; min-width:200px;">
+        <label for="officeClassNameInput">업무명</label>
+        <input type="text" id="officeClassNameInput" list="projectList" placeholder="예: OA 관리업무">
+      </div>
+      <div class="field" style="min-width:200px;">
+        <label for="officeClassCodeSelect">분류</label>
+        <select id="officeClassCodeSelect"></select>
+      </div>
+      <button class="submit-btn" id="officeClassAddBtn">등록 + 소급 반영</button>
+    </div>
+    <div id="officeClassResult" style="margin-bottom:10px; font-size:13px;"></div>
+    <div id="officeClassList" style="max-height:260px; overflow-y:auto; border:1px solid var(--line); border-radius:4px; padding:4px 12px; background:#fff;"></div>
     </div>
   </div>
 
@@ -897,6 +922,12 @@ if ('serviceWorker' in navigator) {
   // 프로젝트 결산 쪽에서 officialProjects/list.codes로 동기화해준다. 근무일지를 작성/수정할 때 프로젝트를
   // 선택하면 이 매핑을 찾아 해당 항목에 코드를 같이 저장해서, 나중에 코드 기준으로도 분류할 수 있게 한다.
   let PROJECT_CODES = {};
+  // 매일 지속적으로 쓰이는 사내 공통업무(OA관리업무 등)용 - 고정 코드 하나 대신 "분류 번호"만
+  // 등록해두면, 근무일지를 저장할 때마다 그 근무일지의 날짜 기준 연도로 코드를 자동 계산한다
+  // ({ 이름: 분류코드 }, 예: { 'OA 관리업무': '20' } → 2026년에 쓰면 2026-20-01, 2027년에 쓰면
+  // 2027-20-01). officialProjects/list.officeClassCodes에 저장되며, PROJECT_CODES(고정 코드)와는
+  // 완전히 분리된 별도 매핑이다 - 한 이름이 동시에 양쪽에 있으면 이쪽이 우선한다.
+  let OFFICE_CLASS_CODES = {};
   // 근무일지에 실제로 입력되어 있는 코드들(결산서에 아직 없는 진행중 프로젝트의 수동 입력분 포함) -
   // 코드 자동제안(중복 방지)에 PROJECT_CODES와 함께 사용된다. updateProjectDatalist()에서 관리자가
   // 전체 근무일지를 조회할 때마다 최신화된다.
@@ -1034,6 +1065,182 @@ if ('serviceWorker' in navigator) {
     return matchedCount;
   }
 
+  // 사무업무 코드(연도별 자동) 계산 - dateStr(근무일지의 '날짜' 필드, YYYY-MM-DD)에서 연도만 뽑아
+  // "연도-분류-01" 형태로 만든다. 날짜가 없거나 형식이 이상하면 오늘 기준 연도로 대체한다.
+  function yearFromDateStr(dateStr) {
+    const y = (dateStr || '').slice(0, 4);
+    return /^\d{4}$/.test(y) ? y : String(new Date().getFullYear());
+  }
+  function officeClassCodeFor(name, dateStr) {
+    const classCode = OFFICE_CLASS_CODES[name];
+    if (!classCode) return '';
+    return `${yearFromDateStr(dateStr)}-${classCode}-01`;
+  }
+
+  // 사무업무 이름 하나에 "분류 번호"를 등록(또는 교체)하고, 이 이름을 쓰는 기존 근무일지 전체를
+  // 각 항목 자신의 날짜 기준으로 즉시 재계산해서 소급 반영한다(assignProjectCode와 달리 모든 항목에
+  // 같은 코드 하나를 넣는 게 아니라, 항목마다 자기 날짜의 연도로 서로 다른 코드가 들어갈 수 있다).
+  // 혹시 이 이름이 기존에 고정 코드(PROJECT_CODES)로 등록되어 있었다면 그쪽은 지워서 혼동을 막는다.
+  async function assignOfficeClassCode(name, classCode) {
+    const listRef = db.collection('officialProjects').doc('list');
+    const listDoc = await listRef.get();
+    const existingOfficeClass = (listDoc.exists && listDoc.data().officeClassCodes) || {};
+    const newOfficeClass = { ...existingOfficeClass, [name]: classCode };
+    const existingCodes = (listDoc.exists && listDoc.data().codes) || {};
+    const hadFixedCode = Object.prototype.hasOwnProperty.call(existingCodes, name);
+    const newCodes = { ...existingCodes };
+    if (hadFixedCode) delete newCodes[name];
+    await listRef.set({
+      officeClassCodes: newOfficeClass,
+      ...(hadFixedCode ? { codes: newCodes } : {}),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    OFFICE_CLASS_CODES = newOfficeClass;
+    if (hadFixedCode) PROJECT_CODES = newCodes;
+    return recalcOfficeClassCode(name);
+  }
+
+  // 등록은 그대로 두고, 이 이름을 쓰는 기존 근무일지 전체를 각 항목의 현재 날짜 기준으로 다시
+  // 계산해서 맞춘다(날짜를 나중에 고친 경우, 또는 등록 직후 과거분을 한 번에 맞출 때 사용).
+  async function recalcOfficeClassCode(name) {
+    const classCode = OFFICE_CLASS_CODES[name];
+    if (!classCode) return 0;
+    const snapshot = await db.collection('workLogs').get();
+    const toUpdate = [];
+    let matchedCount = 0;
+    snapshot.docs.forEach(doc => {
+      const data = doc.data();
+      const projects = data.projects || [];
+      let changed = false;
+      const newProjects = projects.map(p => {
+        const pName = (p['프로젝트'] || '').trim();
+        if (pName !== name) return p;
+        const code = officeClassCodeFor(name, data['날짜']);
+        if ((p['프로젝트코드'] || '') === code) return p;
+        changed = true;
+        matchedCount++;
+        return { ...p, '프로젝트코드': code };
+      });
+      if (changed) toUpdate.push({ ref: doc.ref, projects: newProjects });
+    });
+    for (let i = 0; i < toUpdate.length; i += 400) {
+      const chunk = toUpdate.slice(i, i + 400);
+      const batch = db.batch();
+      chunk.forEach(item => batch.update(item.ref, { projects: item.projects }));
+      await batch.commit();
+    }
+    return matchedCount;
+  }
+
+  // 등록 해제 - 앞으로는 이 이름을 써도 더 이상 자동으로 코드가 안 붙는다(일반 프로젝트처럼 "코드
+  // 미지정" 목록에 다시 나타남). 이미 과거 근무일지에 저장되어 있는 코드값은 건드리지 않는다(다른
+  // 코드 관련 도구들과 동일한 방침 - 지우고 싶으면 "프로젝트 코드 전체 목록"류 도구로 직접 처리).
+  async function removeOfficeClassCode(name) {
+    const listRef = db.collection('officialProjects').doc('list');
+    const listDoc = await listRef.get();
+    const existing = (listDoc.exists && listDoc.data().officeClassCodes) || {};
+    const updated = { ...existing };
+    delete updated[name];
+    await listRef.set({ officeClassCodes: updated, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    OFFICE_CLASS_CODES = updated;
+  }
+
+  // "사무업무 코드(연도별 자동)" 관리 패널 - 등록된 이름들을 목록으로 보여주고, 재계산/해제를
+  // 바로 할 수 있게 한다.
+  function renderOfficeClassList() {
+    const container = document.getElementById('officeClassList');
+    if (!container) return;
+    const names = Object.keys(OFFICE_CLASS_CODES).sort();
+    if (names.length === 0) {
+      container.innerHTML = '<div style="color:var(--muted); font-size:12.5px; padding:4px 2px;">등록된 사무업무 코드가 없습니다.</div>';
+      return;
+    }
+    container.innerHTML = names.map(name => {
+      const classCode = OFFICE_CLASS_CODES[name];
+      const label = (WORK_CLASSIFICATION.find(c => c.code === classCode) || {}).label || classCode;
+      const count = LAST_PROJECT_COUNTS[name] || 0;
+      const sampleCode = officeClassCodeFor(name, new Date().toISOString().slice(0, 10));
+      return `
+        <div class="office-class-row" data-name="${esc(name)}" style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); flex-wrap:wrap;">
+          <div style="flex:1; min-width:180px;">
+            <b style="font-size:13px;">${esc(name)}</b>
+            <span style="color:var(--muted); font-size:11.5px; margin-left:6px;">(근무일지 ${count}건)</span>
+          </div>
+          <div style="font-size:12px; color:var(--muted); min-width:170px;">${esc(classCode)} ${esc(label)} · 예: <span style="font-family:monospace;">${esc(sampleCode)}</span></div>
+          <button type="button" class="row-btn office-class-recalc-btn">재계산</button>
+          <button type="button" class="row-btn danger office-class-remove-btn">등록 해제</button>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.office-class-row').forEach(row => {
+      const name = row.dataset.name;
+      row.querySelector('.office-class-recalc-btn').addEventListener('click', async (e) => {
+        const btn = e.target;
+        btn.disabled = true;
+        btn.textContent = '재계산 중...';
+        try {
+          const n = await recalcOfficeClassCode(name);
+          alert(`"${name}": 근무일지 ${n}건을 재계산했습니다.`);
+        } catch (err) {
+          alert('재계산 실패: ' + err.message);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '재계산';
+        }
+      });
+      row.querySelector('.office-class-remove-btn').addEventListener('click', async () => {
+        if (!confirm(`"${name}"의 사무업무 코드 등록을 해제할까요?\n(이미 저장된 근무일지의 코드값은 그대로 남아있고, 앞으로 이 이름으로 작성되는 근무일지에만 코드가 자동으로 안 붙어요.)`)) return;
+        try {
+          await removeOfficeClassCode(name);
+          renderOfficeClassList();
+          renderUncodedProjectsList();
+        } catch (err) {
+          alert('해제 실패: ' + err.message);
+        }
+      });
+    });
+  }
+
+  // 분류 드롭다운 채우기 - 정적 HTML에는 비워둔 select라 WORK_CLASSIFICATION 기준으로 JS가 채운다.
+  (function initOfficeClassSelect(){
+    const sel = document.getElementById('officeClassCodeSelect');
+    if (!sel) return;
+    sel.innerHTML = WORK_CLASSIFICATION.map(c => `<option value="${c.code}">${c.code} ${c.label}</option>`).join('');
+  })();
+
+  document.getElementById('officeClassAddBtn')?.addEventListener('click', async () => {
+    const nameInput = document.getElementById('officeClassNameInput');
+    const classCode = document.getElementById('officeClassCodeSelect').value;
+    const resultEl = document.getElementById('officeClassResult');
+    const name = nameInput.value.trim();
+    if (!name) {
+      resultEl.style.color = '#a4453c';
+      resultEl.textContent = '업무명을 입력해 주세요.';
+      return;
+    }
+    if (OFFICE_CLASS_CODES[name] === classCode) {
+      resultEl.style.color = 'var(--muted)';
+      resultEl.textContent = `이미 "${name}"은(는) 분류 "${classCode}"로 등록되어 있습니다.`;
+      return;
+    }
+    if (!confirm(`"${name}"을(를) 분류 "${classCode}"로 등록할까요?\n기존에 이 이름으로 작성된 근무일지가 있다면 각자의 날짜 기준으로 코드가 소급 반영됩니다(몇 초 걸릴 수 있어요).`)) return;
+
+    resultEl.style.color = 'var(--muted)';
+    resultEl.textContent = '등록 중...';
+    try {
+      const matchedCount = await assignOfficeClassCode(name, classCode);
+      resultEl.style.color = '#3f6b52';
+      resultEl.textContent = `완료: "${name}" 등록, 근무일지 ${matchedCount}건에 소급 반영했습니다.`;
+      nameInput.value = '';
+      renderOfficeClassList();
+      renderUncodedProjectsList();
+    } catch (err) {
+      resultEl.style.color = '#a4453c';
+      resultEl.textContent = '등록 실패: ' + err.message;
+    }
+  });
+
   async function loadOfficialProjects(){
     try{
       const doc = await db.collection('officialProjects').doc('list').get();
@@ -1041,12 +1248,14 @@ if ('serviceWorker' in navigator) {
         OFFICIAL_PROJECTS = doc.data().names || [];
         EXCLUDED_PROJECTS = doc.data().excluded || [];
         PROJECT_CODES = doc.data().codes || {};
+        OFFICE_CLASS_CODES = doc.data().officeClassCodes || {};
         USED_PROJECT_NAMES = doc.data().usedNames || [];
         PRE_REGISTERED_PROJECTS = doc.data().preRegistered || [];
         renderProjectCodesDatalist();
         updateProjectDatalist();
         renderCodeRefList();
         renderPreRegisteredList();
+        renderOfficeClassList();
       }
     }catch(err){
       console.warn('회계현황 대시보드 프로젝트 목록 동기화 실패(대시보드에서 아직 한 번도 동기화되지 않았을 수 있음):', err);
@@ -1202,6 +1411,7 @@ if ('serviceWorker' in navigator) {
       renderProjectCleanupList(counts, fullMerged);
       renderUncodedProjectsList(counts);
       renderCodeRegistryList();
+      renderOfficeClassList();
       // officialProjects/list.names(정리 도구가 손대는 목록)와 .usedNames(근무일지 작성폼이 참조하는
       // "실사용" 목록)를 둘 다 최신화한다. 결산서/기성청구 페이지의 "근무일지 프로젝트명 연결"
       // 드롭다운은 officialProjects/list.names를 보고 있으므로 그 목록도 계속 채워 넣어 어긋나지 않게 한다.
@@ -1306,7 +1516,7 @@ if ('serviceWorker' in navigator) {
     if (!container) return;
     counts = counts || getProjectNameCounts();
     const names = Object.keys(counts)
-      .filter(n => n && !EXCLUDED_PROJECTS.includes(n) && !PROJECT_CODES[n])
+      .filter(n => n && !EXCLUDED_PROJECTS.includes(n) && !PROJECT_CODES[n] && !OFFICE_CLASS_CODES[n])
       .sort((a, b) => counts[b] - counts[a]);
 
     if (names.length === 0) {
@@ -2189,7 +2399,15 @@ if ('serviceWorker' in navigator) {
     // 관리자가 미리 지정해둔 코드가 있으면 그 값을 그대로 쓴다) - 기존 항목을 수정할 때는 그 항목에
     // 실제로 저장되어 있던 코드값(p['프로젝트코드'])을 먼저 보여주고, 없으면 현재 중앙 코드 매핑에서
     // 찾는다. 프로젝트명을 다른 값으로 바꾸면 그 순간부터는 항상 중앙 매핑 기준으로 갱신된다.
-    const initialCode = (p['프로젝트코드'] || PROJECT_CODES[(p['프로젝트'] || '').trim()] || '').trim();
+    // 사무업무 코드(연도별 자동) 대상이면 저장된 값보다 항상 우선해서 현재 날짜 기준으로 다시
+    // 계산해 보여준다(날짜를 고쳐서 다시 열었을 때도 최신 값이 맞게 보이도록).
+    const currentDateForRow = document.getElementById('f-date')?.value || '';
+    const initialCode = (
+      officeClassCodeFor((p['프로젝트'] || '').trim(), currentDateForRow) ||
+      p['프로젝트코드'] ||
+      PROJECT_CODES[(p['프로젝트'] || '').trim()] ||
+      ''
+    ).trim();
     row.innerHTML = `
       <div class="project-row-top">
         <div class="field">
@@ -2235,7 +2453,8 @@ if ('serviceWorker' in navigator) {
     // 프로젝트명 사전등록" 도구에서 코드를 붙여주기 전까지는 그 상태로 제출된다.
     projectInput.addEventListener('change', () => {
       const newName = projectInput.value.trim();
-      const code = PROJECT_CODES[newName] || '';
+      const currentDate = document.getElementById('f-date')?.value || '';
+      const code = officeClassCodeFor(newName, currentDate) || PROJECT_CODES[newName] || '';
       codeDisplay.dataset.code = code;
       codeDisplay.textContent = code || '미지정';
       codeDisplay.classList.toggle('is-empty', !code);
@@ -2258,6 +2477,23 @@ if ('serviceWorker' in navigator) {
 
   document.getElementById('addProjectBtn').addEventListener('click', () => createProjectRow());
   resetProjectRows();
+
+  // 날짜를 바꾸면(새 항목 작성 중이든, 기존 항목을 수정하며 날짜를 고치든) 사무업무 코드(연도별
+  // 자동) 대상인 행들의 코드 표시도 그 즉시 새 날짜 기준으로 다시 계산해서 보여준다. 일반 프로젝트
+  // (PROJECT_CODES 쪽)는 날짜와 무관한 고정 코드라 여기서 건드릴 필요가 없다.
+  document.getElementById('f-date')?.addEventListener('change', () => {
+    const currentDate = document.getElementById('f-date').value || '';
+    document.querySelectorAll('.project-row').forEach(row => {
+      const name = row.querySelector('.row-project')?.value.trim();
+      if (!name || !OFFICE_CLASS_CODES[name]) return;
+      const code = officeClassCodeFor(name, currentDate);
+      const codeDisplay = row.querySelector('.row-code-display');
+      if (!codeDisplay) return;
+      codeDisplay.dataset.code = code;
+      codeDisplay.textContent = code || '미지정';
+      codeDisplay.classList.toggle('is-empty', !code);
+    });
+  });
 
   // 중요업무일정 반복 행 관리 - 프로젝트별 업무 내역과 동일한 방식으로, 마감/예정일이 있는
   // 중요 업무를 여러 건 적을 수 있게 "+ 추가" 버튼으로 행을 늘렸다 줄였다 할 수 있다.
@@ -3084,10 +3320,13 @@ if ('serviceWorker' in navigator) {
       if (!name && hours === 0 && !Object.values(tasks).some(Boolean)) return; // 완전히 빈 행은 무시
       if (!name) hasEmptyProjectName = true;
 
-      // 코드는 더 이상 이 폼에서 직접 입력하지 않는다 - 프로젝트명을 고를 때 자동으로 채워진
-      // 표시값(사전등록 단계에서 미리 지정된 코드, 또는 수정 중인 기존 항목의 저장된 코드)을 그대로
-      // 쓰고, 혹시 비어있으면 중앙 코드 매핑에서 한 번 더 찾아본다.
-      const code = (row.querySelector('.row-code-display')?.dataset.code || '').trim() || PROJECT_CODES[name] || '';
+      // 코드는 더 이상 이 폼에서 직접 입력하지 않는다 - 사무업무 코드(연도별 자동) 대상이면 이 날짜
+      // 기준으로 항상 새로 계산하고(최종 저장 직전에 한 번 더 확정 - 날짜를 막판에 바꿔도 정확하게
+      // 반영되도록), 아니면 프로젝트명을 고를 때 자동으로 채워진 표시값(사전등록 단계에서 미리
+      // 지정된 코드, 또는 수정 중인 기존 항목의 저장된 코드)을 그대로 쓰고, 혹시 비어있으면 중앙
+      // 코드 매핑에서 한 번 더 찾아본다.
+      const code = officeClassCodeFor(name, date) ||
+        (row.querySelector('.row-code-display')?.dataset.code || '').trim() || PROJECT_CODES[name] || '';
       projects.push({ '프로젝트': name, '프로젝트코드': code, '투입시간': hours, tasks });
     });
 
