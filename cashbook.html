@@ -248,6 +248,8 @@
           <option value="tax">세금관리</option>
           <option value="loan">이자상환관리</option>
           <option value="stock">주식·배당관리</option>
+          <option value="corporateCard">법인카드관리</option>
+          <option value="invest">투자가수금현황</option>
         </select>
       </div>
       <div class="field wide" id="f-linkCard-field" style="display:none;">
@@ -255,6 +257,15 @@
         <select id="f-linkCard">
           <option value="">카드를 선택하세요</option>
         </select>
+      </div>
+      <div class="field" id="f-linkInvestType-field" style="display:none;">
+        <label for="f-linkInvestType">거래유형</label>
+        <select id="f-linkInvestType"></select>
+      </div>
+      <div class="field wide" id="f-linkInvestParty-field" style="display:none;">
+        <label for="f-linkInvestParty">상대방</label>
+        <input type="text" id="f-linkInvestParty" list="investCounterpartyList" placeholder="예: 대표자, 김의석">
+        <datalist id="investCounterpartyList"></datalist>
       </div>
       <button class="btn-primary" id="saveEntryBtn">저장</button>
     </div>
@@ -438,25 +449,37 @@
   // ========================================================
   // 공과금/보험/세금/이자상환 관리 페이지 연동
   // ========================================================
-  // 이 네 페이지는 "거래 목록"이 아니라 "항목(카드)별 월별 합계"를 관리한다
+  // 대부분의 연동 대상 페이지는 "거래 목록"이 아니라 "항목(카드)별 월별 합계"를 관리한다
   // (문서 하나 = 카드 하나, monthly: { 'YYYY-MM': 금액 }).
   // 그래서 현금출납부의 출금 거래 하나를 반대쪽에 "새로 추가"하는 게 아니라,
-  // 선택한 카드의 해당 월 금액에 "더해주는" 방식으로 연동한다.
+  // 선택한 카드의 해당 월 금액에 "더해주는" 방식으로 연동한다 (mode 생략 = 이 "카드형").
   // directions: 이 연동 대상을 "구분"(입금/출금) 어느 쪽 거래에서 고를 수 있는지. 생략하면 출금 전용
-  // (공과금·보험·세금·이자상환은 전부 우리가 내는 돈이라 출금만). 주식·배당은 매수(출금)뿐 아니라
-  // 배당금 수령(입금)도 있어서 두 방향 다 연동 가능하게 열어둔다.
+  // (공과금·보험·세금·이자상환·법인카드는 전부 우리가 내는 돈이라 출금만). 주식·배당은 매수(출금)뿐
+  // 아니라 배당금 수령(입금)도 있어서 두 방향 다 연동 가능하게 열어둔다.
+  // mode: 'entryLog'인 투자가수금현황(investmentEntries)은 "카드형"이 아니라 그 자체가 거래 목록이라,
+  // 월별 합계에 더하는 대신 거래유형(txType)·상대방(counterparty)을 받아서 그 컬렉션에 새 내역을
+  // "추가"하는 방식으로 연동한다(아래 applyInvestLink/reverseInvestLink, resolveLinkOnSave 참고).
+  // txTypesByDirection: entryLog 전용 - 구분(입금/출금)에 따라 고를 수 있는 거래유형을 좁혀준다
+  // (investment-status.html의 INFLOW_TYPES와 동일한 기준: 가수금·가지급회수·개인투자=입금,
+  // 가수금상환·가지급·개인투자회수=출금).
   const LINK_TARGETS = {
     utilities: { label: '공과금관리', collection: 'utilityItems', directions: ['출금'], getCardLabel: c => (c.category || '(이름 없음)') + (c.detail ? ' · ' + c.detail : '') },
     insurance: { label: '보험관리', collection: 'insuranceItems', directions: ['출금'], getCardLabel: c => (c.label || '(이름 없음)') + (c.category ? ' (' + c.category + ')' : '') },
     tax: { label: '세금관리', collection: 'taxItems', directions: ['출금'], getCardLabel: c => (c.label || '(이름 없음)') + (c.category ? ' (' + c.category + ')' : '') },
     loan: { label: '이자상환관리', collection: 'loanRepaymentItems', directions: ['출금'], getCardLabel: c => (c.name || '(이름 없음)') + (c.account ? ' · ' + c.account : '') },
-    stock: { label: '주식·배당관리', collection: 'stockItems', directions: ['출금', '입금'], getCardLabel: c => (c.name || '(이름 없음)') + (c.category ? ' (' + c.category + ')' : '') }
+    stock: { label: '주식·배당관리', collection: 'stockItems', directions: ['출금', '입금'], getCardLabel: c => (c.name || '(이름 없음)') + (c.category ? ' (' + c.category + ')' : '') },
+    corporateCard: { label: '법인카드관리', collection: 'corporateCards', directions: ['출금'], getCardLabel: c => (c.name || '(이름 없음)') + (c.number ? ' · ' + c.number : '') },
+    invest: {
+      label: '투자가수금현황', collection: 'investmentEntries', mode: 'entryLog', directions: ['입금', '출금'],
+      txTypesByDirection: { '입금': ['가수금', '가지급회수', '개인투자'], '출금': ['가수금상환', '가지급', '개인투자회수'] }
+    }
   };
   const COLLECTION_TO_KIND = Object.fromEntries(Object.entries(LINK_TARGETS).map(([kind, cfg]) => [cfg.collection, kind]));
-  let linkTargetCards = {}; // { utilities: [{id, label}], insurance: [...], tax: [...], loan: [...] }
+  let linkTargetCards = {}; // { utilities: [{id, label}], insurance: [...], tax: [...], loan: [...], corporateCard: [...] } - 카드형 대상만
+  let investCounterparties = []; // 투자가수금현황(investmentEntries)에 이미 등록된 상대방 이름 목록 - 자동완성용
 
   async function loadLinkTargetCards(){
-    const entries = await Promise.all(Object.entries(LINK_TARGETS).map(async ([kind, cfg]) => {
+    const entries = await Promise.all(Object.entries(LINK_TARGETS).filter(([, cfg]) => cfg.mode !== 'entryLog').map(async ([kind, cfg]) => {
       try {
         const snap = await db.collection(cfg.collection).orderBy('order', 'asc').get();
         const cards = snap.docs.map(d => ({ id: d.id, label: cfg.getCardLabel(d.data()) }));
@@ -467,6 +490,15 @@
       }
     }));
     linkTargetCards = Object.fromEntries(entries);
+
+    try {
+      const snap = await db.collection('investmentEntries').get();
+      investCounterparties = [...new Set(snap.docs.map(d => d.data().counterparty).filter(Boolean))].sort();
+      const dl = document.getElementById('investCounterpartyList');
+      if (dl) dl.innerHTML = investCounterparties.map(p => `<option value="${esc(p)}">`).join('');
+    } catch (err) {
+      console.warn('투자가수금현황 상대방 목록 불러오기 실패:', err);
+    }
   }
 
   function populateLinkCardOptions(kind, selectedId){
@@ -477,12 +509,20 @@
     sel.value = selectedId || '';
   }
 
+  // entryLog형(투자가수금현황) 전용 - 현재 구분(입금/출금)에서 고를 수 있는 거래유형만 보여준다.
+  function populateInvestTypeOptions(cfg, type, selectedType){
+    const sel = document.getElementById('f-linkInvestType');
+    const types = (cfg.txTypesByDirection && cfg.txTypesByDirection[type]) || [];
+    sel.innerHTML = types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+    sel.value = types.includes(selectedType) ? selectedType : (types[0] || '');
+  }
+
   // 현재 구분(입금/출금)에서 고를 수 있는 연동 대상 kind 목록 (LINK_TARGETS의 directions 기준).
   function availableLinkKinds(type){
     return Object.entries(LINK_TARGETS).filter(([, cfg]) => (cfg.directions || ['출금']).includes(type)).map(([k]) => k);
   }
 
-  // f-linkTarget 드롭다운 내용을 현재 구분에 맞게 다시 그린다 (예: 입금이면 주식·배당관리만 남김).
+  // f-linkTarget 드롭다운 내용을 현재 구분에 맞게 다시 그린다 (예: 입금이면 주식·배당관리/투자가수금현황만 남김).
   // 이전에 골라둔 kind가 새 구분에서도 유효하면 유지하고, 아니면 "연동 안 함"으로 초기화한다.
   function populateLinkTargetOptions(type, selectedKind){
     const sel = document.getElementById('f-linkTarget');
@@ -497,12 +537,20 @@
     const prevKind = document.getElementById('f-linkTarget').value;
     populateLinkTargetOptions(type, prevKind);
     const kind = document.getElementById('f-linkTarget').value;
+    const cfg = kind ? LINK_TARGETS[kind] : null;
+    const isEntryLog = !!(cfg && cfg.mode === 'entryLog');
     const linkable = availableLinkKinds(type).length > 0;
     document.getElementById('f-linkTarget-field').style.display = linkable ? 'flex' : 'none';
-    document.getElementById('f-linkCard-field').style.display = (linkable && kind) ? 'flex' : 'none';
+    document.getElementById('f-linkCard-field').style.display = (linkable && kind && !isEntryLog) ? 'flex' : 'none';
+    document.getElementById('f-linkInvestType-field').style.display = (linkable && isEntryLog) ? 'flex' : 'none';
+    document.getElementById('f-linkInvestParty-field').style.display = (linkable && isEntryLog) ? 'flex' : 'none';
     document.getElementById('linkHelp').style.display = (linkable && kind) ? 'block' : 'none';
-    if (kind) populateLinkCardOptions(kind, document.getElementById('f-linkCard').value);
+    document.getElementById('linkHelp').textContent = isEntryLog
+      ? '"확정" 상태로 저장되는 순간, 투자가수금현황(개인투자·가수금 탭)에 선택한 거래유형·상대방·금액으로 새 내역이 자동으로 추가됩니다. "예정" 상태로 저장하면 나중에 "확정 처리"를 누르는 시점에 추가돼요.'
+      : '출금이 "확정" 상태로 저장되는 순간, 선택한 카드의 해당 월(거래일자 기준) 사용액에 이 금액이 자동으로 더해집니다. "예정" 상태로 저장하면 나중에 "확정 처리"를 누르는 시점에 반영돼요.';
+    if (kind && !isEntryLog) populateLinkCardOptions(kind, document.getElementById('f-linkCard').value);
     else populateLinkCardOptions('', '');
+    if (isEntryLog) populateInvestTypeOptions(cfg, type, document.getElementById('f-linkInvestType').value);
   }
 
   document.getElementById('f-type').addEventListener('change', () => {
@@ -511,6 +559,7 @@
   });
   document.getElementById('f-linkTarget').addEventListener('change', (e) => {
     populateLinkCardOptions(e.target.value, '');
+    document.getElementById('f-linkInvestParty').value = '';
     updateLinkFieldVisibility();
   });
   updateIncomeTypeVisibility();
@@ -520,6 +569,17 @@
     if (!e.linkTargetCollection) return '';
     const kind = COLLECTION_TO_KIND[e.linkTargetCollection];
     return kind ? LINK_TARGETS[kind].label : e.linkTargetCollection;
+  }
+
+  // 삭제 확인창에 띄울 안내 문구 - 카드형(월별 합계 반영분)과 entryLog형(투자가수금현황 내역)을 구분해서 설명한다.
+  function linkDeleteNote(e){
+    if (!e || !e.linkApplied) return '';
+    const kind = COLLECTION_TO_KIND[e.linkTargetCollection];
+    const cfg = kind ? LINK_TARGETS[kind] : null;
+    if (cfg && cfg.mode === 'entryLog') {
+      return `\n\n이 거래는 투자가수금현황에 "${e.linkTargetCardLabel || ''}" 내역(${fmtWon(e.linkAppliedAmount)})으로 추가되어 있어요. 삭제하면 그 내역도 함께 삭제됩니다.`;
+    }
+    return `\n\n이 거래는 "${cardLabelFor(e)}"의 ${e.linkAppliedYm} 사용액에 ${fmtWon(e.linkAppliedAmount)}만큼 반영되어 있어요. 삭제하면 그 금액도 함께 되돌립니다.`;
   }
 
   function linkBadgeHtml(e){
@@ -585,36 +645,101 @@
     }
   }
 
+  // ---------- entryLog형(투자가수금현황) 연동 ----------
+  // 카드형과 달리 "월별 합계에 더하기"가 아니라, investmentEntries 컬렉션에 새 내역을 통째로
+  // "추가"한다. 되돌릴 때도 그 내역 문서를 그냥 지우면 된다 (월별 합계를 빼는 계산이 필요 없음).
+  async function applyInvestLink(entryId, txType, counterparty, date, amount, content){
+    const ref = db.collection('investmentEntries').doc();
+    await ref.set({
+      txType, counterparty, raiseDate: (date || '').slice(0, 7), amount,
+      memo: `현금출납부 연동${content ? ' · ' + content : ''}`,
+      cashbookEntryId: entryId,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    return ref.id;
+  }
+  async function reverseInvestLink(investEntryId){
+    if (!investEntryId) return;
+    try {
+      await db.collection('investmentEntries').doc(investEntryId).delete();
+    } catch (err) {
+      console.warn('투자가수금현황 연동 내역 되돌리기 실패 (이미 삭제됐을 수 있음):', err);
+    }
+  }
+
+  // 이미 반영된 연동을 kind/mode에 따라 알맞게 되돌리는 공용 진입점 (카드형 되돌리기 vs entryLog형 되돌리기).
+  async function reverseLink(entry, entryId){
+    if (!entry || !entry.linkApplied) return;
+    const kind = COLLECTION_TO_KIND[entry.linkTargetCollection];
+    const cfg = kind ? LINK_TARGETS[kind] : null;
+    if (cfg && cfg.mode === 'entryLog') {
+      await reverseInvestLink(entry.linkedInvestEntryId);
+    } else {
+      await reverseLinkIncrement(entry.linkTargetCollection, entry.linkTargetCardId, entry.linkAppliedYm, entry.linkAppliedAmount, entryId);
+    }
+  }
+
+  // 연동을 전혀 선택하지 않은 상태로 되돌리는 데이터 조각 (resolveLinkOnSave에서 여러 번 재사용).
+  function emptyLinkData(){
+    return {
+      linkTargetCollection: null, linkTargetCardId: null, linkTargetCardLabel: null,
+      linkInvestTxType: null, linkInvestParty: null, linkedInvestEntryId: null,
+      linkApplied: false, linkAppliedYm: null, linkAppliedAmount: null
+    };
+  }
+
   // 거래 저장(신규/수정) 시 연동 상태를 정리한다.
   // - 기존에 반영된 연동이 있었다면 먼저 되돌리고,
-  // - 새 상태가 "출금 + 연동카드 선택 + 확정"이면 지금 바로 반영하고,
-  // - "출금 + 연동카드 선택 + 예정"이면 나중에 확정될 때 반영하도록 "연동 예정"만 저장해둔다.
+  // - 새 상태가 "확정 + 연동 대상 선택 완료"면 지금 바로 반영하고(카드형=월별 합계에 더하기,
+  //   entryLog형=투자가수금현황에 새 내역 추가),
+  // - "예정" 상태면 나중에 확정될 때 반영하도록 "연동 예정"만 저장해둔다.
   // entryId는 이 거래 문서의 ID (신규 저장 시에도 미리 만들어둔 ID를 넘겨받는다 - 아래 saveEntryBtn 참고).
   async function resolveLinkOnSave(oldEntry, newData, entryId){
     if (oldEntry && oldEntry.linkApplied) {
-      await reverseLinkIncrement(oldEntry.linkTargetCollection, oldEntry.linkTargetCardId, oldEntry.linkAppliedYm, oldEntry.linkAppliedAmount, entryId);
+      await reverseLink(oldEntry, entryId);
     }
 
     const rawKind = document.getElementById('f-linkTarget').value;
     const kind = availableLinkKinds(newData.type).includes(rawKind) ? rawKind : '';
-    const cardId = kind ? document.getElementById('f-linkCard').value : '';
+    if (!kind) return Object.assign(newData, emptyLinkData());
 
-    if (!kind || !cardId) {
+    const cfg = LINK_TARGETS[kind];
+    const ym = (newData.date || '').slice(0, 7);
+
+    if (cfg.mode === 'entryLog') {
+      const txType = document.getElementById('f-linkInvestType').value;
+      const counterparty = document.getElementById('f-linkInvestParty').value.trim();
+      if (!txType || !counterparty) return Object.assign(newData, emptyLinkData());
+
+      const label = `${txType} · ${counterparty}`;
+      if (newData.status === '확정') {
+        const investId = await applyInvestLink(entryId, txType, counterparty, newData.date, newData.amount, newData.content);
+        return Object.assign(newData, {
+          linkTargetCollection: cfg.collection, linkTargetCardId: null, linkTargetCardLabel: label,
+          linkInvestTxType: txType, linkInvestParty: counterparty, linkedInvestEntryId: investId,
+          linkApplied: true, linkAppliedYm: ym, linkAppliedAmount: newData.amount
+        });
+      }
+      // 예정 상태 - 반영은 나중에, 선택 정보만 저장
       return Object.assign(newData, {
-        linkTargetCollection: null, linkTargetCardId: null, linkTargetCardLabel: null,
+        linkTargetCollection: cfg.collection, linkTargetCardId: null, linkTargetCardLabel: label,
+        linkInvestTxType: txType, linkInvestParty: counterparty, linkedInvestEntryId: null,
         linkApplied: false, linkAppliedYm: null, linkAppliedAmount: null
       });
     }
 
-    const cfg = LINK_TARGETS[kind];
+    // 카드형(월별 합계) 연동
+    const cardId = document.getElementById('f-linkCard').value;
+    if (!cardId) return Object.assign(newData, emptyLinkData());
+
     const card = (linkTargetCards[kind] || []).find(c => c.id === cardId);
     const cardLabel = card ? card.label : '';
-    const ym = (newData.date || '').slice(0, 7);
 
     if (newData.status === '확정') {
       await applyLinkIncrement(cfg.collection, cardId, ym, newData.amount, entryId);
       return Object.assign(newData, {
         linkTargetCollection: cfg.collection, linkTargetCardId: cardId, linkTargetCardLabel: cardLabel,
+        linkInvestTxType: null, linkInvestParty: null, linkedInvestEntryId: null,
         linkApplied: true, linkAppliedYm: ym, linkAppliedAmount: newData.amount
       });
     }
@@ -622,6 +747,7 @@
     // 예정 상태 - 반영은 나중에, 선택 정보만 저장
     return Object.assign(newData, {
       linkTargetCollection: cfg.collection, linkTargetCardId: cardId, linkTargetCardLabel: cardLabel,
+      linkInvestTxType: null, linkInvestParty: null, linkedInvestEntryId: null,
       linkApplied: false, linkAppliedYm: null, linkAppliedAmount: null
     });
   }
@@ -631,10 +757,19 @@
     const e = allEntries.find(x => x.id === id);
     if (!e) return;
     const update = { status: '확정' };
-    if (e.linkTargetCollection && e.linkTargetCardId && !e.linkApplied) {
+    if (e.linkTargetCollection && !e.linkApplied) {
+      const kind = COLLECTION_TO_KIND[e.linkTargetCollection];
+      const cfg = kind ? LINK_TARGETS[kind] : null;
       const ym = (e.date || '').slice(0, 7);
-      await applyLinkIncrement(e.linkTargetCollection, e.linkTargetCardId, ym, e.amount, id);
-      Object.assign(update, { linkApplied: true, linkAppliedYm: ym, linkAppliedAmount: e.amount });
+      if (cfg && cfg.mode === 'entryLog') {
+        if (e.linkInvestTxType && e.linkInvestParty) {
+          const investId = await applyInvestLink(id, e.linkInvestTxType, e.linkInvestParty, e.date, e.amount, e.content);
+          Object.assign(update, { linkApplied: true, linkAppliedYm: ym, linkAppliedAmount: e.amount, linkedInvestEntryId: investId });
+        }
+      } else if (e.linkTargetCardId) {
+        await applyLinkIncrement(e.linkTargetCollection, e.linkTargetCardId, ym, e.amount, id);
+        Object.assign(update, { linkApplied: true, linkAppliedYm: ym, linkAppliedAmount: e.amount });
+      }
     }
     await entriesRef.doc(id).update(update);
     await loadEntries();
@@ -644,7 +779,7 @@
   async function deleteEntryWithLink(id){
     const e = allEntries.find(x => x.id === id);
     if (e && e.linkApplied) {
-      await reverseLinkIncrement(e.linkTargetCollection, e.linkTargetCardId, e.linkAppliedYm, e.linkAppliedAmount, id);
+      await reverseLink(e, id);
     }
     await entriesRef.doc(id).delete();
   }
@@ -910,7 +1045,7 @@
     tbody.querySelectorAll('[data-delete]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const entry = allEntries.find(x => x.id === btn.dataset.delete);
-        const linkNote = entry && entry.linkApplied ? `\n\n이 거래는 "${cardLabelFor(entry)}"의 ${entry.linkAppliedYm} 사용액에 ${fmtWon(entry.linkAppliedAmount)}만큼 반영되어 있어요. 삭제하면 그 금액도 함께 되돌립니다.` : '';
+        const linkNote = linkDeleteNote(entry);
         if (!confirm('이 거래 내역을 삭제할까요?' + linkNote)) return;
         btn.disabled = true;
         await deleteEntryWithLink(btn.dataset.delete);
@@ -994,8 +1129,14 @@
     document.getElementById('f-memo').value = entry.memo || '';
 
     const kind = entry.linkTargetCollection ? COLLECTION_TO_KIND[entry.linkTargetCollection] : '';
+    const kindCfg = kind ? LINK_TARGETS[kind] : null;
     document.getElementById('f-linkTarget').value = kind || '';
-    if (kind) populateLinkCardOptions(kind, entry.linkTargetCardId);
+    if (kind && kindCfg && kindCfg.mode === 'entryLog') {
+      populateInvestTypeOptions(kindCfg, entry.type || '입금', entry.linkInvestTxType);
+      document.getElementById('f-linkInvestParty').value = entry.linkInvestParty || '';
+    } else if (kind) {
+      populateLinkCardOptions(kind, entry.linkTargetCardId);
+    }
     updateLinkFieldVisibility();
 
     document.getElementById('entryPanelTitle').textContent = '거래 수정';
@@ -1017,6 +1158,7 @@
     document.getElementById('f-memo').value = '';
     document.getElementById('f-linkTarget').value = '';
     populateLinkCardOptions('', '');
+    document.getElementById('f-linkInvestParty').value = '';
     updateLinkFieldVisibility();
     document.getElementById('entryPanelTitle').textContent = '거래 입력';
     document.getElementById('editBanner').style.display = 'none';
@@ -1070,6 +1212,7 @@
         document.getElementById('f-memo').value = '';
         document.getElementById('f-linkTarget').value = '';
         populateLinkCardOptions('', '');
+        document.getElementById('f-linkInvestParty').value = '';
         updateLinkFieldVisibility();
       }
       await loadEntries();
@@ -1332,7 +1475,7 @@
     if (allEntries.length === 0) { statusEl.className = 'status-line err'; statusEl.textContent = '삭제할 내역이 없습니다.'; return; }
 
     const linkedCount = allEntries.filter(e => e.linkApplied).length;
-    const linkNote = linkedCount ? `\n\n이 중 ${linkedCount}건은 공과금/보험/세금/이자상환관리 쪽에 금액이 반영되어 있어요. 삭제하면 그쪽 금액도 함께 되돌립니다.` : '';
+    const linkNote = linkedCount ? `\n\n이 중 ${linkedCount}건은 공과금/보험/세금/이자상환/법인카드관리의 월별 금액이나 투자가수금현황 내역에 반영되어 있어요. 삭제하면 그쪽 반영분도 함께 되돌립니다.` : '';
     const first = confirm(`현재 등록된 거래 내역 ${allEntries.length}건을 전부 삭제할까요?${linkNote}\n\n(이월잔액 설정값은 그대로 남습니다. 이 작업은 되돌릴 수 없습니다.)`);
     if (!first) return;
     const second = confirm('정말로 전체 삭제하시겠습니까? 마지막 확인입니다.');
@@ -1348,7 +1491,7 @@
       for (let i = 0; i < linked.length; i++) {
         const e = linked[i];
         statusEl.textContent = `연동 반영분을 되돌리는 중... (${i + 1}/${linked.length})`;
-        await reverseLinkIncrement(e.linkTargetCollection, e.linkTargetCardId, e.linkAppliedYm, e.linkAppliedAmount, e.id);
+        await reverseLink(e, e.id);
       }
 
       statusEl.textContent = '거래 내역 삭제 중...';
