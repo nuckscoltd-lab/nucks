@@ -108,7 +108,14 @@ if ('serviceWorker' in navigator) {
     padding:14px 12px; font-size:13.5px; border-bottom:1px solid var(--line);
     vertical-align:middle; white-space:nowrap;
   }
-  td.note-cell{ white-space:normal; max-width:220px; }
+  tr.has-note td{ border-bottom:none; }
+  tr.note-row td{
+    padding:0 12px 14px; border-bottom:1px solid var(--line);
+    white-space:normal; color:#54514a; font-size:12.5px; background:#fbfaf7;
+  }
+  tr.note-row .note-label{
+    color:var(--muted); font-size:11px; letter-spacing:.03em; margin-right:6px;
+  }
   .status-badge{
     display:inline-block; font-size:11px; padding:3px 10px;
     border-radius:20px; letter-spacing:.02em; white-space:nowrap;
@@ -148,6 +155,12 @@ if ('serviceWorker' in navigator) {
       content:attr(data-label);
       display:block; font-size:11px; color:var(--muted); margin-bottom:2px;
     }
+    tr.has-note{ border-bottom-left-radius:0; border-bottom-right-radius:0; margin-bottom:0; }
+    tr.note-row{
+      margin-top:-1px; border-top:none; border-top-left-radius:0; border-top-right-radius:0;
+      background:#fbfaf7; padding-top:4px;
+    }
+    tr.note-row td{ padding:0 !important; background:transparent; }
   }
 </style>
 </head>
@@ -207,10 +220,6 @@ if ('serviceWorker' in navigator) {
         <label>렌탈료(월)</label>
         <input type="number" id="f_fee" placeholder="예: 330000">
       </div>
-      <div class="field">
-        <label>출금일</label>
-        <input type="date" id="f_withdrawDate">
-      </div>
       <div class="field" style="grid-column:1/-1;">
         <label>비고</label>
         <textarea id="f_note" placeholder="특이사항, 갱신 조건 등"></textarea>
@@ -233,8 +242,6 @@ if ('serviceWorker' in navigator) {
         <th>잔여개월</th>
         <th>상태</th>
         <th>렌탈료</th>
-        <th>출금일</th>
-        <th>비고</th>
         <th></th>
       </tr>
     </thead>
@@ -311,11 +318,10 @@ if ('serviceWorker' in navigator) {
       document.getElementById('f_endDate').value = data['계약종료일'] || '';
       document.getElementById('f_status').value = data['상태'] || '계약유지';
       document.getElementById('f_fee').value = data['렌탈료'] || '';
-      document.getElementById('f_withdrawDate').value = data['출금일'] || '';
       document.getElementById('f_note').value = data['비고'] || '';
     } else {
       editingId = null;
-      ['f_item','f_vendor','f_signDate','f_startDate','f_endDate','f_fee','f_withdrawDate','f_note'].forEach(id => {
+      ['f_item','f_vendor','f_signDate','f_startDate','f_endDate','f_fee','f_note'].forEach(id => {
         document.getElementById(id).value = '';
       });
       document.getElementById('f_status').value = '계약유지';
@@ -336,18 +342,18 @@ if ('serviceWorker' in navigator) {
     {
       '품목': '복합기', '렌탈업체': '와이지 솔루션',
       '계약일자': '2025-03-21', '계약시작일': '2025-03-01', '계약종료일': '2027-02-28',
-      '상태': '계약유지', '렌탈료': 330000, '출금일': '2025-06-23', '비고': ''
+      '상태': '계약유지', '렌탈료': 330000, '비고': ''
     },
     {
       '품목': '정수기', '렌탈업체': 'SK매직',
       '계약일자': '2026-06-05', '계약시작일': '2026-06-05', '계약종료일': '2032-06-04',
-      '상태': '계약유지', '렌탈료': 46900, '출금일': '2025-06-20',
+      '상태': '계약유지', '렌탈료': 46900,
       '비고': '계약종료 약5개월전 교체시 위약금미발생\n(2026.06.09 교체완료)\n→3개월 단위 필터자체교체'
     },
     {
       '품목': '홈페이지도메인', '렌탈업체': '예스닉',
       '계약일자': '2026-02-02', '계약시작일': '2026-02-02', '계약종료일': '2036-02-02',
-      '상태': '계약유지', '렌탈료': 107000, '출금일': '',
+      '상태': '계약유지', '렌탈료': 107000,
       '비고': '10년소유권구매완료(10,700원/연)'
     }
   ];
@@ -382,7 +388,6 @@ if ('serviceWorker' in navigator) {
       '계약종료일': document.getElementById('f_endDate').value || '',
       '상태': document.getElementById('f_status').value,
       '렌탈료': Number(document.getElementById('f_fee').value) || 0,
-      '출금일': document.getElementById('f_withdrawDate').value || '',
       '비고': document.getElementById('f_note').value.trim(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
@@ -427,6 +432,9 @@ if ('serviceWorker' in navigator) {
     tableBody.innerHTML = '';
     emptyMsg.style.display = contractsCache.length === 0 ? 'block' : 'none';
 
+    // 열 개수(비고를 뺀 실제 컬럼 수) - 비고가 있을 때 그 아래 전체 폭으로 펼치는 행의 colspan에 쓴다.
+    const COL_COUNT = 9;
+
     contractsCache.forEach(c => {
       const months = monthsUntilEnd(c['계약종료일']);
       const monthsText = months === null ? '' : `${months}`;
@@ -434,8 +442,10 @@ if ('serviceWorker' in navigator) {
       const periodText = (c['계약시작일'] && c['계약종료일'])
         ? `${fmtDateDot(c['계약시작일'])}~${fmtDateDot(c['계약종료일'])}`
         : '';
+      const note = (c['비고'] || '').trim();
 
       const tr = document.createElement('tr');
+      if (note) tr.className = 'has-note';
       tr.innerHTML = `
         <td data-label="품목">${escapeHtml(c['품목'])}</td>
         <td data-label="렌탈업체">${escapeHtml(c['렌탈업체'])}</td>
@@ -445,14 +455,21 @@ if ('serviceWorker' in navigator) {
         <td data-label="잔여개월" class="${monthsClass}">${monthsText}</td>
         <td data-label="상태"><span class="status-badge ${statusBadgeClass(c['상태'])}">${escapeHtml(c['상태'] || '계약유지')}</span></td>
         <td data-label="렌탈료">${(c['렌탈료'] || 0).toLocaleString()}</td>
-        <td data-label="출금일">${fmtDateKr(c['출금일'])}</td>
-        <td data-label="비고" class="note-cell">${escapeHtml(c['비고'])}</td>
         <td data-label="">
           <button class="edit-btn" data-edit="${c.id}">수정</button>
           <button class="delete-btn" data-delete="${c.id}">삭제</button>
         </td>
       `;
       tableBody.appendChild(tr);
+
+      // 비고가 있는 행만, 바로 아래에 전체 폭으로 펼친 비고 행을 따로 추가한다
+      // (좁은 비고 칸 때문에 표 전체가 넓어지는 것을 막고, 긴 내용도 넉넉하게 보여준다).
+      if (note) {
+        const noteTr = document.createElement('tr');
+        noteTr.className = 'note-row';
+        noteTr.innerHTML = `<td colspan="${COL_COUNT}"><span class="note-label">비고</span>${escapeHtml(note).replace(/\n/g, '<br>')}</td>`;
+        tableBody.appendChild(noteTr);
+      }
     });
 
     tableBody.querySelectorAll('[data-edit]').forEach(btn => {
