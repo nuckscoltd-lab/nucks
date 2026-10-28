@@ -761,8 +761,34 @@ if ('serviceWorker' in navigator) {
         <option value="전체">전체 사원</option>
       </select>
     </div>
-    <button class="row-btn" id="jumpToCostBtn" style="text-decoration:underline; font-size:12.5px; display:none;">인건비 집계 바로가기 ↓</button>
     <button class="row-btn" id="refreshBtn" style="text-decoration:none; font-size:12.5px;">새로고침</button>
+  </div>
+
+  <!-- 프로젝트별 인건비 집계 (관리자 전용) -->
+  <div id="costPanel" style="display:none; margin:20px 0 32px;">
+    <div class="panel-title" style="margin-bottom:6px;">프로젝트별 인건비 집계 (관리자 전용)</div>
+    <div style="font-size:12px; color:var(--muted); margin-bottom:16px; line-height:1.6;">
+      투입시간 × (해당 월 기본급 ÷ 209시간 기준 통상시급)으로 계산한 참고용 추정치입니다.
+      해당 월 급여명세서가 없는 경우, 등록된 급여명세서 중 가장 최근(이전) 달 기본급을 대신 사용합니다.<br>
+      ※ 위 목록에서 선택한 기간(이번 달 / 전체 기간) 필터와 동일한 범위를 기준으로 계산됩니다. 전체 기간 원가가 보고 싶으면 목록 쪽에서 "전체 기간 보기"를 먼저 켜주세요.
+    </div>
+    <div class="toolbar" style="margin-bottom:14px;">
+      <select id="costProjectFilter"><option value="전체">전체 프로젝트</option></select>
+      <select id="costSortMode">
+        <option value="cost">인건비순</option>
+        <option value="code">코드순(작업분류번호)</option>
+        <option value="name">이름순</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table id="costTable" style="display:none;">
+        <thead>
+          <tr><th>코드</th><th>프로젝트</th><th>총 투입시간</th><th>참여 인원</th><th>추정 인건비</th><th>평균 시급</th></tr>
+        </thead>
+        <tbody id="costTableBody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="costEmptyMsg" style="display:none;">집계할 데이터가 없습니다.</div>
   </div>
 
   <!-- 달력보기 -->
@@ -809,36 +835,6 @@ if ('serviceWorker' in navigator) {
     <div id="monthGroups" style="display:none;"></div>
   </div>
   <div class="empty" id="emptyMsg">불러오는 중...</div>
-
-  <!-- 프로젝트별 인건비 집계 (관리자 전용) -->
-  <div id="costPanel" style="display:none; margin-top:48px;">
-    <div style="margin-bottom:6px;">
-      <a href="#" id="backToTopBtn" style="font-size:12px; color:var(--muted); text-decoration:underline;">↑ 목록/필터로 돌아가기</a>
-    </div>
-    <div class="panel-title" style="margin-bottom:6px;">프로젝트별 인건비 집계 (관리자 전용)</div>
-    <div style="font-size:12px; color:var(--muted); margin-bottom:16px; line-height:1.6;">
-      투입시간 × (해당 월 기본급 ÷ 209시간 기준 통상시급)으로 계산한 참고용 추정치입니다.
-      해당 월 급여명세서가 없는 경우, 등록된 급여명세서 중 가장 최근(이전) 달 기본급을 대신 사용합니다.<br>
-      ※ 위 목록에서 선택한 기간(이번 달 / 전체 기간) 필터와 동일한 범위를 기준으로 계산됩니다. 전체 기간 원가가 보고 싶으면 목록 쪽에서 "전체 기간 보기"를 먼저 켜주세요.
-    </div>
-    <div class="toolbar" style="margin-bottom:14px;">
-      <select id="costProjectFilter"><option value="전체">전체 프로젝트</option></select>
-      <select id="costSortMode">
-        <option value="cost">인건비순</option>
-        <option value="code">코드순(작업분류번호)</option>
-        <option value="name">이름순</option>
-      </select>
-    </div>
-    <div class="table-wrap">
-      <table id="costTable" style="display:none;">
-        <thead>
-          <tr><th>코드</th><th>프로젝트</th><th>총 투입시간</th><th>참여 인원</th><th>추정 인건비</th><th>평균 시급</th></tr>
-        </thead>
-        <tbody id="costTableBody"></tbody>
-      </table>
-    </div>
-    <div class="empty" id="costEmptyMsg" style="display:none;">집계할 데이터가 없습니다.</div>
-  </div>
 
   <!-- 프로젝트별 인건비 집계 - 프로젝트 클릭 시 참여인원별 상세(투입시간·추정인건비·근무일지 간단내용) 팝업 -->
   <div class="cost-modal-overlay" id="costModalOverlay">
@@ -2623,7 +2619,6 @@ if ('serviceWorker' in navigator) {
     document.getElementById('employeeFilter').style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
     document.getElementById('importPanel').style.display = (currentRole === 'admin') ? 'block' : 'none';
     document.getElementById('costPanel').style.display = (currentRole === 'admin') ? 'block' : 'none';
-    document.getElementById('jumpToCostBtn').style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
 
     // 오늘 날짜 기본값
     document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
@@ -2641,15 +2636,6 @@ if ('serviceWorker' in navigator) {
 
   document.getElementById('refreshBtn').addEventListener('click', loadLogs);
 
-  // 전체 기간으로 두면 목록이 길어져서 아래 인건비 집계까지 스크롤이 오래 걸리는 것을 보완 -
-  // 바로가기/돌아가기 링크로 스크롤만 이동시켜준다 (데이터 재조회 없음).
-  document.getElementById('jumpToCostBtn').addEventListener('click', () => {
-    document.getElementById('costPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
-  document.getElementById('backToTopBtn').addEventListener('click', (e) => {
-    e.preventDefault();
-    document.querySelector('.toolbar').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
   document.getElementById('employeeFilter').addEventListener('change', () => { renderTable(); renderCalendar(); });
 
   // 목록/달력 전환
