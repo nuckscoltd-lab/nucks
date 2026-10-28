@@ -481,8 +481,19 @@
   async function loadLinkTargetCards(){
     const entries = await Promise.all(Object.entries(LINK_TARGETS).filter(([, cfg]) => cfg.mode !== 'entryLog').map(async ([kind, cfg]) => {
       try {
-        const snap = await db.collection(cfg.collection).orderBy('order', 'asc').get();
-        const cards = snap.docs.map(d => ({ id: d.id, label: cfg.getCardLabel(d.data()) }));
+        // orderBy('order')로 가져오면 그 페이지에서 "order" 필드를 안 챙겨 넣고 저장한 문서는
+        // Firestore가 결과에서 통째로 빼버린다 - 방금 등록한 새 항목이 여기 목록에 안 보이는
+        // 원인이 될 수 있다. 그래서 정렬 없이 전부 가져온 뒤 여기서 직접 정렬한다
+        // (order가 있으면 그 순서대로, 없으면 맨 뒤로 보내고 이름순으로 정렬).
+        const snap = await db.collection(cfg.collection).get();
+        const cards = snap.docs
+          .map(d => ({ id: d.id, label: cfg.getCardLabel(d.data()), order: d.data().order }))
+          .sort((a, b) => {
+            if (a.order != null && b.order != null) return a.order - b.order;
+            if (a.order != null) return -1;
+            if (b.order != null) return 1;
+            return a.label.localeCompare(b.label);
+          });
         return [kind, cards];
       } catch (err) {
         console.warn(`${cfg.label} 카드 목록 불러오기 실패:`, err);
