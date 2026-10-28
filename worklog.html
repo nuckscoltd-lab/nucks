@@ -302,6 +302,37 @@ if ('serviceWorker' in navigator) {
   .office-modal .modal-btns .primary{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
   .office-modal .modal-btns .danger{ color:#a4453c; border-color:#a4453c; }
   .office-modal .modal-status{ font-size:12px; margin-top:10px; min-height:14px; }
+  /* 프로젝트별 인건비 집계 - 프로젝트 클릭 시 뜨는 참여인원별 상세 팝업 */
+  .cost-row-clickable{ cursor:pointer; }
+  .cost-row-clickable:hover{ background:#f8f7f3; }
+  .cost-modal-overlay{
+    display:none; position:fixed; inset:0; background:rgba(20,20,20,.45);
+    align-items:center; justify-content:center; z-index:200; padding:20px;
+  }
+  .cost-modal-overlay.open{ display:flex; }
+  .cost-modal{
+    background:#fff; border-radius:8px; padding:24px; width:100%; max-width:720px;
+    max-height:85vh; overflow-y:auto; border:1px solid var(--line);
+  }
+  .cost-modal h3{ margin:0 0 4px; font-size:17px; font-weight:600; }
+  .cost-modal .cost-modal-sub{ font-size:12px; color:var(--muted); margin-bottom:18px; line-height:1.6; }
+  .cost-modal .cost-emp-block{ margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid var(--line); }
+  .cost-modal .cost-emp-block:last-of-type{ border-bottom:none; margin-bottom:0; padding-bottom:0; }
+  .cost-modal .cost-emp-head{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:8px; font-size:14px; font-weight:600; }
+  .cost-modal .cost-emp-stats{ font-size:12px; color:var(--muted); font-weight:400; white-space:nowrap; }
+  .cost-modal .cost-entry-row{ display:flex; gap:10px; font-size:12.5px; padding:6px 0; border-top:1px solid #f0efe9; }
+  .cost-modal .cost-entry-row:first-of-type{ border-top:none; }
+  .cost-modal .cost-entry-date{ color:var(--muted); min-width:78px; flex-shrink:0; }
+  .cost-modal .cost-entry-hours{ min-width:52px; flex-shrink:0; }
+  .cost-modal .cost-entry-content{ flex:1; word-break:break-word; }
+  .cost-modal .cost-close-btn{
+    margin-top:18px; width:100%; padding:9px 0; border-radius:4px; font-size:13px;
+    cursor:pointer; border:1px solid var(--line); background:#fff; font-family:inherit;
+  }
+  @media (max-width: 640px) {
+    .cost-modal{ padding:18px; }
+    .cost-entry-row{ flex-wrap:wrap; }
+  }
   /* 태블릿/폴더블 대응 (Z Fold 펼침 화면 등, 641~1024px) */
   @media (min-width: 641px) and (max-width: 1024px) {
     main{ padding:32px 24px !important; max-width:100% !important; }
@@ -807,6 +838,11 @@ if ('serviceWorker' in navigator) {
       </table>
     </div>
     <div class="empty" id="costEmptyMsg" style="display:none;">집계할 데이터가 없습니다.</div>
+  </div>
+
+  <!-- 프로젝트별 인건비 집계 - 프로젝트 클릭 시 참여인원별 상세(투입시간·추정인건비·근무일지 간단내용) 팝업 -->
+  <div class="cost-modal-overlay" id="costModalOverlay">
+    <div class="cost-modal" id="costModalBody"></div>
   </div>
 </main>
 
@@ -4649,9 +4685,17 @@ if ('serviceWorker' in navigator) {
           projectCost[name].cost += cost;
           projectCost[name].people.add(empName);
 
-          if (!projectCost[name].byEmployee[empName]) projectCost[name].byEmployee[empName] = { hours: 0, cost: 0 };
+          if (!projectCost[name].byEmployee[empName]) projectCost[name].byEmployee[empName] = { hours: 0, cost: 0, entries: [] };
           projectCost[name].byEmployee[empName].hours += hours;
           projectCost[name].byEmployee[empName].cost += cost;
+          // 인건비 집계 팝업에서 "간단한 내용"으로 보여줄 근거 - 그 날 체크된 업무태그와 상세내용,
+          // 그 프로젝트에 쓴 투입시간을 날짜별로 남겨둔다 (한 사람이 같은 프로젝트를 여러 날 썼으면 여러 건).
+          projectCost[name].byEmployee[empName].entries.push({
+            date: row['날짜'] || '',
+            hours,
+            taskTags: Object.keys(p.tasks || {}).filter(k => p.tasks[k]),
+            detail: row['상세내용'] || ''
+          });
         });
       });
 
@@ -4708,13 +4752,13 @@ if ('serviceWorker' in navigator) {
     table.style.display = 'table';
 
     if (filterVal === '전체') {
-      // 프로젝트별 요약 보기
+      // 프로젝트별 요약 보기 - 행을 클릭하면 참여인원별 상세(투입시간·추정인건비·근무일지 간단내용) 팝업이 뜬다.
       thead.innerHTML = `<th>코드</th><th>프로젝트</th><th>총 투입시간</th><th>참여 인원</th><th>추정 인건비</th><th>평균 시급</th>`;
 
       tbody.innerHTML = entries.map(([name, data]) => {
         const avgHourly = data.hours > 0 ? data.cost / data.hours : 0;
         return `
-        <tr>
+        <tr class="cost-row-clickable" data-cost-detail="${esc(name)}" title="클릭하면 참여인원별 상세 내역을 볼 수 있어요">
           <td data-label="코드" style="color:var(--muted); font-size:12px;">${esc(data.code || '-')}</td>
           <td data-label="프로젝트">${esc(name)}</td>
           <td data-label="총 투입시간">${data.hours.toFixed(1)}시간</td>
@@ -4765,7 +4809,63 @@ if ('serviceWorker' in navigator) {
         </tr>
       `;
     }
+
+    // 클릭 이벤트는 tbody.innerHTML을 마지막으로 확정한 뒤(위 skippedNoWage 안내줄까지 다 붙인 뒤)에
+    // 한 번만 걸어야 한다 - 중간에 또 innerHTML을 덧붙이면 그 사이 DOM이 새로 만들어지면서
+    // 먼저 걸어둔 리스너가 날아가 버린다.
+    if (filterVal === '전체') {
+      tbody.querySelectorAll('[data-cost-detail]').forEach(tr => {
+        tr.addEventListener('click', () => openCostDetailModal(tr.dataset.costDetail, projectCost[tr.dataset.costDetail]));
+      });
+    }
   }
+
+  function openCostDetailModal(name, data){
+    if (!data) return;
+    const overlay = document.getElementById('costModalOverlay');
+    const body = document.getElementById('costModalBody');
+    const empEntries = Object.entries(data.byEmployee).sort((a, b) => b[1].cost - a[1].cost);
+
+    const empHtml = empEntries.map(([empName, empData]) => {
+      const rows = (empData.entries || []).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      const rowsHtml = rows.map(e => {
+        const contentText = [e.taskTags.join(', '), e.detail].filter(Boolean).join(' · ') || '-';
+        return `
+          <div class="cost-entry-row">
+            <div class="cost-entry-date">${esc(e.date || '-')}</div>
+            <div class="cost-entry-hours">${(e.hours || 0).toFixed(1)}시간</div>
+            <div class="cost-entry-content">${esc(contentText)}</div>
+          </div>
+        `;
+      }).join('');
+      return `
+        <div class="cost-emp-block">
+          <div class="cost-emp-head">
+            <span>${esc(empName)}</span>
+            <span class="cost-emp-stats">${empData.hours.toFixed(1)}시간 · ${Math.round(empData.cost).toLocaleString()}원</span>
+          </div>
+          ${rowsHtml || '<div style="font-size:12.5px; color:var(--muted);">기록된 근무일지가 없습니다.</div>'}
+        </div>
+      `;
+    }).join('');
+
+    body.innerHTML = `
+      <h3>${esc(name)}</h3>
+      <div class="cost-modal-sub">${data.code ? `[${esc(data.code)}] · ` : ''}총 투입시간 ${data.hours.toFixed(1)}시간 · 참여 ${data.people.size}명 · 추정 인건비 ${Math.round(data.cost).toLocaleString()}원</div>
+      ${empHtml}
+      <button type="button" class="cost-close-btn" id="costModalCloseBtn">닫기</button>
+    `;
+    document.getElementById('costModalCloseBtn').addEventListener('click', closeCostDetailModal);
+    overlay.classList.add('open');
+  }
+
+  function closeCostDetailModal(){
+    document.getElementById('costModalOverlay').classList.remove('open');
+  }
+
+  document.getElementById('costModalOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'costModalOverlay') closeCostDetailModal();
+  });
 
   document.getElementById('costProjectFilter').addEventListener('change', () => {
     renderCostBody(lastProjectCost, lastSkippedNoWage);
