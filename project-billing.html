@@ -257,7 +257,6 @@ if ('serviceWorker' in navigator) {
   const projectsRef = db.collection('billingProjects');
   let allProjects = [];
   let openIds = new Set();
-  let showDatesFor = new Set();
   let editingProjectId = null;
   let editingRound = null; // { pid, idx } 또는 null - 회차 인라인 수정 상태
   let activeStatuses = new Set(); // 비어있으면 "전체" - 상태 다중선택 필터
@@ -790,11 +789,11 @@ if ('serviceWorker' in navigator) {
   }
 
   function renderProjectBody(p){
-    const showDates = showDatesFor.has(p.id);
-    const dateHeaders = showDates ? '<th>청구일자</th><th>수금일자</th>' : '';
-    const dateAddFields = showDates ? `
+    const showDates = true; // 2026-10-29: 청구·수금일자 상시 노출로 변경(기존 선택적 숨기기 토글 제거)
+    const dateHeaders = '<th>청구일자</th><th>수금일자</th>';
+    const dateAddFields = `
         <div class="field"><label>청구일자</label><input type="date" id="nr-claimdate-${p.id}"></div>
-        <div class="field"><label>수금일자</label><input type="date" id="nr-collectdate-${p.id}"></div>` : '';
+        <div class="field"><label>수금일자</label><input type="date" id="nr-collectdate-${p.id}"></div>`;
 
     const roundAddFields = `
       <div class="inline-add">
@@ -811,10 +810,7 @@ if ('serviceWorker' in navigator) {
     `;
 
     const roundsHtml = (p.rounds || []).length ? `
-      <div class="subsection-title" style="display:flex; align-items:center; justify-content:space-between;">
-        <span>회차별 청구 / 수금</span>
-        <button class="row-btn" data-round-date-toggle="${p.id}" style="text-transform:none; letter-spacing:normal;">${showDates ? '날짜 숨기기' : '청구·수금일자 표시'}</button>
-      </div>
+      <div class="subsection-title">회차별 청구 / 수금</div>
       <table class="mini">
         <thead><tr><th>회차</th><th>청구금액</th><th>수금금액</th>${dateHeaders}<th>관리</th></tr></thead>
         <tbody id="rounds-${p.id}">
@@ -839,10 +835,7 @@ if ('serviceWorker' in navigator) {
       </table>
       ${roundAddFields}
     ` : `
-      <div class="subsection-title" style="display:flex; align-items:center; justify-content:space-between;">
-        <span>회차별 청구 / 수금 (없음)</span>
-        <button class="row-btn" data-round-date-toggle="${p.id}" style="text-transform:none; letter-spacing:normal;">${showDates ? '날짜 숨기기' : '청구·수금일자 표시'}</button>
-      </div>
+      <div class="subsection-title">회차별 청구 / 수금 (없음)</div>
       ${roundAddFields}
     `;
 
@@ -900,12 +893,6 @@ if ('serviceWorker' in navigator) {
   }
 
   function bindCardEvents(p){
-    const dateToggleBtn = document.querySelector(`[data-round-date-toggle="${p.id}"]`);
-    if (dateToggleBtn) dateToggleBtn.addEventListener('click', () => {
-      if (showDatesFor.has(p.id)) showDatesFor.delete(p.id); else showDatesFor.add(p.id);
-      renderList();
-    });
-
     const addRoundBtn = document.querySelector(`[data-round-add="${p.id}"]`);
     if (addRoundBtn) addRoundBtn.addEventListener('click', () => addRound(p.id));
 
