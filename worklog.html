@@ -210,6 +210,17 @@ if ('serviceWorker' in navigator) {
   .log-card-row{ margin-bottom:8px; }
   .log-card-row:last-child{ margin-bottom:0; }
   .log-card-row-label{ font-size:11px; color:var(--muted); margin-bottom:3px; }
+  .detail-notes{ display:flex; flex-wrap:wrap; gap:8px; }
+  .detail-note{
+    flex:1 1 180px; max-width:260px; padding:9px 11px; border-radius:3px 9px 9px 9px;
+    font-size:12.5px; line-height:1.55; white-space:pre-wrap; word-break:break-word;
+    box-shadow:0 1px 3px rgba(0,0,0,.12), 0 1px 1px rgba(0,0,0,.06); color:#3d3620;
+  }
+  .detail-note.c1{ background:#fff3b0; }
+  .detail-note.c2{ background:#ffd7c2; color:#5a3521; }
+  .detail-note.c3{ background:#c9f0d6; color:#245239; }
+  .detail-note.c4{ background:#cfe6ff; color:#1f3f61; }
+  .detail-note.c5{ background:#ead9fb; color:#432a63; }
   .log-card-actions{
     display:flex; justify-content:flex-end; gap:8px;
     margin-top:10px; padding-top:10px; border-top:1px solid var(--line);
@@ -3012,6 +3023,30 @@ if ('serviceWorker' in navigator) {
     return allLeaveRows.find(l => l.uid === row.uid && l['날짜'] === row['날짜'] && l['승인상태'] === '승인완료');
   }
 
+  // 상세내용을 "스티커 메모" 여러 장으로 쪼개서 보여주기 위한 분리 로직 (2026-10-30 추가).
+  // 1) 줄바꿈(\n)이 있으면 1차로 그 기준으로 나누고, 2) 각 줄을 다시 "/ "(슬래시+공백) 기준으로
+  //    한 번 더 나눈다. 날짜 표기(11/6)나 괄호 안의 "/"(절차진행/취등록세)처럼 슬래시 뒤에 공백이
+  //    없는 경우는 분리되지 않으므로, 기존에 "/ "로 항목을 구분해온 입력 습관과 잘 맞는다.
+  //    "=>"로 이어지는 하나의 흐름(같은 건의 진행 경과)은 한 장의 메모 안에 그대로 유지한다.
+  function splitDetailNotes(text) {
+    const raw = String(text || '');
+    const lines = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    let notes = [];
+    lines.forEach(line => {
+      const parts = line.split(/\/\s+/).map(s => s.trim()).filter(Boolean);
+      notes = notes.concat(parts.length ? parts : [line]);
+    });
+    return notes;
+  }
+
+  function renderDetailNotes(text) {
+    const notes = splitDetailNotes(text);
+    if (!notes.length) return '';
+    return `<div class="detail-notes">` +
+      notes.map((n, i) => `<div class="detail-note c${(i % 5) + 1}">${esc(n)}</div>`).join('') +
+      `</div>`;
+  }
+
   function rowHtml(row) {
     const isAdmin = currentRole === 'admin';
     const isOwner = row.uid === currentUser.uid;
@@ -3051,7 +3086,7 @@ if ('serviceWorker' in navigator) {
 
     const extraRows = [
       projectHtml ? `<div class="log-card-row"><div class="log-card-row-label">프로젝트별 내역</div>${projectHtml}</div>` : '',
-      row['상세내용'] ? `<div class="log-card-row"><div class="log-card-row-label">상세내용</div>${row['상세내용']}</div>` : '',
+      row['상세내용'] ? `<div class="log-card-row"><div class="log-card-row-label">상세내용</div>${renderDetailNotes(row['상세내용'])}</div>` : '',
       importantHtml ? `<div class="log-card-row"><div class="log-card-row-label">중요업무일정</div>${importantHtml}</div>` : '',
       attach ? `<div class="log-card-row"><div class="log-card-row-label">첨부</div>${attach}</div>` : '',
     ].filter(Boolean).join('');
