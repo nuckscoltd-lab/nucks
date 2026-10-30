@@ -96,6 +96,7 @@ section{margin-bottom:28px;}
 /* 필터 바 */
 .filter-bar{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:20px;}
 .filter-bar label{font-size:11.5px; color:var(--muted); font-weight:600;}
+.filter-group{display:inline-flex; align-items:center; gap:8px; flex-wrap:nowrap;}
 .seg{display:inline-flex; border:1px solid var(--line); border-radius:999px; padding:2px; background:var(--surface); gap:2px;}
 .seg-btn{font-family:inherit; font-size:11.5px; font-weight:700; padding:6px 14px; border-radius:999px; border:none; background:transparent; color:var(--ink-2); cursor:pointer;}
 .seg-btn:hover{background:var(--surface-2);}
@@ -221,6 +222,7 @@ section{margin-bottom:32px;}
 /* 필터 바 */
 .filter-bar{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:16px;}
 .filter-bar label{font-size:11.5px; color:var(--muted); font-weight:600;}
+.filter-group{display:inline-flex; align-items:center; gap:8px; flex-wrap:nowrap;}
 .seg{display:inline-flex; border:1px solid var(--line); border-radius:999px; padding:2px; background:var(--surface); gap:2px;}
 .seg-btn{font-family:inherit; font-size:11.5px; font-weight:700; padding:6px 14px; border-radius:999px; border:none; background:transparent; color:var(--ink-2); cursor:pointer;}
 .seg-btn:hover{background:var(--surface-2);}
@@ -1673,7 +1675,7 @@ tr.group-hd .group-hd-meta{float:right; color:var(--muted); font-size:11.5px;}
   }
 
   // ── 인라인 프로젝트 상세 패널 (project-detail-real.html의 목록/상세 로직을 그대로 이식) ──
-  var pdState = {view:'list', major:'all', q:'', group:'none', sub:'', i:null, cmp:'major', includeAdmin:true, includeAdminOptional:true, status4:'all'};
+  var pdState = {view:'list', major:'all', q:'', group:'none', sub:'', i:null, cmp:'major', includeAdmin:true, includeAdminOptional:true, status4:'all', year:'2026'};
   // 일반관리비 포함/미포함은 이 페이지 전체(위 요약 KPI·대분류·소분류 구성 모자이크·"프로젝트 상세" 목록/상세)가
   // 하나의 상태(pdState.includeAdmin)를 공유합니다 — 어느 토글을 눌러도 전부 같이 바뀝니다.
   function syncTopAdminToggle(){
@@ -1706,6 +1708,31 @@ tr.group-hd .group-hd-meta{float:right; color:var(--muted); font-size:11.5px;}
   function pdProjectYear(p){
     var y = p.code ? String(p.code).slice(0,4) : null;
     return (y && YEARS.indexOf(y) >= 0) ? y : null;
+  }
+  // ── "진행+완료" 연도 기준 보기 (2026-10-30 추가, 사용자 확인 완료) ──────────────────────
+  // "진행+완료" 조합 버튼을 연도 선택과 함께 쓰면, 저장된 status4 값을 그대로 보는 대신
+  // 날짜 기준으로 그 연도에 해당하는 건만 다시 걸러서 보여줍니다.
+  //   · "완료" 건은 실제 종료일(end)의 연도를 우선 쓰고, end가 없으면(완료 45건 중 42건이 이에
+  //     해당 — 실제 종료일이 기록되지 않은 과거 데이터) 프로젝트 코드 앞 4자리(수주/분류 연도)를
+  //     대신 씁니다. 코드 연도는 "완료된 해"가 아니라 "수주한 해"에 가까운 값이라 완전히 정확한
+  //     연도 귀속은 아니지만, 실제 종료일이 없는 과거 건까지 연도별로 보려면 현재로선 이 방법이
+  //     최선입니다 — 종료일이 실제로 입력되는 대로 더 정확해집니다.
+  //   · "진행" 건은 아직 끝나지 않았으므로 "오늘(PD_CURRENT_YEAR)" 기준 연도를 선택했을 때만
+  //     진행건으로 잡힙니다(과거 연도를 선택하면 진행 중 건은 보이지 않습니다 — 예: 2025-12
+  //     시작~2026-10 현재까지 진행 중인 건은 "2026년 진행"으로만 집계되고 "2025년 진행"으로는
+  //     집계되지 않습니다).
+  // 개별 "진행"·"완료"·"계약"·"실주" 버튼은 이 연도 로직과 무관하게 기존처럼 저장된 상태값
+  // 그대로 보여줍니다 — 연도 선택은 "진행+완료" 조합 보기에만 영향을 줍니다(사용자 확인).
+  var PD_CURRENT_YEAR = String(new Date().getFullYear());
+  function pdYearBucket(p, year){
+    if(p.status4 === '완료'){
+      var endYear = p.end ? String(p.end).slice(0,4) : (p.code ? String(p.code).slice(0,4) : null);
+      return (endYear && endYear === year) ? '완료' : null;
+    }
+    if(p.status4 === '진행'){
+      return (year === PD_CURRENT_YEAR) ? '진행' : null;
+    }
+    return null;
   }
   // includeOptional(기본 true)이 false면 영업권·중간배당금·퇴직급여(ADMIN_OPTIONAL_BY_YEAR)를 풀에서 뺍니다.
   function pdAdminPoolForYear(y, includeOptional){
@@ -1912,7 +1939,10 @@ tr.group-hd .group-hd-meta{float:right; color:var(--muted); font-size:11.5px;}
     var filtered = PD_PROJECTS.filter(function(p, idx){ p.__idx = idx; return true; });
     if(major !== 'all') filtered = filtered.filter(function(p){ return p.major === major; });
     if(sub) filtered = filtered.filter(function(p){ return p.subLabel === sub; });
-    if(status4 === '진행+완료') filtered = filtered.filter(function(p){ return p.status4 === '진행' || p.status4 === '완료'; });
+    if(status4 === '진행+완료'){
+      if(pdState.year === '전체') filtered = filtered.filter(function(p){ return p.status4 === '진행' || p.status4 === '완료'; });
+      else filtered = filtered.filter(function(p){ return pdYearBucket(p, pdState.year) !== null; });
+    }
     else if(status4 !== 'all') filtered = filtered.filter(function(p){ return p.status4 === status4; });
     if(q) filtered = filtered.filter(function(p){ return (p.name+p.client).toLowerCase().indexOf(q.toLowerCase()) >= 0; });
 
@@ -1989,33 +2019,47 @@ tr.group-hd .group-hd-meta{float:right; color:var(--muted); font-size:11.5px;}
         '</div>' +
       '</details>' +
       '<div class="filter-bar">' +
+        '<span class="filter-group">' +
         '<label>대분류</label>' +
         '<span class="seg">' +
           '<button class="seg-btn'+(major==='all'?' on':'')+'" data-pd-major="all">전체</button>' +
           '<button class="seg-btn'+(major==='공사'?' on':'')+'" data-pd-major="공사">공사</button>' +
           '<button class="seg-btn'+(major==='설계'?' on':'')+'" data-pd-major="설계">설계</button>' +
         '</span>' +
-        '<label style="margin-left:6px;">보기</label>' +
+        '</span>' +
+        '<span class="filter-group">' +
+        '<label>보기</label>' +
         '<span class="seg">' +
           '<button class="seg-btn'+(group==='none'?' on':'')+'" data-pd-group="none">계약금액순</button>' +
           '<button class="seg-btn'+(group==='client'?' on':'')+'" data-pd-group="client" title="손익기여(원가 확정분) 큰 발주처순으로 정렬">발주처별</button>' +
           '<button class="seg-btn'+(group==='sub'?' on':'')+'" data-pd-group="sub">소분류별</button>' +
         '</span>' +
-        '<label style="margin-left:6px;">일반관리비</label>' +
+        '</span>' +
+        '<span class="filter-group">' +
+        '<label>일반관리비</label>' +
         '<span class="seg">' +
           '<button class="seg-btn'+(pdState.includeAdmin?' on':'')+'" data-pd-admin="1">포함</button>' +
           '<button class="seg-btn'+(!pdState.includeAdmin?' on':'')+'" data-pd-admin="0">미포함</button>' +
         '</span>' +
-        '<label style="margin-left:6px;" title="영업권·중간배당금·퇴직급여 — 매년 반복되는 운영비로 보기 애매해 선택적으로 뺄 수 있게 했습니다">영업권·배당금·퇴직급여</label>' +
+        '</span>' +
+        '<span class="filter-group">' +
+        '<label title="영업권·중간배당금·퇴직급여 — 매년 반복되는 운영비로 보기 애매해 선택적으로 뺄 수 있게 했습니다">영업권·배당금·퇴직급여</label>' +
         '<span class="seg">' +
           '<button class="seg-btn'+(pdState.includeAdminOptional?' on':'')+'" data-pd-admin-optional="1">포함</button>' +
           '<button class="seg-btn'+(!pdState.includeAdminOptional?' on':'')+'" data-pd-admin-optional="0">미포함</button>' +
         '</span>' +
-        '<label style="margin-left:6px;">진행상태</label>' +
+        '</span>' +
+        '<span class="filter-group">' +
+        '<label>진행상태</label>' +
         '<span class="seg">' +
           '<button class="seg-btn'+(status4==='all'?' on':'')+'" data-pd-status4="all">전체</button>' +
           PD_STATUS4_OPTIONS.map(function(s){ return '<button class="seg-btn'+(status4===s?' on':'')+'" data-pd-status4="'+s+'">'+s+'</button>'; }).join('') +
           '<button class="seg-btn'+(status4==='진행+완료'?' on':'')+'" data-pd-status4="진행+완료" title="진행과 완료를 함께 봅니다">진행+완료</button>' +
+        '</span>' +
+        '<select class="filter-select" id="pdYearSel" title="\'진행+완료\'를 선택했을 때만 적용됩니다 — 그 해에 종료된 완료건 + 올해 기준 진행 중인 건만 보여줍니다. 다른 상태 버튼에는 영향이 없습니다.">' +
+          '<option value="전체"'+(pdState.year==='전체'?' selected':'')+'>연도 전체</option>' +
+          YEARS.map(function(y){ return '<option value="'+y+'"'+(pdState.year===y?' selected':'')+'>'+y+'년</option>'; }).join('') +
+        '</select>' +
         '</span>' +
         '<input class="search-input" id="pdSearchBox" placeholder="프로젝트명·발주처 검색" value="'+q.replace(/"/g,'&quot;')+'">' +
         (sub ? '<span class="sub-filter-chip">소분류 · '+sub+' <a href="#" class="sub-filter-clear pd-clear-sub" title="필터 해제">✕</a></span>' : '') +
@@ -2043,6 +2087,10 @@ tr.group-hd .group-hd-meta{float:right; color:var(--muted); font-size:11.5px;}
     document.querySelectorAll('[data-pd-status4]').forEach(function(btn){
       btn.addEventListener('click', function(){ pdState.status4 = btn.getAttribute('data-pd-status4'); pdRender(); });
     });
+    var pdYearSel = document.getElementById('pdYearSel');
+    if(pdYearSel){
+      pdYearSel.addEventListener('change', function(){ pdState.year = pdYearSel.value; pdRender(); });
+    }
     var sb = document.getElementById('pdSearchBox');
     if(sb){
       sb.addEventListener('input', function(){ pdState.q = sb.value; pdRender(); });
