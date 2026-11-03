@@ -280,6 +280,17 @@ if ('serviceWorker' in navigator) {
   // 관리자만 접근 가능
   requireRole(['admin']);
 
+  // 프로필 사진(photoURL)이 깨져 있거나(삭제된 Storage 파일, 만료/손상된 URL 등) 불러오지
+  // 못하면 브라우저가 기본 "깨진 이미지" 아이콘을 그대로 보여주는데, 그 자리에 다른 회원들과
+  // 동일한 이니셜 아바타(.avatar-fallback)로 자동 대체해 깨진 아이콘이 노출되지 않게 한다.
+  function handleAvatarImgError(imgEl) {
+    const initial = imgEl.dataset.initial || '?';
+    const span = document.createElement('span');
+    span.className = 'avatar-fallback';
+    span.textContent = initial;
+    imgEl.replaceWith(span);
+  }
+
   // 상단 "업무 도구" 드롭다운 (index.html과 동일한 동작 패턴)
   function toggleNavDropdown(e, el) {
     e.preventDefault();
@@ -357,7 +368,7 @@ if ('serviceWorker' in navigator) {
           <div class="name-cell">
             <label class="avatar-wrap" data-avatar-wrap="${uid}">
               ${data.photoURL
-                ? `<img src="${data.photoURL}" class="avatar-img">`
+                ? `<img src="${data.photoURL}" class="avatar-img" data-initial="${String((data.displayName || '?').charAt(0)).replace(/"/g, '&quot;')}" onerror="handleAvatarImgError(this)">`
                 : `<span class="avatar-fallback">${(data.displayName || '?').charAt(0)}</span>`}
               <span class="avatar-overlay">변경</span>
               <input type="file" accept="image/*" data-photo-uid="${uid}">
