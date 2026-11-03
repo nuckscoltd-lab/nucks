@@ -250,6 +250,7 @@
           <option value="stock">주식·배당관리</option>
           <option value="corporateCard">법인카드관리</option>
           <option value="invest">투자가수금현황</option>
+          <option value="generalExpense">분기별매입매출 - 일반지출(기타)</option>
         </select>
       </div>
       <div class="field wide" id="f-linkCard-field" style="display:none;">
@@ -273,6 +274,43 @@
       출금이 "확정" 상태로 저장되는 순간, 선택한 카드의 해당 월(거래일자 기준) 사용액에 이 금액이 자동으로 더해집니다. "예정" 상태로 저장하면 나중에 "확정 처리"를 누르는 시점에 반영돼요.
     </div>
     <div class="status-line" id="entryStatus"></div>
+  </div>
+
+  <!-- 일반지출(기타) 카드 관리 - 공과금/보험/세금/이자상환/법인카드처럼 고정 분류 탭이 따로 없는
+       일시적 지출 건을, 분기별 법인매입매출현황의 "일반지출(자동)" 집계에 반영하기 위한 카드.
+       다른 연동 대상은 각자의 관리 페이지(공과금 관리 등)에서 카드를 만들지만, 이 항목은 전용
+       관리 페이지가 없어서 여기 현금출납부에서 바로 만들고 지울 수 있게 해둔다. -->
+  <div class="panel">
+    <div class="panel-title">
+      일반지출(기타) 카드 관리
+      <button type="button" class="toggle-btn" id="toggleGeneralExpenseBtn">펼치기</button>
+    </div>
+    <div id="generalExpenseBody" style="display:none;">
+      <div class="import-help" style="margin-top:0;">
+        공과금·보험·세금·이자상환·법인카드처럼 고정된 분류 탭이 따로 없는 일시적 납부건(예: 일회성 협회비, 벌과금 등)을
+        분기별 법인매입매출현황의 "일반지출(자동)"에 반영하고 싶을 때 여기서 카드를 만드세요.
+        카드를 추가하면 위 "거래 입력"의 연동 대상에서 바로 선택할 수 있고, 출금 거래를 그 카드에 연동해서 확정 저장하면
+        분기별 법인매입매출현황 페이지의 일반지출 자동집계에 그대로 반영됩니다.
+      </div>
+      <div class="form-row" style="margin-top:14px;">
+        <div class="field wide">
+          <label for="ge-name">카드 이름</label>
+          <input type="text" id="ge-name" placeholder="예: 협회비, 과태료 등">
+        </div>
+        <button class="btn-primary" id="saveGeneralExpenseBtn">카드 추가</button>
+      </div>
+      <div class="status-line" id="generalExpenseStatus"></div>
+
+      <div class="table-wrap" style="margin-top:16px;">
+        <table id="generalExpenseTable" style="display:none;">
+          <thead>
+            <tr><th>카드 이름</th><th>누적 반영액</th><th>관리</th></tr>
+          </thead>
+          <tbody id="generalExpenseTableBody"></tbody>
+        </table>
+        <div class="empty-msg" id="generalExpenseEmptyMsg">등록된 카드가 없습니다.</div>
+      </div>
+    </div>
   </div>
 
   <!-- 수금예상현황 (계약금/중도금 등 예정 수금) -->
@@ -406,6 +444,7 @@
   const configRef = db.collection('cashbookConfig').doc('settings');
   const entriesRef = db.collection('cashbookEntries');
   const recurringRef = db.collection('cashbookRecurring');
+  const generalExpenseRef = db.collection('generalExpenseItems');
 
   let config = { startDate: '', startBalance: 0 };
   let allEntries = [];
@@ -469,6 +508,10 @@
     loan: { label: '이자상환관리', collection: 'loanRepaymentItems', directions: ['출금'], getCardLabel: c => (c.name || '(이름 없음)') + (c.account ? ' · ' + c.account : '') },
     stock: { label: '주식·배당관리', collection: 'stockItems', directions: ['출금', '입금'], getCardLabel: c => (c.name || '(이름 없음)') + (c.category ? ' (' + c.category + ')' : '') },
     corporateCard: { label: '법인카드관리', collection: 'corporateCards', directions: ['출금'], getCardLabel: c => (c.name || '(이름 없음)') + (c.number ? ' · ' + c.number : '') },
+    // 전용 관리 페이지가 없는 항목 - 카드 자체를 이 페이지(아래 "일반지출(기타) 카드 관리" 패널)에서
+    // 만들고 지운다. collection은 quarterly-overview.html의 SOURCE_COLLECTIONS에도 추가해뒀어야
+    // "일반지출(자동)" 집계에 잡힌다.
+    generalExpense: { label: '분기별매입매출 - 일반지출(기타)', collection: 'generalExpenseItems', directions: ['출금'], getCardLabel: c => (c.name || '(이름 없음)') },
     invest: {
       label: '투자가수금현황', collection: 'investmentEntries', mode: 'entryLog', directions: ['입금', '출금'],
       txTypesByDirection: { '입금': ['가수금', '가지급회수', '개인투자'], '출금': ['가수금상환', '가지급', '개인투자회수'] }
@@ -511,6 +554,104 @@
       console.warn('투자가수금현황 상대방 목록 불러오기 실패:', err);
     }
   }
+
+  // ---------- 일반지출(기타) 카드 관리 ----------
+  // 전용 관리 페이지가 없는 연동 대상이라, 카드(문서) 생성/삭제를 이 페이지에서 직접 처리한다.
+  // 목록은 loadLinkTargetCards()가 이미 LINK_TARGETS 기준으로 generalExpenseItems까지 읽어다 둔
+  // linkTargetCards.generalExpense를 그대로 재사용한다(중복으로 다시 불러오지 않음).
+  document.getElementById('toggleGeneralExpenseBtn').addEventListener('click', () => {
+    const body = document.getElementById('generalExpenseBody');
+    const show = body.style.display === 'none';
+    body.style.display = show ? 'block' : 'none';
+    document.getElementById('toggleGeneralExpenseBtn').textContent = show ? '접기' : '펼치기';
+  });
+
+  function renderGeneralExpenseCards(){
+    const table = document.getElementById('generalExpenseTable');
+    const tbody = document.getElementById('generalExpenseTableBody');
+    const emptyMsg = document.getElementById('generalExpenseEmptyMsg');
+    const cards = linkTargetCards.generalExpense || [];
+
+    if (cards.length === 0) {
+      table.style.display = 'none';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+    table.style.display = 'table';
+
+    tbody.innerHTML = cards.map(c => `
+      <tr>
+        <td>${esc(c.label)}</td>
+        <td class="amount out" data-ge-total="${esc(c.id)}">-</td>
+        <td><div class="row-actions"><button class="danger" data-ge-delete="${esc(c.id)}">삭제</button></div></td>
+      </tr>
+    `).join('');
+
+    // 카드별 누적 반영액은 목록 렌더링 뒤에 각자 조회해서 채운다 (목록 렌더링 자체가 전체 문서를
+    // 다시 읽을 필요는 없게 하기 위함 - linkTargetCards에는 월별 금액까지는 들어있지 않음).
+    cards.forEach(async (c) => {
+      try {
+        const doc = await generalExpenseRef.doc(c.id).get();
+        const total = Object.values((doc.data() || {}).monthly || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+        const cell = tbody.querySelector(`[data-ge-total="${CSS.escape(c.id)}"]`);
+        if (cell) cell.textContent = fmtWon(total);
+      } catch (err) { /* 조용히 무시 - 금액 표시만 실패, 삭제 시 다시 확인함 */ }
+    });
+
+    tbody.querySelectorAll('[data-ge-delete]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.geDelete;
+        const card = cards.find(c => c.id === id);
+        btn.disabled = true;
+        let total = 0;
+        try {
+          const doc = await generalExpenseRef.doc(id).get();
+          total = Object.values((doc.data() || {}).monthly || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+        } catch (err) { /* 무시 - 경고 문구에 금액만 못 보여줄 뿐 */ }
+        const amountNote = total ? `\n\n이 카드에는 지금까지 ${fmtWon(total)}이 쌓여 있어요. 삭제하면 분기별 법인매입매출현황의 "일반지출(자동)" 집계에서도 이 금액이 함께 빠집니다.` : '';
+        if (!confirm(`"${card ? card.label : ''}" 카드를 삭제할까요?${amountNote}\n\n이 카드로 연동된 현금출납부 거래가 있었다면, 그 거래의 연동 표시가 "카드를 찾을 수 없음" 상태가 됩니다. 필요하면 먼저 해당 거래들의 연동을 다른 카드로 옮기거나 해제해주세요.`)) {
+          btn.disabled = false;
+          return;
+        }
+        try {
+          await generalExpenseRef.doc(id).delete();
+          await loadLinkTargetCards();
+          renderGeneralExpenseCards();
+          if (document.getElementById('f-linkTarget').value === 'generalExpense') populateLinkCardOptions('generalExpense', document.getElementById('f-linkCard').value);
+        } catch (err) {
+          alert('삭제 실패: ' + err.message);
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  document.getElementById('saveGeneralExpenseBtn').addEventListener('click', async () => {
+    const input = document.getElementById('ge-name');
+    const statusEl = document.getElementById('generalExpenseStatus');
+    const btn = document.getElementById('saveGeneralExpenseBtn');
+    const name = input.value.trim();
+    if (!name) { statusEl.className = 'status-line err'; statusEl.textContent = '카드 이름을 입력해주세요.'; return; }
+
+    btn.disabled = true;
+    statusEl.className = 'status-line';
+    statusEl.textContent = '';
+    try {
+      await generalExpenseRef.add({ name, monthly: {}, order: Date.now() });
+      input.value = '';
+      statusEl.className = 'status-line ok';
+      statusEl.textContent = `"${name}" 카드를 추가했습니다. 위 "거래 입력"에서 연동 대상으로 바로 선택할 수 있어요.`;
+      await loadLinkTargetCards();
+      renderGeneralExpenseCards();
+      if (document.getElementById('f-linkTarget').value === 'generalExpense') populateLinkCardOptions('generalExpense', document.getElementById('f-linkCard').value);
+    } catch (err) {
+      statusEl.className = 'status-line err';
+      statusEl.textContent = '추가 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   function populateLinkCardOptions(kind, selectedId){
     const sel = document.getElementById('f-linkCard');
@@ -1542,6 +1683,7 @@
   (async function init(){
     await loadConfig();
     await loadLinkTargetCards();
+    renderGeneralExpenseCards();
     // loadRecurring()을 loadEntries()보다 먼저 불러야, loadEntries()가 renderAll()을 호출할 때
     // allRecurring이 이미 채워져 있어서 예상잔고 계산에 고정항목 예상치가 처음부터 반영된다.
     await loadRecurring();
