@@ -811,12 +811,15 @@ if ('serviceWorker' in navigator) {
         <option value="사직서">사직서</option>
       `;
     } else {
-      // 근로자는 본인 명의로 사직서만 작성 가능 (재직/경력증명서 등은 관리자가 발급)
+      // 근로자는 본인 명의로 재직증명서·사직서만 작성 가능 (경력/퇴직/해촉증명서는 관리자가 발급)
       const me = certEmployees.find(e => e.uid === currentCertUser.uid);
       empSelect.innerHTML = `<option value="${currentCertUser.uid}">${me?.displayName || currentCertUser.email}</option>`;
       empSelect.disabled = true;
-      typeSelect.innerHTML = `<option value="사직서">사직서</option>`;
-      typeSelect.disabled = true;
+      typeSelect.innerHTML = `
+        <option value="재직증명서">재직증명서</option>
+        <option value="사직서">사직서</option>
+      `;
+      typeSelect.disabled = false;
     }
 
     typeSelect.removeEventListener('change', renderCertFields);
