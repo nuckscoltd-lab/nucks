@@ -1406,7 +1406,7 @@ function renderFinItems(){const won=n=>WON(vx(n)),man=n=>MAN(vx(n));
     <td><input class="inp num" data-k="paid" value="${+x.paid?won(x.paid):''}" placeholder="0" autocomplete="off"></td>
     <td><select class="inp" data-k="payType" style="min-width:76px"><option value="">현금</option><option value="bill" ${x.payType==='bill'?'selected':''}>전자어음</option></select></td>
     <td><span class="st ${st.k}">${st.t}</span> ${exp>(+x.paid||0)&&st.k!=='ok'?`<button class="btn" data-full type="button" title="예정·청구금액 전액을 오늘 수금으로 기록" style="padding:2px 6px;font-size:11px">전액 수금</button>`:''}</td>
-    <td><button class="btn danger" data-del type="button" title="이 차수 지우기" style="padding:2px 8px">×</button></td></tr>${x.payType==='bill'?`<tr class="billrow" data-i="${i}"><td colspan="11"><div class="billbox"><span class="st bill">전자어음</span>
+    <td><button class="btn" data-split type="button" title="이 회차는 청구를 그대로 두고, 수금만 나눠서 새 줄로 추가합니다 (청구를 다시 한 게 아니라 같은 청구의 분할 입금일 때)" style="padding:2px 6px;font-size:11px">분할 수금</button> <button class="btn danger" data-del type="button" title="이 차수 지우기" style="padding:2px 8px">×</button></td></tr>${x.payType==='bill'?`<tr class="billrow" data-i="${i}"><td colspan="11"><div class="billbox"><span class="st bill">전자어음</span>
       <label>어음 받은 날 <b>${x.payDate?fmtS(x.payDate):'수금일 입력'}</b></label>
       <label>만기일 <input class="inp" data-k="billDue" value="${fmtS(x.billDue)}" placeholder="${x.payDate?fmtS(addD(x.payDate,BILLDAYS)):'수금일+60일'}" autocomplete="off"></label>
       <label>할인(조기 현금화)일 <input class="inp" data-k="discDate" value="${fmtS(x.discDate)}" placeholder="할인 안 함" autocomplete="off"></label>
@@ -1433,9 +1433,26 @@ $('#fItems').addEventListener('change',e=>{
     renderFinItems();if(tr2&&k2){const n=$('#fItems').querySelector(`tr[data-i="${tr2.dataset.i}"] [data-k="${k2}"]`);if(n){n.focus();try{n.setSelectionRange(pos,pos)}catch(_){}}}},0);
   const nx=$('#fItems').querySelector(`tr[data-i="${tr.dataset.i}"] [data-k="${k}"]`);if(nx&&document.activeElement===document.body){}
 });
+// 기성청구는 1번만 했는데 입금만 여러 날짜로 나눠 들어오는 경우를 위한 줄 추가.
+// 이름을 "N차 기성"처럼 매번 새 회차로 늘리면 실제로는 청구를 1번 한 건인데도 여러 번
+// 청구한 것처럼 기록이 남으므로, 같은 청구 줄의 이름 뒤에 "-수금n"만 붙여서 "이건 같은
+// 청구의 n번째 분할 입금"이라는 게 드러나게 한다(청구금액/청구일은 그대로 0으로 비워두고
+// 수금액/수금일만 입력하면 됨). 이미 "-수금n"이 붙어있는 줄에서 다시 눌러도 원래 회차
+// 이름을 기준으로 다음 번호를 이어서 붙인다.
+function splitCollectionBase(nm){return String(nm||'').replace(/-수금\d+$/,'')}
+function nextSplitName(base){
+  const esc=base.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const re=new RegExp('^'+esc+'-수금(\\d+)$');
+  let max=0;
+  FD.items.forEach(y=>{const m=String(y.name||'').match(re);if(m)max=Math.max(max,+m[1])});
+  return`${base}-수금${max+1}`}
 $('#fItems').addEventListener('click',e=>{
   const tr=e.target.closest('tr[data-i]');if(!tr)return;const i=+tr.dataset.i;
   if(e.target.closest('[data-full]')){const x=FD.items[i];const tot=fTotal()||0;if(!+x.claim){x.claim=itemExp(x,tot);if(!x.claimDate)x.claimDate=x.dueDate&&x.dueDate<=todayStr?x.dueDate:todayStr}x.paid=+x.claim;if(!x.payDate)x.payDate=todayStr;renderFinItems();finSum()}
+  if(e.target.closest('[data-split]')){const x=FD.items[i];const base=splitCollectionBase(x.name||itemName(x,i));
+    FD.items.splice(i+1,0,{name:nextSplitName(base),claim:0,claimDate:'',dueDate:'',payDate:'',paid:0,payType:x.payType||$('#fPay').value});
+    renderFinItems();finSum();
+    const payDateInput=$('#fItems').querySelector(`tr[data-i="${i+1}"] [data-k="payDate"]`);if(payDateInput)payDateInput.focus()}
   if(e.target.closest('[data-del]')){FD.items.splice(i,1);if(!FD.items.length)FD.items.push({claimDate:'',claim:0,payDate:'',paid:0});renderFinItems();finSum()}});
 $('#fPay').addEventListener('change',e=>{const v=e.target.value;let n=0;FD.items.forEach(x=>{if(!+x.paid&&x.payType!==v){x.payType=v;n++}});renderFinItems();finSum();if(n)toast(`아직 수금 전인 ${n}개 차수를 ${v==='bill'?'전자어음':'현금'}으로 바꿨습니다`)});
 $('#fAdd').onclick=()=>{FD.items.push({claimDate:'',claim:0,payDate:'',paid:0,payType:$('#fPay').value});renderFinItems();finSum();const ins=$('#fItems').querySelectorAll('tr:last-child input');ins[0]&&ins[0].focus()};
