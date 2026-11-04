@@ -192,6 +192,10 @@ body.dlgresize,body.dlgresize *{cursor:ew-resize!important;user-select:none}
 .fa tfoot td{font-weight:700;border-top:2px solid var(--line-strong);background:var(--head)}
 .fa .two{line-height:1.35;font-size:11px;text-align:right;font-family:var(--font-num)}
 .fa .two .c{color:var(--muted)}.fa .two .w{color:var(--warn)}.fa .two .l{color:var(--bad);font-weight:600}
+.fa .two>div:nth-child(3){border-top:1px solid var(--grid);margin-top:3px;padding-top:3px}
+.fa .two .tg{display:inline-block;margin-left:3px;padding:0 4px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.02em;vertical-align:middle}
+.fa .two .tgc{background:var(--head);color:var(--muted)}
+.fa .two .tgp{background:var(--accent-soft);color:var(--ink)}
 .fa td.nm{white-space:normal;min-width:220px;max-width:320px;line-height:1.3}
 .fa td.bad{color:var(--bad);font-weight:600}.fa td.due{color:var(--warn)}
 .dh .acts{display:flex;gap:6px;flex-wrap:wrap}
@@ -1361,6 +1365,25 @@ function finCalc(f){const it=(f&&f.items)||[],total=+(f&&f.total)||0;let claim=0
   it.forEach((x,i)=>{claim+=+x.claim||0;paid+=+x.paid||0;if(itemState(x,it).k==='late')late.push(i+1);if(x.payType==='bill'){if(itemState(x,it).k==='bill')bill+=+x.paid||0;if(x.discDate)fee+=+x.discFee||0}});
   return{total,claim,paid,unpaid:Math.max(0,claim-paid),bal:total-paid,unclaimed:total-claim,late,bill,fee}}
 const hasFin=r=>!!(r.fin&&(+r.fin.total||(r.fin.items||[]).length));
+// 계약·기성 관리 창을 처음 열어보는(= 상태를 한 번도 직접 고른 적 없는) 프로젝트는 항상 "그대로
+// 두기"로만 보여서, 관리자가 매번 일일이 계약/진행/완료를 골라줘야만 막대에 상태가 표시됐다.
+// 실주(수주 실패)는 날짜·금액만으로는 알 수 없는 영업 판단이라 자동 추론 대상에서 빼고, 계약/진행/
+// 완료 세 가지는 계약일·진행기간·기성 청구·수금 데이터로 충분히 짐작할 수 있으므로 기본값으로
+// 제안한다. 실제로 막대/색에 반영되는 건 사용자가 저장을 눌렀을 때뿐이라 기존 수동 선택 동작은
+// 그대로 유지된다.
+function suggestFinStatus(r){
+  if(!r)return'';
+  const b=r.bars&&r.bars[0],f=r.fin;
+  if(hasFin(r)){
+    const c=finCalc(f);
+    if(c.total>0&&c.unclaimed<=0&&c.unpaid<=0)return'완료';
+    if(c.claim>0)return'진행';
+    if(b&&!b.startOnly&&todayStr>=b.start)return'진행';
+    return'계약'}
+  if(b&&!b.startOnly){
+    if(b.end&&todayStr>b.end)return'완료';
+    if(todayStr>=b.start)return'진행'}
+  return'계약'}
 function remW(){return P.remarkMode==='note'?(P.remW||180):P.groups.some(g=>g.rows.some(hasFin))?172:REMW_}
 function finRemark(r){if(!hasFin(r))return'';const c=finCalc(r.fin);
   return`<div class="rcf" data-fin="${r.id}" title="눌러서 계약·기성 보기"><div>계약 ${man(c.total)}</div><div>잔금 ${man(c.bal)}</div>${c.unpaid?`<div class="${c.late.length?'late':'due'}">미수 ${man(c.unpaid)}${c.late.length?' 지연':''}</div>`:''}</div>`}
@@ -1389,7 +1412,13 @@ function openFin(rowId){
   $('#fCoList').innerHTML=P.groups.map(g=>`<option value="${esc(g.name)}">`).join('');
   $('#fCo').value=f?f.g.name:((curGroup()||{}).name||'');$('#fName').value=r?r.name:'';$('#fCode').value=r?(r.code||''):'';$('#fCode2').value=r?(r.projCode||''):'';
   $('#fCD').value=fmtS(fn.contractDate);$('#fEnd').value=fmtS(fn.endDate);$('#fPer').value=b?`${fmtS(b.start)} ~ ${fmtS(b.end)}`:'';
-  $('#fSt').value='';const vx=fn.vatEx!==false&&(fn.vatEx||!+fn.total);$('#fVat').value=vx?'ex':'in';$('#fTot').value=+fn.total?won(vx?(+fn.supply||Math.round(fn.total/1.1)):fn.total):'';setTimeout(vatInfo);
+  // 저장 시 상태를 고르면 r.bars[0].inner/color에 바로 반영되는데, 다시 열 때마다 이 선택창을
+  // 항상 비워뒀었다. 저장이 실제로는 됐는데도 "다시 들어오면 원복됐다"는 오해를 주기 쉬워서,
+  // 이제는 현재 막대에 저장돼 있는 상태(계약/실주/진행/완료)를 그대로 보여준다. 그 외의 글씨
+  // (예: 자동 생성된 "계약 2025.5.1" 같은 라벨)가 들어있거나 한 번도 고른 적 없는 경우는 매칭되는
+  // 옵션이 없어 늘 "그대로 두기"로만 보였는데, 이제는 계약일·진행기간·기성 데이터를 보고 적절한
+  // 상태(계약/진행/완료)를 추측해 미리 선택해둔다 (실주는 자동으로 판단할 수 없어 제외).
+  $('#fSt').value=(b&&['계약','실주','진행','완료'].includes(b.inner))?b.inner:suggestFinStatus(r);const vx=fn.vatEx!==false&&(fn.vatEx||!+fn.total);$('#fVat').value=vx?'ex':'in';$('#fTot').value=+fn.total?won(vx?(+fn.supply||Math.round(fn.total/1.1)):fn.total):'';setTimeout(vatInfo);
   if(!FD.items.length)FD.items.push({claimDate:'',claim:0,payDate:'',paid:0});
   vatNote();$('#fDelFin').hidden=!(r&&r.fin);renderFinItems();finSum();$('#dFin').showModal();
   setTimeout(()=>{(r?$('#fTot'):$('#fCo')).focus()},30)}
@@ -1533,7 +1562,7 @@ function renderFinAll(){const won=n=>WON(vx(n)),man=n=>MAN(vx(n));
     h+=`<td class="n">${won(c.total)}</td><td class="n">${won(c.claim)}</td><td class="n">${won(c.paid)}</td><td class="n ${c.unpaid?(c.late.length?'bad':'due'):''}">${won(c.unpaid)}</td><td class="n">${won(c.bal)}</td><td class="n">${won(c.unclaimed)}</td>`;
     for(let i=0;i<maxN;i++){const x=(f.items||[])[i];if(!x){h+='<td></td>';continue}const st=itemState(x,f.items);
       const dd=d=>d?`<span class="dt">${fmtS(d).slice(2)}</span>`:`<span class="dt no">일자 —</span>`;
-      h+=`<td class="two" data-it="${i}" title="눌러서 청구일·수금일 입력"><div class="c">${esc(itemName(x,i))}${+x.pct?' '+x.pct+'%':''}</div><div>${dd(x.claimDate)}${+x.claim?won(x.claim):(itemPlan(x,c.total)?'<span class="c">예정 </span>'+won(itemPlan(x,c.total)):'-')}<span class="c"> 청</span></div><div class="${st.k==='late'?'l':st.k==='wait'?'w':''}">${dd(x.payDate||(!+x.paid&&x.dueDate?'':''))}${+x.paid?won(x.paid):'-'}<span class="c"> 수</span></div>${!+x.paid&&x.dueDate?`<div class="w">수금예정 ${fmtS(x.dueDate).slice(2)}</div>`:''}${x.payType==='bill'&&+x.paid?`<div class="bl">${x.discDate?`어음 할인 ${fmtS(x.discDate).slice(2)}${+x.discFee?` · 수수료 ${WON(x.discFee)}`:''}`:`어음 만기 ${fmtS(billDue(x)).slice(2)||'—'}`}</div>`:''}</td>`}
+      h+=`<td class="two" data-it="${i}" title="눌러서 청구일·수금일 입력"><div class="c">${esc(itemName(x,i))}${+x.pct?' '+x.pct+'%':''}</div><div>${dd(x.claimDate)}${+x.claim?won(x.claim):(itemPlan(x,c.total)?'<span class="c">예정 </span>'+won(itemPlan(x,c.total)):'-')}<span class="tg tgc">청</span></div><div class="${st.k==='late'?'l':st.k==='wait'?'w':''}">${dd(x.payDate||(!+x.paid&&x.dueDate?'':''))}${+x.paid?won(x.paid):'-'}<span class="tg tgp">수</span></div>${!+x.paid&&x.dueDate?`<div class="w">수금예정 ${fmtS(x.dueDate).slice(2)}</div>`:''}${x.payType==='bill'&&+x.paid?`<div class="bl">${x.discDate?`어음 할인 ${fmtS(x.discDate).slice(2)}${+x.discFee?` · 수수료 ${WON(x.discFee)}`:''}`:`어음 만기 ${fmtS(billDue(x)).slice(2)||'—'}`}</div>`:''}</td>`}
     const ls=!c.late.length&&!c.unpaid&&c.bill?`<span class="st bill">어음 보유</span>`:c.late.length?`<span class="st late">지연 ${c.late.map(n=>n+'차').join('·')}</span>`:c.unpaid?`<span class="st wait">수금 대기</span>`:c.unclaimed>0?`<span class="st plan">기성 청구 ${won(c.unclaimed)}</span>`:`<span class="st ok">정산 완료</span>`;
     h+=`<td>${ls}</td></tr>`}
   if(!list.length)h+=`<tr><td colspan="${11+maxN}" style="padding:24px;text-align:center;color:var(--muted)">선택한 조건에 맞는 프로젝트가 없습니다</td></tr>`;
