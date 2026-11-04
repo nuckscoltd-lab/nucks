@@ -1338,15 +1338,19 @@ const billDue=x=>x.billDue||(x.payDate?addD(x.payDate,BILLDAYS):'');
 const cashDate=x=>x.payType==='bill'?(x.discDate||billDue(x)):x.payDate;
 function billState(x){if(x.discDate)return{k:'ok',t:'어음 할인 현금화'};const d=billDue(x);
   if(d&&d>todayStr)return{k:'bill',t:`어음 · 만기 ${fmtS(d).slice(2)}`};return{k:'ok',t:'어음 현금화 완료'}}
-function itemGroupAgg(items,x){
-  // 구분(이름)이 같은 줄들을 한 회차로 묶어, 분할 입력된 수금을 합산 비교하기 위한 집계.
-  // 이름이 비어있거나 같은 이름이 1줄뿐이면 묶을 의미가 없으므로 null(=개별 판단 유지) 반환.
-  const nm=String(x.name||'').trim();if(!nm)return null;
-  let c=0,p=0,n=0;(items||[]).forEach(y=>{if(String(y.name||'').trim()===nm){c+=+y.claim||0;p+=+y.paid||0;n++}});
-  return n>1?{c,p}:null}
+function itemGroupAgg(items){
+  // 한 프로젝트(기성 리스트) 전체를 하나의 묶음으로 보고 청구/수금 합계를 낸다.
+  // 처음에는 "구분(이름)이 같은 줄끼리만" 묶었는데, 실제로는 청구는 한 줄에 몰아서(예: 1차
+  // 기성 한 줄에 전체 계약금액) 적고 수금은 "1차/2차/.../7차 기성"처럼 회차마다 다른 이름을
+  // 붙인 여러 줄에 나눠 기록하는 경우가 흔해서, 이름이 전부 달라 전혀 묶이지 않는 문제가
+  // 있었다(그 회차 줄만 떼어보면 계속 "지연"으로 남음). 한 프로젝트의 items 배열은 이미 그
+  // 프로젝트 하나로 범위가 한정돼 있으므로, 이름 일치 여부와 상관없이 전체를 더해서
+  // "이 프로젝트 전체로 보면 미수가 없는지"를 기준으로 판단한다.
+  let c=0,p=0;(items||[]).forEach(y=>{c+=+y.claim||0;p+=+y.paid||0});
+  return{c,p}}
 function itemState(x,items){const c=+x.claim||0,pdv=+x.paid||0;
   if(x.payType==='bill'&&pdv&&(pdv>=c||!c))return billState(x);
-  if(c>0){const g=itemGroupAgg(items,x);if(g&&g.c>0&&g.p>=g.c)return{k:'ok',t:'수금 완료'}}
+  if(c>0){const g=itemGroupAgg(items);if(g.c>0&&g.p>=g.c)return{k:'ok',t:'수금 완료'}}
   if(!c&&!pdv){if(x.dueDate&&x.dueDate<todayStr)return{k:'due',t:'청구 필요'};return{k:'plan',t:x.dueDate?'예정 '+fmtS(x.dueDate).slice(5):'예정'}}
   if(pdv>=c&&c>0)return{k:'ok',t:'수금 완료'};
   if(!c&&pdv)return{k:'ok',t:'수금'};
