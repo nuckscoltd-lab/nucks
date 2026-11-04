@@ -401,8 +401,10 @@ if ('serviceWorker' in navigator) {
     currentCertUser = user;
     document.getElementById('uploadPanel').classList.toggle('show', isAdmin);
     loadFiles();
-    await initCertSection();
+    // 증명서 발급이력(allCertDocs)이 있어야 "최근 발급이력 기준 자동 채우기"가 첫 렌더부터
+    // 바로 동작하므로, 입력 UI를 그리는 initCertSection()보다 먼저 이력을 불러온다.
     await loadCertHistory();
+    await initCertSection();
 
     // ESG 자가진단(임원/직원) 모두에 로그인한 사람 이름을 실어 보내서, 각 페이지가 이름
     // 선택/입력 없이 바로 본인 설문(또는 이미 참여함 안내)으로 진입시키게 한다.
@@ -776,8 +778,23 @@ if ('serviceWorker' in navigator) {
   };
 
   async function initCertSection() {
-    const snap = await db.collection('users').get();
-    certEmployees = snap.docs.map(d => ({ uid: d.id, ...d.data() })).filter(e => e.role !== 'guest');
+    // users 컬렉션 전체 목록 조회(firestore.rules상 admin만 허용)는 관리자일 때만 수행한다.
+    // 근로자가 이 전체 조회를 시도하면 보안규칙에 막혀 permission-denied로 통째로 실패했었고,
+    // 그 바람에 아래 "사원 선택" <select>에 옵션을 채우는 코드까지 못 가서 드롭다운이 완전히
+    // 빈 채로 남아있었다 (클릭해도 아무 목록도 안 뜨는 증상의 원인). 근로자는 어차피 본인만
+    // 선택할 수 있으므로, 본인 문서 하나만 읽어오면 충분하고 규칙과도 충돌하지 않는다.
+    if (currentCertRole === 'admin') {
+      const snap = await db.collection('users').get();
+      certEmployees = snap.docs.map(d => ({ uid: d.id, ...d.data() })).filter(e => e.role !== 'guest');
+    } else {
+      try {
+        const myDoc = await db.collection('users').doc(currentCertUser.uid).get();
+        certEmployees = myDoc.exists ? [{ uid: myDoc.id, ...myDoc.data() }] : [];
+      } catch (err) {
+        console.error('본인 사원 정보 조회 실패:', err);
+        certEmployees = [];
+      }
+    }
 
     const typeSelect = document.getElementById('cert-type');
     const empSelect = document.getElementById('cert-employee');
@@ -809,6 +826,17 @@ if ('serviceWorker' in navigator) {
     renderCertFields();
   }
 
+  // 선택된 사원이 가장 최근에 발급받은 문서(종류 무관 - 주민등록번호/주소 등 인적사항 필드는
+  // 모든 문서 종류에 공통으로 존재)를 찾아, 거기 저장된 값을 돌려준다. 매번 같은 정보를 다시
+  // 입력하는 번거로움을 줄이기 위한 자동 불러오기용.
+  function latestCertFieldsFor(uid) {
+    if (!uid) return null;
+    const docs = (allCertDocs || []).filter(d => d.uid === uid);
+    if (!docs.length) return null;
+    docs.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+    return docs[0].fields || null;
+  }
+
   function renderCertFields() {
     const type = document.getElementById('cert-type').value;
     const defs = CERT_FIELD_DEFS[type] || [];
@@ -829,6 +857,16 @@ if ('serviceWorker' in navigator) {
     const emp = certEmployees.find(e => e.uid === uid);
     const hireInput = document.getElementById('cf-hireDate');
     if (hireInput && emp?.hireDate) hireInput.value = emp.hireDate;
+
+    // 주민등록번호/주소는 가장 최근 발급이력 기준으로 자동 채워줌 (매번 다시 입력하는 번거로움 완화).
+    // 자동으로 채워질 뿐 수정 가능한 일반 입력칸이므로, 필요하면 그대로 고쳐서 발급하면 됨.
+    const latestFields = latestCertFieldsFor(uid);
+    if (latestFields) {
+      const rrnInput = document.getElementById('cf-rrn');
+      if (rrnInput && latestFields.rrn) rrnInput.value = latestFields.rrn;
+      const addressInput = document.getElementById('cf-address');
+      if (addressInput && latestFields.address) addressInput.value = latestFields.address;
+    }
   }
 
   function formatDateKR(str) {
