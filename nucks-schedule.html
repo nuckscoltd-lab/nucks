@@ -33,6 +33,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .grp{display:flex;gap:4px;align-items:center;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:4px}
 .btn{border:0;background:transparent;padding:6px 10px;border-radius:6px;cursor:pointer;white-space:nowrap}
 .btn:hover{background:var(--head)}
+a.btn{color:inherit;text-decoration:none;display:inline-block}
 .btn:focus-visible,.inp:focus-visible{outline:2px solid var(--sel);outline-offset:1px}
 .btn.pri{background:var(--accent);color:#fff}
 .btn.pri:hover{filter:brightness(1.05)}
@@ -345,6 +346,9 @@ textarea.inp{width:100%;resize:vertical}
 
 <div class="wrap">
   <div class="bar">
+    <div class="grp">
+      <a class="btn" href="index.html" title="홈 화면으로 이동" style="border:1px solid var(--line)">홈</a>
+    </div>
     <div class="grp">
       <select id="projSel" class="inp" aria-label="공정표 선택"></select>
       <button class="btn" id="bNew">새 공정표</button>
