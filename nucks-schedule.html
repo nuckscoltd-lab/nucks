@@ -189,6 +189,7 @@ body.dlgresize,body.dlgresize *{cursor:ew-resize!important;user-select:none}
 .inp.num,.ft td.n{text-align:right;font-family:var(--font-num);font-variant-numeric:tabular-nums}
 .st{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;white-space:nowrap}
 .st.ok{background:var(--okbg);color:var(--ok)}.st.wait{background:var(--warnbg);color:var(--warn)}.st.late{background:var(--badbg);color:var(--bad);font-weight:600}.st.plan{background:var(--head);color:var(--muted)}
+.st.lost{background:var(--badbg);color:var(--bad)}
 .fsum{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
 .fsum > div{background:var(--head);border-radius:6px;padding:8px 10px;font-size:11px;color:var(--muted)}
 .fsum b{display:block;font-family:var(--font-num);font-size:15px;color:var(--ink);font-weight:600;margin-top:2px}
@@ -1566,8 +1567,13 @@ $('#fSave').onclick=()=>{
 
 /* 전체 정산표 */
 function finRows(){const out=[];for(const g of P.groups)for(const r of g.rows)out.push({g,r});return out}
-const FST=[['done','정산 완료','var(--ok)'],['bill','어음 보유','#6a4fb3'],['claim','기성 청구','var(--muted)'],['wait','수금 대기','var(--warn)'],['late','지연','var(--bad)'],['contract','계약 대기','var(--line-strong)']];
-function finStatus(r){if(!hasFin(r))return'contract';const c=finCalc(r.fin);if(c.late.length)return'late';if(c.unpaid>0)return'wait';if(c.bill>0)return'bill';if(c.unclaimed>0)return'claim';return'done'}
+const FST=[['done','정산 완료','var(--ok)'],['bill','어음 보유','#6a4fb3'],['claim','기성 청구','var(--muted)'],['wait','수금 대기','var(--warn)'],['late','지연','var(--bad)'],['contract','계약 대기','var(--line-strong)'],['lost','실주','#c9372c']];
+// 실주(수주 실패) 건은 계약이 아예 안 됐으니 기성 데이터가 없는 게 당연한데, 지금까지는 그래서
+// "계약 대기"와 똑같이 묶여 보였다. 계약 대기(=곧 계약될 수도 있는 건)와 실주(=다시는 안 될 건)는
+// 성격이 전혀 다르고, 실주는 계약일이 지날수록 계속 쌓이기만 해서 "계약 대기" 건수 안에 섞여
+// 매번 눈에 밟히는 문제가 있었다. 막대 상태(상단 막대 글씨)가 "실주"로 지정된 건 기성 데이터
+// 유무와 상관없이 항상 별도의 'lost' 상태로 분류해서, 상태 필터에서 따로 켜고 끌 수 있게 한다.
+function finStatus(r){const b=r.bars&&r.bars[0];if(b&&b.inner==='실주')return'lost';if(!hasFin(r))return'contract';const c=finCalc(r.fin);if(c.late.length)return'late';if(c.unpaid>0)return'wait';if(c.bill>0)return'bill';if(c.unclaimed>0)return'claim';return'done'}
 function projRange(r){const f=r.fin||{},ds=[],de=[];
   if(f.contractDate)ds.push(f.contractDate);
   for(const b of r.bars){ds.push(b.start);if(!b.startOnly)de.push(b.end)}
@@ -1576,7 +1582,7 @@ function projRange(r){const f=r.fin||{},ds=[],de=[];
   if(!ds.length&&!f.endDate)return null;
   const start=ds.length?ds.sort()[0]:f.endDate;
   let end=f.endDate||'';
-  if(!end){const st=hasFin(r)?finStatus(r):'contract';
+  if(!end){const st=finStatus(r);
     const last=de.length?de.sort().pop():start;
     end=(st==='wait'||st==='late'||st==='claim')&&todayStr>last?todayStr:last}
   if(end<start)end=start;return{start,end,known:!!f.endDate}}
@@ -1607,12 +1613,12 @@ function renderFinAll(){const won=n=>WON(vx(n)),man=n=>MAN(vx(n));
     const f=r.fin||{},c=finCalc(f),b=r.bars[0];
     if(hasFin(r)){T.total+=c.total;T.claim+=c.claim;T.paid+=c.paid;T.unpaid+=c.unpaid;T.bal+=c.bal;T.unclaimed+=c.unclaimed;T.late+=c.late.length;T.bill+=c.bill;T.fee+=c.fee}
     h+=`<tr class="pr" data-r="${r.id}"><td class="nm">${esc(r.name)}${r.hidden?' <span class="st plan">숨김</span>':''}</td><td>${fmtS(f.contractDate)}</td><td>${(()=>{const R=projRange(r);if(!R)return'';return`${fmtS(R.start)} ~ ${R.known?`<b>${fmtS(R.end)}</b>`:`<span style="color:var(--muted)" title="작업완료일 미입력 · 막대·기성 날짜로 추정">${fmtS(R.end)}?</span>`}`})()}</td>`;
-    if(!hasFin(r)){h+=`<td class="n" colspan="${6+maxN}" style="text-align:left;color:var(--muted)">계약금액 미입력 (눌러서 입력)</td><td><span class="st plan">계약 대기</span></td></tr>`;continue}
+    if(!hasFin(r)){const lost=finStatus(r)==='lost';h+=`<td class="n" colspan="${6+maxN}" style="text-align:left;color:var(--muted)">${lost?'실주 (계약 불발)':'계약금액 미입력 (눌러서 입력)'}</td><td><span class="st ${lost?'lost':'plan'}">${lost?'실주':'계약 대기'}</span></td></tr>`;continue}
     h+=`<td class="n">${won(c.total)}</td><td class="n">${won(c.claim)}</td><td class="n">${won(c.paid)}</td><td class="n ${c.unpaid?(c.late.length?'bad':'due'):''}">${won(c.unpaid)}</td><td class="n">${won(c.bal)}</td><td class="n">${won(c.unclaimed)}</td>`;
     for(let i=0;i<maxN;i++){const x=(f.items||[])[i];if(!x){h+='<td></td>';continue}const st=itemState(x,f.items);
       const dd=d=>d?`<span class="dt">${fmtS(d).slice(2)}</span>`:`<span class="dt no">일자 —</span>`;
       h+=`<td class="two" data-it="${i}" title="눌러서 청구일·수금일 입력"><div class="c">${esc(itemName(x,i))}${+x.pct?' '+x.pct+'%':''}</div><div>${dd(x.claimDate)}${+x.claim?won(x.claim):(itemPlan(x,c.total)?'<span class="c">예정 </span>'+won(itemPlan(x,c.total)):'-')}<span class="tg tgc">청</span></div><div class="${st.k==='late'?'l':st.k==='wait'?'w':''}">${dd(x.payDate||(!+x.paid&&x.dueDate?'':''))}${+x.paid?won(x.paid):'-'}<span class="tg tgp">수</span></div>${!+x.paid&&x.dueDate?`<div class="w">수금예정 ${fmtS(x.dueDate).slice(2)}</div>`:''}${x.payType==='bill'&&+x.paid?`<div class="bl">${x.discDate?`어음 할인 ${fmtS(x.discDate).slice(2)}${+x.discFee?` · 수수료 ${WON(x.discFee)}`:''}`:`어음 만기 ${fmtS(billDue(x)).slice(2)||'—'}`}</div>`:''}</td>`}
-    const ls=!c.late.length&&!c.unpaid&&c.bill?`<span class="st bill">어음 보유</span>`:c.late.length?`<span class="st late">지연 ${c.late.map(n=>n+'차').join('·')}</span>`:c.unpaid?`<span class="st wait">수금 대기</span>`:c.unclaimed>0?`<span class="st plan">기성 청구 ${won(c.unclaimed)}</span>`:`<span class="st ok">정산 완료</span>`;
+    const ls=finStatus(r)==='lost'?`<span class="st lost">실주</span>`:!c.late.length&&!c.unpaid&&c.bill?`<span class="st bill">어음 보유</span>`:c.late.length?`<span class="st late">지연 ${c.late.map(n=>n+'차').join('·')}</span>`:c.unpaid?`<span class="st wait">수금 대기</span>`:c.unclaimed>0?`<span class="st plan">기성 청구 ${won(c.unclaimed)}</span>`:`<span class="st ok">정산 완료</span>`;
     h+=`<td>${ls}</td></tr>`}
   if(!list.length)h+=`<tr><td colspan="${11+maxN}" style="padding:24px;text-align:center;color:var(--muted)">선택한 조건에 맞는 프로젝트가 없습니다</td></tr>`;
   h+=`</tbody><tfoot><tr><td colspan="3">합계 (${list.length}건)</td><td class="n">${won(T.total)}</td><td class="n">${won(T.claim)}</td><td class="n">${won(T.paid)}</td><td class="n ${T.unpaid?'bad':''}">${won(T.unpaid)}</td><td class="n">${won(T.bal)}</td><td class="n">${won(T.unclaimed)}</td><td colspan="${maxN+1}"></td></tr></tfoot>`;
