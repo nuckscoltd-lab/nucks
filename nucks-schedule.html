@@ -1659,11 +1659,18 @@ function inYear(r,y){const R=projRange(r);if(!R)return false;
 function finYears(){const ys=new Set([todayStr.slice(0,4)]);for(const {r} of finRows()){for(const b of r.bars){for(let y=+b.start.slice(0,4);y<=+b.end.slice(0,4)&&y<2101;y++)ys.add(String(y))}}return[...ys].sort().reverse()}
 function renderFinFilter(all){
   const F=P.finFilter||(P.finFilter={st:[],year:todayStr.slice(0,4)});
-  const scoped=all.filter(x=>!F.year||inYear(x.r,F.year));
+  const scopedAll=all.filter(x=>!F.year||inYear(x.r,F.year));
+  // 실주(수주 실패) 건은 월별 자금계획 팝업의 "실주 제외됨" 버튼과 똑같은 동작으로, 기본적으로는
+  // 목록에서 제외하고 버튼을 눌렀을 때만 포함해서 보여준다(2026-11-05). 예전엔 "상태" 칩 중
+  // 하나였는데, 칩은 "선택한 것만 보기" 방식이라 기본값(미선택=전체 보기)에서 실주도 같이
+  // 섞여 보이는 문제가 있어 전용 토글 버튼으로 뺐다.
+  const lostN=scopedAll.filter(x=>finStatus(x.r)==='lost').length;
+  const scoped=P.finShowLost?scopedAll:scopedAll.filter(x=>finStatus(x.r)!=='lost');
   const cnt={};for(const x of scoped){const k=finStatus(x.r);cnt[k]=(cnt[k]||0)+1}
   $('#faFilt').innerHTML=`<span class="lbl">금액</span><select class="inp vatv" style="width:auto"><option value="ex" ${P.vatView!=='in'?'selected':''}>부가세 별도</option><option value="in" ${P.vatView==='in'?'selected':''}>부가세 포함</option></select><span class="lbl">범위</span><select id="faYear" class="inp" style="width:auto">
       <option value="">전체 기간 (${all.length})</option>${finYears().map(y=>`<option value="${y}" ${F.year===y?'selected':''}>${y===todayStr.slice(0,4)?`${y}년 관리 대상 · 진행 중 + 올해 완료`:`${y}년 프로젝트 (당해년 진행 프로젝트만)`}</option>`).join('')}</select>
-    <span class="lbl">상태 (여러 개 선택)</span><div class="chips">${FST.map(([k,t,c])=>`<button type="button" class="chip" data-st="${k}" aria-pressed="${F.st.includes(k)}"><span class="dot" style="background:${c}"></span>${t}<span class="cnt">${cnt[k]||0}</span></button>`).join('')}
+    <button class="btn chip" id="faLost" type="button" ${lostN?'':'hidden'} aria-pressed="${P.finShowLost?'true':'false'}" title="실주(수주 실패) 건은 기본적으로 목록에서 제외됩니다. 눌러서 다시 포함해서 볼 수 있습니다.">${P.finShowLost?`실주 포함 중 (${lostN})`:`실주 제외됨 (${lostN})`}</button>
+    <span class="lbl">상태 (여러 개 선택)</span><div class="chips">${FST.filter(([k])=>k!=='lost').map(([k,t,c])=>`<button type="button" class="chip" data-st="${k}" aria-pressed="${F.st.includes(k)}"><span class="dot" style="background:${c}"></span>${t}<span class="cnt">${cnt[k]||0}</span></button>`).join('')}
       ${F.st.length?`<button type="button" class="chip clear" data-st="">선택 해제</button>`:''}</div>`;
   if(!F.year)$('#faYear').value='';
   return scoped.filter(x=>!F.st.length||F.st.includes(finStatus(x.r)))}
@@ -1694,7 +1701,9 @@ function renderFinAll(){const won=n=>WON(vx(n)),man=n=>MAN(vx(n));
   VIEW.finCopy={list,maxN}}
 $('#bFin').onclick=()=>{renderFinAll();$('#dFinAll').showModal()};
 document.addEventListener('change',e=>{if(!e.target.classList||!e.target.classList.contains('vatv'))return;P.vatView=e.target.value;save();if($('#dFinAll').open)renderFinAll();if($('#dCash').open)renderCash();toast(`금액을 ${VATL()}로 표시합니다`)});
-$('#faFilt').addEventListener('click',e=>{const b=e.target.closest('[data-st]');if(!b)return;const F=P.finFilter;
+$('#faFilt').addEventListener('click',e=>{
+  if(e.target.closest('#faLost')){P.finShowLost=!P.finShowLost;save();renderFinAll();return}
+  const b=e.target.closest('[data-st]');if(!b)return;const F=P.finFilter;
   if(!b.dataset.st)F.st=[];else{const k=b.dataset.st;F.st=F.st.includes(k)?F.st.filter(x=>x!==k):[...F.st,k]}save();renderFinAll()});
 $('#faFilt').addEventListener('change',e=>{if(e.target.id==='faYear'){P.finFilter.year=e.target.value;save();renderFinAll()}});
 $('#faTbl').addEventListener('click',e=>{const tr=e.target.closest('tr.pr');if(!tr)return;openFin(tr.dataset.r);const td=e.target.closest('td[data-it]');
