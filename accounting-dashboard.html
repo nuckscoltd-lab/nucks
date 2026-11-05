@@ -203,6 +203,8 @@ a{color:inherit;}
   color:var(--muted); font-size:11.5px; font-weight:600; padding:6px 12px; border-radius:999px; white-space:nowrap;
 }
 .real-badge::before{content:''; width:6px; height:6px; border-radius:50%; background:var(--pos);}
+.home-link{display:inline-flex; align-items:center; gap:4px; color:var(--muted); font-size:12.5px; font-weight:600; text-decoration:none; margin-bottom:10px;}
+.home-link:hover{color:var(--ink-2); text-decoration:underline;}
 .note-line{font-size:12px; color:var(--muted); margin:14px 0 22px; padding:10px 14px; background:var(--surface-2); border-radius:var(--radius-sm); border:1px dashed var(--line); line-height:1.7;}
 .note-line b{color:var(--ink-2);}
 
@@ -393,6 +395,7 @@ tr.group-hd .group-hd-meta{float:right; color:var(--muted); font-size:11.5px;}
 </style>
 
 <div class="top-shell">
+  <a class="home-link" href="index.html">← 홈으로</a>
   <div class="hd combo-hd">
     <div>
       <h1>회계현황 대시보드</h1>
