@@ -495,7 +495,7 @@ textarea.inp{width:100%;resize:vertical}
 </dialog>
 
 <dialog id="dCash" class="xwide"><div class="dgrip l" title="좌우로 끌어서 창 너비 조절 · 더블클릭: 화면 가득/원래대로"></div><div class="dgrip r" title="좌우로 끌어서 창 너비 조절 · 더블클릭: 화면 가득/원래대로"></div>
-  <div class="dh"><h2>월별 자금계획 (설계비 수금)</h2><div class="acts"><select class="inp vatv" id="cVat" style="width:auto" aria-label="부가세"><option value="ex">부가세 별도</option><option value="in">부가세 포함</option></select><select id="cYear" class="inp" style="width:auto" aria-label="연도"></select><button class="btn wbtn" data-wide="dCash" type="button" title="창을 화면 가로 가득 / 원래 크기">↔ 가로 가득</button><button class="btn" id="cCopy" style="border:1px solid var(--line)">엑셀에 붙여넣기용 복사</button><button class="btn" data-close>닫기</button></div></div>
+  <div class="dh"><h2>월별 자금계획 (설계비 수금)</h2><div class="acts"><select class="inp vatv" id="cVat" style="width:auto" aria-label="부가세"><option value="ex">부가세 별도</option><option value="in">부가세 포함</option></select><select id="cYear" class="inp" style="width:auto" aria-label="연도"></select><button class="btn chip" id="cLost" type="button" title="실주(수주 실패) 건은 수금 예정이 없어 기본적으로 자금계획에서 제외됩니다. 눌러서 검토용으로 다시 포함해서 볼 수 있습니다."></button><button class="btn wbtn" data-wide="dCash" type="button" title="창을 화면 가로 가득 / 원래 크기">↔ 가로 가득</button><button class="btn" id="cCopy" style="border:1px solid var(--line)">엑셀에 붙여넣기용 복사</button><button class="btn" data-close>닫기</button></div></div>
   <div class="db">
     <div class="fsum" id="cSum"></div>
     <div class="tw" style="max-height:60vh;overflow:auto"><table class="ft fa cash" id="cTbl"></table></div>
@@ -735,25 +735,49 @@ function renderSheet(){
   VIEW.groups=visGroups();
   const L=computePages();VIEW.pages=L.pages;
   const host=$('#sheet');host.style.setProperty('--gw',(P.gw||62)+'px');host.style.setProperty('--rw',(P.rw||128)+'px');host.style.setProperty('--labfs',(P.labelSize||10)+'px');host.style.setProperty('--barf',{thin:.3,normal:.42,thick:.55}[P.barSize||'normal']);const keep=[...host.querySelectorAll('.scroller')].map(s=>s.scrollLeft);
-  const n=L.pages.length;
-  const S=L.mode==='free'?1:Math.min(1,(host.clientWidth||L.SW)/L.SW);VIEW.S=S;
   L.pages.forEach(pg=>pg.groups=L.pages.length>1?visGroups(pg.cs,pg.ce):null);VIEW.groups=visGroups();L.pages.forEach(pg=>{if(!pg.groups)pg.groups=VIEW.groups});
-  host.innerHTML=L.pages.map((pg,i)=>{const inner=sheetInner(pg,i,n);
-    return L.mode==='free'?`<div class="sheet">${inner}</div>`:`<div class="pagebox" style="width:${L.SW*S}px;height:${L.SH*S}px"><div class="sheet fixed" style="width:${L.SW}px;height:${L.SH}px;transform:scale(${S})">${inner}</div></div>`}).join('');
-  host.querySelectorAll('.scroller').forEach((s,i)=>{if(keep[i])s.scrollLeft=keep[i]});
+  const S=L.mode==='free'?1:Math.min(1,(host.clientWidth||L.SW)/L.SW);VIEW.S=S;
+  const draw=()=>{const n=L.pages.length;
+    host.innerHTML=L.pages.map((pg,i)=>{const inner=sheetInner(pg,i,n);
+      return L.mode==='free'?`<div class="sheet">${inner}</div>`:`<div class="pagebox" style="width:${L.SW*S}px;height:${L.SH*S}px"><div class="sheet fixed" style="width:${L.SW}px;height:${L.SH}px;transform:scale(${S})">${inner}</div></div>`}).join('');
+    host.querySelectorAll('.scroller').forEach((s,i)=>{if(keep[i])s.scrollLeft=keep[i]})};
+  draw();
+  const rowFit=sh=>{const si=[...host.querySelectorAll('.sheet.fixed')].indexOf(sh);const G=L.pages[si].groups,nRows=G.reduce((a,g)=>a+g.rows.length,0)||1;
+    const head=sh.querySelector('.sh-head').offsetHeight;
+    const avail=L.SH-2*PADY-head-4-64-2*Math.max(0,G.length-1)-(P.remark==='bottom'?REMH:0)-(showCash()?CSH:0);
+    // 줄 수가 많아져서 "칸 높이 = 남는 공간 ÷ 줄 수"로만 정하면, 프로젝트 이름이 긴 줄은 글씨가
+    // 너무 작아지거나 글자가 잘릴 수 있었다(대분류 세로글씨는 억지로 균등 분할돼 끊기는 것도 같은
+    // 원인). 그래서 이 페이지에서 가장 긴 프로젝트 이름이 읽기 편한 글씨 크기(10px)로 최대 2줄
+    // 안에 들어가는 데 필요한 최소 칸 높이를 미리 계산해서, 줄 수로 나눈 값이 그보다 작으면 이
+    // 최소값까지는 올려서 쓴다(그만큼 전체 표가 길어질 수 있음 - 글자가 잘리는 것보다는 낫다).
+    const rw=P.rw||128,longest=Math.max(0,...G.flatMap(g=>g.rows.map(r=>String(r.name||'').replace(/\s+/g,'').length)));
+    const charsPerLine=Math.max(1,Math.floor((rw-14)/10)),lines=Math.min(3,Math.max(1,Math.ceil(longest/charsPerLine))),minRh=lines*10*1.3+8;
+    return{nRows,avail,minRh,maxRows:Math.max(1,Math.floor(avail/minRh))}};
   if(L.mode!=='free'){
-    host.querySelectorAll('.sheet.fixed').forEach((sh,si)=>{
-      const G=L.pages[si].groups,nRows=G.reduce((a,g)=>a+g.rows.length,0)||1;
-      const head=sh.querySelector('.sh-head').offsetHeight;
-      const avail=L.SH-2*PADY-head-4-64-2*Math.max(0,G.length-1)-(P.remark==='bottom'?REMH:0)-(showCash()?CSH:0);
-      // 줄 수가 많아져서 "칸 높이 = 남는 공간 ÷ 줄 수"로만 정하면, 프로젝트 이름이 긴 줄은 글씨가
-      // 너무 작아지거나 글자가 잘릴 수 있었다(대분류 세로글씨는 억지로 균등 분할돼 끊기는 것도 같은
-      // 원인). 그래서 이 페이지에서 가장 긴 프로젝트 이름이 읽기 편한 글씨 크기(10px)로 최대 2줄
-      // 안에 들어가는 데 필요한 최소 칸 높이를 미리 계산해서, 줄 수로 나눈 값이 그보다 작으면 이
-      // 최소값까지는 올려서 쓴다(그만큼 전체 표가 길어질 수 있음 - 글자가 잘리는 것보다는 낫다).
-      const rw=P.rw||128,longest=Math.max(0,...G.flatMap(g=>g.rows.map(r=>String(r.name||'').replace(/\s+/g,'').length)));
-      const charsPerLine=Math.max(1,Math.floor((rw-14)/10)),lines=Math.min(3,Math.max(1,Math.ceil(longest/charsPerLine))),minRh=lines*10*1.3+8;
-      const rh=Math.min(96,Math.max(14,minRh,avail/nRows));sh.style.setProperty('--rowh',rh+'px');sh.classList.toggle('dense',rh<34);sh.classList.toggle('xdense',rh<22);
+    // "N년씩 나눠서" 같은 용지 모드는 한 장(페이지)의 기간(cs~ce)을 날짜만 보고 정하다 보니, 그
+    // 기간 안에 프로젝트 줄이 너무 많으면(예: 특정 2년 구간에 설계 건이 수십 개) 최소 글씨
+    // 크기로도 다 못 들어가는 경우가 있었다. 예전에는 이럴 때 그냥 최소 칸 높이로 욱여넣어서
+    // 표 전체 높이가 실제 용지 높이를 넘어버리고, 그 아래쪽 프로젝트들이 화면에서도 인쇄에서도
+    // 통째로 잘려서 안 보이는 문제가 있었다. 이제는 렌더링 후 "이 페이지, 최소 글씨로도 다
+    // 들어가는가"를 먼저 재보고, 못 들어가면 같은 기간을 유지한 채 줄들을 여러 장으로 나눠
+    // 다시 그린다(장수는 늘어나지만 어떤 줄도 잘리지 않는다).
+    const need=[...host.querySelectorAll('.sheet.fixed')].map(sh=>rowFit(sh));
+    if(need.some((f,si)=>f.nRows>f.maxRows)){
+      const newPages=[];
+      L.pages.forEach((pg,si)=>{const f=need[si];
+        if(f.nRows<=f.maxRows){newPages.push(pg);return}
+        let chunk=[],cnt=0;const flush=()=>{if(chunk.length)newPages.push({...pg,groups:chunk});chunk=[];cnt=0};
+        for(const g of pg.groups){let rows=g.rows,idx=0;
+          while(idx<rows.length){
+            if(cnt>=f.maxRows){flush();continue}
+            const take=rows.slice(idx,idx+(f.maxRows-cnt));
+            chunk.push({id:g.id,name:g.name,hidden:g.hidden,rows:take});cnt+=take.length;idx+=take.length}}
+        flush()});
+      L.pages=newPages;VIEW.pages=L.pages;
+      draw();
+    }
+    host.querySelectorAll('.sheet.fixed').forEach(sh=>{const f=rowFit(sh);
+      const rh=Math.min(96,Math.max(14,f.minRh,f.avail/f.nRows));sh.style.setProperty('--rowh',rh+'px');sh.classList.toggle('dense',rh<34);sh.classList.toggle('xdense',rh<22);
     });
   }
   host.querySelectorAll('.lr').forEach(el=>{let fs=12;while(el.scrollHeight>el.clientHeight+1&&fs>7.5){fs-=.5;el.style.fontSize=fs+'px'}});
@@ -1717,7 +1741,10 @@ $('#insp').addEventListener('click',e=>{const t=e.target,box=t.closest('.evs');i
 
 /* ---------- 월별 자금계획 ---------- */
 function cashData(y){const rows=[],ys=y+'-01-01',ye=y+'-12-31',lim=P.payDays||30;
-  for(const g of P.groups)for(const r of g.rows){if(!r.fin)continue;const tot=+r.fin.total||0;
+  // 실주(수주 실패) 건은 계약이 애초에 진행되지 않아 수금 예정 자체가 없으므로, 기본적으로는
+  // 자금계획 집계(미배정 등)에서 제외한다. P.cashShowLost를 켜면(상단 "실주 포함" 버튼) 그래도
+  // 검토용으로 다시 포함해서 볼 수 있다.
+  for(const g of P.groups)for(const r of g.rows){if(!r.fin)continue;if(!P.cashShowLost&&finStatus(r)==='lost')continue;const tot=+r.fin.total||0;
     const m=Array.from({length:12},()=>({done:0,exp:0,late:0}));let carry=0,undated=0,alloc=0;
     const items=r.fin.items||[];
     // 분할 수금(같은 청구를 여러 줄로 나눠 입금만 기록)은 줄 하나만 떼어보면 "미수"처럼 보여도
@@ -1755,6 +1782,8 @@ function renderCash(){const won=n=>WON(vx(n)),man=n=>manCash(vx(n));
   for(const {r} of finRows())if(r.fin)for(const x of r.fin.items||[])for(const d of [x.dueDate,x.payDate,x.claimDate])if(d)yrs.add(d.slice(0,4));
   const y=P.cashYear&&yrs.has(P.cashYear)?P.cashYear:cy;
   $('#cVat').value=P.vatView==='in'?'in':'ex';
+  const lostN=finRows().filter(x=>x.r.fin&&finStatus(x.r)==='lost').length,cLostBtn=$('#cLost');
+  if(cLostBtn){cLostBtn.hidden=!lostN;cLostBtn.setAttribute('aria-pressed',P.cashShowLost?'true':'false');cLostBtn.textContent=P.cashShowLost?`실주 포함 중 (${lostN})`:`실주 제외됨 (${lostN})`}
   $('#cYear').innerHTML=[...yrs].sort().map(v=>`<option value="${v}" ${v===y?'selected':''}>${v}년</option>`).join('');
   const rows=cashData(y),curM=y===cy?+todayStr.slice(5,7)-1:-1;
   const T=Array.from({length:12},()=>({done:0,exp:0,late:0}));let tc=0,tu=0,ta=0;
@@ -1778,6 +1807,7 @@ function renderCash(){const won=n=>WON(vx(n)),man=n=>manCash(vx(n));
   VIEW.cash={y,rows}}
 $('#bCash').onclick=()=>{renderCash();$('#dCash').showModal()};
 $('#cYear').addEventListener('change',e=>{P.cashYear=e.target.value;save();renderCash()});
+$('#cLost').addEventListener('click',()=>{P.cashShowLost=!P.cashShowLost;save();renderCash()});
 $('#cTbl').addEventListener('click',e=>{const tr=e.target.closest('tr.pr');if(tr)openFin(tr.dataset.r)});
 $('#cCopy').onclick=async()=>{const {y,rows}=VIEW.cash||{};if(!rows)return;
   const head=['CO.','프로젝트','이월 지연'];for(let i=1;i<=12;i++)head.push(i+'월 입금',i+'월 예정');head.push('날짜 미정','미배정');head[2]+=' ('+VATL()+')';
