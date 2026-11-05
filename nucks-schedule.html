@@ -127,6 +127,8 @@ body.rowdrag,body.rowdrag *{cursor:grabbing!important;user-select:none}
 .bw{position:absolute;top:max(2px,calc((var(--rowh) - var(--barh) - 13px)/2));height:var(--barh);cursor:grab;z-index:2;touch-action:none}
 .bw .seg{position:absolute;top:0;height:100%;outline:1px solid rgba(0,0,0,.08)}
 .bw .seg.dim{opacity:.35}
+.bw.pt .seg{left:50%!important;top:50%!important;width:clamp(8px,calc(var(--barh)*0.75),16px)!important;height:clamp(8px,calc(var(--barh)*0.75),16px)!important;transform:translate(-50%,-50%);border-radius:50%;border:1.5px solid var(--line-strong);box-sizing:border-box;outline:none;z-index:1}
+@media print{.bw.pt .seg{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 .bw .lab{position:absolute;top:calc(100% + 2px);left:50%;transform:translateX(-50%);text-align:center;font-size:var(--labfs,10px);white-space:nowrap;line-height:1.3;pointer-events:none;color:var(--ink);text-shadow:0 0 3px var(--paper),0 0 3px var(--paper)}
 .bw .lab.la-left{left:0;transform:none;text-align:left}
 .bw .in{position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);display:flex;align-items:center;padding:0 4px;white-space:nowrap;font-size:min(var(--labfs,10px),calc(var(--barh) - 3px));font-weight:500;pointer-events:none;line-height:1}
@@ -241,6 +243,7 @@ dialog.wide{width:min(1200px,calc(100vw - 32px))}
 .cash td,.cash th{text-align:right}.cash td:first-child,.cash th:first-child{text-align:left}
 .cash th.cur,.cash td.cur{background:var(--accent-soft)}
 .cash .cd{color:var(--ok)}.cash .ce{color:var(--warn)}.cash .cl{color:var(--bad);font-weight:600}.cash .cu{color:var(--muted)}
+.cash .manex{color:var(--muted);font-weight:400;font-size:9.5px;margin-left:3px}
 .cash td{font-family:var(--font-num);font-size:11.5px;line-height:1.35}
 .cash td.nm{font-family:var(--font-ui);font-size:12px}
 .cash tfoot td{font-size:11.5px}
@@ -727,7 +730,14 @@ function renderSheet(){
       const G=L.pages[si].groups,nRows=G.reduce((a,g)=>a+g.rows.length,0)||1;
       const head=sh.querySelector('.sh-head').offsetHeight;
       const avail=L.SH-2*PADY-head-4-64-2*Math.max(0,G.length-1)-(P.remark==='bottom'?REMH:0)-(showCash()?CSH:0);
-      const rh=Math.min(96,Math.max(14,avail/nRows));sh.style.setProperty('--rowh',rh+'px');sh.classList.toggle('dense',rh<34);sh.classList.toggle('xdense',rh<22);
+      // 줄 수가 많아져서 "칸 높이 = 남는 공간 ÷ 줄 수"로만 정하면, 프로젝트 이름이 긴 줄은 글씨가
+      // 너무 작아지거나 글자가 잘릴 수 있었다(대분류 세로글씨는 억지로 균등 분할돼 끊기는 것도 같은
+      // 원인). 그래서 이 페이지에서 가장 긴 프로젝트 이름이 읽기 편한 글씨 크기(10px)로 최대 2줄
+      // 안에 들어가는 데 필요한 최소 칸 높이를 미리 계산해서, 줄 수로 나눈 값이 그보다 작으면 이
+      // 최소값까지는 올려서 쓴다(그만큼 전체 표가 길어질 수 있음 - 글자가 잘리는 것보다는 낫다).
+      const rw=P.rw||128,longest=Math.max(0,...G.flatMap(g=>g.rows.map(r=>String(r.name||'').replace(/\s+/g,'').length)));
+      const charsPerLine=Math.max(1,Math.floor((rw-14)/10)),lines=Math.min(3,Math.max(1,Math.ceil(longest/charsPerLine))),minRh=lines*10*1.3+8;
+      const rh=Math.min(96,Math.max(14,minRh,avail/nRows));sh.style.setProperty('--rowh',rh+'px');sh.classList.toggle('dense',rh<34);sh.classList.toggle('xdense',rh<22);
     });
   }
   host.querySelectorAll('.lr').forEach(el=>{let fs=12;while(el.scrollHeight>el.clientHeight+1&&fs>7.5){fs-=.5;el.style.fontSize=fs+'px'}});
@@ -737,7 +747,13 @@ function renderSheet(){
     if(u.length<=cap)return;
     if(cap<2){el.classList.add('horiz');return}
     let cols=/\s/.test(t)?t.split(/\s+/):null;
-    if(!cols||cols.some(c=>c.length>cap)){const n=Math.ceil(u.length/cap),sz=Math.ceil(u.length/n);cols=[];for(let i=0;i<u.length;i+=sz)cols.push(u.slice(i,i+sz))}
+    // 띄어쓰기가 없는 복합명사(예: "인테리어공사")는 자연스럽게 끊을 경계가 없어 결국 글자 수
+    // 기준으로 나눠야 하는데, 예전에는 전체 길이를 칸 수로 "균등 분배"했다(예: 10자를 3칸이면
+    // 4·4·2자씩) - 매번 다른 길이로 끊기다 보니 어디서 끊길지 예측하기 어려워 줄바꿈이 무작위로
+    // 느껴졌다. 이제는 앞 칸부터 cap(한 칸에 들어가는 글자 수)만큼 최대한 채우고 남는 글자를 다음
+    // 칸으로 넘기는 방식(그리디 채우기)으로 바꿔서, 가로쓰기 글이 줄바꿈되는 순서와 같게 - 앞에서부터
+    // 꽉 채워서 - 끊기도록 했다.
+    if(!cols||cols.some(c=>c.length>cap)){cols=[];for(let i=0;i<u.length;i+=cap)cols.push(u.slice(i,i+cap))}
     if(cols.length>3){el.classList.add('horiz');return}
     el.innerHTML='<span class="lgn-t">'+cols.map(esc).join('<br>')+'</span>';el.classList.add('multi')});
   let ps=document.getElementById('pageStyle');if(!ps){ps=document.createElement('style');ps.id='pageStyle';document.head.appendChild(ps)}
@@ -745,7 +761,12 @@ function renderSheet(){
 }
 function sheetInner(pg,pi,pn){
   const dw=pg.dw,cs=pg.cs,ce=pg.ce,nd=diff(cs,ce)+1,W=nd*dw;
-  const per=(P.workStart&&P.workEnd)?`${ymd(P.workStart).slice(0,-1)} ~ ${md(P.workEnd)}`:'';
+  // 타이틀 아래 기간 문구는 원래 착공일·준공일(기본 설정에서 한 번 입력해두는 고정값)을 그대로
+  // 썼는데, 그러다 보니 "보기 기간"/용지의 "N년씩 나눠서" 같은 표시 필터를 바꿔도 문구가 전혀 안
+  // 바뀌어서 실제로 지금 화면·인쇄에 보이는 기간과 어긋나 보일 수 있었다. 이제는 이 페이지에 실제로
+  // 표시되는 날짜 범위(pg.cs~pg.ce - 필터가 적용된 결과)를 그대로 보여준다. 같은 해 안이면 끝
+  // 날짜의 연도를 생략해 기존과 같은 짧은 표기를 유지하고, 해가 걸치면 끝 날짜에도 연도를 붙인다.
+  const per=(cs&&ce)?`${ymd(cs).slice(0,-1)} ~ ${cs.slice(0,4)===ce.slice(0,4)?md(ce):ymd(ce).slice(0,-1)}`:'';
   let h=`<div class="sh-head"><div class="sh-top"><div class="sh-title"><h1>${esc(P.name)}</h1><span class="period">${per}</span></div>
   <div class="sh-brand">${esc(P.company)}<small>${esc(P.page||'')}${pn>1?` &nbsp;${pi+1} / ${pn}`:''}</small></div></div>
   <ul class="notes" title="클릭해서 안내 문구 편집">${(P.notes||[]).map(l=>{const red=l.startsWith('!');return`<li class="${red?'red':''}">${esc(tok(red?l.slice(1):l))}</li>`}).join('')||'<li style="color:var(--muted)">안내 문구 추가</li>'}</ul></div>`;
@@ -836,7 +857,12 @@ function barHTML(b,pg,pi){
   }else segs=`<div class="seg" style="left:0;width:${w}px;background:${b.color}"></div>`;
   const on=sel&&sel.t==='bar'&&sel.id===b.id;
   const inner=b.inner?`<div class="in" style="background:${b.color};color:${fgFor(b.color)}${b.fs?`;font-size:min(${b.fs}px,calc(var(--barh) - 3px))`:''}">${esc(b.inner)}</div>`:'';
-  return`<div class="bw ${on?'on':''} " data-bar="${b.id}" data-pg="${pi}" style="left:${x}px;width:${w}px" title="${esc(b.label)} ${md(b.start)}~${md(b.end)} · 작업일 ${bDays(b)}일">${segs}${inner}<div class="hl"></div><div class="hr"></div><div class="lab ${b.la==='left'?'la-left':''}"${b.fs?` style="font-size:${b.fs}px"`:''}>${esc(b.label)}</div></div>`;
+  // 종료일 미정(startOnly) 건은 막대 범위가 하루(폭 1칸)뿐이라, 칸 너비를 좁게 보고 있을 때는
+  // 거의 안 보이는 가는 선 하나로만 표시돼서 "점이 안 보인다"는 문제가 있었다. 선택·끌기에 쓰는
+  // .bw 자체의 실제 위치·폭(날짜 계산 기준)은 그대로 두고, 눈에 보이는 색칠 부분(.seg)만 CSS로
+  // 칸 너비와 무관하게 항상 일정 크기의 동그란 점으로 키워서(pt 클래스) 확대해 보여준다.
+  const pt=b.startOnly?' pt':'';
+  return`<div class="bw${on?' on':''}${pt}" data-bar="${b.id}" data-pg="${pi}" style="left:${x}px;width:${w}px" title="${esc(b.label)} ${md(b.start)}~${md(b.end)} · 작업일 ${bDays(b)}일">${segs}${inner}<div class="hl"></div><div class="hr"></div><div class="lab ${b.la==='left'?'la-left':''}"${b.fs?` style="font-size:${b.fs}px"`:''}>${esc(b.label)}</div></div>`;
 }
 
 /* ---------- 속성 패널 ---------- */
@@ -1680,8 +1706,18 @@ function cashData(y){const rows=[],ys=y+'-01-01',ye=y+'-12-31',lim=P.payDays||30
     const unalloc=Math.max(0,tot-alloc);
     if(carry||undated||unalloc||m.some(c=>c.done||c.exp||c.late))rows.push({g,r,m,carry,undated,unalloc})}
   return rows}
-function cashCell(c){return(c.done?`<div class="cd">입금 ${MAN(vx(c.done))}</div>`:'')+(c.exp?`<div class="ce">예정 ${MAN(vx(c.exp))}</div>`:'')+(c.late?`<div class="cl">지연 ${MAN(vx(c.late))}</div>`:'')}
-function renderCash(){const won=n=>WON(vx(n)),man=n=>MAN(vx(n));
+// 월별 자금계획 전용 금액 표기. 원래 MAN()은 10,000원 단위로 딱 떨어지는 금액만 "만원"으로 줄여
+// 보여주고 그렇지 않으면 원 단위 숫자를 그대로 보여줘서, 같은 열 안에서 "7,764만" 같은 짧은
+// 표기와 "61,236,000" 같은 긴 원 단위 표기가 뒤섞여 보기 불편했다(사용자 확인 후 요청). 이제는
+// 월별 자금계획에서는 항상 10,000원 단위로 반올림한 "만원" 표기로 통일하고, 반올림으로 생기는
+// 10,000원 미만 자투리가 있을 때만 정확한 원 단위 금액을 작은 글씨로 괄호 병기해서, 표기는
+// 짧게 통일하면서도 정확한 금액은 바로 옆에서 확인할 수 있게 했다. (다른 화면의 MAN()/man()은
+// 그대로 둔다 - 기성 정산표 등 다른 곳까지 한꺼번에 바꾸면 영향 범위가 너무 커진다.)
+function manCash(n){n=Math.round(+n||0);if(!n)return'0';
+  const manv=Math.round(n/10000).toLocaleString('ko-KR')+'만';
+  return n%10000===0?manv:`${manv}<small class="manex">(${WON(n)})</small>`}
+function cashCell(c){return(c.done?`<div class="cd">입금 ${manCash(vx(c.done))}</div>`:'')+(c.exp?`<div class="ce">예정 ${manCash(vx(c.exp))}</div>`:'')+(c.late?`<div class="cl">지연 ${manCash(vx(c.late))}</div>`:'')}
+function renderCash(){const won=n=>WON(vx(n)),man=n=>manCash(vx(n));
   const cy=todayStr.slice(0,4);const yrs=new Set([String(+cy-1),cy,String(+cy+1)]);
   for(const {r} of finRows())if(r.fin)for(const x of r.fin.items||[])for(const d of [x.dueDate,x.payDate,x.claimDate])if(d)yrs.add(d.slice(0,4));
   const y=P.cashYear&&yrs.has(P.cashYear)?P.cashYear:cy;
