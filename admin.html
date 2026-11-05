@@ -378,7 +378,7 @@ if ('serviceWorker' in navigator) {
         </td>
         <td data-label="이메일">${data.email || ''}</td>
         <td data-label="인사정보" data-hr-cell="${uid}">
-          ${data.department || '부서 미지정'} · ${(data.positionTags || []).join(', ') || '직급 미지정'} · ${data.hireDate ? '입사일 ' + data.hireDate : '입사일 미지정'}
+          ${data.department || '부서 미지정'} · ${(data.positionTags || []).join(', ') || '직급 미지정'} · ${data.hireDate ? '입사일 ' + data.hireDate : '입사일 미지정'}${data.birthDate ? ' · 생일 ' + data.birthDate.slice(5) : ''}
         </td>
         <td data-label="현재 권한"><span class="role-badge role-${data.role}">${roleLabel[data.role] || data.role}</span></td>
         <td data-label="변경">
@@ -529,6 +529,7 @@ if ('serviceWorker' in navigator) {
       <input type="text" class="hr-edit-input" data-hr-field="department" value="${esc(data.department)}" placeholder="부서 (예: 경영관리부)">
       <input type="text" class="hr-edit-input" data-hr-field="positionTags" value="${esc((data.positionTags || []).join(', '))}" placeholder="직급 (콤마로 구분, 예: 과장, 대표)">
       <input type="date" class="hr-edit-input" data-hr-field="hireDate" value="${esc(data.hireDate)}">
+      <input type="date" class="hr-edit-input" data-hr-field="birthDate" value="${esc(data.birthDate)}" title="생년월일 (일주일 전부터 홈 화면 알림에 표시됩니다)">
       <select class="hr-edit-input" data-hr-field="employmentStatus">
         <option value="재직" ${data.employmentStatus !== '퇴사' ? 'selected' : ''}>재직중</option>
         <option value="퇴사" ${data.employmentStatus === '퇴사' ? 'selected' : ''}>퇴사</option>
@@ -544,11 +545,12 @@ if ('serviceWorker' in navigator) {
       const department = hrCell.querySelector('[data-hr-field="department"]').value.trim();
       const positionTagsRaw = hrCell.querySelector('[data-hr-field="positionTags"]').value.trim();
       const hireDate = hrCell.querySelector('[data-hr-field="hireDate"]').value;
+      const birthDate = hrCell.querySelector('[data-hr-field="birthDate"]').value;
       const employmentStatus = hrCell.querySelector('[data-hr-field="employmentStatus"]').value;
       const positionTags = positionTagsRaw ? positionTagsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
 
       try {
-        await db.collection('users').doc(uid).update({ department, positionTags, hireDate, employmentStatus });
+        await db.collection('users').doc(uid).update({ department, positionTags, hireDate, birthDate, employmentStatus });
         statusMsg.style.color = '#3f6b52';
         statusMsg.textContent = '인사정보가 저장되었습니다.';
         await loadUsers();

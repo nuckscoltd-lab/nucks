@@ -898,6 +898,58 @@ if ('serviceWorker' in navigator) {
                             lines: upcomingAnnual.map(item => `${item.month}월 - ${item.task}`)
                         });
                     }
+
+                    // 4. 관리자: 앞으로 7일 이내 다가오는 직원 생일 · 입사기념일 (admin.html 인사정보에서
+                    // 입력한 생년월일(birthDate)·입사일(hireDate) 기준). 생일·입사일은 연도가 달라도
+                    // "월-일"만 같으면 매년 돌아오므로, 올해 날짜로 한 번 맞춰보고 이미 지났으면 내년
+                    // 날짜로 넘겨서 "오늘부터 7일 이내"인지 본다(위 연간 주요직무와 같은 방식 - 12월 말에
+                    // 1월 생일자를 놓치지 않기 위함). 퇴사자·가상 계정은 제외한다.
+                    const nextOccurrence = (dateStr) => {
+                        if (!dateStr) return null;
+                        const d = new Date(dateStr + 'T00:00:00');
+                        if (isNaN(d.getTime())) return null;
+                        let occ = new Date(todayDate.getFullYear(), d.getMonth(), d.getDate());
+                        if (occ < todayDate) occ = new Date(todayDate.getFullYear() + 1, d.getMonth(), d.getDate());
+                        return occ;
+                    };
+                    const weekLaterDate = new Date(todayDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+                    const usersSnap = await db.collection('users').get();
+                    const activeUsers = usersSnap.docs
+                        .map(d => d.data())
+                        .filter(u => u.employmentStatus !== '퇴사' && !u.isPlaceholder);
+
+                    const upcomingBirthdays = [];
+                    const upcomingAnniversaries = [];
+                    activeUsers.forEach(u => {
+                        const name = u.displayName || u.email || '(이름 없음)';
+                        const bOcc = nextOccurrence(u.birthDate);
+                        if (bOcc && bOcc >= todayDate && bOcc <= weekLaterDate) {
+                            upcomingBirthdays.push({ name, occ: bOcc, label: `${bOcc.getMonth() + 1}.${bOcc.getDate()}` });
+                        }
+                        const hOcc = nextOccurrence(u.hireDate);
+                        if (hOcc && hOcc >= todayDate && hOcc <= weekLaterDate) {
+                            const years = hOcc.getFullYear() - new Date(u.hireDate + 'T00:00:00').getFullYear();
+                            if (years > 0) {
+                                upcomingAnniversaries.push({ name, occ: hOcc, years, label: `${hOcc.getMonth() + 1}.${hOcc.getDate()}` });
+                            }
+                        }
+                    });
+
+                    if (upcomingBirthdays.length > 0) {
+                        upcomingBirthdays.sort((a, b) => a.occ - b.occ);
+                        sections.push({
+                            icon: '🎂', title: '일주일 내 직원 생일',
+                            lines: upcomingBirthdays.map(b => `${b.name} - ${b.label}`)
+                        });
+                    }
+
+                    if (upcomingAnniversaries.length > 0) {
+                        upcomingAnniversaries.sort((a, b) => a.occ - b.occ);
+                        sections.push({
+                            icon: '🎉', title: '일주일 내 입사기념일',
+                            lines: upcomingAnniversaries.map(a => `${a.name} - ${a.label} (입사 ${a.years}주년)`)
+                        });
+                    }
                 }
 
                 if (sections.length > 0) {
