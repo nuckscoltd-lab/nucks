@@ -128,7 +128,11 @@ body.rowdrag,body.rowdrag *{cursor:grabbing!important;user-select:none}
 .bw .seg{position:absolute;top:0;height:100%;outline:1px solid rgba(0,0,0,.08)}
 .bw .seg.dim{opacity:.35}
 .bw.pt .seg{left:50%!important;top:50%!important;width:clamp(8px,calc(var(--barh)*0.75),16px)!important;height:clamp(8px,calc(var(--barh)*0.75),16px)!important;transform:translate(-50%,-50%);border-radius:50%;border:1.5px solid var(--line-strong);box-sizing:border-box;outline:none;z-index:1}
-@media print{.bw.pt .seg{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+/* 가운데 글씨(.in, 예: "진행")가 있는 종료일미정 막대는 점이 글씨를 통째로 가려버리므로,
+   점 대신 글씨 배찌 테두리에 별도 색(--warn) 가이드라인을 둘러 "종료일 미정" 표시를 겸한다 */
+.bw.pt:has(.in) .seg{display:none}
+.bw.pt .in{outline:2px dashed var(--warn);outline-offset:2px;border-radius:3px}
+@media print{.bw.pt .seg,.bw.pt .in{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 .bw .lab{position:absolute;top:calc(100% + 2px);left:50%;transform:translateX(-50%);text-align:center;font-size:var(--labfs,10px);white-space:nowrap;line-height:1.3;pointer-events:none;color:var(--ink);text-shadow:0 0 3px var(--paper),0 0 3px var(--paper)}
 .bw .lab.la-left{left:0;transform:none;text-align:left}
 .bw .in{position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);display:flex;align-items:center;padding:0 4px;white-space:nowrap;font-size:min(var(--labfs,10px),calc(var(--barh) - 3px));font-weight:500;pointer-events:none;line-height:1}
