@@ -621,16 +621,17 @@ const KEY='nucks-schedule-v1';
 let DB={projects:[],current:null};
 try{const raw=localStorage.getItem(KEY);if(raw)DB=JSON.parse(raw)}catch(e){}
 if(!DB.projects||!DB.projects.length){const s=sample();const n=nucksAll();DB={projects:[n,s],current:n.id}}
-// "NUCKS 전체 프로젝트"(id가 nucks-all-projects인 항목)는 파일을 열 때마다 이 파일에 담긴 최신 데이터로
-// 갱신합니다 — 브라우저에 저장된 예전 버전(예: 발주처·작업분류코드 필드가 없던 버전)이 남아있어도
-// 항상 최신 공정표 파일 기준으로 보이게 하기 위함입니다(2026-11-03). 이 프로젝트를 직접 손으로
-// 수정하기 시작하면 이 자동 갱신이 그 수정분을 덮어쓰니, 그때는 이 블록을 지우거나 id를 바꿔주세요.
+// "NUCKS 전체 프로젝트"(id가 nucks-all-projects인 항목)가 이 브라우저에 아직 없으면, 이 파일에 담긴
+// 데이터로 한 번만 추가해 둡니다. 이미 있으면(=한 번이라도 열어서 추가된 뒤) 더 이상 건드리지 않습니다.
+// 예전엔 파일을 열 때마다 이 프로젝트를 통째로 덮어썼었는데, 그러면 계약·기성 관리 팝업에서 직접
+// 고친 내용(분할 수금 등)이 다음에 열 때마다 파일에 박혀있던 원래 데이터로 되돌아가 보이는 문제가
+// 있었습니다(2026-11-05에 발견·수정). 이 파일 자체의 내장 데이터를 최신화해 다시 배포하더라도,
+// 이미 브라우저에 추가돼 직접 수정 중인 프로젝트는 이제 자동으로 덮어써지지 않습니다.
 try{
   const n2=nucksAll();
-  const idx=DB.projects.findIndex(p=>p.id===n2.id);
-  if(idx>=0)DB.projects[idx]=n2;else DB.projects.unshift(n2);
+  if(!DB.projects.some(p=>p.id===n2.id))DB.projects.unshift(n2);
   if(!DB.current||!DB.projects.some(p=>p.id===DB.current))DB.current=n2.id;
-}catch(e){console.error('nucksAll 갱신 실패', e)}
+}catch(e){console.error('nucksAll 추가 실패', e)}
 P=DB.projects.find(p=>p.id===DB.current)||DB.projects[0];
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}};
 let hist=[];
@@ -1538,9 +1539,13 @@ $('#fSave').onclick=()=>{
   let r;const f=FD.rowId&&findRow(FD.rowId);
   if(f){r=f.r;if(f.g!==g){f.g.rows.splice(f.g.rows.indexOf(r),1);g.rows.push(r)}}else{r={id:uid(),name,bars:[]};g.rows.push(r)}
   r.name=name;r.code=$('#fCode').value.trim()||null;r.projCode=$('#fCode2').value.trim()||null;
-  FD.items.forEach((v,i)=>{if(!v.name)v.name=itemName(v,i)});
+  // 이름도 없고(아직 이름을 입력/자동배정 받지 않았고) 금액·날짜도 전혀 안 채운, 진짜 빈 줄만 저장에서
+  // 제외한다. "분할 수금"으로 만든 줄은 생성 즉시 이름("N차 기성-수금n")이 붙어 있으므로, 금액·날짜를
+  // 아직 안 채웠더라도(=수금 예정 상태) 여기서 걸러지지 않고 그대로 저장된다.
+  const items=FD.items.filter(x=>x.name||+x.claim||+x.paid||x.claimDate||x.payDate||x.dueDate||+x.plan||+x.pct);
+  items.forEach((v,i)=>{if(!v.name)v.name=itemName(v,i)});
   const vEx=$('#fVat').value==='ex';
-  r.fin={total,payType:$('#fPay').value,vatEx:vEx,supply:vEx?parseAmt($('#fTot').value,0):Math.round(total/1.1),contractDate:cd||'',endDate:en||'',items:FD.items.filter(x=>+x.claim||+x.paid||x.claimDate||x.payDate||x.dueDate||+x.plan||+x.pct)};
+  r.fin={total,payType:$('#fPay').value,vatEx:vEx,supply:vEx?parseAmt($('#fTot').value,0):Math.round(total/1.1),contractDate:cd||'',endDate:en||'',items};
   if(en&&!per&&r.bars[0]&&(r.bars[0].startOnly||r.bars[0].end<en)){const b=r.bars[0];if(en>=b.start){b.end=en;if(en>P.chartEnd)P.chartEnd=en}}
   if(per){let b=r.bars[0];if(!b){b=B(per[0],per[1],cd?`계약 ${fmtS(cd)}`:'','#e1863a');r.bars.unshift(b)}b.start=per[0];b.end=per[1];
     if(per[1]>P.chartEnd)P.chartEnd=per[1];if(per[0]<P.chartStart&&!r.bars.length)P.chartStart=per[0]}
@@ -1698,10 +1703,18 @@ $('#insp').addEventListener('click',e=>{const t=e.target,box=t.closest('.evs');i
 function cashData(y){const rows=[],ys=y+'-01-01',ye=y+'-12-31',lim=P.payDays||30;
   for(const g of P.groups)for(const r of g.rows){if(!r.fin)continue;const tot=+r.fin.total||0;
     const m=Array.from({length:12},()=>({done:0,exp:0,late:0}));let carry=0,undated=0,alloc=0;
-    (r.fin.items||[]).forEach(x=>{const paid=+x.paid||0,exp=itemExp(x,tot);alloc+=Math.max(exp,paid);
+    const items=r.fin.items||[];
+    // 분할 수금(같은 청구를 여러 줄로 나눠 입금만 기록)은 줄 하나만 떼어보면 "미수"처럼 보여도
+    // 프로젝트 전체로는 이미 다 들어온 경우가 흔하다(itemState의 itemGroupAgg와 같은 이유로, 청구는
+    // 한 줄에 몰아 적고 수금은 여러 줄에 나눠 적기 때문). 이걸 줄별로 따로 계산하면 다른 줄에서
+    // 이미 메워진 차액이 영원히 "이월 지연"으로 남는 문제가 있었다. 그래서 프로젝트 전체의
+    // "총청구-총수금"(진짜 남은 미수금)을 먼저 구해두고, 각 줄의 미수분은 이 전체 잔액 한도
+    // 안에서만 월별 칸에 반영한다(이미 다른 줄 입금으로 메워진 몫은 0으로 처리됨).
+    let budget=Math.max(0,items.reduce((s,x)=>s+itemExp(x,tot),0)-items.reduce((s,x)=>s+(+x.paid||0),0));
+    items.forEach(x=>{const paid=+x.paid||0,exp=itemExp(x,tot);alloc+=Math.max(exp,paid);
       if(paid&&x.payType==='bill'){const cd=cashDate(x),net=paid-(x.discDate?(+x.discFee||0):0);if(cd&&cd>=ys&&cd<=ye){const k=+cd.slice(5,7)-1;if(cd<=todayStr)m[k].done+=net;else m[k].exp+=net}}
       else if(paid&&x.payDate&&x.payDate>=ys&&x.payDate<=ye)m[+x.payDate.slice(5,7)-1].done+=paid;
-      const rem=Math.max(0,exp-paid);if(!rem)return;
+      const raw=Math.max(0,exp-paid),rem=Math.min(raw,budget);budget-=rem;if(!rem)return;
       const d=x.dueDate||(x.claimDate?addD(x.claimDate,lim):'');
       if(!d){undated+=rem;return}
       if(d<ys){carry+=rem;return}
