@@ -334,6 +334,41 @@ body.picking .bw:hover{outline:2px dashed var(--sel);outline-offset:2px}
 .acts .btn{border:1px solid var(--line)}
 @media (max-width:640px){.insp{top:auto;width:auto;left:0;height:62vh;border-left:0;border-top:1px solid var(--line);padding-left:env(safe-area-inset-left,0px)}}
 
+/* ---------- 모바일 조회 전용 화면(#mobileView) ---------- */
+.mv{padding:14px 16px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:10px}
+.mv-head{display:flex;flex-direction:column;gap:4px;margin-bottom:4px}
+.mv-title{font-size:17px;font-weight:600}
+.mv-sub{display:flex;gap:8px;align-items:center}
+.mv-sub select{flex:1;min-width:0;padding:9px 10px;font-size:15px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink)}
+.mv-note{font-size:11.5px;color:var(--muted);background:var(--head);border:1px solid var(--line);border-radius:6px;padding:6px 9px}
+.mv-grp{font-size:12px;font-weight:600;color:var(--muted);margin:10px 2px 0;text-transform:uppercase;letter-spacing:.02em}
+.mv-row{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 14px;cursor:pointer}
+.mv-row.open{border-color:var(--accent)}
+.mv-row-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.mv-name{font-size:14.5px;font-weight:500;line-height:1.35}
+.mv-badge{flex:none;font-size:11px;padding:2px 9px;border-radius:10px;white-space:nowrap}
+.mv-dates{font-size:12px;color:var(--muted);margin-top:4px;font-family:var(--font-num)}
+.mv-bar{margin-top:8px;height:5px;border-radius:3px;background:var(--grid);overflow:hidden}
+.mv-bar-fill{height:100%;background:var(--accent);border-radius:3px}
+.mv-pct{font-size:11px;color:var(--muted);margin-top:3px;text-align:right;font-family:var(--font-num)}
+.mv-detail{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:8px}
+.mv-fin{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:12.5px;font-family:var(--font-num)}
+.mv-fin div{display:flex;justify-content:space-between;gap:8px}
+.mv-fin div.due{color:var(--warn)}
+.mv-fin>.st{grid-column:1/-1;justify-self:start;margin-top:2px}
+.mv-fin.mv-empty{color:var(--muted);font-family:var(--font-ui)}
+.mv-memo{font-size:12.5px;color:var(--ink);background:var(--head);border-radius:6px;padding:8px 10px;white-space:pre-wrap;word-break:keep-all}
+.mv-empty-all{color:var(--muted);font-size:13px;text-align:center;padding:40px 0}
+@media (max-width:900px){
+  .bar,.hintrow,#sheet,.insp{display:none!important}
+  /* #mobileView는 HTML에 hidden 속성으로 시작하는데([hidden]{display:none!important}가
+     전역 규칙이라 우선순위가 가장 높음), 폭이 좁을 땐 그 hidden을 무시하고 보여줘야 하므로
+     이 규칙도 똑같이 !important를 붙인다. */
+  .mv{display:flex!important}
+  html,body{overflow-x:hidden}
+}
+@media (min-width:901px){.mv{display:none!important}}
+
 /* dialogs */
 dialog{border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);padding:0;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 40px)}
 dialog::backdrop{background:rgba(10,12,14,.45)}
@@ -414,6 +449,14 @@ textarea.inp{width:100%;resize:vertical}
 
   <div class="pages" id="sheet"></div>
 </div>
+
+<!-- 갤럭시 Z 폴드(펼친 화면 약 750px)·Z 플립(접힌 화면 약 374px) 같은 좁은 화면에서는 위 도구막대·
+     간트차트가 글자 하나씩 세로로 끊겨 보일 만큼 비좁아진다. 막대를 픽셀 단위로 끌어서 일정을
+     조정하는 이 편집 화면은 애초에 손가락 터치로 정밀하게 쓰기 어렵기도 해서(2026-11-06 확인),
+     900px 이하에서는 간트차트 대신 "조회 전용" 목록 화면(#mobileView)을 보여준다 - 공종별이
+     아니라 프로젝트별로 상태·기간·진행률을 한눈에 보고, 눌러서 기성·자금·비고까지 펼쳐 볼 수
+     있다. 편집(막대 추가·이동 등)은 여전히 PC 화면에서만 가능하다. -->
+<div class="mv" id="mobileView" hidden></div>
 
 <aside class="insp" id="insp" hidden></aside>
 
@@ -677,7 +720,64 @@ let sel=null; // {t:'bar'|'row'|'group'|'region'|'marker', id}
 let lastColor='#f4a46c';
 
 /* ---------- 렌더 ---------- */
-function renderAll(){renderSheet();renderInsp();renderBar()}
+function renderAll(){renderSheet();renderInsp();renderBar();renderMobileView()}
+// Z 폴드 펼친 화면·Z 플립 접힌 화면처럼 좁은 화면(900px 이하, CSS 쪽 미디어쿼리와 짝)에서 보여줄
+// "조회 전용" 목록. 간트차트 대신 프로젝트를 세로 목록으로 보여주고, 막대 머리글(계약/진행/완료/
+// 실주)과 기간으로 진행률을 계산해 보여준다. 눌러서 펼치면 기성 정산 요약·비고까지 볼 수 있지만
+// 어디까지나 "읽기 전용"이고, 막대 추가·이동 같은 편집은 여전히 PC 화면에서만 가능하다(2026-11-06).
+const MV_BARCOLOR={'완료':'#b9b0a8','진행':'#e1863a','계약':'#9aa0a6','실주':'#c9372c'};
+function renderMobileView(){
+  const host=$('#mobileView');if(!host)return;
+  const won=n=>WON(vx(n));
+  let h=`<div class="mv-head">
+    <div class="mv-title">${esc(P.name||'NUCKS 공정표')}</div>
+    <div class="mv-sub"><select id="mvProjSel" aria-label="공정표 선택">${DB.projects.map(p=>`<option value="${p.id}" ${p.id===P.id?'selected':''}>${esc(p.name)}${p.chartStart?' · '+p.chartStart.slice(0,7):''}</option>`).join('')}</select></div>
+    <div class="mv-note">📱 모바일 조회 화면 · 막대 추가·이동 같은 편집은 PC에서 해주세요. 프로젝트를 누르면 기성·자금·비고를 볼 수 있습니다.</div>
+  </div>`;
+  let any=false;
+  for(const g of P.groups){
+    if(g.hidden)continue;
+    // 실주(수주 실패) 건은 더 이상 진행되지 않는 건이라, 다른 화면(기성 정산표·월별 자금계획)과
+    // 똑같이 기본 목록에서는 빼서 실제로 보고 있는 일들만 깔끔하게 보이게 한다.
+    const rows=g.rows.filter(r=>!r.hidden&&(r.bars.length||hasFin(r))&&finStatus(r)!=='lost');
+    if(!rows.length)continue;
+    any=true;
+    h+=`<div class="mv-grp">${esc(g.name)}</div>`;
+    for(const r of rows){
+      const R=projRange(r);
+      const b=r.bars[0];
+      const label=b&&b.inner?b.inner:(R?(R.end<todayStr?'완료':(R.start>todayStr?'예정':'진행')):'');
+      const col=MV_BARCOLOR[label]||'#9aa0a6';
+      let pct=null;
+      if(R&&R.known){
+        const total=diff(R.start,R.end);
+        pct=total>0?Math.max(0,Math.min(100,Math.round(diff(R.start,todayStr<R.start?R.start:(todayStr>R.end?R.end:todayStr))/total*100))):(todayStr>=R.end?100:0);
+      }
+      const c=hasFin(r)?finCalc(r.fin):null;
+      const ls=!c?'':finStatus(r)==='lost'?`<span class="st lost">실주</span>`:!c.late.length&&!c.unpaid&&c.bill?`<span class="st bill">어음 보유</span>`:c.late.length?`<span class="st late">지연 ${c.late.map(n=>n+'차').join('·')}</span>`:c.unpaid?`<span class="st wait">수금 대기</span>`:c.unclaimed>0?`<span class="st plan">기성 청구 ${won(c.unclaimed)}</span>`:`<span class="st ok">정산 완료</span>`;
+      const note=P.remarkMode==='note'?(P.rowRemarks||{})[r.id]:'';
+      h+=`<div class="mv-row" data-r="${r.id}">
+        <div class="mv-row-head">
+          <span class="mv-name">${esc(r.name)}</span>
+          ${label?`<span class="mv-badge" style="background:${tint(col,.16)};color:${col}">${esc(label)}</span>`:''}
+        </div>
+        <div class="mv-dates">${R?`${fmtS(R.start)} ~ ${fmtS(R.end)}${R.known?'':' (종료일 미정)'}`:'일정 없음'}</div>
+        ${pct!=null?`<div class="mv-bar"><div class="mv-bar-fill" style="width:${pct}%"></div></div><div class="mv-pct">${pct}%</div>`:''}
+        <div class="mv-detail" hidden>
+          ${c?`<div class="mv-fin">
+            <div>계약금액 <b>${won(c.total)}</b></div>
+            <div>청구금액 <b>${won(c.claim)}</b></div>
+            <div>수금금액 <b>${won(c.paid)}</b></div>
+            <div class="${c.unpaid?'due':''}">잔금 <b>${won(c.bal)}</b></div>
+            ${ls}
+          </div>`:`<div class="mv-fin mv-empty">계약금액 미입력</div>`}
+          ${note?`<div class="mv-memo">${esc(note)}</div>`:''}
+        </div>
+      </div>`}
+  }
+  if(!any)h+=`<div class="mv-empty-all">표시할 프로젝트가 없습니다</div>`;
+  host.innerHTML=h;
+}
 function renderBar(){
   $('#projSel').innerHTML=DB.projects.map(p=>`<option value="${p.id}" ${p.id===P.id?'selected':''}>${esc(p.name)}${p.chartStart?' · '+p.chartStart.slice(0,7):''}</option>`).join('');
   $('#bAddG').textContent='+ '+(P.hdG||'공사구획')+' 추가';$('#bAddRow').textContent='+ '+(P.hdR||'공종')+' 추가';
@@ -1312,6 +1412,21 @@ $('#sheet').addEventListener('input',e=>{const t=e.target;
 $('#paper').addEventListener('change',e=>{P.paper=e.target.value;save();renderAll()});
 let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if((P.paper||'a4')!=='free')renderSheet()},120)});
 $('#projSel').addEventListener('change',e=>{P=DB.projects.find(p=>p.id===e.target.value);DB.current=P.id;hist=[];sel=null;save();renderAll()});
+// 모바일 조회 화면(#mobileView)은 매번 innerHTML로 통째로 다시 그려지므로, 그 안의 공정표
+// 선택 select(#mvProjSel)는 고정 DOM이 아니라 이벤트 위임으로 처리한다 - 평소 #projSel과
+// 똑같은 전환 로직을 그대로 쓴다.
+$('#mobileView').addEventListener('change',e=>{
+  if(e.target.id!=='mvProjSel')return;
+  P=DB.projects.find(p=>p.id===e.target.value);DB.current=P.id;hist=[];sel=null;save();renderAll();
+});
+// 프로젝트 줄을 누르면 기성·자금·비고 상세를 펼치거나 접는다 - 어디까지나 보기 전용이라 값을
+// 고치는 입력칸은 없다.
+$('#mobileView').addEventListener('click',e=>{
+  if(e.target.closest('select'))return;
+  const row=e.target.closest('.mv-row');if(!row)return;
+  const d=row.querySelector('.mv-detail');if(!d)return;
+  d.hidden=!d.hidden;row.classList.toggle('open',!d.hidden);
+});
 function autoW(p){const sc=$('#scroller');const avail=Math.min(window.innerWidth-48,(sc?sc.parentElement.clientWidth:900))-48-194;p.dayW=Math.max(8,Math.min(30,Math.floor(avail/(diff(p.chartStart,p.chartEnd)+1))))}
 $('#bNew').onclick=()=>{const p=blank();autoW(p);DB.projects.push(p);P=p;DB.current=p.id;hist=[];sel=null;save();renderAll();openSet();toast('새 공정표를 만들었습니다')};
 $('#bDup').onclick=()=>{const p=JSON.parse(JSON.stringify(P));p.id=uid();p.name=P.name+' (사본)';DB.projects.push(p);P=p;DB.current=p.id;hist=[];sel=null;save();renderAll();toast('복제했습니다')};
