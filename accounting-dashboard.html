@@ -13,19 +13,9 @@
   /* 계정과목 카테고리 팔레트 (dataviz 스킬 validate_palette.js 통과, light surface #FFFFFF) */
   --c1:#2F6FB0; --c2:#C97A2E; --c3:#0E93AC; --c4:#B08A2E; --c5:#A8547E; --c6:#5A8C30; --c7:#6B5CA5; --c8:#A24E3D;
 }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#17140F; --surface:#1E1A14; --surface-2:#26211A; --line:#373126;
-    --ink:#F1ECE2; --ink-2:#C7BFAF; --muted:#8F8877;
-    --con:#4A8AC4; --con-soft:#1E2B38;
-    --des:#C17F2E; --des-soft:#2E2417;
-    --pos:#1BA6A6; --neg:#E0665C; --mid:#5C5647;
-    --pos-soft:#12312E; --neg-soft:#341F1C;
-    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
-    /* 계정과목 팔레트 (dark surface #1E1A14 기준 검증) */
-    --c1:#4A8AC4; --c2:#C17F2E; --c3:#1E9DB4; --c4:#B08327; --c5:#C15C93; --c6:#6B9635; --c7:#8B7BC7; --c8:#C4695A;
-  }
-}
+/* 2026-11-06: 기기(OS) 다크모드를 그대로 따라가던 @media(prefers-color-scheme:dark) 자동 전환는
+   없앴다(페이지 안에 다크모드를 켜는 버튼이 따로 없어서, 있으나 마나 OS 설정에만 끌려다녔음).
+   아래 :root[data-theme="dark"]는 나중에 수동 전환 버튼을 달 때 쓰려고 남겨뒀다. */
 :root[data-theme="dark"]{
   --bg:#17140F; --surface:#1E1A14; --surface-2:#26211A; --line:#373126;
   --ink:#F1ECE2; --ink-2:#C7BFAF; --muted:#8F8877;
@@ -162,18 +152,6 @@ footer b{color:var(--ink-2);}
   --radius:10px; --radius-sm:6px;
   --shadow:0 1px 2px rgba(42,38,33,.06), 0 8px 24px -12px rgba(42,38,33,.12);
   --c1:#2F6FB0; --c2:#C97A2E; --c3:#0E93AC; --c4:#B08A2E; --c5:#A8547E; --c6:#5A8C30; --c7:#6B5CA5; --c8:#A24E3D;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#17140F; --surface:#1E1A14; --surface-2:#26211A; --line:#373126;
-    --ink:#F1ECE2; --ink-2:#C7BFAF; --muted:#8F8877;
-    --con:#4A8AC4; --con-soft:#1E2B38;
-    --des:#C17F2E; --des-soft:#2E2417;
-    --pos:#1BA6A6; --neg:#E0665C; --mid:#5C5647;
-    --pos-soft:#12312E; --neg-soft:#341F1C;
-    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
-    --c1:#4A8AC4; --c2:#C17F2E; --c3:#1E9DB4; --c4:#B08327; --c5:#C15C93; --c6:#6B9635; --c7:#8B7BC7; --c8:#C4695A;
-  }
 }
 :root[data-theme="dark"]{
   --bg:#17140F; --surface:#1E1A14; --surface-2:#26211A; --line:#373126;
@@ -539,10 +517,10 @@ tr.group-hd .group-hd-meta{float:right; color:var(--muted); font-size:11.5px;}
   'use strict';
 
   var isDark = function(){
+    // 2026-11-06: OS 다크모드를 그대로 따라가지 않도록 함 - data-theme="dark"를 명시적으로
+    // 설정한 경우에만 다크모드로 본다(지금은 그걸 켜는 버튼이 없으니 항상 false).
     var t = document.documentElement.getAttribute('data-theme');
-    if(t === 'dark') return true;
-    if(t === 'light') return false;
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return t === 'dark';
   };
   var fmtWon = function(n){
     var v = Math.round(n);
@@ -1271,10 +1249,10 @@ tr.group-hd .group-hd-meta{float:right; color:var(--muted); font-size:11.5px;}
   'use strict';
 
   var isDark = function(){
+    // 2026-11-06: OS 다크모드를 그대로 따라가지 않도록 함 - data-theme="dark"를 명시적으로
+    // 설정한 경우에만 다크모드로 본다(지금은 그걸 켜는 버튼이 없으니 항상 false).
     var t = document.documentElement.getAttribute('data-theme');
-    if(t === 'dark') return true;
-    if(t === 'light') return false;
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return t === 'dark';
   };
   var fmtWon = function(n){
     if(n === null || n === undefined) return '-';
