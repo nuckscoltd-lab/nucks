@@ -535,6 +535,18 @@ textarea.inp{width:100%;resize:vertical}
       <div class="acts" style="margin-top:6px"><button class="btn" id="fAdd" type="button" style="border:1px solid var(--line)">+ 기성 차수 추가</button></div>
     </div>
     <div class="fsum" id="fSum"></div>
+    <div class="f" style="border:1px solid var(--line);border-radius:8px;padding:10px 12px">
+      <label style="margin-bottom:4px">참여 근로자·인건비 배분 <small style="color:var(--muted);font-weight:400">· 근무일지(근무일지 페이지) 기록을 코드(위 "코드" 칸의 두 번째 값)로 찾아 집계한 참고용 추정치입니다 - 여기서 입력·수정은 안 되고, 근무일지에서 입력해야 반영됩니다.</small></label>
+      <div id="fLabor" class="hint" style="margin:0">코드를 저장하면 볼 수 있습니다.</div>
+    </div>
+    <div class="f" style="border:1px solid var(--line);border-radius:8px;padding:10px 12px">
+      <label style="margin-bottom:4px">계약서·참조문서 첨부</label>
+      <div id="fAttachList" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px"></div>
+      <div class="acts">
+        <label class="btn" style="border:1px solid var(--line)">파일 올리기<input type="file" id="fAttachFile" hidden multiple></label>
+        <span class="hint" id="fAttachStatus" style="margin:0"></span>
+      </div>
+    </div>
   </div>
   <div class="df"><button class="btn danger" id="fDelFin" type="button">기성 정보 지우기</button><span style="flex:1"></span><button class="btn" data-close>취소</button><button class="btn pri" id="fSave">저장</button></div>
 </dialog>
@@ -562,6 +574,15 @@ textarea.inp{width:100%;resize:vertical}
 <dialog id="dData">
   <div class="dh"><h2>저장파일·불러오기</h2><button class="btn" data-close>닫기</button></div>
   <div class="db">
+    <div class="f" style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--head)">
+      <label style="margin-bottom:4px">서버 동기화 <small style="color:var(--muted);font-weight:400">· 편집하면 몇 초 후 자동으로 지금 보고 있는 공정표만 서버에 올라갑니다. 서버 → 이 브라우저로 받아오는 건 아래에서 직접 눌러야만 합니다(실수로 편집 내용이 덮어써지지 않도록).</small></label>
+      <p class="hint" id="syncStatus" style="margin:4px 0 8px"></p>
+      <div class="acts">
+        <button class="btn" id="syncPushAll" type="button">지금 모든 공정표 서버에 올리기</button>
+        <button class="btn" id="syncList" type="button" style="border:1px solid var(--line)">서버 목록 보기·받아오기</button>
+      </div>
+      <div id="syncListBox" hidden style="margin-top:8px;display:flex;flex-direction:column;gap:4px"></div>
+    </div>
     <p class="hint" style="margin:0">작업 내용은 이 브라우저에 자동 저장됩니다. 다른 PC나 직원과 주고받을 때는 아래 내용을 복사하거나 파일로 저장해 전달하세요.</p>
     <textarea id="jTxt" class="inp" rows="9" style="font-family:var(--font-num);font-size:11px"></textarea>
     <div class="acts">
@@ -579,6 +600,7 @@ textarea.inp{width:100%;resize:vertical}
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="auth.js"></script>
 <script>
@@ -700,12 +722,112 @@ try{
   if(!DB.current||!DB.projects.some(p=>p.id===DB.current))DB.current=n2.id;
 }catch(e){console.error('nucksAll 추가 실패', e)}
 P=DB.projects.find(p=>p.id===DB.current)||DB.projects[0];
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}};
+// save()는 기본적으로 지금까지처럼 이 브라우저(localStorage)에만 저장한다. skipPush를 안 주면
+// 추가로 "지금 편집 중인 프로젝트(P)"를 서버(Firestore)에도 올리도록 예약한다(디바운스).
+// 서버에서 막 받아온 직후처럼 "다시 서버로 올릴 필요 없는" 저장은 save(true)로 건너뛴다.
+const save=(skipPush)=>{try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}if(!skipPush)scheduleServerPush(P)};
 let hist=[];
 let redoS=[];
 const snap=()=>{redoS=[];hist.push(JSON.stringify(P));if(hist.length>60)hist.shift();$('#bUndo').disabled=false};
 function redo(){if(!redoS.length)return;hist.push(JSON.stringify(P));const o=JSON.parse(redoS.pop());const i=DB.projects.findIndex(p=>p.id===P.id);DB.projects[i]=o;P=o;sel=null;save();renderAll();toast('다시 실행했습니다')}
 function undo(){if(!hist.length)return;redoS.push(JSON.stringify(P));const o=JSON.parse(hist.pop());const i=DB.projects.findIndex(p=>p.id===P.id);DB.projects[i]=o;P=o;sel=null;save();renderAll();$('#bUndo').disabled=!hist.length;toast('되돌렸습니다')}
+
+/* ---------- 서버 동기화 (Firestore 'scheduleProjects' 컬렉션) ----------
+   2026-11-06: 지금까지 이 공정표는 이 브라우저 localStorage에만 저장되어서, 다른 기기나
+   회계현황대시보드 같은 다른 페이지에서는 이 데이터를 전혀 읽을 수 없었다. 이제 같은 프로젝트를
+   Firestore에도 올려서 다른 페이지가 "기준 데이터"로 읽어갈 수 있게 한다.
+   - 자동으로 하는 건 "로컬 → 서버로 올리기"뿐이다(편집할 때마다 몇 초 후 디바운스로 올라감).
+     여러 사람이 동시에 열어도 안전하도록, "서버 → 로컬로 받기"는 절대 자동으로 하지 않고
+     항상 사람이 "저장파일·불러오기" 창에서 직접 눌러야만 받아온다(실수로 방금 한 편집이
+     다른 사람(또는 다른 탭)의 서버 데이터로 덮어써지는 사고를 막기 위함).
+   - Firestore 연결이 안 되거나(auth.js/firebase-config.js 로드 실패, 권한 문제 등) 오프라인이어도
+     이 기능은 "있으면 좋은" 부가 기능일 뿐, 실패해도 기존 로컬 저장·편집 기능에는 전혀 영향이
+     없도록 전부 try/catch로 감싼다.
+   - Firestore 보안 규칙에 'scheduleProjects' 컬렉션에 대한 admin 읽기/쓰기 허용이 아직 없다면,
+     Firebase 콘솔에서 다른 컬렉션(예: billingProjects)과 같은 수준으로 규칙을 추가해야 한다 -
+     이 세션에서는 규칙 파일을 볼 수 없어 직접 넣어드릴 수 없다. */
+const SCHED_COL='scheduleProjects';
+const SYNC={pushTimer:null,pushing:new Set(),lastPushAt:{},lastErr:''};
+function fsReady(){try{return typeof firebase!=='undefined'&&typeof db!=='undefined'&&!!db}catch(e){return false}}
+function scheduleServerPush(p){
+  if(!fsReady()||!p||!p.id)return;
+  clearTimeout(SYNC.pushTimer);
+  SYNC.pushTimer=setTimeout(()=>{pushProjectToServer(p)},2500);
+}
+async function pushProjectToServer(p){
+  if(!fsReady()||!p||!p.id)return;
+  if(SYNC.pushing.has(p.id))return; // 같은 프로젝트가 이미 올라가는 중이면 겹쳐 보내지 않음
+  SYNC.pushing.add(p.id);
+  try{
+    const data=JSON.parse(JSON.stringify(p));
+    data._pushedAt=firebase.firestore.FieldValue.serverTimestamp();
+    try{data._pushedBy=(firebase.auth().currentUser&&firebase.auth().currentUser.email)||'';}catch(_){data._pushedBy=''}
+    await db.collection(SCHED_COL).doc(p.id).set(data);
+    SYNC.lastPushAt[p.id]=Date.now();SYNC.lastErr='';
+  }catch(e){console.error('서버 저장 실패',e);SYNC.lastErr=String(e&&e.message||e)}
+  finally{SYNC.pushing.delete(p.id);updateSyncStatus()}
+}
+/* 지금 이 브라우저에 있는 "모든" 공정표를 한 번에 서버로 올린다(저장파일·불러오기 창의 버튼).
+   서버에 이미 있는 프로젝트를 말없이 덮어쓰지 않도록, 서버 쪽에 더 최근 기록이 있으면 먼저 물어본다. */
+async function pushAllToServer(){
+  if(!fsReady()){toast('서버에 연결할 수 없습니다 (오프라인이거나 로그인 상태를 확인하세요)');return}
+  const conflicts=[];
+  for(const p of DB.projects){
+    try{
+      const doc=await db.collection(SCHED_COL).doc(p.id).get();
+      if(doc.exists){
+        const sv=doc.data();const svAt=sv._pushedAt&&sv._pushedAt.toMillis?sv._pushedAt.toMillis():0;
+        const mine=SYNC.lastPushAt[p.id]||0;
+        if(svAt&&svAt>mine)conflicts.push({id:p.id,name:p.name,svBy:sv._pushedBy||'(알 수 없음)'});
+      }
+    }catch(e){toast('서버 확인 중 오류: '+(e&&e.message||e));return}
+  }
+  if(conflicts.length){
+    const msg=`서버에 이미 더 최근 기록이 있는 프로젝트가 ${conflicts.length}건 있습니다:\n`+
+      conflicts.map(c=>`· ${c.name} (올린 사람: ${c.svBy})`).join('\n')+
+      `\n\n그래도 이 브라우저 내용으로 전부 덮어쓸까요? (서버의 최신 내용은 사라집니다)`;
+    if(!confirm(msg))return;
+  }
+  let ok=0,fail=0;
+  for(const p of DB.projects){
+    try{
+      const data=JSON.parse(JSON.stringify(p));
+      data._pushedAt=firebase.firestore.FieldValue.serverTimestamp();
+      try{data._pushedBy=(firebase.auth().currentUser&&firebase.auth().currentUser.email)||''}catch(_){data._pushedBy=''}
+      await db.collection(SCHED_COL).doc(p.id).set(data);SYNC.lastPushAt[p.id]=Date.now();ok++;
+    }catch(e){fail++;console.error('올리기 실패',p.id,e)}
+  }
+  updateSyncStatus();
+  toast(fail?`${ok}건 올림, ${fail}건 실패(콘솔 확인)`:`${ok}개 공정표를 서버에 올렸습니다`);
+}
+/* 서버에 올라가 있는 공정표 목록(이름·마지막으로 올린 사람/시각)만 가볍게 가져온다(본문은 안 받음 - 큰 문서라). */
+async function listServerProjects(){
+  if(!fsReady())return[];
+  const snap=await db.collection(SCHED_COL).get();
+  return snap.docs.map(d=>{const v=d.data();return{id:d.id,name:v.name||'(이름 없음)',pushedBy:v._pushedBy||'',pushedAt:v._pushedAt&&v._pushedAt.toDate?v._pushedAt.toDate():null}});
+}
+/* 서버의 특정 프로젝트를 이 브라우저로 받아온다(= 로컬 내용을 서버 내용으로 덮어씀, 그래서 항상
+   확인을 받고 호출해야 한다). 받아온 직후의 저장은 다시 서버로 올릴 필요가 없으니 save(true). */
+async function pullProjectFromServer(id){
+  if(!fsReady())return false;
+  const doc=await db.collection(SCHED_COL).doc(id).get();
+  if(!doc.exists)return false;
+  const data=doc.data();delete data._pushedAt;delete data._pushedBy;
+  const i=DB.projects.findIndex(x=>x.id===id);
+  if(i>=0)DB.projects[i]=data;else DB.projects.push(data);
+  SYNC.lastPushAt[id]=Date.now();
+  if(P.id===id)P=data;
+  sel=null;hist=[];redoS=[];DB.current=DB.current||id;
+  save(true);renderAll();
+  return true;
+}
+function updateSyncStatus(){const el=document.getElementById('syncStatus');if(!el)return;
+  if(!fsReady()){el.textContent='서버 연결 안 됨(오프라인) - 이 브라우저에만 저장됩니다.';return}
+  const n=Object.keys(SYNC.lastPushAt).length;
+  el.textContent=SYNC.lastErr?`마지막 서버 저장 실패: ${SYNC.lastErr}`:
+    n?`이 브라우저에서 서버로 마지막 저장: ${new Date(Math.max(...Object.values(SYNC.lastPushAt))).toLocaleString('ko-KR')}`:
+    '아직 이 브라우저에서 서버로 올린 적 없음';
+}
 
 /* ---------- 유틸 ---------- */
 const $=q=>document.querySelector(q);
@@ -1553,7 +1675,29 @@ $('#shGo').onclick=()=>{
   save();$('#dShift').close();renderAll();toast(`일정 ${t.length}건을 ${n>0?n+'작업일 미뤘습니다':(-n)+'작업일 당겼습니다'}`)};
 
 /* 저장파일 */
-$('#bData').onclick=()=>{$('#jTxt').value=JSON.stringify(P,null,1);$('#dData').showModal()};
+$('#bData').onclick=()=>{$('#jTxt').value=JSON.stringify(P,null,1);$('#syncListBox').hidden=true;updateSyncStatus();$('#dData').showModal()};
+$('#syncPushAll').onclick=async()=>{const b=$('#syncPushAll');b.disabled=true;b.textContent='올리는 중...';try{await pushAllToServer()}finally{b.disabled=false;b.textContent='지금 모든 공정표 서버에 올리기'}};
+$('#syncList').onclick=async()=>{
+  const box=$('#syncListBox');
+  if(!box.hidden){box.hidden=true;return}
+  box.hidden=false;box.innerHTML='불러오는 중...';
+  try{
+    const list=await listServerProjects();
+    if(!list.length){box.innerHTML='<span class="hint">서버에 올라간 공정표가 아직 없습니다.</span>';return}
+    box.innerHTML=list.map(it=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--line)">
+      <span style="flex:1;min-width:0">${esc(it.name)} <small style="color:var(--muted)">${it.pushedAt?it.pushedAt.toLocaleString('ko-KR'):''}${it.pushedBy?' · '+esc(it.pushedBy):''}</small></span>
+      <button class="btn" data-pull="${esc(it.id)}" data-nm="${esc(it.name)}" type="button" style="border:1px solid var(--line)">이 브라우저로 받기</button>
+    </div>`).join('');
+  }catch(e){box.innerHTML='<span class="hint">목록을 가져오지 못했습니다: '+esc(String(e&&e.message||e))+'</span>'}
+};
+$('#syncListBox').addEventListener('click',async e=>{
+  const b=e.target.closest('[data-pull]');if(!b)return;
+  if(!confirm(`"${b.dataset.nm}"의 서버 내용을 이 브라우저로 받아올까요?\n이 브라우저에 같은 이름의 공정표가 있으면 그 내용은 사라지고 서버 내용으로 바뀝니다.`))return;
+  b.disabled=true;b.textContent='받는 중...';
+  try{const ok=await pullProjectFromServer(b.dataset.pull);toast(ok?'서버에서 받아왔습니다':'서버에서 찾을 수 없습니다');if(ok)$('#dData').close()}
+  catch(e){toast('받아오기 실패: '+(e&&e.message||e))}
+  finally{b.disabled=false;b.textContent='이 브라우저로 받기'}
+});
 $('#jCopy').onclick=async()=>{const t=$('#jTxt');t.value=JSON.stringify(P,null,1);try{await navigator.clipboard.writeText(t.value);toast('복사했습니다')}catch(e){t.focus();t.select();toast('선택된 내용을 Ctrl+C로 복사하세요')}};
 $('#jDown').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(P,null,1)],{type:'application/json'}));a.download=(P.name||'공정표').replace(/[\\/:*?"<>|]/g,'_')+'.json';a.click()};
 function importText(txt){
@@ -1672,9 +1816,101 @@ function fTotal(){const v=parseAmt($('#fTot').value,0);if(isNaN(v))return NaN;re
 function vatInfo(){const t=fTotal(),el=$('#fVatInfo');if(!el)return;if(!t||isNaN(t)){el.textContent='';return}
   const sup=$('#fVat').value==='ex'?parseAmt($('#fTot').value,0):Math.round(t/1.1);el.textContent=`공급가 ${won(sup)} + 부가세 ${won(t-sup)} = 합계 ${won(t)} (아래 금액은 ${VATL()} 기준으로 표시·입력)`}
 let FD=null;
+
+/* ---------- 참여 근로자·인건비 배분 (근무일지 Firestore 데이터를 읽기 전용으로 집계) ----------
+   근무일지(worklog.html)의 workLogs(하루·직원별 투입시간)와 payslips(월별 기본급)를 그대로 읽어와,
+   근무일지 자체에 이미 있는 "프로젝트별 인건비 집계" 계산식(투입시간 × 통상시급)을 그대로 적용한다.
+   공정표 쪽에서 입력/수정은 하지 않는다 - 근무일지가 원본이고 여기는 보여주기만 한다.
+   코드는 "코드(대분류·작업분류)"의 두 번째 칸(r.projCode, 예: 2026-01-01)으로 맞춘다. 관공서
+   공사 일부는 근무일지 쪽 코드에 "(2)"같은 괄호 구분이 더 붙어 있어 정확히 일치하지 않을 수
+   있어서, 정확히 일치하는 코드가 없으면 그 괄호를 뗀 값으로 한 번 더 찾아보고(근사치), 그 경우
+   화면에 "근사치" 표시를 한다. */
+function normCode(c){return String(c||'').replace(/\(\d+\)/g,'').trim()}
+let LABOR_CACHE=null;
+async function loadLaborData(force){
+  if(LABOR_CACHE&&!force)return LABOR_CACHE;
+  if(!fsReady())return(LABOR_CACHE={byCode:{},byNorm:{},err:'서버 연결 안 됨'});
+  try{
+    const[wlSnap,paySnap]=await Promise.all([db.collection('workLogs').get(),db.collection('payslips').get()]);
+    const wageMap={};
+    paySnap.docs.forEach(d=>{const p=d.data();const ym=(p['지급일']||'').slice(0,7);if(!ym||!p.uid)return;wageMap[p.uid]=wageMap[p.uid]||{};wageMap[p.uid][ym]=(p.pay&&p.pay['기본급'])||0});
+    const byCode={};
+    wlSnap.docs.forEach(d=>{
+      const row=d.data();const ym=(row['날짜']||'').slice(0,7);const uidWages=wageMap[row.uid]||{};
+      let base=uidWages[ym];
+      if(base===undefined){const prior=Object.keys(uidWages).filter(m=>m<=ym).sort().reverse();base=prior.length?uidWages[prior[0]]:undefined}
+      if(base===undefined)return; // 근무일지와 똑같이: 해당 월(또는 그 이전 가장 최근) 급여명세서가 아예 없으면 이 기록은 집계에서 뺀다
+      const hourly=base/209;const empName=row['사원명']||'(이름없음)';
+      (row.projects||[]).forEach(p=>{
+        const code=p['프로젝트코드'];if(!code)return;
+        const hours=Number(p['투입시간'])||0;const cost=hours*hourly;
+        if(!byCode[code])byCode[code]={hours:0,cost:0,people:new Set(),name:p['프로젝트']||''};
+        byCode[code].hours+=hours;byCode[code].cost+=cost;byCode[code].people.add(empName);
+      });
+    });
+    const byNorm={};
+    for(const code in byCode){const n=normCode(code);if(!byNorm[n])byNorm[n]={hours:0,cost:0,people:new Set(),codes:[]};
+      byNorm[n].hours+=byCode[code].hours;byNorm[n].cost+=byCode[code].cost;byCode[code].people.forEach(x=>byNorm[n].people.add(x));byNorm[n].codes.push(code)}
+    LABOR_CACHE={byCode,byNorm,err:''};
+  }catch(e){LABOR_CACHE={byCode:{},byNorm:{},err:String(e&&e.message||e)}}
+  return LABOR_CACHE;
+}
+async function renderFinLabor(projCode){
+  const el=$('#fLabor');if(!el)return;
+  if(!projCode){el.textContent='코드(두 번째 값, 예: 2026-01-01)를 입력하면 참여 근로자·인건비를 보여줍니다.';return}
+  el.textContent='근무일지에서 불러오는 중...';
+  const data=await loadLaborData();
+  if($('#fCode2').value.trim()!==projCode)return; // 불러오는 사이 코드를 또 바꿨으면 그 결과는 버림
+  if(data.err){el.textContent='불러오지 못했습니다: '+data.err;return}
+  let hit=data.byCode[projCode],exact=true;
+  if(!hit){const n=normCode(projCode);hit=(data.byNorm[n]&&data.byNorm[n].codes.length)?data.byNorm[n]:null;exact=false}
+  if(!hit){el.textContent=`코드 "${esc(projCode)}"로 근무일지에서 찾은 기록이 없습니다.`;return}
+  el.innerHTML=`참여 인원 <b>${hit.people.size}명</b> · 총 투입시간 <b>${Math.round(hit.hours*10)/10}시간</b> · 추정 인건비 <b>${won(hit.cost)}원</b>`+
+    (exact?'':' <small style="color:var(--warn)">(코드가 정확히 일치하지 않아 비슷한 코드를 묶어 집계한 근사치입니다)</small>');
+}
+$('#fCode2').addEventListener('change',()=>renderFinLabor($('#fCode2').value.trim()||null));
+
+/* ---------- 계약서·참조문서 첨부 (Firebase Storage) ---------- */
+function renderFinAttach(){
+  const box=$('#fAttachList');if(!box)return;
+  $('#fAttachFile').disabled=!FD.rowId;
+  if(!FD.rowId){box.innerHTML='<span class="hint">먼저 저장한 뒤(아래 저장 버튼) 첨부할 수 있습니다.</span>';return}
+  if(!FD.attachments||!FD.attachments.length){box.innerHTML='<span class="hint">첨부된 파일이 없습니다.</span>';return}
+  box.innerHTML=FD.attachments.map((a,i)=>`<div style="display:flex;align-items:center;gap:8px">
+    <a href="${esc(a.url)}" target="_blank" rel="noopener" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</a>
+    <button class="btn danger" data-delatt="${i}" type="button" style="padding:2px 8px" title="삭제">×</button>
+  </div>`).join('');
+}
+$('#fAttachFile').addEventListener('change',async e=>{
+  const files=[...e.target.files];e.target.value='';
+  if(!files.length)return;
+  if(!FD.rowId){toast('먼저 저장한 뒤 첨부할 수 있습니다');return}
+  if(!fsReady()){toast('서버에 연결할 수 없어 첨부할 수 없습니다(오프라인이거나 로그인 상태를 확인하세요)');return}
+  const statusEl=$('#fAttachStatus');
+  for(const file of files){
+    statusEl.textContent=`올리는 중: ${file.name}`;
+    try{
+      const path=`schedule-attachments/${FD.rowId}/${Date.now()}_${file.name.replace(/[^\w.\-가-힣 ]/g,'_')}`;
+      const ref=firebase.storage().ref(path);
+      await ref.put(file);
+      const url=await ref.getDownloadURL();
+      FD.attachments=FD.attachments||[];FD.attachments.push({name:file.name,url,path,size:file.size,addedAt:Date.now()});
+    }catch(err){toast('업로드 실패: '+(err&&err.message||err))}
+  }
+  statusEl.textContent='';renderFinAttach();
+});
+$('#fAttachList').addEventListener('click',async e=>{
+  const b=e.target.closest('[data-delatt]');if(!b)return;
+  const i=+b.dataset.delatt;const a=FD.attachments&&FD.attachments[i];if(!a)return;
+  if(!confirm(`"${a.name}" 첨부를 삭제할까요?`))return;
+  b.disabled=true;
+  try{if(a.path&&fsReady()){try{await firebase.storage().ref(a.path).delete()}catch(err){console.warn('스토리지 파일 삭제 실패(목록에서는 제거됨):',err)}}}
+  finally{FD.attachments.splice(i,1);renderFinAttach()}
+});
+
 function openFin(rowId){
   const f=rowId?findRow(rowId):null,r=f&&f.r,b=r&&r.bars[0],fn=(r&&r.fin)||{};
-  FD={rowId:rowId||null,items:JSON.parse(JSON.stringify(fn.items||[]))};$('#fPay').value=fn.payType!=null?fn.payType:(f&&/HDC|현대산업/.test(f.g.name)?'bill':'');if(fn.payType==null)FD.items.forEach(x=>{if(x.payType==null&&!+x.paid)x.payType=$('#fPay').value});
+  FD={rowId:rowId||null,items:JSON.parse(JSON.stringify(fn.items||[])),attachments:JSON.parse(JSON.stringify((r&&r.attachments)||[]))};$('#fPay').value=fn.payType!=null?fn.payType:(f&&/HDC|현대산업/.test(f.g.name)?'bill':'');if(fn.payType==null)FD.items.forEach(x=>{if(x.payType==null&&!+x.paid)x.payType=$('#fPay').value});
   $('#fTitle').textContent=r?'계약·기성 관리':'새 프로젝트 등록';
   $('#fCoList').innerHTML=P.groups.map(g=>`<option value="${esc(g.name)}">`).join('');
   $('#fCo').value=f?f.g.name:((curGroup()||{}).name||'');$('#fName').value=r?r.name:'';$('#fCode').value=r?(r.code||''):'';$('#fCode2').value=r?(r.projCode||''):'';
@@ -1687,7 +1923,7 @@ function openFin(rowId){
   // 상태(계약/진행/완료)를 추측해 미리 선택해둔다 (실주는 자동으로 판단할 수 없어 제외).
   $('#fSt').value=(b&&['계약','실주','진행','완료'].includes(b.inner))?b.inner:suggestFinStatus(r);const vx=fn.vatEx!==false&&(fn.vatEx||!+fn.total);$('#fVat').value=vx?'ex':'in';$('#fTot').value=+fn.total?won(vx?(+fn.supply||Math.round(fn.total/1.1)):fn.total):'';setTimeout(vatInfo);
   if(!FD.items.length)FD.items.push({claimDate:'',claim:0,payDate:'',paid:0});
-  vatNote();$('#fDelFin').hidden=!(r&&r.fin);renderFinItems();finSum();$('#dFin').showModal();
+  vatNote();$('#fDelFin').hidden=!(r&&r.fin);renderFinItems();finSum();renderFinAttach();renderFinLabor(r&&r.projCode);$('#dFin').showModal();
   setTimeout(()=>{(r?$('#fTot'):$('#fCo')).focus()},30)}
 function renderFinItems(){const won=n=>WON(vx(n)),man=n=>MAN(vx(n));
   const tot=fTotal()||0;
@@ -1771,6 +2007,7 @@ $('#fSave').onclick=()=>{
   let r;const f=FD.rowId&&findRow(FD.rowId);
   if(f){r=f.r;if(f.g!==g){f.g.rows.splice(f.g.rows.indexOf(r),1);g.rows.push(r)}}else{r={id:uid(),name,bars:[]};g.rows.push(r)}
   r.name=name;r.code=$('#fCode').value.trim()||null;r.projCode=$('#fCode2').value.trim()||null;
+  if(FD.attachments&&FD.attachments.length)r.attachments=FD.attachments;else delete r.attachments;
   // 이름도 없고(아직 이름을 입력/자동배정 받지 않았고) 금액·날짜도 전혀 안 채운, 진짜 빈 줄만 저장에서
   // 제외한다. "분할 수금"으로 만든 줄은 생성 즉시 이름("N차 기성-수금n")이 붙어 있으므로, 금액·날짜를
   // 아직 안 채웠더라도(=수금 예정 상태) 여기서 걸러지지 않고 그대로 저장된다.
