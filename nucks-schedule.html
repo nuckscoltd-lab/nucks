@@ -45,6 +45,7 @@ select.inp{padding-right:4px}
 .stat b{color:var(--ink);font-weight:500}
 .zoom{display:flex;align-items:center;gap:6px;padding:0 6px;color:var(--muted);font-size:12px}
 .hint{color:var(--muted);font-size:12px;line-height:1.5}
+.hint-mobile{display:none;color:var(--ink);font-weight:600}
 
 /* sheet */
 .sheet{background:var(--paper);border:1px solid var(--line);border-radius:4px;padding:22px 24px 26px;min-width:0;width:fit-content;max-width:100%}
@@ -360,12 +361,20 @@ body.picking .bw:hover{outline:2px dashed var(--sel);outline-offset:2px}
 .mv-memo{font-size:12.5px;color:var(--ink);background:var(--head);border-radius:6px;padding:8px 10px;white-space:pre-wrap;word-break:keep-all}
 .mv-empty-all{color:var(--muted);font-size:13px;text-align:center;padding:40px 0}
 @media (max-width:900px){
-  .bar,.hintrow,#sheet,.insp{display:none!important}
-  /* #mobileView는 HTML에 hidden 속성으로 시작하는데([hidden]{display:none!important}가
-     전역 규칙이라 우선순위가 가장 높음), 폭이 좁을 땐 그 hidden을 무시하고 보여줘야 하므로
-     이 규칙도 똑같이 !important를 붙인다. */
-  .mv{display:flex!important}
-  html,body{overflow-x:hidden}
+  /* 2026-11-06: "조회 전용" 목록 화면(#mobileView)으로 아예 바꿔봤었는데, 원래 PC 화면과 너무
+     달라져서(의도와 다름) 되돌렸다. 이제 900px 이하에서도 PC와 같은 간트차트(#sheet)를 그대로
+     보여주되, 1) "자유 크기" 용지는 화면 폭에 맞게(Z폴드) 또는 읽기 쉽게 확대(Z플립) 자동으로
+     크기를 조절하고(renderSheet의 .freebox 처리 참고) 2) 터치로 스크롤·확대하다가 막대를
+     끌었다고 오인되어 일정이 바뀌는 일이 없도록 막대 끌기·칸 너비 조절·공종 끌어서 옮기기 같은
+     "끌기" 동작은 비활성화한다(JS의 viewOnly() 분기). #mobileView 관련 코드는 남겨두되 더 이상
+     기본으로 노출하지 않는다. */
+  .hint-mobile{display:block;margin-bottom:6px}
+  #sheet{overflow-x:auto}
+  .freebox{min-width:0}
+  /* 위 도구막대(.bar)는 .grp(버튼 묶음) 하나에 셀렉트가 몰려 있어서, 좁은 화면에서 줄바꿈 없이
+     그대로 넓어지면 화면 전체가 옆으로 밀려서 스크롤되어 버린다(차트뿐 아니라 화면 전체가).
+     .grp 안에서도 줄바꿈되게 해서 도구막대가 화면 폭 안에서 여러 줄로 쌓이게 한다. */
+  .grp{flex-wrap:wrap;min-width:0;max-width:100%}
 }
 @media (min-width:901px){.mv{display:none!important}}
 
@@ -445,17 +454,16 @@ textarea.inp{width:100%;resize:vertical}
       <span class="stat" id="stat"></span>
     </div>
   </div>
-  <div class="hint hintrow">빈 칸을 드래그하면 일정 막대가 생깁니다. 막대는 끌어서 이동(다른 공종 줄로도), 양 끝을 끌어서 기간 조절, 클릭하면 오른쪽에서 내용·색·작업일수를 바꿉니다. 토·일·공휴일 칸은 자동으로 비워집니다. <b>왼쪽 칸</b> 더블클릭: 공종·구획·머리글 이름 바로 수정 · 공종을 위아래로 끌기: 순서 변경·다른 구획으로 이동 · 왼쪽 칸 세로 경계선 끌기: 칸 너비 조절(날짜 칸도 함께 맞춰짐) · 공종 추가는 공종이나 구획 이름을 클릭한 뒤 오른쪽 패널에서.<br><b>단축키</b> (막대 선택 후) Del 삭제 · Ctrl+C 복사 · Ctrl+X 잘라내기 · Ctrl+V 마우스가 있는 칸에 붙여넣기 · Ctrl+D 바로 다음에 복제 · ←→ 하루씩 이동 · Shift+←→ 기간 조절 · ↑↓ 다른 공종 줄로 · Enter 글씨 입력 · Ctrl+Z 되돌리기 · Ctrl+Y 다시 실행 · Esc 선택 해제</div>
+  <div class="hint hintrow"><span class="hint-mobile">모바일에서는 조회만 가능합니다 - 화면을 스크롤·확대해도 일정이 바뀌지 않습니다. 일정 추가·이동·수정은 PC에서 해주세요.</span>빈 칸을 드래그하면 일정 막대가 생깁니다. 막대는 끌어서 이동(다른 공종 줄로도), 양 끝을 끌어서 기간 조절, 클릭하면 오른쪽에서 내용·색·작업일수를 바꿉니다. 토·일·공휴일 칸은 자동으로 비워집니다. <b>왼쪽 칸</b> 더블클릭: 공종·구획·머리글 이름 바로 수정 · 공종을 위아래로 끌기: 순서 변경·다른 구획으로 이동 · 왼쪽 칸 세로 경계선 끌기: 칸 너비 조절(날짜 칸도 함께 맞춰짐) · 공종 추가는 공종이나 구획 이름을 클릭한 뒤 오른쪽 패널에서.<br><b>단축키</b> (막대 선택 후) Del 삭제 · Ctrl+C 복사 · Ctrl+X 잘라내기 · Ctrl+V 마우스가 있는 칸에 붙여넣기 · Ctrl+D 바로 다음에 복제 · ←→ 하루씩 이동 · Shift+←→ 기간 조절 · ↑↓ 다른 공종 줄로 · Enter 글씨 입력 · Ctrl+Z 되돌리기 · Ctrl+Y 다시 실행 · Esc 선택 해제</div>
 
   <div class="pages" id="sheet"></div>
 </div>
 
-<!-- 갤럭시 Z 폴드(펼친 화면 약 750px)·Z 플립(접힌 화면 약 374px) 같은 좁은 화면에서는 위 도구막대·
-     간트차트가 글자 하나씩 세로로 끊겨 보일 만큼 비좁아진다. 막대를 픽셀 단위로 끌어서 일정을
-     조정하는 이 편집 화면은 애초에 손가락 터치로 정밀하게 쓰기 어렵기도 해서(2026-11-06 확인),
-     900px 이하에서는 간트차트 대신 "조회 전용" 목록 화면(#mobileView)을 보여준다 - 공종별이
-     아니라 프로젝트별로 상태·기간·진행률을 한눈에 보고, 눌러서 기성·자금·비고까지 펼쳐 볼 수
-     있다. 편집(막대 추가·이동 등)은 여전히 PC 화면에서만 가능하다. -->
+<!-- 2026-11-06: 아래 "조회 전용" 목록 화면(#mobileView)을 한 번 만들어 900px 이하에서 간트차트
+     대신 보여줬었는데, PC 화면과 구성이 너무 달라져서 원래 의도와 멀어진다는 피드백으로 되돌렸다.
+     지금은 어떤 화면 폭에서도 간트차트(#sheet)를 그대로 보여준다. 이 코드는 혹시 나중에 다시
+     쓸 수도 있어 남겨두되, 아래 CSS에서 항상 숨김 처리([hidden] 전역 규칙 + .mv는 더 이상
+     강제로 보이게 하지 않음)되어 기본으로는 노출되지 않는다. -->
 <div class="mv" id="mobileView" hidden></div>
 
 <aside class="insp" id="insp" hidden></aside>
@@ -850,9 +858,31 @@ function renderSheet(){
   const S=L.mode==='free'?1:Math.min(1,(host.clientWidth||L.SW)/L.SW);VIEW.S=S;
   const draw=()=>{const n=L.pages.length;
     host.innerHTML=L.pages.map((pg,i)=>{const inner=sheetInner(pg,i,n);
-      return L.mode==='free'?`<div class="sheet">${inner}</div>`:`<div class="pagebox" style="width:${L.SW*S}px;height:${L.SH*S}px"><div class="sheet fixed" style="width:${L.SW}px;height:${L.SH}px;transform:scale(${S})">${inner}</div></div>`}).join('');
+      return L.mode==='free'?`<div class="freebox"><div class="sheet">${inner}</div></div>`:`<div class="pagebox" style="width:${L.SW*S}px;height:${L.SH*S}px"><div class="sheet fixed" style="width:${L.SW}px;height:${L.SH}px;transform:scale(${S})">${inner}</div></div>`}).join('');
     host.querySelectorAll('.scroller').forEach((s,i)=>{if(keep[i])s.scrollLeft=keep[i]})};
   draw();
+  if(L.mode==='free'){
+    // "자유 크기" 용지는 P.dayW(칸 너비)가 PC 화면 기준으로 저장되어 있어서, 좁은 화면에서는
+    // 그대로 두면 오른쪽에 빈 공간이 남거나(갤럭시 Z폴드처럼 어느 정도 넓은 화면) 글씨가 너무
+    // 작아진다(Z플립처럼 아주 좁은 화면). P.dayW 자체(저장되는 값)는 그대로 두고, 화면에
+    // 보여줄 때만 .freebox/.sheet에 CSS transform:scale()을 입혀 크기를 맞춘다 - 그래서 PC로
+    // 돌아가면 원래 칸 너비 그대로 보인다.
+    host.querySelectorAll(':scope > .freebox').forEach(fb=>{
+      const sh=fb.querySelector('.sheet');if(!sh)return;
+      sh.style.transform='';sh.style.width='';sh.style.height='';fb.style.width='';fb.style.height='';
+      if(innerWidth>900)return; // PC·태블릿 화면은 저장된 칸 너비 그대로
+      const natW=sh.scrollWidth,natH=sh.scrollHeight;if(!natW||!natH)return;
+      const availW=host.clientWidth||natW;
+      let fs=availW/natW;
+      // Z플립처럼 완전히 접힌 아주 좁은 화면(대략 420px 이하)은 폭에 딱 맞추기보다 "확대"가
+      // 우선이라고 해서(가로로 스크롤해서 보더라도 글씨가 커 보이게) 맞춤 배율보다 더 키운다.
+      if(innerWidth<=420)fs*=1.6;
+      fs=Math.max(.4,Math.min(4,fs));
+      sh.style.transformOrigin='top left';
+      sh.style.width=natW+'px';sh.style.height=natH+'px';sh.style.transform=`scale(${fs})`;
+      fb.style.width=Math.ceil(natW*fs)+'px';fb.style.height=Math.ceil(natH*fs)+'px';
+    });
+  }
   const rowFit=sh=>{const si=[...host.querySelectorAll('.sheet.fixed')].indexOf(sh);const G=L.pages[si].groups,nRows=G.reduce((a,g)=>a+g.rows.length,0)||1;
     const head=sh.querySelector('.sh-head').offsetHeight;
     const avail=L.SH-2*PADY-head-4-64-2*Math.max(0,G.length-1)-(P.remark==='bottom'?REMH:0)-(showCash()?CSH:0);
@@ -1186,9 +1216,15 @@ $('#insp').addEventListener('click',e=>{
 });
 
 /* ---------- 차트 조작 ---------- */
+// 모바일(900px 이하)에서는 화면을 스크롤·확대하다가 막대나 칸 경계를 끄는 것으로 오인되어
+// 일정·칸 너비가 실수로 바뀌는 일이 없도록, 아래 끌기(드래그) 계열 동작들을 모두 건너뛴다.
+// 선택(탭해서 오른쪽 패널 보기)·세로 구분선 보기 등 "조회"는 그대로 되고, 끌어서 바꾸는
+// 동작만 비활성화된다.
+function viewOnly(){return innerWidth<=900}
 let drag=null;
 $('#sheet').addEventListener('pointerdown',e=>{
   if(e.button!==0)return;
+  if(viewOnly())return;
   const bw=e.target.closest('.bw');
   if(bw&&(pickMode||e.altKey)&&sel&&sel.t==='bar'&&bw.dataset.bar!==sel.id){
     e.preventDefault();const src=findBar(bw.dataset.bar),dst=findBar(sel.id);
@@ -1248,6 +1284,7 @@ window.addEventListener('pointerup',e=>{
 $('#sheet').addEventListener('click',e=>{
   if(suppressClick){suppressClick=false;return}
   if(e.target.closest('.editing,[data-hd],.cw'))return;
+  if(viewOnly()){const bw=e.target.closest('.bw');if(bw){select({t:'bar',id:bw.dataset.bar});return}}
   const rf=e.target.closest('.rcf[data-fin]');if(rf){openFin(rf.dataset.fin);return}
   if(e.target.closest('.notes')){openSet();setTimeout(()=>$('#sNotes').focus());return}
   const lr=e.target.closest('[data-row]');if(lr){selectLight({t:'row',id:lr.dataset.row});return}
@@ -1290,6 +1327,7 @@ function startEdit(el){
   },{once:true});
 }
 $('#sheet').addEventListener('dblclick',e=>{
+  if(viewOnly())return; // 모바일 두 번 탭(화면 확대 동작)에 이름 수정이 끼어들지 않도록
   const el=e.target.closest('[data-row],[data-g],[data-hd]');if(!el||e.target.closest('.cw'))return;
   e.preventDefault();startEdit(el);
 });
@@ -1297,6 +1335,7 @@ $('#sheet').addEventListener('dblclick',e=>{
 let rdrag=null;
 $('#sheet').addEventListener('pointerdown',e=>{
   if(e.button!==0)return;
+  if(viewOnly())return;
   const cw=e.target.closest('.cw');
   if(cw){e.preventDefault();e.stopPropagation();const k=cw.dataset.cw;
     rdrag={kind:'cw',k,x0:e.clientX,w0:k==='g'?(P.gw||62):(P.rw||128),el:cw,snapped:false};cw.classList.add('act');return}
@@ -1410,7 +1449,7 @@ $('#sheet').addEventListener('input',e=>{const t=e.target;
   if(t.dataset.rc!==undefined){P.rowRemarks=P.rowRemarks||{};P.rowRemarks[t.dataset.rc]=t.innerText.replace(/\n$/,'');save()}
   if(t.dataset.rmb!==undefined){P.remarkText=t.innerText.replace(/\n$/,'');save()}});
 $('#paper').addEventListener('change',e=>{P.paper=e.target.value;save();renderAll()});
-let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if((P.paper||'a4')!=='free')renderSheet()},120)});
+let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if((P.paper||'a4')!=='free'||innerWidth<=900)renderSheet()},120)});
 $('#projSel').addEventListener('change',e=>{P=DB.projects.find(p=>p.id===e.target.value);DB.current=P.id;hist=[];sel=null;save();renderAll()});
 // 모바일 조회 화면(#mobileView)은 매번 innerHTML로 통째로 다시 그려지므로, 그 안의 공정표
 // 선택 select(#mvProjSel)는 고정 DOM이 아니라 이벤트 위임으로 처리한다 - 평소 #projSel과
