@@ -163,6 +163,12 @@ if ('serviceWorker' in navigator) {
     display:block; width:100%; max-width:220px; padding:6px 8px; margin-bottom:6px;
     border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:12.5px; background:#fff;
   }
+  /* 부서·직급 / 입사일·생일, 이렇게 두 줄로 나눠서 보여준다 - 생일이 추가되면서 한 줄에 다
+     이어붙이면(부서 · 직급 · 입사일 · 생일) 칸 너비에서 줄바꿈이 일어나는데, 그때 둘째 줄이
+     어디서 끊기는지 예측할 수 없어 정렬이 흐트러져 보였다. 날짜 정보(입사일·생일)는 한 줄로
+     묶고 글자도 살짝 작고 연하게 둬서 부서·직급과 위계가 구분되게 했다. */
+  .hr-line{ line-height:1.5; }
+  .hr-line.hr-dates{ font-size:12.5px; color:var(--muted); margin-top:2px; }
   .empty{ font-size:13px; color:var(--muted); padding:20px 0; }
   .status-msg{ font-size:13px; margin-top:-40px; margin-bottom:40px; min-height:18px; }
   @media (max-width: 640px) {
@@ -378,7 +384,8 @@ if ('serviceWorker' in navigator) {
         </td>
         <td data-label="이메일">${data.email || ''}</td>
         <td data-label="인사정보" data-hr-cell="${uid}">
-          ${data.department || '부서 미지정'} · ${(data.positionTags || []).join(', ') || '직급 미지정'} · ${data.hireDate ? '입사일 ' + data.hireDate : '입사일 미지정'}${data.birthDate ? ' · 생일 ' + data.birthDate.slice(5) : ''}
+          <div class="hr-line">${data.department || '부서 미지정'} · ${(data.positionTags || []).join(', ') || '직급 미지정'}</div>
+          <div class="hr-line hr-dates">${data.hireDate ? '입사일 ' + data.hireDate : '입사일 미지정'}${data.birthDate ? ' · 생일 ' + data.birthDate.slice(5) : ''}</div>
         </td>
         <td data-label="현재 권한"><span class="role-badge role-${data.role}">${roleLabel[data.role] || data.role}</span></td>
         <td data-label="변경">
