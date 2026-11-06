@@ -747,7 +747,16 @@ function undo(){if(!hist.length)return;redoS.push(JSON.stringify(P));const o=JSO
      Firebase 콘솔에서 다른 컬렉션(예: billingProjects)과 같은 수준으로 규칙을 추가해야 한다 -
      이 세션에서는 규칙 파일을 볼 수 없어 직접 넣어드릴 수 없다. */
 const SCHED_COL='scheduleProjects';
-const SYNC={pushTimer:null,pushing:new Set(),lastPushAt:{},lastErr:''};
+// 2026-11-06: "내가 이 프로젝트를 서버로 언제 올렸는지"(lastPushAt)를 브라우저 메모리에만 들고
+// 있으면, 페이지를 새로고침하거나 다시 들어올 때마다 이 값이 0으로 리셋되어 버린다. 그러면
+// 서버에 있는 건 전부 "나보다 더 최근"으로 보여서, 실제로는 충돌이 전혀 없는데도(= 전부 본인이
+// 예전에 올린 내용 그대로인데도) "서버에 더 최근 기록이 있습니다" 경고가 매번 뜨는 오탐이
+// 생긴다. localStorage에 같이 저장해두고 페이지가 열릴 때 불러와서, 새로고침해도 "내가 언제
+// 올렸는지"를 기억하게 한다.
+const SYNC_PUSHAT_KEY='nucks-schedule-pushat-v1';
+function loadLastPushAt(){try{return JSON.parse(localStorage.getItem(SYNC_PUSHAT_KEY))||{}}catch(e){return{}}}
+function saveLastPushAt(){try{localStorage.setItem(SYNC_PUSHAT_KEY,JSON.stringify(SYNC.lastPushAt))}catch(e){}}
+const SYNC={pushTimer:null,pushing:new Set(),lastPushAt:loadLastPushAt(),lastErr:''};
 function fsReady(){try{return typeof firebase!=='undefined'&&typeof db!=='undefined'&&!!db}catch(e){return false}}
 function scheduleServerPush(p){
   if(!fsReady()||!p||!p.id)return;
@@ -763,7 +772,7 @@ async function pushProjectToServer(p){
     data._pushedAt=firebase.firestore.FieldValue.serverTimestamp();
     try{data._pushedBy=(firebase.auth().currentUser&&firebase.auth().currentUser.email)||'';}catch(_){data._pushedBy=''}
     await db.collection(SCHED_COL).doc(p.id).set(data);
-    SYNC.lastPushAt[p.id]=Date.now();SYNC.lastErr='';
+    SYNC.lastPushAt[p.id]=Date.now();saveLastPushAt();SYNC.lastErr='';
   }catch(e){console.error('서버 저장 실패',e);SYNC.lastErr=String(e&&e.message||e)}
   finally{SYNC.pushing.delete(p.id);updateSyncStatus()}
 }
@@ -794,7 +803,7 @@ async function pushAllToServer(){
       const data=JSON.parse(JSON.stringify(p));
       data._pushedAt=firebase.firestore.FieldValue.serverTimestamp();
       try{data._pushedBy=(firebase.auth().currentUser&&firebase.auth().currentUser.email)||''}catch(_){data._pushedBy=''}
-      await db.collection(SCHED_COL).doc(p.id).set(data);SYNC.lastPushAt[p.id]=Date.now();ok++;
+      await db.collection(SCHED_COL).doc(p.id).set(data);SYNC.lastPushAt[p.id]=Date.now();saveLastPushAt();ok++;
     }catch(e){fail++;console.error('올리기 실패',p.id,e)}
   }
   updateSyncStatus();
@@ -815,7 +824,7 @@ async function pullProjectFromServer(id){
   const data=doc.data();delete data._pushedAt;delete data._pushedBy;
   const i=DB.projects.findIndex(x=>x.id===id);
   if(i>=0)DB.projects[i]=data;else DB.projects.push(data);
-  SYNC.lastPushAt[id]=Date.now();
+  SYNC.lastPushAt[id]=Date.now();saveLastPushAt();
   if(P.id===id)P=data;
   sel=null;hist=[];redoS=[];DB.current=DB.current||id;
   save(true);renderAll();
