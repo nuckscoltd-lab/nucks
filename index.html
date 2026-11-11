@@ -321,6 +321,7 @@ if ('serviceWorker' in navigator) {
             <a href="payslip.html" id="payslipNavLink" style="display: inline-block;">Payslip</a>
             <a href="worklog.html" id="worklogNavLink" style="display: inline-block;">Worklog</a>
             <a href="board.html" id="boardNavLink" style="display: inline-block; position: relative;">Board<span id="boardBadge" style="display:none; position:absolute; top:-4px; right:-10px; width:8px; height:8px; border-radius:50%; background:#a4453c;"></span></a>
+            <a href="contacts.html" id="contactsNavLink" style="display: none;">Contacts</a>
             <a href="gallery-admin.html" id="galleryNavLink" style="display: none;">Gallery</a>
             <a href="project-settlement.html" id="settlementNavLink" style="display: none;">Settlement</a>
 
@@ -694,6 +695,9 @@ if ('serviceWorker' in navigator) {
                 const boardLink = document.getElementById('boardNavLink');
                 boardLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
 
+                const contactsLink = document.getElementById('contactsNavLink');
+                contactsLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
+
                 // 갤러리 관리(윤성원) / 프로젝트 결산(손영화): 관리자는 항상 노출, 그 외에는 해당 담당자인 경우에만 노출
                 const galleryLink = document.getElementById('galleryNavLink');
                 const settlementLink = document.getElementById('settlementNavLink');
@@ -743,6 +747,9 @@ if ('serviceWorker' in navigator) {
 
                 const boardLink = document.getElementById('boardNavLink');
                 boardLink.style.display = 'none';
+
+                const contactsLink = document.getElementById('contactsNavLink');
+                contactsLink.style.display = 'none';
 
                 const galleryLink = document.getElementById('galleryNavLink');
                 galleryLink.style.display = 'none';
