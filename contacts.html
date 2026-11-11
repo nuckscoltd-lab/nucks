@@ -1,0 +1,802 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2F5D50">
+<title>넉스 거래처 연락처</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+html{-webkit-text-size-adjust:100%}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+
+/* Layout: 상단 검색·분류 바 → 현재 소속 회사별 목록, 사람을 누르면 오른쪽(모바일은 아래)에 상세·경력 이력·명함 */
+:root{
+  --bg:#F3F4F2; --surface:#FFFFFF; --ink:#1C2320; --muted:#66706B; --line:#DDE1DE;
+  --accent:#2F5D50; --accent-soft:#E3ECE8; --danger:#A33A2C; --warn-soft:#F6EEDC; --warn:#7A5A14;
+  --font-body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+:root[data-theme="dark"]{
+  --bg:#141917; --surface:#1C2320; --ink:#E6EBE8; --muted:#97A29D; --line:#2E3733;
+  --accent:#7FB8A6; --accent-soft:#233430; --danger:#E08A7C; --warn-soft:#3A3220; --warn:#E3C47E; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1120px;margin:0 auto;padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:20px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{margin:0;font-size:24px;font-weight:700;letter-spacing:-.01em;text-wrap:balance}
+.sub{margin:2px 0 0;color:var(--muted);font-size:13px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+button{font:inherit;cursor:pointer}
+button:disabled{opacity:.55;cursor:default}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 14px;border-radius:8px;font-size:14px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:600}
+.btn.danger{color:var(--danger)}
+.btn.sm{padding:5px 10px;font-size:13px}
+.link{border:0;background:none;color:var(--accent);padding:0;font-size:12.5px}
+.link.danger{color:var(--danger)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tools{display:flex;flex-direction:column;gap:10px}
+.search{width:100%;padding:11px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:transparent;color:var(--muted);padding:4px 12px;border-radius:999px;font-size:13px}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.chip .n{font-family:var(--font-mono);font-size:11px;margin-left:4px;opacity:.75}
+.layout{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}
+.layout.open{grid-template-columns:minmax(0,1fr) 400px}
+@media (max-width:860px){.layout.open{grid-template-columns:minmax(0,1fr)}}
+.groups{display:flex;flex-direction:column;gap:14px;min-width:0}
+.group{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.ghead{display:flex;align-items:baseline;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.ghead h2{margin:0;font-size:16px;font-weight:700}
+.tag{font-size:11px;letter-spacing:.04em;color:var(--accent);background:var(--accent-soft);padding:2px 8px;border-radius:4px;white-space:nowrap}
+.ghead .cnt{margin-left:auto;color:var(--muted);font-size:12px;font-family:var(--font-mono)}
+.row{display:grid;grid-template-columns:minmax(130px,1.2fr) minmax(130px,1fr) minmax(0,1.3fr);gap:4px 16px;padding:12px 16px;border-top:1px solid var(--line);cursor:pointer;align-items:center}
+.row:first-of-type{border-top:0}
+.row:hover{background:var(--accent-soft)}
+.row.sel{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.who b{font-weight:600}
+.who small{display:block;color:var(--muted);font-size:12.5px}
+.who .prev{color:var(--warn);font-size:12px}
+.num,.mail{font-family:var(--font-mono);font-size:13.5px;font-variant-numeric:tabular-nums;min-width:0;overflow-wrap:anywhere}
+.mail{color:var(--muted)}
+.nocell{font-family:var(--font-body);font-size:12px;color:var(--warn)}
+@media (max-width:560px){.row{grid-template-columns:1fr}}
+.copy{border:0;background:none;color:var(--accent);font-size:12px;padding:2px 4px;margin-left:4px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:14px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);max-height:calc(100vh - 24px);overflow:auto;min-width:0}
+@media (max-width:860px){.panel{position:static;max-height:none}}
+.panel h3{margin:0;font-size:18px}
+.phead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.kv{display:grid;grid-template-columns:72px minmax(0,1fr);gap:6px 10px;font-size:14px;margin:0}
+.kv dt{color:var(--muted);font-size:12.5px;padding-top:1px}
+.kv dd{margin:0;overflow-wrap:anywhere}
+.kv dd.m{font-family:var(--font-mono);font-size:13.5px}
+.sec{font-size:12px;letter-spacing:.06em;color:var(--muted);margin:4px 0 -4px;text-transform:uppercase}
+.timeline{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.timeline li{position:relative;padding:0 0 14px 20px;border-left:2px solid var(--line);margin-left:5px}
+.timeline li:last-child{border-left-color:transparent;padding-bottom:0}
+.timeline li::before{content:"";position:absolute;left:-7px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--surface);border:2px solid var(--muted)}
+.timeline li.cur::before{background:var(--accent);border-color:var(--accent)}
+.timeline .co{font-weight:600}
+.timeline .meta{color:var(--muted);font-size:12.5px}
+.timeline .when{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+.cards figure{margin:0;display:flex;flex-direction:column;gap:2px}
+.cards img{width:100%;aspect-ratio:1.75;object-fit:cover;border-radius:6px;border:1px solid var(--line);cursor:zoom-in;background:var(--bg)}
+.cards figcaption{font-size:11.5px;color:var(--muted)}
+.pbtns{display:flex;flex-wrap:wrap;gap:6px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:12px;color:var(--muted);letter-spacing:.02em}
+.field input,.field select,.field textarea{font:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);width:100%;min-width:0}
+.field textarea{min-height:60px;resize:vertical}
+.field .hint{font-size:11.5px;color:var(--muted)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+form{display:flex;flex-direction:column;gap:12px}
+fieldset{border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:12px}
+legend{font-size:12px;letter-spacing:.06em;color:var(--muted);padding:0;margin-bottom:8px}
+.foot{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.notice{background:var(--warn-soft);color:var(--warn);border-radius:8px;padding:10px 12px;font-size:13px}
+.notice b{color:var(--ink)}
+.preview{width:100%;border-radius:8px;border:1px solid var(--line)}
+.reading{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}
+.spin{width:16px;height:16px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--accent);animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+.drop{display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;padding:22px 12px;border:2px dashed var(--accent);border-radius:10px;background:var(--accent-soft);color:var(--accent);font-weight:600;font-size:15px;text-align:center}
+.drop small{font-weight:400;color:var(--muted);font-size:12.5px;line-height:1.5}
+body.dragging .drop,body.dragging .search{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.fab{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:15;display:inline-flex;align-items:center;gap:8px;border:0;border-radius:999px;background:var(--accent);color:var(--surface);font-weight:700;font-size:16px;padding:14px 26px;box-shadow:0 6px 20px rgba(0,0,0,.22)}
+html:not(.is-mobile) .fab,html:not(.is-mobile) .mob{display:none!important}
+html.is-mobile .desk,body.formopen .fab{display:none!important}
+html.is-mobile .wrap{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+html.is-mobile .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+html.is-mobile .drop{padding:18px 8px;font-size:15px}
+.newbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:10px 14px;font-size:14px}
+.newbar span{margin-right:auto}
+.newbar b{color:var(--ink)}
+.newb{display:inline-block;font-family:var(--font-mono);font-size:10.5px;font-weight:500;letter-spacing:.06em;color:var(--surface);background:var(--warn);border-radius:3px;padding:0 5px;vertical-align:2px}
+.row.isnew{box-shadow:inset 3px 0 0 var(--warn)}
+.added{display:block;font-size:12px;color:var(--muted);font-family:var(--font-mono)}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:none;color:var(--muted);padding:6px 14px;font-size:13.5px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--surface);font-weight:600}
+.ptags{display:flex;flex-wrap:wrap;gap:4px}
+.ptag{border:1px solid var(--line);background:var(--accent-soft);color:var(--accent);border-radius:4px;padding:1px 8px;font-size:12.5px}
+.ptag.sm{background:transparent;color:var(--muted);font-size:12px}
+.check{display:flex;gap:8px;align-items:center;font-size:13.5px}
+.state{background:var(--surface);border:1px dashed var(--line);border-radius:12px;padding:28px;color:var(--muted);text-align:center}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:13px;z-index:30;max-width:calc(100% - 32px)}
+.overlay{position:fixed;inset:0;background:rgba(10,14,12,.82);display:flex;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));z-index:20;cursor:zoom-out}
+.overlay img{max-width:100%;max-height:100%;border-radius:8px}
+@media (prefers-reduced-motion:no-preference){.row{transition:background .12s}}
+.syncchip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);margin-top:4px;flex-wrap:wrap}
+.syncchip .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.syncchip.on .dot{background:var(--accent)}
+.syncchip.warn{color:var(--warn)}.syncchip.warn .dot{background:var(--warn)}
+.chip.empty{opacity:.6}
+.chip.tool{border-style:dashed;color:var(--accent)}
+.chip.tool[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn.xs{padding:2px 8px;font-size:12.5px;border-radius:6px}
+.selbar{position:sticky;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:12;display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--surface);border:2px solid var(--accent);border-radius:10px;padding:10px 14px;font-size:14px;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+.selbar>span{margin-right:auto}
+.selto{display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:var(--muted);font-size:13px}
+.selto select,.catinline select,.catdel select{font:inherit;font-size:14px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+.row.selmode{grid-template-columns:minmax(150px,1.2fr) minmax(130px,1fr) minmax(0,1.3fr)}
+.row.picked{background:var(--accent-soft)}
+.cbox{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border:2px solid var(--muted);border-radius:4px;margin-right:8px;vertical-align:-3px;font-size:12px;font-weight:700;color:var(--surface)}
+.row.picked .cbox{background:var(--accent);border-color:var(--accent)}
+.ctag{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 5px;margin-right:2px}
+.ghead .tag+.tag{margin-left:-4px}
+.ghead .cnt .link{margin-right:8px}
+.newcat{display:flex;gap:6px;margin-top:6px}
+.newcat input{flex:1;min-width:0;font:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+.newcat.show{margin-top:4px}
+.catpick{background:var(--accent-soft);border-radius:10px;padding:10px 12px}
+.catpick label{color:var(--accent);font-weight:600;font-size:13px}
+.catpick select{font-size:15px;font-weight:600}
+.catpick .hint{color:var(--accent)}
+.catinline .newcat{margin-top:6px}
+.catlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.catlist li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:8px 10px;border-top:1px solid var(--line)}
+.catlist li:first-child{border-top:0}
+.catlist .catname{font:inherit;font-size:14px;font-weight:600;padding:5px 8px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--ink);min-width:0}
+.catlist .catname:hover,.catlist .catname:focus{border-color:var(--line);background:var(--bg)}
+.catlist .n{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.catbtns{display:flex;gap:4px}
+.catdel{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px;color:var(--danger);background:var(--warn-soft);border-radius:6px;padding:8px}
+.foot.sticky{position:sticky;bottom:calc(-18px);background:var(--surface);padding:12px 0 calc(4px + env(safe-area-inset-bottom,0px));margin-top:4px;border-top:1px solid var(--line)}
+.fab small{display:block;font-size:11.5px;font-weight:500;opacity:.85;line-height:1.1}
+.fab span{display:flex;flex-direction:column;align-items:flex-start}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>넉스 거래처 연락처</h1>
+      <p class="sub" id="summary">불러오는 중…</p>
+      <div class="syncchip off" id="syncChip"></div>
+    </div>
+    <div class="actions">
+      <a class="btn" href="index.html" style="text-decoration:none">홈</a>
+      <button class="btn" id="setBtn">설정·백업</button>
+      <button class="btn" id="csvBtn">엑셀용 CSV 저장</button>
+      <button class="btn" id="addBtn">+ 직접 입력</button>
+      <button class="btn primary desk" id="scanBtn">명함 사진으로 추가</button>
+      <button class="btn mob" id="albumBtn">앨범에서 선택</button>
+    </div>
+  </header>
+  <input type="file" id="photo" accept="image/*" hidden>
+  <input type="file" id="camera" accept="image/*" capture="environment" hidden>
+  <input type="file" id="importFile" accept=".json,application/json" hidden>
+
+  <div class="tools">
+    <input class="search" id="q" type="search" placeholder="이름, 휴대폰, 회사(전 직장 포함), 이메일로 검색" autocomplete="off">
+    <div class="bar">
+      <div class="seg" role="group" aria-label="목록 묶는 방식"><button data-view="company" aria-pressed="true">회사별</button><button data-view="project" aria-pressed="false">프로젝트별</button><button data-view="recent" aria-pressed="false">최근 추가순</button></div>
+      <div class="chips" id="chips"></div>
+    </div>
+  </div>
+
+  <div class="newbar" id="newBar" hidden></div>
+  <div class="selbar" id="selBar" hidden></div>
+  <div class="layout" id="layout">
+    <div class="groups" id="groups"><div class="state">연락처를 불러오는 중입니다.</div></div>
+    <aside class="panel" id="panel" hidden></aside>
+  </div>
+</div>
+<div class="overlay" id="overlay" hidden><img id="overlayImg" alt="명함 크게 보기"></div>
+<button class="fab" id="camBtn"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/></svg><span id="fabLabel">명함 촬영</span></button>
+<div class="toast" id="toast" hidden></div>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-functions-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script>
+/* 넉스 거래처 연락처 — 근로자·관리자 공용
+   저장: Firestore 'contacts' 컬렉션(모두가 같은 연락처를 실시간으로 봄) · 명함 사진: Storage 'contacts-cards/'
+   명함 자동 읽기: Cloud Function 'readBusinessCard'(API 키는 서버에만 보관)
+   권한: 조회·추가·수정은 근로자·관리자, 삭제는 관리자만(firestore.rules / storage.rules 참고)
+   분류: '분류 관리'에서 추가·이름변경·순서·삭제, 'meta-categories' 문서에 함께 저장 */
+requireRole(['worker', 'admin']);
+const storage=firebase.storage();
+const functions=firebase.functions();
+const DEFAULT_CATS=["시공사","설계·디자인","협력업체","자재·가구","관공서","기타"];
+let CATS=DEFAULT_CATS.slice();
+const META_ID="meta-categories";
+const isMeta=r=>String(r.id||"").startsWith("meta-");
+let selecting=false,picked=new Set();
+const AFF=["company","category","title","dept","tel","fax","email","address","project","from"];
+const NOAFF="현재 소속 미확인",NOPROJ="프로젝트 미지정";
+const $=id=>document.getElementById(id);
+let all=[],people=[],filter="전체",query="",selId=null,mode=null,view="company",showNewOnly=false;
+let pending=null; // {blob,url,targetId}
+const MOBILE=matchMedia("(pointer:coarse)").matches||/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+document.documentElement.classList.toggle("is-mobile",MOBILE);
+
+/* ---------- 설정 (이 브라우저에만 저장) ---------- */
+const LS=(k,v)=>{try{if(v===undefined)return localStorage.getItem("nucks-contacts-"+k)||"";localStorage.setItem("nucks-contacts-"+k,v)}catch{return ""}};
+let myName="",lastSeen=LS("lastSeen"),deviceId=LS("deviceId");
+if(!deviceId){deviceId="d-"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);LS("deviceId",deviceId)}
+// 명함 자동 읽기(OCR)는 비용이 드는 기능이라 지금은 꺼 둠 — 사진은 서버에 저장되고 내용은 직접 입력.
+// 나중에 쓰려면 readBusinessCard Cloud Function을 배포한 뒤 아래 값을 true로 바꾸면 된다.
+const OCR_ENABLED=false;
+const ocrOn=()=>OCR_ENABLED;
+
+/* ---------- 공용 도구 ---------- */
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const digits=s=>{let d=String(s||"").replace(/\D/g,"");if(d.startsWith("82"))d="0"+d.slice(2);return d};
+const fmtCell=s=>{const d=digits(s);if(/^01\d{8,9}$/.test(d))return d.length===11?`${d.slice(0,3)}-${d.slice(3,7)}-${d.slice(7)}`:`${d.slice(0,3)}-${d.slice(3,6)}-${d.slice(6)}`;return String(s||"").trim()};
+const thisMonth=()=>new Date().toISOString().slice(0,7);
+const today=()=>new Date().toISOString().slice(0,10);
+const normCo=s=>String(s||"").replace(/\(주\)|㈜|주식회사|\s/g,"").toLowerCase();
+const current=p=>(p.career||[]).find(a=>!a.to)||null;
+const pastOf=p=>(p.career||[]).filter(a=>a.to).sort((a,b)=>(b.to||"").localeCompare(a.to||""));
+const byId=id=>people.find(p=>p.id===id);
+const ym=s=>s?s.replace("-","."):"";
+const fmtDate=s=>s?s.slice(0,10).replace(/-/g,"."):"";
+const createdOf=p=>p.createdAt||p.updatedAt||"";
+const mine=p=>p.createdDev===deviceId||(!!ME&&p.createdUid===ME.uid)||(!!myName&&p.createdBy===myName);
+const isNew=p=>!!lastSeen&&createdOf(p)>lastSeen&&!mine(p);
+const who=n=>n?(n===myName?"나":n):"";
+const splitProj=s=>String(s||"").split(/[,，\n]/).map(x=>x.trim()).filter(Boolean);
+function projectsOf(p){const s=new Set(p.projects||[]);(p.career||[]).forEach(a=>splitProj(a.project).forEach(x=>s.add(x)));return [...s]}
+function allProjects(){const s=new Set();people.forEach(p=>projectsOf(p).forEach(x=>s.add(x)));return [...s].sort((a,b)=>a.localeCompare(b,"ko"))}
+function toast(m){const t=$("toast");t.textContent=m;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,2600)}
+function markSeen(){lastSeen=new Date().toISOString();LS("lastSeen",lastSeen);showNewOnly=false;renderList()}
+const newId=()=>"p-"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+function saveFile(name,data,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([data],{type}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)}
+
+/* ---------- 저장소: Firestore (contacts 컬렉션, 실시간 공유) ---------- */
+const COL="contacts";
+let ME=null,ROLE="";
+const isAdmin=()=>ROLE==="admin";
+function recompute(){const m=all.find(r=>r.id===META_ID);CATS=m?.list?.length?m.list.slice():DEFAULT_CATS.slice();people=all.filter(p=>!p.deleted&&!isMeta(p))}
+async function reload(){recompute()}
+const syncSoon=()=>{};
+/* 명함 사진: 촬영 즉시 Storage에 올리고 url만 문서에 저장한다(문서 1MB 제한 때문에 사진 본문은 문서에 넣지 않음) */
+async function uploadCard(blob){
+  if(!ME)throw new Error("로그인 필요");
+  const path=`contacts-cards/${ME.uid}/${Date.now()}_${Math.random().toString(36).slice(2,8)}.jpg`;
+  const ref=storage.ref(path);await ref.put(blob,{contentType:"image/jpeg"});
+  return {path,url:await ref.getDownloadURL()};
+}
+/* 예전(단독 파일) 버전에서 내보낸 JSON의 base64 사진을 Storage로 옮김 */
+async function migrateCards(rows){
+  for(const r of rows)for(const k of (r.cards||[])){
+    if(k.data&&String(k.data).startsWith("data:")){
+      const blob=await (await fetch(k.data)).blob();const up=await uploadCard(blob);
+      k.path=up.path;k.url=up.url;delete k.data;
+    }
+  }
+}
+async function dbPut(rows){
+  const clean=rows.map(r=>JSON.parse(JSON.stringify(r)));
+  await migrateCards(clean);
+  clean.forEach(r=>{const i=all.findIndex(x=>x.id===r.id);if(i>=0)all[i]=r;else all.push(r)});
+  recompute();
+  for(let i=0;i<clean.length;i+=400){const b=db.batch();clean.slice(i,i+400).forEach(r=>b.set(db.collection(COL).doc(r.id),r));await b.commit()}
+}
+const catOf=p=>{const c=current(p);return c?(c.category||"기타"):NOAFF};
+function catsAll(){const s=[...CATS];people.forEach(p=>{const k=catOf(p);if(k!==NOAFF&&!s.includes(k))s.push(k)});return s}
+const catCount=k=>people.filter(p=>catOf(p)===k).length;
+async function saveCats(list){await dbPut([{id:META_ID,list,updatedAt:new Date().toISOString()}]);await reload();syncSoon()}
+async function addCat(name){name=String(name||"").trim();if(!name)return false;if(catsAll().includes(name)){toast("이미 있는 분류입니다");return false}if(name===NOAFF||name.startsWith("__")){toast("쓸 수 없는 이름입니다");return false}await saveCats([...CATS,name]);return true}
+/* 사람들의 현재 소속 분류를 바꿈 — 바뀐 사람 수를 돌려줌 */
+async function setCategory(ids,cat){
+  const now=new Date().toISOString(),rows=[];let skipped=0;
+  ids.forEach(id=>{const p=structuredClone(byId(id));if(!p)return;const c=current(p);if(!c){skipped++;return}if(c.category===cat)return;c.category=cat;p.updatedAt=now;rows.push(p)});
+  if(rows.length){await dbPut(rows);await reload();syncSoon()}
+  return {moved:rows.length,skipped};
+}
+async function renameCat(oldN,newN){
+  newN=String(newN||"").trim();if(!newN||newN===oldN)return;
+  if(catsAll().includes(newN)){toast("이미 있는 분류 이름입니다");return}
+  const now=new Date().toISOString(),rows=[];
+  people.forEach(p=>{let ch=false;const q=structuredClone(p);(q.career||[]).forEach(a=>{if((a.category||"기타")===oldN){a.category=newN;ch=true}});if(ch){q.updatedAt=now;rows.push(q)}});
+  const list=catsAll().map(k=>k===oldN?newN:k);
+  await dbPut([...rows,{id:META_ID,list,updatedAt:now}]);await reload();syncSoon();
+  if(filter===oldN)filter=newN;
+  toast(`‘${oldN}’을(를) ‘${newN}’(으)로 바꿨습니다 · 연락처 ${rows.length}명 반영`);
+}
+async function deleteCat(name,target){
+  const ids=people.filter(p=>catOf(p)===name).map(p=>p.id);
+  if(ids.length){if(!target||target===name){toast("연락처를 옮길 분류를 고르세요");return false}await setCategory(ids,target)}
+  await saveCats(catsAll().filter(k=>k!==name));if(filter===name)filter="전체";return true;
+}
+function catSelect(id,val,extraClass){
+  const list=catsAll();if(val&&!list.includes(val))list.push(val);
+  return `<select id="${id}" class="${extraClass||""}">${list.map(c=>`<option${c===val?" selected":""}>${esc(c)}</option>`).join("")}<option value="__new">+ 새 분류 만들기…</option></select>
+    <div class="newcat" id="${id}_newwrap" hidden><input id="${id}_new" placeholder="새 분류 이름"><button type="button" class="btn sm" data-newcat="${id}">추가</button></div>`;
+}
+
+async function writePerson(p){
+  p.id=p.id||newId();p.updatedAt=new Date().toISOString();p.cards=p.cards||[];p.career=p.career||[];
+  await dbPut([p]);await reload();syncSoon();return p.id;
+}
+async function deletePerson(id){
+  if(!isAdmin()){toast("삭제는 관리자만 할 수 있습니다");return false}
+  const p=byId(id);
+  await db.collection(COL).doc(id).delete();
+  all=all.filter(r=>r.id!==id);recompute();
+  (p?.cards||[]).forEach(k=>{if(k.path)storage.ref(k.path).delete().catch(()=>{})});
+  return true;
+}
+
+/* ---------- 실시간 동기화 (Firestore onSnapshot) ---------- */
+function mergeRows(a,b){const m=new Map();[...a,...b].forEach(r=>{const o=m.get(r.id);if(!o||(r.updatedAt||"")>(o.updatedAt||""))m.set(r.id,r)});return [...m.values()]}
+let booted=false,syncState="loading";
+function listen(){
+  db.collection(COL).onSnapshot(snap=>{
+    const firstLoad=!booted;
+    const incoming=[];
+    if(!firstLoad)snap.docChanges().forEach(ch=>{if(ch.type==="added"&&!snap.metadata.hasPendingWrites){const r={...ch.doc.data(),id:ch.doc.id};if(!isMeta(r)&&!r.deleted&&!mine(r))incoming.push(r)}});
+    all=snap.docs.map(d=>({...d.data(),id:d.id}));
+    recompute();
+    syncState="ok";booted=true;renderSync();
+    if(incoming.length){const d=incoming[0],c=current(d);toast(incoming.length>1?`새 연락처 ${incoming.length}명이 추가됐습니다`:`${d.createdBy?d.createdBy+"님이 ":""}${c?.company?c.company+" ":""}${d.name||""} 연락처를 추가했습니다`)}
+    renderList();
+    if(mode==="view"&&selId&&!pending){if(byId(selId))showPerson(selId);else closePanel()}
+  },err=>{
+    console.error("연락처 불러오기 실패",err);syncState="error";renderSync();
+    $("groups").innerHTML=`<div class="state">연락처를 불러오지 못했습니다 (${esc(err.code||err.message||"오류")}). 로그인 상태와 권한을 확인해 주세요.</div>`;
+  });
+}
+function renderSync(){
+  const el=$("syncChip");
+  if(syncState==="error"){el.className="syncchip warn";el.innerHTML=`<span class="dot"></span>서버 연결 실패`;return}
+  if(syncState!=="ok"){el.className="syncchip off";el.innerHTML=`<span class="dot"></span>서버에 연결하는 중…`;return}
+  el.className="syncchip on";el.innerHTML=`<span class="dot"></span>서버 연동 중 · 근로자 모두가 같은 연락처를 봅니다`;
+}
+async function importFile(file){
+  try{const j=JSON.parse(await file.text());const rows=Array.isArray(j)?j:(j.people||[]);
+    if(!rows.every(r=>r&&r.id))throw 0;
+    const before=new Set(all.map(r=>r.id));const merged=mergeRows(all,rows);
+    await dbPut(merged);await reload();syncSoon();
+    toast(`불러왔습니다 · 새로 추가 ${merged.filter(r=>!r.deleted&&!before.has(r.id)).length}명`);renderList();
+  }catch{toast("넉스 연락처 파일이 아닙니다")}
+}
+
+/* ---------- 목록 ---------- */
+function hay(p){return [p.name,p.memo,...projectsOf(p),...(p.career||[]).flatMap(a=>AFF.map(f=>a[f]))].join(" ").toLowerCase()}
+function matches(p){
+  if(showNewOnly&&!isNew(p))return false;
+  if(filter!=="전체"&&catOf(p)!==filter)return false;
+  if(!query)return true;
+  const q=query.toLowerCase(),qd=q.replace(/\D/g,"");
+  if(hay(p).includes(q))return true;
+  return qd.length>=3&&[p.cell,...(p.career||[]).flatMap(a=>[a.tel,a.fax])].some(n=>digits(n).includes(qd));
+}
+function renderList(){
+  const counts={전체:people.length};
+  people.forEach(p=>{const k=catOf(p);counts[k]=(counts[k]||0)+1});
+  if(filter!=="전체"&&!catsAll().includes(filter)&&!(filter===NOAFF&&counts[NOAFF]))filter="전체";
+  $("chips").innerHTML=["전체",...catsAll(),...(counts[NOAFF]?[NOAFF]:[])].map(k=>
+    `<button class="chip${k!=="전체"&&!counts[k]?" empty":""}" data-cat="${esc(k)}" aria-pressed="${k===filter}">${esc(k)}<span class="n">${counts[k]||0}</span></button>`).join("")
+    +`<button class="chip tool" data-act="cats">분류 관리</button><button class="chip tool" data-act="select" aria-pressed="${selecting}">${selecting?"선택 끝내기":"여러 명 선택"}</button>`;
+  renderSelBar();renderFab();
+  const cos=new Set(people.map(p=>current(p)?.company).filter(Boolean));
+  $("summary").textContent=`거래처 ${cos.size}곳 · 담당자 ${people.length}명 · 프로젝트 ${allProjects().length}건`;
+  document.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.view===view));
+  const nNew=people.filter(isNew).length;
+  $("newBar").hidden=!nNew;
+  if(nNew)$("newBar").innerHTML=`<span><b>새 연락처 ${nNew}명</b>이 마지막 확인 이후 추가됐습니다.</span>
+    <button class="btn sm" data-act="shownew">${showNewOnly?"전체 보기":"새 연락처만 보기"}</button><button class="btn sm" data-act="seen">모두 확인</button>`;
+  if(!nNew)showNewOnly=false;
+  if(!people.length){$("groups").innerHTML=`<div class="state">아직 등록된 연락처가 없습니다. <b>명함 사진으로 추가</b>를 눌러 첫 명함을 올려 보세요.</div>`;return}
+  const list=people.filter(matches);
+  if(!list.length){$("groups").innerHTML=`<div class="state">“${esc(query||filter)}”에 맞는 연락처가 없습니다.</div>`;return}
+  if(view==="recent"){
+    const sorted=list.slice().sort((a,b)=>createdOf(b).localeCompare(createdOf(a)));
+    const bucket=p=>{const d=(Date.now()-Date.parse(createdOf(p)))/864e5;return !createdOf(p)?"이전":d<1?"오늘":d<7?"이번 주":d<31?"이번 달":"이전"};
+    const g={};sorted.forEach(p=>(g[bucket(p)]=g[bucket(p)]||[]).push(p));
+    $("groups").innerHTML=["오늘","이번 주","이번 달","이전"].filter(k=>g[k]).map(k=>`<section class="group"><div class="ghead"><h2>${k}</h2><span class="cnt">${g[k].length}명</span></div>${g[k].map(rowHtml).join("")}</section>`).join("");
+    return;
+  }
+  const by={},LAST=view==="project"?NOPROJ:NOAFF;
+  list.forEach(p=>{const keys=view==="project"?(projectsOf(p).length?projectsOf(p):[NOPROJ]):[current(p)?.company||NOAFF];keys.forEach(k=>(by[k]=by[k]||[]).push(p))});
+  const keys=Object.keys(by).sort((a,b)=>a===LAST?1:b===LAST?-1:a.localeCompare(b,"ko"));
+  $("groups").innerHTML=keys.map(co=>{
+    const ppl=by[co].sort((a,b)=>(current(a)?.company||"").localeCompare(current(b)?.company||"","ko")||(a.name||"").localeCompare(b.name||"","ko"));
+    let tag="";
+    if(view==="project"){const n=new Set(ppl.map(p=>current(p)?.company).filter(Boolean)).size;tag=co===NOPROJ?"":`<span class="tag">${n}개사</span>`}
+    else if(co!==NOAFF){const cs=[...new Set(ppl.map(catOf))];tag=cs.map(k=>`<span class="tag">${esc(k)}</span>`).join("")}
+    const ids=ppl.map(p=>p.id).join(",");
+    const all_=ppl.every(p=>picked.has(p.id));
+    const gsel=selecting?`<button class="link" data-pickgroup="${ids}">${all_?"선택 해제":"이 묶음 전체 선택"}</button>`:"";
+    return `<section class="group"><div class="ghead"><h2>${esc(co)}</h2>${tag}<span class="cnt">${gsel} ${ppl.length}명</span></div>`+ppl.map(rowHtml).join("")+`</section>`;
+  }).join("");
+}
+function rowHtml(p){const c=current(p)||{},past=pastOf(p),pr=projectsOf(p);
+  const line=view==="company"?[c.dept,pr.join(", ")].filter(Boolean).join(" · "):[c.company||NOAFF,c.dept].filter(Boolean).join(" · ");
+  const added=view==="recent"&&createdOf(p)?`<span class="added">${fmtDate(createdOf(p))}${p.createdBy?" · "+esc(who(p.createdBy))+" 추가":""}</span>`:"";
+  const on=picked.has(p.id);
+  return `<div class="row${p.id===selId?" sel":""}${isNew(p)?" isnew":""}${selecting?" selmode":""}${on?" picked":""}" tabindex="0" data-id="${p.id}">
+    <div class="who">${selecting?`<span class="cbox" aria-hidden="true">${on?"✓":""}</span>`:""}${isNew(p)?`<span class="newb">NEW</span> `:""}${filter==="전체"&&view!=="company"?`<span class="ctag">${esc(catOf(p))}</span> `:""}<b>${esc(p.name)}</b> ${esc(c.title)}<small>${esc(line)}</small>${added}${past.length?`<span class="prev">이전 ${esc(past.map(a=>a.company).join(", "))}</span>`:""}</div>
+    <div class="num">${p.cell?esc(p.cell)+`<button type="button" class="copy" data-copy="${esc(p.cell)}">복사</button>`:`<span class="nocell">개인 휴대폰 미등록</span>`}</div>
+    <div class="mail">${c.email?esc(c.email)+`<button type="button" class="copy" data-copy="${esc(c.email)}">복사</button>`:""}</div></div>`}
+
+function renderSelBar(){
+  const bar=$("selBar");if(!selecting){bar.hidden=true;return}
+  bar.hidden=false;
+  bar.innerHTML=`<span><b>${picked.size}명</b> 선택됨</span>
+    <label class="selto">분류 ${catSelect("bulkCat",filter!=="전체"&&filter!==NOAFF?filter:CATS[0])}</label>
+    <button class="btn sm primary" data-act="bulkmove"${picked.size?"":" disabled"}>선택한 연락처 이동</button>
+    <button class="btn sm" data-act="select">취소</button>`;
+  hookNewCat("bulkCat");
+}
+function renderFab(){
+  const isCat=filter!=="전체"&&filter!==NOAFF;
+  $("fabLabel").innerHTML=isCat?`명함 촬영<small>${esc(filter)}에 저장</small>`:"명함 촬영";
+}
+function hookNewCat(id){
+  const s=$(id);if(!s)return;let prev=s.value==="__new"?CATS[0]:s.value;
+  s.onchange=()=>{if(s.value==="__new"){$(id+"_newwrap").hidden=false;$(id+"_new").focus()}else{prev=s.value;$(id+"_newwrap").hidden=true}};
+  s.dataset.prev=prev;
+}
+async function commitNewCat(id){
+  const inp=$(id+"_new"),name=inp.value.trim();
+  if(!(await addCat(name)))return;
+  const s=$(id);const o=document.createElement("option");o.textContent=name;s.insertBefore(o,s.querySelector('option[value="__new"]'));s.value=name;$(id+"_newwrap").hidden=true;inp.value="";
+  toast(`‘${name}’ 분류를 만들었습니다`);
+  if(id==="f_category")catTouched=true;
+  renderList();
+  if(id==="bulkCat"&&$("bulkCat"))$("bulkCat").value=name;
+  if(id==="p_cat"&&selId){await setCategory([selId],name);toast(`‘${name}’ 분류를 만들고 옮겼습니다`);showPerson(selId)}
+}
+
+/* ---------- 분류 관리 ---------- */
+function showCats(){
+  mode="cats";selId=null;
+  const list=catsAll();
+  $("panel").innerHTML=`<div class="phead"><h3>분류 관리</h3><button class="btn sm" data-act="close">닫기</button></div>
+    <p class="sub">분류 이름을 바꾸면 그 분류의 연락처도 함께 바뀝니다. 순서는 목록 위 버튼 순서가 됩니다. NAS 동기화를 쓰면 다른 PC에도 같은 분류가 적용됩니다.</p>
+    <ol class="catlist">${list.map((k,i)=>`<li data-cat-row="${esc(k)}">
+      <input class="catname" value="${esc(k)}" aria-label="분류 이름" data-orig="${esc(k)}">
+      <span class="n">${catCount(k)}명</span>
+      <span class="catbtns"><button class="btn xs" data-catup="${i}"${i?"":" disabled"} aria-label="위로">↑</button><button class="btn xs" data-catdown="${i}"${i<list.length-1?"":" disabled"} aria-label="아래로">↓</button><button class="btn xs danger" data-catdel="${esc(k)}">삭제</button></span>
+      <div class="catdel" hidden></div></li>`).join("")}</ol>
+    <div class="newcat show"><input id="cat_add" placeholder="새 분류 이름 (예: 조명, 시행사, 감리)"><button class="btn sm primary" data-act="addcat">분류 추가</button></div>`;
+  openPanel();
+  document.querySelectorAll(".catname").forEach(inp=>{
+    const commit=async()=>{const o=inp.dataset.orig,n=inp.value.trim();if(n&&n!==o){await renameCat(o,n);renderList();showCats()}else inp.value=o};
+    inp.onchange=commit;inp.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();inp.blur()}};
+  });
+  $("cat_add").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();document.querySelector('[data-act="addcat"]').click()}};
+}
+
+/* ---------- 상세 ---------- */
+function openPanel(){document.body.classList.toggle("formopen",mode!=="view");$("panel").hidden=false;$("layout").classList.add("open");if(innerWidth<=860)$("panel").scrollIntoView({behavior:"smooth",block:"start"})}
+function closePanel(){document.body.classList.remove("formopen");selId=null;mode=null;clearPending();$("panel").hidden=true;$("layout").classList.remove("open");renderList()}
+function clearPending(){
+  if(pending){
+    if(pending.url)URL.revokeObjectURL(pending.url);
+    if(!pending.keep&&pending.up){const up=pending.up;up.then(r=>{if(r&&r.path)storage.ref(r.path).delete().catch(()=>{})})}
+  }
+  pending=null;
+}
+
+function showPerson(id){
+  const p=byId(id);if(!p){closePanel();return}
+  selId=id;mode="view";clearPending();
+  const c=current(p),car=[...(c?[c]:[]),...pastOf(p)];
+  const kv=(k,v,m)=>v?`<dt>${k}</dt><dd${m?' class="m"':""}>${esc(v)}</dd>`:"";
+  $("panel").innerHTML=`
+    <div class="phead"><div><h3>${esc(p.name)} <span style="font-weight:400;font-size:14px">${esc(c?.title||"")}</span></h3>
+      <div class="sub">${c?esc(c.company)+(c.dept?" · "+esc(c.dept):""):NOAFF}</div></div>
+      <button class="btn sm" data-act="close">닫기</button></div>
+    <dl class="kv">
+      ${c?`<dt>분류</dt><dd class="catinline">${catSelect("p_cat",catOf(p))}</dd>`:""}
+      ${p.cell?`<dt>휴대폰</dt><dd class="m">${esc(p.cell)} <button class="copy" data-copy="${esc(p.cell)}">복사</button></dd>`:`<dt>휴대폰</dt><dd class="nocell">미등록 — 이직해도 이어서 기록하려면 개인 휴대폰을 넣어 주세요</dd>`}
+      ${c?kv("사무실",c.tel,1)+kv("팩스",c.fax,1)+(c.email?`<dt>이메일</dt><dd class="m">${esc(c.email)} <button class="copy" data-copy="${esc(c.email)}">복사</button></dd>`:"")+kv("주소",c.address):""}
+      ${projectsOf(p).length?`<dt>프로젝트</dt><dd class="ptags">${projectsOf(p).map(x=>`<button class="ptag" data-proj="${esc(x)}">${esc(x)}</button>`).join("")}</dd>`:""}
+      ${kv("메모",p.memo)}
+      ${createdOf(p)?`<dt>등록</dt><dd>${fmtDate(createdOf(p))}${p.createdBy?" · "+esc(who(p.createdBy)):""}</dd>`:""}
+    </dl>
+    <div class="pbtns">
+      <button class="btn sm" data-act="edit">수정</button>
+      <button class="btn sm" data-act="move">이직·퇴사 기록</button>
+      ${MOBILE?`<button class="btn sm" data-act="cardcam">새 명함 촬영</button><button class="btn sm" data-act="card">앨범에서</button>`:`<button class="btn sm" data-act="card">명함 추가</button>`}
+    </div>
+    <p class="sec">경력 이력</p>
+    ${car.length?`<ol class="timeline">${car.map(a=>`<li class="${a.to?"":"cur"}">
+      <div class="co">${esc(a.company)} ${a.to?"":`<span class="tag">현재</span>`}</div>
+      <div class="meta">${esc([a.title,a.dept].filter(Boolean).join(" · "))}${a.email?" · "+esc(a.email):""}</div>
+      <div class="when">${a.from?ym(a.from):"?"} – ${a.to?ym(a.to):"현재"} <button class="link danger" data-del-aff="${(p.career||[]).indexOf(a)}">기록 삭제</button></div></li>`).join("")}</ol>`:`<p class="sub">소속 기록이 없습니다.</p>`}
+    <p class="sec">명함</p>
+    ${(p.cards||[]).filter(k=>k.url||k.data).length?`<div class="cards">${p.cards.filter(k=>k.url||k.data).slice().reverse().map((k,i)=>`<figure><img src="${k.url||k.data}" alt="${esc(k.company)} 명함" data-zoom="1" loading="lazy"><figcaption>${esc(k.company)} · ${esc(k.addedAt)}</figcaption></figure>`).join("")}</div>`:`<p class="sub">저장된 명함 사진이 없습니다.</p>`}
+    ${isAdmin()?`<div class="foot" style="justify-content:flex-start"><button class="link danger" data-act="delperson">이 사람 연락처 전체 삭제</button></div>`:""}`;
+  openPanel();renderList();
+  if($("p_cat")){hookNewCat("p_cat");const s=$("p_cat"),base=s.onchange;
+    s.onchange=async()=>{base();if(s.value==="__new")return;await setCategory([id],s.value);toast(`${p.name}님을 ‘${s.value}’(으)로 옮겼습니다`);renderList()}}
+}
+
+/* ---------- 설정·백업 ---------- */
+function showSettings(){
+  mode="settings";selId=null;
+  $("panel").innerHTML=`<div class="phead"><h3>설정·백업</h3><button class="btn sm" data-act="close">닫기</button></div>
+  <fieldset><legend>내 계정</legend>
+    <p class="sub">${esc(myName||"")} ${ME?`(${esc(ME.email||"")})`:""} · ${isAdmin()?"관리자":"근로자"}<br>연락처를 추가하면 이 이름이 ‘추가한 사람’으로 표시됩니다.${isAdmin()?"":"<br>삭제는 관리자만 할 수 있습니다."}</p></fieldset>
+  <fieldset><legend>백업·이전</legend>
+    <p class="sub">연락처는 서버에 저장되어 모두가 같이 봅니다. 아래는 따로 보관하거나, 예전 단독 파일 버전에서 내보낸 파일을 서버로 옮길 때 씁니다.</p>
+    <div class="pbtns"><button type="button" class="btn sm" data-act="export">파일로 내보내기</button><button type="button" class="btn sm" data-act="import">파일 불러와 합치기</button></div></fieldset>`;
+  openPanel();
+}
+/* ---------- 입력 폼 ---------- */
+function affFields(a,label,noCat){
+  a=a||{};
+  return `<fieldset><legend>${label}</legend>
+    ${noCat?`<div class="field"><label for="f_company">회사</label><input id="f_company" value="${esc(a.company)}"></div>`
+    :`<div class="two"><div class="field"><label for="f_company">회사</label><input id="f_company" value="${esc(a.company)}"></div>
+    <div class="field"><label for="f_category">분류</label>${catSelect("f_category",a.category||defaultCat())}</div></div>`}
+    <div class="two"><div class="field"><label for="f_title">직급</label><input id="f_title" value="${esc(a.title)}"></div>
+    <div class="field"><label for="f_from">근무 시작</label><input id="f_from" type="month" value="${esc(a.from||"")}"></div></div>
+    <div class="field"><label for="f_dept">부서</label><input id="f_dept" value="${esc(a.dept)}"></div>
+    <div class="two"><div class="field"><label for="f_tel">사무실</label><input id="f_tel" inputmode="tel" value="${esc(a.tel)}"></div>
+    <div class="field"><label for="f_fax">팩스</label><input id="f_fax" inputmode="tel" value="${esc(a.fax)}"></div></div>
+    <div class="field"><label for="f_email">회사 이메일</label><input id="f_email" type="email" value="${esc(a.email)}"></div>
+    <div class="field"><label for="f_address">회사 주소</label><input id="f_address" value="${esc(a.address)}"></div></fieldset>`;
+}
+function personFields(p){
+  p=p||{};
+  return `<fieldset><legend>사람</legend>
+    <div class="two"><div class="field"><label for="f_name">이름</label><input id="f_name" value="${esc(p.name)}" required></div>
+    <div class="field"><label for="f_cell">개인 휴대폰</label><input id="f_cell" inputmode="tel" value="${esc(p.cell)}" placeholder="010-0000-0000"></div></div>
+    <div class="field"><label for="f_projects">참여 프로젝트</label><input id="f_projects" list="projList" value="${esc((p.id?projectsOf(p):[]).join(", "))}" placeholder="예: 남성역A구역, 잠실 모델하우스">
+      <span class="hint">여러 개는 쉼표로 구분 · 기존 프로젝트는 입력하면 목록에 뜹니다</span>
+      <div class="ptags">${allProjects().map(x=>`<button type="button" class="ptag sm" data-addproj="${esc(x)}">+ ${esc(x)}</button>`).join("")}</div>
+      <datalist id="projList">${allProjects().map(x=>`<option value="${esc(x)}">`).join("")}</datalist></div>
+    <div class="field"><label for="f_memo">메모</label><textarea id="f_memo">${esc(p.memo)}</textarea></div></fieldset>`;
+}
+function showForm(m,id){
+  mode=m;selId=id||null;
+  const p=id?byId(id):null,c=p?current(p):null;
+  let title,body;
+  if(m==="edit"){title="연락처 수정";body=`<div id="matchNote"></div>`+personFields(p)+affFields(c,"현재 소속");}
+  else if(m==="move"){title=`${esc(p.name)} 이직·퇴사 기록`;
+    body=`${c?`<div class="field"><label for="f_to">${esc(c.company)} 근무 종료</label><input id="f_to" type="month" value="${thisMonth()}"></div>`:""}
+    <label class="check"><input type="checkbox" id="f_unknown"> 옮긴 회사를 아직 모름 (퇴사만 기록)</label>
+    <div id="newAff">${affFields({from:thisMonth(),category:catOf(p)===NOAFF?"":catOf(p)},"새 소속")}</div>
+    <p class="sub">이전 소속은 지우지 않고 경력 이력에 남습니다. 새 명함을 받으셨다면 상세 화면의 <b>명함 추가</b>로 올리셔도 자동으로 이 기록이 됩니다.</p>`;}
+  else {title=m==="scan"?"명함 내용 확인":"연락처 직접 입력";
+    const startCat=pending?.cat||defaultCat();
+    body=`<div class="field catpick"><label for="f_category">저장할 분류</label>${catSelect("f_category",startCat)}<span class="hint" id="catHint">${pending?.cat?"선택해 둔 분류로 저장합니다":""}</span></div>`+(m==="new"?(MOBILE?`<div class="two"><button type="button" class="drop" data-act="cam">카메라로 찍기<small>명함을 바로 촬영</small></button><button type="button" class="drop" data-act="pick">앨범에서 선택<small>찍어둔 사진</small></button></div>`:`<button type="button" class="drop" data-act="pick">명함 사진 넣기<small>눌러서 사진 선택 · 끌어다 놓기 · Ctrl+V 붙여넣기${ocrOn()?"<br>넣으면 아래 칸이 자동으로 채워집니다":""}</small></button>`):"")
+      +(m==="scan"?`<img class="preview" src="${pending.url}" alt="올린 명함 사진"><div id="readState" class="reading"><span class="spin"></span>명함을 읽는 중입니다…</div><div id="upState" class="sub"></div>`:"")
+      +`<div id="matchNote"></div>`+personFields({})+affFields({from:thisMonth()},"소속",true);}
+  $("panel").innerHTML=`<div class="phead"><h3>${title}</h3><button class="btn sm" data-act="${id?"back":"close"}">${id?"취소":"닫기"}</button></div>
+    <form id="form" novalidate>${body}<div class="foot sticky"><button type="submit" class="btn primary" id="saveBtn">저장</button></div></form>`;
+  openPanel();renderList();
+  if($("f_category")){hookNewCat("f_category");const s=$("f_category"),base=s.onchange;s.onchange=()=>{base();catTouched=true;if($("catHint"))$("catHint").textContent=""}}
+  catTouched=!!pending?.cat;
+  if($("f_company")&&(m==="new"||m==="scan"))$("f_company").addEventListener("change",()=>applyCompanyCat());
+  if(m==="move")$("f_unknown").onchange=e=>$("newAff").hidden=e.target.checked;
+  if($("f_cell")){$("f_cell").addEventListener("input",updateMatch);$("f_company").addEventListener("input",updateMatch);updateMatch()}
+  $("form").onsubmit=onSave;
+}
+let catTouched=false;
+function defaultCat(){const l=LS("lastCat");return filter!=="전체"&&filter!==NOAFF?filter:(catsAll().includes(l)?l:CATS[0])}
+/* 이미 등록된 회사면 그 회사 사람들이 들어 있는 분류를 씀 */
+function companyCat(co){const n=normCo(co);if(!n)return "";const cnt={};people.forEach(p=>{const c=current(p);if(c&&normCo(c.company)===n){const k=c.category||"기타";cnt[k]=(cnt[k]||0)+1}});return Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0]||""}
+function applyCompanyCat(guess){
+  if(catTouched||!$("f_category"))return;
+  const k=companyCat($("f_company")?.value)||(catsAll().includes(guess)?guess:"");
+  if(k){$("f_category").value=k;if($("catHint"))$("catHint").textContent=companyCat($("f_company").value)?`이미 등록된 ‘${$("f_company").value}’ 연락처와 같은 분류로 넣었습니다`:"명함 내용을 보고 고른 분류입니다. 다르면 바꿔 주세요"}
+}
+function readAff(){const a={};AFF.forEach(f=>{const el=$("f_"+f);if(el)a[f]=el.value.trim()});return a}
+function setProjects(p,list,merge){const s=new Set(merge?projectsOf(p):[]);list.forEach(x=>s.add(x));p.projects=[...s];(p.career||[]).forEach(a=>{if(a.project)a.project=""})}
+function findByCell(cell,exceptId){const d=digits(cell);return d.length>=9?people.find(p=>p.id!==exceptId&&digits(p.cell)===d):null}
+function updateMatch(){
+  const box=$("matchNote");if(!box)return;
+  if(mode==="edit"){const o=findByCell($("f_cell").value,selId);box.innerHTML=o?`<div class="notice">이 번호는 이미 <b>${esc(o.name)}</b>님에게 등록돼 있습니다. 번호를 확인해 주세요.</div>`:"";return}
+  const t=findByCell($("f_cell").value)||(pending?.targetId?byId(pending.targetId):null);
+  if(!t){box.innerHTML="";return}
+  const c=current(t),co=$("f_company").value.trim();
+  box.innerHTML=c&&co&&normCo(c.company)!==normCo(co)
+    ?`<div class="notice">같은 휴대폰 번호의 <b>${esc(t.name)}</b>님이 이미 있습니다 (현재 ${esc(c.company)}). 저장하면 <b>${esc(c.company)}</b> 근무는 경력 이력으로 남기고 <b>${esc(co)}</b>을(를) 현재 소속으로 기록합니다.</div>`
+    :`<div class="notice">같은 휴대폰 번호의 <b>${esc(t.name)}</b>님 기록에 합쳐서 저장합니다.</div>`;
+}
+const blobToDataURL=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(b)});
+
+async function onSave(e){
+  e.preventDefault();
+  if($("f_category")?.value==="__new"){toast("새 분류 이름을 넣고 ‘추가’를 누르거나 다른 분류를 고르세요");$("f_category_new")?.focus();return}
+  const btn=$("saveBtn");btn.disabled=true;
+  if($("f_category"))LS("lastCat",$("f_category").value);
+  try{
+    if(mode==="move"){
+      const p=structuredClone(byId(selId));p.career=p.career||[];
+      const c=current(p);if(c)c.to=$("f_to").value||thisMonth();
+      if(!$("f_unknown").checked){const a=readAff();if(!a.company){toast("새 회사 이름을 입력하거나 ‘옮긴 회사를 아직 모름’을 선택하세요");return}a.to="";p.career.push(a)}
+      else if(!c){toast("기록할 현재 소속이 없습니다");return}
+      await writePerson(p);toast("이직 기록을 저장했습니다");showPerson(p.id);return;
+    }
+    const name=$("f_name").value.trim(),cell=fmtCell($("f_cell").value),memo=$("f_memo").value.trim(),projs=splitProj($("f_projects").value),a=readAff();a.to="";
+    if(!name){toast("이름을 입력하세요");$("f_name").focus();return}
+    if(mode==="edit"){
+      if(findByCell(cell,selId)){toast("다른 사람에게 이미 등록된 휴대폰 번호입니다");return}
+      const p=structuredClone(byId(selId));p.name=name;p.cell=cell;p.memo=memo;p.career=p.career||[];
+      const i=p.career.findIndex(x=>!x.to);
+      if(i>=0)p.career[i]={...p.career[i],...a};else if(a.company)p.career.push(a);
+      setProjects(p,projs,false);
+      await writePerson(p);toast("저장했습니다");showPerson(p.id);return;
+    }
+    const t=findByCell(cell)||(pending?.targetId?byId(pending.targetId):null);
+    let card=null;
+    if(pending?.blob){
+      const up=await pending.up;
+      if(up)card={id:newId(),company:a.company||"",addedAt:today(),path:up.path,url:up.url};
+      else if(!confirm("명함 사진이 서버에 올라가지 않았습니다. 사진 없이 저장할까요?"))return;
+    }
+    let p;
+    if(t){
+      p=structuredClone(t);p.career=p.career||[];p.cards=p.cards||[];
+      if(cell)p.cell=cell;if(name)p.name=name;if(memo&&memo!==p.memo)p.memo=p.memo?p.memo+"\n"+memo:memo;
+      const c=current(p);
+      if(a.company){
+        if(c&&normCo(c.company)===normCo(a.company)){AFF.forEach(f=>{if(a[f]&&f!=="from")c[f]=a[f]})}
+        else{if(c)c.to=a.from||thisMonth();p.career.push(a)}
+      }
+    } else p={name,cell,memo,career:a.company?[a]:[],cards:[],createdAt:new Date().toISOString(),createdBy:myName,createdUid:ME?.uid||"",createdDev:deviceId};
+    setProjects(p,projs,true);
+    if(card)p.cards.push(card);
+    const id=await writePerson(p);if(pending)pending.keep=true;clearPending();
+    toast(t?`${p.name}님 기록에 합쳐 저장했습니다`:"저장했습니다");showPerson(id);
+  }catch(err){console.error("저장 실패",err);toast("저장하지 못했습니다. 네트워크·권한을 확인하세요"+(err?.code?` (${err.code})`:""))}
+  finally{if(btn.isConnected)btn.disabled=false}
+}
+
+/* ---------- 명함 사진 · 자동 읽기 ---------- */
+async function shrink(file,max){
+  const bmp=await createImageBitmap(file);const s=Math.min(1,max/Math.max(bmp.width,bmp.height));
+  const cv=document.createElement("canvas");cv.width=Math.round(bmp.width*s);cv.height=Math.round(bmp.height*s);
+  cv.getContext("2d").drawImage(bmp,0,0,cv.width,cv.height);
+  return await new Promise(r=>cv.toBlob(r,"image/jpeg",.82));
+}
+async function readCard(blob){
+  const b64=(await blobToDataURL(blob)).split(",")[1];
+  const call=functions.httpsCallable("readBusinessCard",{timeout:70000});
+  const r=await call({image:b64,categories:catsAll()});
+  return r.data||{};
+}
+async function handleFile(f){
+  const targetId=pending?.targetId||null,cat=pending?.cat||"";clearPending();
+  let blob;try{blob=await shrink(f,1400)}catch{blob=f}
+  const P={blob,url:URL.createObjectURL(blob),targetId,cat};pending=P;
+  // 촬영(선택) 즉시 서버로 업로드 시작 — 저장 버튼을 누르기 전에 이미 올라가 있음
+  P.up=uploadCard(blob).then(r=>{P.path=r.path;if($("upState")&&pending===P)$("upState").textContent="사진이 서버에 올라갔습니다";return r}).catch(e=>{console.error("사진 업로드 실패",e);P.upErr=e;if($("upState")&&pending===P)$("upState").textContent="사진을 서버에 올리지 못했습니다 ("+(e.code||e.message||"오류")+")";return null});
+  showForm("scan",null);
+  if($("upState"))$("upState").textContent="사진을 서버에 올리는 중…";
+  if(targetId){const t=byId(targetId);$("f_name").value=t.name||"";$("f_cell").value=t.cell||"";if(!cat&&current(t)){$("f_category").value=catOf(t)}updateMatch()}
+  if(!ocrOn()){$("readState").innerHTML=`사진은 서버에 저장됩니다. 사진을 보며 내용을 입력하세요.`;$("readState").classList.remove("reading");return}
+  try{
+    const r=await readCard(blob);
+    if(mode!=="scan"||!$("form"))return;
+    ["name","cell"].forEach(k=>{if(r?.[k]&&!$("f_"+k).value)$("f_"+k).value=k==="cell"?fmtCell(r[k]):String(r[k])});
+    ["company","title","dept","tel","fax","email","address"].forEach(k=>{if(r?.[k])$("f_"+k).value=String(r[k])});
+    applyCompanyCat(r?.category);
+    $("readState").innerHTML="명함을 읽었습니다. 내용을 확인하고 저장하세요.";$("readState").classList.remove("reading");
+    updateMatch();
+  }catch(err){
+    if($("readState")){$("readState").classList.remove("reading");$("readState").innerHTML="자동으로 읽지 못했습니다 ("+esc(err.message||"오류")+"). 사진을 보며 직접 입력해 주세요."}
+  }
+}
+
+/* ---------- 이벤트 ---------- */
+$("photo").onchange=$("camera").onchange=e=>{const f=e.target.files[0];e.target.value="";if(f)handleFile(f)};
+$("importFile").onchange=e=>{const f=e.target.files[0];e.target.value="";if(f)importFile(f)};
+document.addEventListener("paste",e=>{const f=[...(e.clipboardData?.files||[])].find(x=>x.type.startsWith("image/"));if(f){e.preventDefault();handleFile(f)}});
+document.addEventListener("dragover",e=>{if([...(e.dataTransfer?.items||[])].some(i=>i.kind==="file")){e.preventDefault();document.body.classList.add("dragging")}});
+document.addEventListener("dragleave",e=>{if(!e.relatedTarget)document.body.classList.remove("dragging")});
+document.addEventListener("drop",e=>{document.body.classList.remove("dragging");const f=[...(e.dataTransfer?.files||[])].find(x=>x.type.startsWith("image/"));if(f){e.preventDefault();handleFile(f)}});
+function startCapture(input,targetId){
+  const formCat=(mode==="new"&&$("f_category")&&catTouched&&$("f_category").value!=="__new")?$("f_category").value:"";
+  const cat=formCat||(filter!=="전체"&&filter!==NOAFF?filter:"");
+  clearPending();pending={targetId:targetId||null,cat};$(input).click();
+}
+$("scanBtn").onclick=$("albumBtn").onclick=()=>startCapture("photo");
+$("camBtn").onclick=()=>startCapture("camera");
+$("addBtn").onclick=()=>{clearPending();showForm("new",null)};
+$("setBtn").onclick=()=>showSettings();
+$("q").oninput=e=>{query=e.target.value.trim();renderList()};
+$("chips").onclick=e=>{const b=e.target.closest(".chip[data-cat]");if(b){filter=b.dataset.cat;renderList()}};
+document.addEventListener("click",async e=>{
+  const cp=e.target.closest("[data-copy]");
+  if(cp){e.stopPropagation();try{await navigator.clipboard.writeText(cp.dataset.copy);toast("복사했습니다")}catch{toast(cp.dataset.copy)}return}
+  const z=e.target.closest("[data-zoom]");if(z){$("overlayImg").src=z.src;$("overlay").hidden=false;return}
+  if(e.target.closest("#overlay")){$("overlay").hidden=true;return}
+  const nc=e.target.closest("[data-newcat]");if(nc){await commitNewCat(nc.dataset.newcat);return}
+  const pg=e.target.closest("[data-pickgroup]");if(pg){const ids=pg.dataset.pickgroup.split(",");const allOn=ids.every(i=>picked.has(i));ids.forEach(i=>allOn?picked.delete(i):picked.add(i));renderList();return}
+  const r=e.target.closest(".row");if(r){if(selecting){const i=r.dataset.id;picked.has(i)?picked.delete(i):picked.add(i);renderList()}else showPerson(r.dataset.id);return}
+  const cu=e.target.closest("[data-catup],[data-catdown]");
+  if(cu){const l=catsAll(),i=+(cu.dataset.catup??cu.dataset.catdown),j=cu.dataset.catup!=null?i-1:i+1;[l[i],l[j]]=[l[j],l[i]];await saveCats(l);renderList();showCats();return}
+  const cd=e.target.closest("[data-catdel]");
+  if(cd){const name=cd.dataset.catdel,n=catCount(name),box=cd.closest("li").querySelector(".catdel");
+    if(!n){if(cd.dataset.armed){await deleteCat(name);toast(`‘${name}’ 분류를 삭제했습니다`);renderList();showCats()}else{cd.dataset.armed="1";cd.textContent="삭제 확인"}return}
+    const others=catsAll().filter(k=>k!==name);
+    box.hidden=false;box.innerHTML=`<span>이 분류의 연락처 ${n}명을</span><select class="catdel-to">${others.map(k=>`<option>${esc(k)}</option>`).join("")}</select><span>(으)로 옮기고</span><button class="btn xs danger" data-catdelgo="${esc(name)}">삭제</button>`;return}
+  const cg=e.target.closest("[data-catdelgo]");
+  if(cg){const name=cg.dataset.catdelgo,to=cg.parentElement.querySelector(".catdel-to").value;if(await deleteCat(name,to)){toast(`‘${name}’ 연락처를 ‘${to}’(으)로 옮기고 분류를 삭제했습니다`);renderList();showCats()}return}
+  const sv=e.target.closest("[data-view]");if(sv){view=sv.dataset.view;renderList();return}
+  const pt=e.target.closest("[data-proj]");if(pt){view="project";query=pt.dataset.proj;$("q").value=query;renderList();return}
+  const ap=e.target.closest("[data-addproj]");if(ap){const el=$("f_projects"),l=splitProj(el.value);if(!l.includes(ap.dataset.addproj))l.push(ap.dataset.addproj);el.value=l.join(", ");return}
+  const da=e.target.closest("[data-del-aff]");
+  if(da){if(da.dataset.armed){const p=structuredClone(byId(selId));p.career.splice(+da.dataset.delAff,1);await writePerson(p);toast("이력 한 줄을 삭제했습니다");showPerson(p.id)}
+    else{da.dataset.armed="1";da.textContent="한 번 더 누르면 삭제"}return}
+  const b=e.target.closest("[data-act]");if(!b)return;
+  const act=b.dataset.act;
+  if(act==="close")closePanel();
+  else if(act==="back")showPerson(selId);
+  else if(act==="edit")showForm("edit",selId);
+  else if(act==="move")showForm("move",selId);
+  else if(act==="seen")markSeen();
+  else if(act==="shownew"){showNewOnly=!showNewOnly;renderList()}
+  else if(act==="pick")startCapture("photo");
+  else if(act==="cam")startCapture("camera");
+  else if(act==="card"){const t=selId;clearPending();pending={targetId:t,cat:""};$("photo").click()}
+  else if(act==="cardcam"){const t=selId;clearPending();pending={targetId:t,cat:""};$("camera").click()}
+  else if(act==="cats")showCats();
+  else if(act==="addcat"){if(await addCat($("cat_add").value)){toast(`‘${$("cat_add").value.trim()}’ 분류를 만들었습니다`);renderList();showCats()}}
+  else if(act==="select"){selecting=!selecting;picked.clear();if(selecting&&mode)closePanel();renderList()}
+  else if(act==="bulkmove"){const to=$("bulkCat").value;if(to==="__new"){toast("새 분류 이름을 넣고 ‘추가’를 누르세요");return}
+    const {moved,skipped}=await setCategory([...picked],to);
+    toast(`${moved}명을 ‘${to}’(으)로 옮겼습니다${skipped?` · 현재 소속이 없는 ${skipped}명은 제외`:""}`);picked.clear();selecting=false;renderList()}
+  else if(act==="settings")showSettings();
+  else if(act==="export")saveFile(`넉스_거래처_연락처_${today()}.json`,JSON.stringify({app:"nucks-contacts",version:1,savedAt:new Date().toISOString(),people:all}),"application/json");
+  else if(act==="import")$("importFile").click();
+  else if(act==="delperson"){
+    if(!b.dataset.armed){b.dataset.armed="1";b.textContent="정말 삭제할까요? 한 번 더 누르면 경력 이력까지 모두 지워집니다";return}
+    if(await deletePerson(selId)){toast("삭제했습니다");closePanel()}
+  }
+});
+$("groups").addEventListener("keydown",e=>{if(e.key==="Enter"){const r=e.target.closest(".row");if(r)showPerson(r.dataset.id)}});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")$("overlay").hidden=true});
+$("csvBtn").onclick=()=>{
+  const head=["이름","개인 휴대폰","현재 회사","분류","직급","부서","사무실","팩스","회사 이메일","주소","참여 프로젝트","근무 시작","이전 소속","메모","등록일","추가한 사람"];
+  const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+  const rows=people.slice().sort((a,b)=>(current(a)?.company||"힣").localeCompare(current(b)?.company||"힣","ko")).map(p=>{const c=current(p)||{};
+    return [p.name,p.cell,c.company||NOAFF,c.category,c.title,c.dept,c.tel,c.fax,c.email,c.address,projectsOf(p).join(", "),ym(c.from),pastOf(p).map(a=>`${a.company}(${ym(a.from)||"?"}~${ym(a.to)})`).join(" / "),p.memo,fmtDate(createdOf(p)),p.createdBy].map(q).join(",")});
+  saveFile(`넉스_거래처_연락처_${today()}.csv`,"﻿"+[head.map(q).join(","),...rows].join("\r\n"),"text/csv");
+};
+
+/* ---------- 시작 ---------- */
+auth.onAuthStateChanged(async user=>{
+  if(!user||ME)return;
+  ME=user;
+  try{ROLE=await getCurrentUserRole()}catch{}
+  try{const u=await db.collection("users").doc(user.uid).get();myName=u.data()?.displayName||user.email||""}catch{myName=user.email||""}
+  if(!lastSeen){lastSeen=new Date().toISOString();LS("lastSeen",lastSeen)}
+  renderSync();renderList();
+  listen();
+});
+renderSync();
+</script>
+</body>
+</html>
