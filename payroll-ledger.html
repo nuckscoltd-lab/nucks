@@ -59,6 +59,10 @@ if ('serviceWorker' in navigator) {
   .grid{ display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; }
   .field{ display:flex; flex-direction:column; gap:6px; min-width:0; }
   .field label{ font-size:11px; color:var(--muted); }
+  .field textarea{
+    width:100%; box-sizing:border-box; padding:8px 9px; border:1px solid var(--line); border-radius:4px;
+    font-family:inherit; font-size:13px; background:#fff; resize:vertical; line-height:1.5;
+  }
   .field input, .field select{
     width:100%; box-sizing:border-box;
     padding:8px 9px; border:1px solid var(--line); border-radius:4px;
@@ -140,6 +144,10 @@ if ('serviceWorker' in navigator) {
     padding:4px 5px; font-size:9px; white-space:nowrap;
   }
   .print-ledger .pl-date{ text-align:right; font-size:11px; color:#555; margin-top:12px; }
+  .print-ledger .pl-table td.pl-memo-cell{ text-align:left; white-space:normal; min-width:90px; max-width:170px; }
+  .print-ledger .pl-memo{ margin-top:14px; border:1px solid #333; }
+  .print-ledger .pl-memo-title{ background:#f2f0eb; border-bottom:1px solid #333; padding:4px 8px; font-size:11px; font-weight:700; }
+  .print-ledger .pl-memo-body{ min-height:56px; padding:8px 10px; font-size:11px; line-height:1.6; white-space:normal; }
 
   /* 모달 */
   .modal-overlay{
@@ -230,6 +238,24 @@ if ('serviceWorker' in navigator) {
         <table id="pvTable"></table>
       </div>
       <div class="empty" id="pivotEmpty" style="display:none;">표시할 급여 데이터가 없습니다.</div>
+    </div>
+
+    <div class="write-panel" id="memoPanel">
+      <div class="panel-title">급여대장 메모 (월별 인쇄에 함께 표시)</div>
+      <div class="panel-desc">
+        월을 고르고 직원별 "비고"와 "월 전체 메모"를 적은 뒤 저장하세요. 위 "전체 직원 급여 현황"에서 <b>○월만</b>을 골라 인쇄하면 표 맨 오른쪽 "비고" 칸과 표 아래 "메모" 칸에 그대로 찍힙니다.
+        (저장 전에 적은 내용도 같은 월이면 인쇄에 바로 반영됩니다. 연간 전체 인쇄에는 메모가 들어가지 않습니다.)
+      </div>
+      <div class="toolbar">
+        <select id="memoMonthSelect"></select>
+        <button type="button" class="submit-btn" id="memoSaveBtn" style="margin:0; padding:8px 16px;">메모 저장</button>
+        <span class="status-line" id="memoStatus" style="margin:0;"></span>
+      </div>
+      <div style="overflow-x:auto;"><table id="memoTable"></table></div>
+      <div class="field" style="margin-top:14px; max-width:720px;">
+        <label for="memoNote">월 전체 메모</label>
+        <textarea id="memoNote" rows="3" placeholder="예: 11월 급여는 25일 지급, 외주 이은정 3.3% 원천징수 등"></textarea>
+      </div>
     </div>
   </div>
 </main>
@@ -341,6 +367,7 @@ if ('serviceWorker' in navigator) {
     document.getElementById('draftModal').addEventListener('click', (e) => { if (e.target.id === 'draftModal') closeDraftModal(); });
 
     setupPivot();
+    setupMemo();
   }
 
   async function reloadSlips() {
@@ -564,6 +591,125 @@ if ('serviceWorker' in navigator) {
     renderPivot();
   }
 
+  // ---------- 급여대장 메모 (payrollMemos/{YYYY-MM}: {note, byName:{이름:비고}}) ----------
+  const MEMO_COL = 'payrollMemos';
+  const memoCache = {};
+  let memoPanelMonth = null;
+  let memoNames = [];
+  let memoDirty = false;
+  const escHtml = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  async function fetchMemo(month) {
+    if (memoCache[month]) return memoCache[month];
+    try {
+      const snap = await db.collection(MEMO_COL).doc(month).get();
+      const d = snap.exists ? snap.data() : {};
+      memoCache[month] = { note: d.note || '', byName: d.byName || {} };
+    } catch (err) {
+      console.error('메모 불러오기 실패', err);
+      const st = document.getElementById('memoStatus');
+      st.style.color = 'var(--neg)';
+      st.textContent = '메모를 불러오지 못했습니다 (' + (err.code || err.message) + ') - Firestore 규칙에 payrollMemos 추가가 필요할 수 있습니다.';
+      return { note: '', byName: {}, failed: true };
+    }
+    return memoCache[month];
+  }
+
+  function memoNamesFor(month) {
+    const set = new Set();
+    employees.filter(isActiveEmployee).forEach(e => set.add(empDisplayName(e)));
+    Object.keys(pivotData).forEach(n => { if (pivotData[n] && pivotData[n][month]) set.add(n); });
+    return [...set].sort((a, b) => a.localeCompare(b, 'ko'));
+  }
+
+  function readMemoFromPanel() {
+    const byName = {};
+    document.querySelectorAll('[data-memo-idx]').forEach(inp => {
+      const v = inp.value.trim();
+      if (v) byName[memoNames[+inp.dataset.memoIdx]] = v;
+    });
+    return { note: document.getElementById('memoNote').value.trim(), byName };
+  }
+
+  async function renderMemoPanel(month) {
+    const table = document.getElementById('memoTable');
+    table.dataset.ready = '0';
+    document.getElementById('memoStatus').textContent = '';
+    const memo = await fetchMemo(month);
+    memoPanelMonth = month;
+    memoNames = memoNamesFor(month);
+    table.innerHTML = `
+      <thead><tr><th>사원명</th><th>비고 (인쇄 시 맨 오른쪽 칸)</th></tr></thead>
+      <tbody>${memoNames.map((n, i) => `
+        <tr>
+          <td style="font-weight:600;">${escHtml(n)}</td>
+          <td><input type="text" data-memo-idx="${i}" maxlength="150" value="${escHtml(memo.byName[n] || '')}" placeholder="비고" style="width:100%; min-width:320px; padding:6px 8px; border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:13px;"></td>
+        </tr>`).join('')}</tbody>`;
+    // 저장돼 있지만 지금 명단에 없는 사람(퇴사 등)의 비고도 잃지 않게 안내
+    const orphan = Object.keys(memo.byName).filter(n => !memoNames.includes(n));
+    if (orphan.length) {
+      table.insertAdjacentHTML('beforeend', `<tfoot><tr><td colspan="2" style="color:var(--muted); font-size:12px;">현재 명단에 없는 사람의 저장된 비고: ${orphan.map(n => escHtml(n + ': ' + memo.byName[n])).join(' / ')} (저장하면 이 비고는 사라집니다)</td></tr></tfoot>`);
+    }
+    document.getElementById('memoNote').value = memo.note || '';
+    memoDirty = false;
+    table.dataset.ready = '1';
+    table.querySelectorAll('[data-memo-idx]').forEach(inp => inp.addEventListener('input', () => { memoDirty = true; }));
+  }
+
+  function setupMemo() {
+    const months = [...new Set(allSlips.map(s => (s['지급일'] || '').slice(0, 7)).filter(Boolean))];
+    const cur = new Date().toISOString().slice(0, 7);
+    if (!months.includes(cur)) months.push(cur);
+    months.sort().reverse();
+    const sel = document.getElementById('memoMonthSelect');
+    sel.innerHTML = months.map(m => `<option value="${m}">${m.slice(0, 4)}년 ${Number(m.slice(5))}월</option>`).join('');
+    sel.value = cur;
+    sel.dataset.prev = cur;
+    document.getElementById('memoNote').addEventListener('input', () => { memoDirty = true; });
+    sel.addEventListener('change', async () => {
+      if (memoDirty && !confirm('저장하지 않은 메모가 있습니다. 버리고 다른 달로 이동할까요?')) { sel.value = sel.dataset.prev; return; }
+      sel.dataset.prev = sel.value;
+      await renderMemoPanel(sel.value);
+    });
+    document.getElementById('memoSaveBtn').addEventListener('click', saveMemo);
+    renderMemoPanel(cur);
+  }
+
+  async function saveMemo() {
+    const month = memoPanelMonth;
+    const st = document.getElementById('memoStatus');
+    const btn = document.getElementById('memoSaveBtn');
+    if (!month) return;
+    const memo = readMemoFromPanel();
+    btn.disabled = true;
+    st.style.color = 'var(--ink)';
+    st.textContent = '저장 중...';
+    try {
+      await db.collection(MEMO_COL).doc(month).set({
+        month, note: memo.note, byName: memo.byName,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: (auth.currentUser && auth.currentUser.email) || ''
+      });
+      memoCache[month] = { note: memo.note, byName: memo.byName };
+      memoDirty = false;
+      st.style.color = 'var(--pos)';
+      st.textContent = `${month} 메모를 저장했습니다.`;
+    } catch (err) {
+      console.error('메모 저장 실패', err);
+      st.style.color = 'var(--neg)';
+      st.textContent = '저장 실패: ' + (err.code || err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // 월별 인쇄에 쓸 메모: 같은 달을 메모 패널에서 편집 중이면 저장 전 내용도 그대로 반영
+  async function getMemoForPrint(month) {
+    const table = document.getElementById('memoTable');
+    if (memoPanelMonth === month && table.dataset.ready === '1') return readMemoFromPanel();
+    return await fetchMemo(month);
+  }
+
   // ---------- 피벗 (전체 직원 급여 현황) ----------
   function setupPivot() {
     const years = [...new Set(allSlips.map(s => (s['지급일'] || '').slice(0, 4)).filter(Boolean))].sort().reverse();
@@ -739,12 +885,12 @@ if ('serviceWorker' in navigator) {
   }
 
   // ---------- 선택 직원 월별 인쇄(저장) ----------
-  function printPivot() {
+  async function printPivot() {
     const names = visiblePivotNames();
     if (!names.length) { alert('인쇄할 직원이 없습니다. "직원 선택"에서 먼저 골라주세요.'); return; }
 
     const scope = document.getElementById('pvPrintScopeSelect').value;
-    const html = (scope === 'year') ? buildYearPrintHtml(names) : buildMonthPrintHtml(names, scope);
+    const html = (scope === 'year') ? buildYearPrintHtml(names) : buildMonthPrintHtml(names, scope, await getMemoForPrint(scope));
 
     document.getElementById('printArea').innerHTML = html;
     window.print();
@@ -787,7 +933,8 @@ if ('serviceWorker' in navigator) {
   }
 
   // 특정 월 하나만 - 지급/공제 항목까지 다 펼친 "급여대장" 표준 양식으로 인쇄
-  function buildMonthPrintHtml(names, month) {
+  function buildMonthPrintHtml(names, month, memo) {
+    memo = memo || { note: '', byName: {} };
     const today = new Date().toISOString().slice(0, 10);
 
     // 그 달에 해당 직원 명세서가 2건 이상(중복 등)이면 항목별로 합산해서 한 줄로 보여준다.
@@ -824,7 +971,7 @@ if ('serviceWorker' in navigator) {
     const bodyRows = rows.map(r => {
       const payCells = PAY_KEYS.map(k => `<td>${(r.pay[k] || 0).toLocaleString()}</td>`).join('');
       const dedCells = DED_KEYS.map(k => `<td>${(r.ded[k] || 0).toLocaleString()}</td>`).join('');
-      return `<tr><td>${r.name}</td>${payCells}<td>${r.payTotal.toLocaleString()}</td>${dedCells}<td>${r.dedTotal.toLocaleString()}</td><td>${r.net.toLocaleString()}</td></tr>`;
+      return `<tr><td>${r.name}</td>${payCells}<td>${r.payTotal.toLocaleString()}</td>${dedCells}<td>${r.dedTotal.toLocaleString()}</td><td>${r.net.toLocaleString()}</td><td class="pl-memo-cell">${escHtml(memo.byName[r.name] || '')}</td></tr>`;
     }).join('');
 
     const sumPay = PAY_KEYS.map(k => rows.reduce((s, r) => s + (r.pay[k] || 0), 0));
@@ -844,13 +991,17 @@ if ('serviceWorker' in navigator) {
         </div>
         <table class="pl-table pl-table-dense">
           <thead>
-            <tr><th>사원명</th>${payHeaders}<th>지급액계</th>${dedHeaders}<th>공제액계</th><th>차인지급액</th></tr>
+            <tr><th>사원명</th>${payHeaders}<th>지급액계</th>${dedHeaders}<th>공제액계</th><th>차인지급액</th><th>비고</th></tr>
           </thead>
           <tbody>${bodyRows}</tbody>
           <tfoot>
-            <tr><th>합계</th>${sumPayCells}<th>${sumPayTotal.toLocaleString()}</th>${sumDedCells}<th>${sumDedTotal.toLocaleString()}</th><th>${sumNet.toLocaleString()}</th></tr>
+            <tr><th>합계</th>${sumPayCells}<th>${sumPayTotal.toLocaleString()}</th>${sumDedCells}<th>${sumDedTotal.toLocaleString()}</th><th>${sumNet.toLocaleString()}</th><th></th></tr>
           </tfoot>
         </table>
+        <div class="pl-memo">
+          <div class="pl-memo-title">메모</div>
+          <div class="pl-memo-body">${escHtml(memo.note).replace(/\n/g, '<br>')}</div>
+        </div>
         <div class="pl-date">NUCKS Co.,Ltd</div>
       </div>
     `;
