@@ -355,7 +355,15 @@ if ('serviceWorker' in navigator) {
   // 실제로 저장된 급여명세서 기록은 그대로 남아있으므로, 해당 기간에 지급 이력이 있으면
   // buildPivotData()가 allSlips를 그대로 훑으면서 자동으로 다시 보여준다 - 완전히 숨기는 게
   // 아니라 "매번 새로 체크 해제할 필요가 없게" 하는 것.
-  function isActiveEmployee(e) { return e.employmentStatus !== '퇴사' && !e.isPlaceholder; }
+  // 2026-11: 가상 프로필 중에서도 지금 급여를 지급하는 분(예: 외주 직원)은 admin.html 회원 관리 >
+  // 인사정보 "수정"에서 재직상태를 "재직중"으로 한 번 저장해 두면(employmentStatus === '재직'이
+  // 명시적으로 기록됨) 이 목록에 다시 나타난다. 재직상태를 한 번도 저장하지 않은 가상 프로필
+  // (퇴사자 근무일지 가져오기용)은 예전처럼 계속 제외된다.
+  function isActiveEmployee(e) {
+    if (e.employmentStatus === '퇴사') return false;
+    if (e.isPlaceholder) return e.employmentStatus === '재직';
+    return true;
+  }
 
   function latestSlipFor(uid, name) {
     const mine = allSlips.filter(s => (uid && s.uid === uid) || s['사원명'] === name);
