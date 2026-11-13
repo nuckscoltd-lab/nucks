@@ -234,6 +234,7 @@ if ('serviceWorker' in navigator) {
         <select id="pvPrintScopeSelect"><option value="year">연간 전체</option></select>
         <button type="button" class="submit-btn" id="pvPrintBtn" style="margin:0; padding:8px 16px;">선택 직원 인쇄(저장)</button>
       </div>
+      <div style="font-size:12px; color:var(--muted); margin:-6px 0 10px;">※ 인쇄 범위를 "○월만"으로 고르면 표 오른쪽에 비고 칸, 아래에 메모 박스가 들어갑니다. "연간 전체"는 표 아래에 월별 메모 모음이 들어갑니다.</div>
       <div id="pivotWrap" style="overflow-x:auto;">
         <table id="pvTable"></table>
       </div>
@@ -658,7 +659,8 @@ if ('serviceWorker' in navigator) {
 
   function setupMemo() {
     const months = [...new Set(allSlips.map(s => (s['지급일'] || '').slice(0, 7)).filter(Boolean))];
-    const cur = new Date().toISOString().slice(0, 7);
+    const _n = new Date();
+    const cur = _n.getFullYear() + '-' + String(_n.getMonth() + 1).padStart(2, '0');
     if (!months.includes(cur)) months.push(cur);
     months.sort().reverse();
     const sel = document.getElementById('memoMonthSelect');
@@ -693,7 +695,9 @@ if ('serviceWorker' in navigator) {
       memoCache[month] = { note: memo.note, byName: memo.byName };
       memoDirty = false;
       st.style.color = 'var(--pos)';
-      st.textContent = `${month} 메모를 저장했습니다.`;
+      st.textContent = `${month} 메모를 저장했습니다. (인쇄 범위를 "${Number(month.slice(5))}월만"으로 맞춰 두었습니다)`;
+      const scopeSel = document.getElementById('pvPrintScopeSelect');
+      if ([...scopeSel.options].some(o => o.value === month)) scopeSel.value = month;
     } catch (err) {
       console.error('메모 저장 실패', err);
       st.style.color = 'var(--neg)';
@@ -890,14 +894,26 @@ if ('serviceWorker' in navigator) {
     if (!names.length) { alert('인쇄할 직원이 없습니다. "직원 선택"에서 먼저 골라주세요.'); return; }
 
     const scope = document.getElementById('pvPrintScopeSelect').value;
-    const html = (scope === 'year') ? buildYearPrintHtml(names) : buildMonthPrintHtml(names, scope, await getMemoForPrint(scope));
+    let html;
+    if (scope === 'year') {
+      const year = document.getElementById('pvYearSelect').value;
+      const memos = {};
+      for (let i = 1; i <= 12; i++) {
+        const m = `${year}-${String(i).padStart(2, '0')}`;
+        memos[m] = await getMemoForPrint(m);
+      }
+      html = buildYearPrintHtml(names, memos);
+    } else {
+      html = buildMonthPrintHtml(names, scope, await getMemoForPrint(scope));
+    }
 
     document.getElementById('printArea').innerHTML = html;
     window.print();
   }
 
   // 연간 전체(월별 차인지급액만) 인쇄용 HTML - 기존 피벗 표와 같은 구성
-  function buildYearPrintHtml(names) {
+  function buildYearPrintHtml(names, memos) {
+    memos = memos || {};
     const year = document.getElementById('pvYearSelect').value;
     const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
     const today = new Date().toISOString().slice(0, 10);
@@ -927,9 +943,25 @@ if ('serviceWorker' in navigator) {
           <tbody>${bodyRows}</tbody>
           <tfoot><tr><th>전체 합계</th>${totalCells}<th>${grandTotal.toLocaleString()}원</th></tr></tfoot>
         </table>
+        ${buildYearMemoHtml(months, names, memos)}
         <div class="pl-date">NUCKS Co.,Ltd</div>
       </div>
     `;
+  }
+
+  // 연간 인쇄 하단: 저장된 월별 메모·직원별 비고를 월 순서대로 모아서 보여준다(내용이 없으면 생략)
+  function buildYearMemoHtml(months, names, memos) {
+    const lines = [];
+    months.forEach(m => {
+      const memo = memos[m];
+      if (!memo) return;
+      const parts = [];
+      if (memo.note) parts.push(escHtml(memo.note).replace(/\n/g, '<br>'));
+      names.forEach(n => { if (memo.byName && memo.byName[n]) parts.push(`· ${escHtml(n)}: ${escHtml(memo.byName[n])}`); });
+      if (parts.length) lines.push(`<div style="margin-bottom:6px;"><b>${Number(m.slice(5))}월</b><br>${parts.join('<br>')}</div>`);
+    });
+    if (!lines.length) return '';
+    return `<div class="pl-memo"><div class="pl-memo-title">월별 메모</div><div class="pl-memo-body">${lines.join('')}</div></div>`;
   }
 
   // 특정 월 하나만 - 지급/공제 항목까지 다 펼친 "급여대장" 표준 양식으로 인쇄
