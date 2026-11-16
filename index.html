@@ -303,6 +303,24 @@ if ('serviceWorker' in navigator) {
         }
         .notif-card-body div { margin-bottom: 6px; }
         .notif-card-body div:last-child { margin-bottom: 0; }
+
+        /* ===== 모바일: 대문 영상 탭하면 크게 보기 ===== */
+        .hero-zoom-hint { display: none; }
+        .hero-modal { position: fixed; inset: 0; z-index: 9999; background: #0b0b0b;
+            display: none; align-items: center; justify-content: center; flex-direction: column; }
+        .hero-modal.open { display: flex; }
+        .hero-modal video { width: 100vw; max-height: 100vh; object-fit: contain; background: #000; }
+        .hero-modal-close { position: absolute; top: 14px; right: 14px; width: 44px; height: 44px; border: 0;
+            border-radius: 50%; background: rgba(255,255,255,0.14); color: #fff; font-size: 26px; line-height: 44px;
+            cursor: pointer; z-index: 2; }
+        .hero-modal-tip { color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 14px; letter-spacing: 0.02em; }
+        @media (max-width: 768px) {
+            .hero-video-area { cursor: pointer; }
+            .hero-zoom-hint { display: flex; align-items: center; gap: 5px; position: absolute; right: 10px; bottom: 10px;
+                z-index: 5; padding: 5px 9px; border-radius: 14px; background: rgba(0,0,0,0.45); color: #fff;
+                font-size: 11px; pointer-events: none; }
+        }
+        @media (orientation: landscape) and (max-height: 500px) { .hero-modal-tip { display: none; } }
     </style>
 </head>
 <body>
@@ -380,6 +398,12 @@ if ('serviceWorker' in navigator) {
             <div class="hero-video-area">
                 <video id="video1" muted="" playsinline="" preload="auto" style="opacity: 0; z-index: 1;"></video>
                 <video id="video2" muted="" playsinline="" preload="auto" style="opacity: 0; z-index: 1;"></video>
+                <div class="hero-zoom-hint">&#x2922; 크게 보기</div>
+            </div>
+            <div class="hero-modal" id="heroModal">
+                <button class="hero-modal-close" type="button" aria-label="닫기" onclick="closeHeroModal()">&times;</button>
+                <video id="heroModalVideo" muted playsinline controls preload="auto"></video>
+                <div class="hero-modal-tip">휴대폰을 가로로 돌리면 더 크게 볼 수 있어요</div>
             </div>
         </section>
 
@@ -498,6 +522,40 @@ if ('serviceWorker' in navigator) {
             nextPrepared = false;
             activeVideo.ontimeupdate = checkPrepare;
         }
+
+        // ===== 모바일: 대문 영상 탭 → 팝업 플레이어 (같은 파일을 이어서 재생, 추가 용량 거의 없음) =====
+        const heroModal = document.getElementById('heroModal');
+        const heroModalVideo = document.getElementById('heroModalVideo');
+        let heroModalIdx = 0;
+        function openHeroModal() {
+            if (!isMobile) return;
+            heroModalIdx = currentIdx;
+            const t = activeVideo.currentTime || 0;
+            activeVideo.pause();
+            heroModalVideo.src = videoList[heroModalIdx];
+            heroModalVideo.onloadedmetadata = function () {
+                heroModalVideo.onloadedmetadata = null;
+                try { heroModalVideo.currentTime = t; } catch (e) {}
+                heroModalVideo.play();
+            };
+            heroModal.classList.add('open');
+            document.body.style.overflow = 'hidden';
+        }
+        heroModalVideo.onended = function () {   // 끝나면 다음 영상으로 계속
+            heroModalIdx = (heroModalIdx + 1) % videoList.length;
+            heroModalVideo.src = videoList[heroModalIdx];
+            heroModalVideo.play();
+        };
+        function closeHeroModal() {
+            heroModal.classList.remove('open');
+            document.body.style.overflow = '';
+            heroModalVideo.pause();
+            heroModalVideo.removeAttribute('src');
+            heroModalVideo.load();
+            activeVideo.play();
+        }
+        document.querySelector('.hero-video-area').addEventListener('click', openHeroModal);
+        heroModal.addEventListener('click', function (e) { if (e.target === heroModal) closeHeroModal(); });
 
         window.onload = function() {
             initVideo();
