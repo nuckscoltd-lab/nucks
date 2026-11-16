@@ -698,7 +698,7 @@ if ('serviceWorker' in navigator) {
                 const contactsLink = document.getElementById('contactsNavLink');
                 contactsLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
 
-                // 갤러리 관리(윤성원) / 프로젝트 결산(손영화): 관리자는 항상 노출, 그 외에는 해당 담당자인 경우에만 노출
+                // 갤러리 관리(윤성원): 관리자는 항상 노출, 그 외에는 해당 담당자인 경우에만 노출 / 프로젝트 결산: 관리자만 노출(2026-11 손영화 님 제외)
                 const galleryLink = document.getElementById('galleryNavLink');
                 const settlementLink = document.getElementById('settlementNavLink');
                 if (role === 'admin') {
@@ -710,7 +710,6 @@ if ('serviceWorker' in navigator) {
                     db.collection('users').doc(user.uid).get().then(doc => {
                         const name = doc.data()?.displayName;
                         if (name === '윤성원') galleryLink.style.display = 'inline-block';
-                        if (name === '손영화') settlementLink.style.display = 'inline-block';
                     }).catch(() => {});
                 }
 

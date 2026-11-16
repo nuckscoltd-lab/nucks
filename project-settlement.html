@@ -189,7 +189,7 @@ if ('serviceWorker' in navigator) {
 <script src="firebase-config.js"></script>
 <script src="auth.js"></script>
 <script>
-  // 관리자 또는 프로젝트 결산 담당자(손영화)만 접근 가능
+  // 관리자만 접근 가능 (2026-11: 손영화 님 접근 권한 제외)
   auth.onAuthStateChanged(async (user) => {
     if (!user) { window.location.href = 'login.html'; return; }
     const role = await getCurrentUserRole();
@@ -200,7 +200,7 @@ if ('serviceWorker' in navigator) {
     } catch (err) {
       console.error('이름 조회 실패:', err);
     }
-    if (role !== 'admin' && displayName !== '손영화') {
+    if (role !== 'admin') {
       alert('접근 권한이 없습니다.');
       window.location.href = 'index.html';
     }
