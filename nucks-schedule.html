@@ -2665,8 +2665,12 @@ function renderFinSettle(rowId){
   const f=rowId?findRow(rowId):null;
   if(!f){el.textContent='프로젝트를 저장한 뒤 확인할 수 있습니다.';return}
   const r=f.r;
-  if(r.settle){el.innerHTML=`결산서 <b>${r.settle.status==='confirmed'?'확정':'초안'}</b> 상태입니다. <button type="button" class="lchip lgh" data-setopen="${r.id}">결산서 열기</button>`;return}
-  if(settleEligible(r)){el.innerHTML=`완료·전액수금 조건을 채웠습니다. 저장하면 결산서 초안이 자동으로 만들어집니다.`;return}
+  if(r.settle){
+    const s=r.settle,sn=s.snap||{},cf=s.status==='confirmed',ppl=(s.people||[]).map(p=>`${esc(p.name)}${p.hours!==undefined?` <small>${hrs(p.hours)}h</small>`:''}`).join(', ')||'-';
+    el.innerHTML=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><span class="sc-tag ${cf?'cf':'dr'}">${cf?'확정':'초안'}</span><b>${esc(s.name||r.name)}</b><span style="flex:1"></span><button type="button" class="lchip" data-setopen="${r.id}">결산서 열어서 수정</button></div>
+      <div class="fsum" style="margin-bottom:6px"><div>PROJ.NO<b style="font-size:13px">${esc(s.projNo||'-')}</b></div><div>기간<b style="font-size:13px">${sDate(s.startDate)} ~ ${sDate(s.endDate)}</b></div><div>총계약금<b style="font-size:13px">${sn.total?won(sn.total)+'원':'-'}</b></div><div>추정 인건비<b style="font-size:13px">${sn.laborHours!==undefined?won(sn.laborCost)+'원':'-'}</b></div></div>
+      <div style="font-size:12px;line-height:1.7"><b>투입인원</b> ${ppl}<br><b>진행 내용</b> ${(s.progressItems||[]).length?esc(s.progressItems.join(' / ')):'<span style="color:var(--muted)">아직 입력 없음</span>'}<br><b>특이사항</b> ${(s.notes||[]).length?esc(s.notes.join(' / ')):'<span style="color:var(--muted)">없음</span>'}</div>`;return}
+  if(settleEligible(r)){el.innerHTML=`완료·전액수금 조건을 채웠습니다. 저장하면 결산서 초안이 자동으로 만들어집니다. <button type="button" class="lchip" data-setmake="${r.id}">지금 초안 만들기</button>`;return}
   const b=r.bars&&r.bars[0],c=hasFin(r)?finCalc(r.fin):null,need=[];
   if(!b||b.inner!=='완료')need.push('상태를 "완료"로 저장');
   if(c&&c.unclaimed>0)need.push(`미청구 ${won(c.unclaimed)}원 청구`);
@@ -2674,6 +2678,8 @@ function renderFinSettle(rowId){
   if(!c)need.push('총계약금·기성 입력');
   el.textContent='아직 결산서 자동 작성 조건이 아닙니다 → '+need.join(' · ')+' 후 저장하면 초안이 자동으로 만들어집니다.';
 }
+document.addEventListener('click',e=>{const b=e.target.closest('[data-setmake]');if(!b)return;const id=b.dataset.setmake,f=findRow(id);if(!f)return;b.disabled=true;
+  settleAutoValues(f.r,true).then(v=>{const g=findRow(id);if(!g||g.r.settle)return;snap();g.r.settle=mergeSettle(blankSettle(),v);g.r.settle.source='auto';save();updateSettleBadge();renderFinSettle(id);toast('결산서 초안을 만들었습니다')})});
 document.addEventListener('click',e=>{const b=e.target.closest('[data-setopen]');if(!b)return;
   const k=b.dataset.setopen;$('#dFin').close();SET_UI.open.add(k);SET_UI.edit=null;SET_UI.st='all';SET_UI.ct='';SET_UI.yr='';SET_UI.q='';$('#seQ').value='';renderSettle();$('#dSettle').showModal()});
 
