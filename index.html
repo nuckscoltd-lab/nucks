@@ -441,7 +441,12 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <script>
-        const videoList = ["nucks_mood.mp4", "hero_cheonan_publichall.mp4", "hero_cheonan_unit.mp4", "nucks1-1.mp4", "nucks1-2.mp4"];
+        const isMobile = window.matchMedia("(max-width: 768px)").matches;
+        // 휴대폰에서는 가벼운 720p 버전(_m)을 재생 (화면이 작아 화질 차이가 보이지 않음)
+        const mobileVersion = {"hero_cheonan_publichall.mp4": "hero_cheonan_publichall_m.mp4", "hero_cheonan_unit.mp4": "hero_cheonan_unit_m.mp4"};
+        const videoList = ["nucks_mood.mp4", "hero_cheonan_publichall.mp4", "hero_cheonan_unit.mp4", "nucks1-1.mp4", "nucks1-2.mp4"]
+            .map(f => (isMobile && mobileVersion[f]) ? mobileVersion[f] : f);
+        let nextPrepared = false;
         let currentIdx = 0;
         const v1 = document.getElementById('video1');
         const v2 = document.getElementById('video2');
@@ -453,8 +458,17 @@ if ('serviceWorker' in navigator) {
             activeVideo.style.opacity = "1";
             activeVideo.style.zIndex = "2";
             activeVideo.play();
-            prepareNext();
             activeVideo.onended = swapVideo;
+            activeVideo.ontimeupdate = checkPrepare;
+        }
+
+        // 다음 영상은 현재 영상이 끝나기 10초 전부터 미리 불러옴 (처음부터 전부 받지 않도록)
+        function checkPrepare() {
+            if (nextPrepared || !activeVideo.duration) return;
+            if (activeVideo.duration - activeVideo.currentTime < 10) {
+                nextPrepared = true;
+                prepareNext();
+            }
         }
 
         function prepareNext() {
@@ -467,6 +481,8 @@ if ('serviceWorker' in navigator) {
 
         function swapVideo() {
             activeVideo.onended = null;
+            activeVideo.ontimeupdate = null;
+            if (!nextPrepared) prepareNext();
             idleVideo.play();
             idleVideo.style.opacity = "1";
             idleVideo.style.zIndex = "2";
@@ -479,7 +495,8 @@ if ('serviceWorker' in navigator) {
 
             currentIdx = (currentIdx + 1) % videoList.length;
             activeVideo.onended = swapVideo;
-            setTimeout(prepareNext, 1000);
+            nextPrepared = false;
+            activeVideo.ontimeupdate = checkPrepare;
         }
 
         window.onload = function() {

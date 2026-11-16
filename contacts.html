@@ -246,9 +246,9 @@ document.documentElement.classList.toggle("is-mobile",MOBILE);
 const LS=(k,v)=>{try{if(v===undefined)return localStorage.getItem("nucks-contacts-"+k)||"";localStorage.setItem("nucks-contacts-"+k,v)}catch{return ""}};
 let myName="",lastSeen=LS("lastSeen"),deviceId=LS("deviceId");
 if(!deviceId){deviceId="d-"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);LS("deviceId",deviceId)}
-// 명함 자동 읽기(OCR)는 비용이 드는 기능이라 지금은 꺼 둠 — 사진은 서버에 저장되고 내용은 직접 입력.
-// 나중에 쓰려면 readBusinessCard Cloud Function을 배포한 뒤 아래 값을 true로 바꾸면 된다.
-const OCR_ENABLED=false;
+// 명함 자동 읽기(OCR) 켜짐 — readBusinessCard Cloud Function(Claude API)이 명함을 읽어 칸을 채운다.
+// 끄려면 false로 바꾸면 된다(사진 저장·직접 입력은 그대로 동작).
+const OCR_ENABLED=true;
 const ocrOn=()=>OCR_ENABLED;
 
 /* ---------- 공용 도구 ---------- */
