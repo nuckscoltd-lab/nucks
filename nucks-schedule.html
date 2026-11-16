@@ -2015,7 +2015,7 @@ $('#fName').addEventListener('change',()=>renderFinLabor());
    공정표의 모든 프로젝트가 근무일지 기록과 어떻게 연결되는지 한 번에 보여 준다. 근무일지 쪽에는 있는데 어떤 공정표
    프로젝트와도 연결되지 않은 프로젝트(이름·코드가 달라 놓치는 후보)도 함께 보여 준다. 읽기 전용이며,
    "코드 적용"은 확인을 거쳐 이 공정표 프로젝트의 코드(두 번째 값)만 바꾼다. */
-let AUDIT_ONLY_PROBLEMS=true,AUDIT_BULK={ok:[],skip:[]};
+let AUDIT_ONLY_PROBLEMS=true,AUDIT_BULK={ok:[],skip:[]},AUDIT_ORPH=[];
 function auditClassify(row,m){
   const code=(row.projCode||'').trim(),nn=normName(row.name);
   if(m.hits.length&&!m.emps.length)return{k:'nowage',lv:'warn',t:'급여명세서 없음'};
@@ -2025,7 +2025,7 @@ function auditClassify(row,m){
     if(odd.length&&m.how.name===0&&nn)return{k:'conflict',lv:'warn',t:'코드는 같지만 근무일지 프로젝트명이 다름'};
     return{k:'ok',lv:'ok',t:lkn.size?'정상(코드 일치 · 이름 확인됨)':'정상(코드 일치)'};
   }
-  if(m.how.name>0)return{k:'name',lv:'warn',t:'코드 불일치 · 이름으로 연결됨'};
+  if(m.how.name>0){const ig=row.wlCodeIgnore||[];if(m.codes.length&&m.codes.every(c=>ig.includes(c)))return{k:'name',lv:'warn',t:`근무일지 코드(${m.codes.join(', ')})가 틀린 것으로 확인됨 → 근무일지의 "프로젝트 코드 전체 목록"에서 ${row.projCode||''}로 고치세요`,ign:true};return{k:'name',lv:'warn',t:'코드 불일치 · 이름으로 연결됨'}}
   if(m.how.norm>0)return{k:'norm',lv:'warn',t:'근사 일치(괄호 코드)'};
   return{k:'none',lv:'info',t:code?'근무일지 기록 없음':'코드 미입력 · 기록 없음'};
 }
@@ -2060,7 +2060,7 @@ async function openLaborAudit(force){
   shown.sort((a,b)=>order[a.c.lv]-order[b.c.lv]);
   const btn=(x)=>{
     const codes=x.m.codes;let act='';
-    if((x.c.k==='name'||x.c.k==='norm')&&codes.length===1&&codes[0]!==(x.r.projCode||''))act=`<button type="button" class="lchip" data-apply="${esc(x.r.id)}" data-code="${esc(codes[0])}">코드 ${esc(codes[0])} 적용</button> `;
+    if((x.c.k==='name'||x.c.k==='norm')&&!x.c.ign&&codes.length===1&&codes[0]!==(x.r.projCode||''))act=`<button type="button" class="lchip" data-apply="${esc(x.r.id)}" data-code="${esc(codes[0])}">코드 ${esc(codes[0])} 적용</button> `;
     if(x.sug&&x.sug.g.codes.size===1){const cd=[...x.sug.g.codes][0];if(cd!==(x.r.projCode||''))act+=`<button type="button" class="lchip" data-apply="${esc(x.r.id)}" data-code="${esc(cd)}" title="근무일지 프로젝트: ${esc(x.sug.g.name)}">추천 코드 ${esc(cd)} 적용</button> `}
     if(x.c.k==='conflict'&&x.m.names.length)act+=`<button type="button" class="lchip" data-same="${esc(x.r.id)}" title="코드가 같고 같은 프로젝트임을 확인했다고 기록합니다">같은 프로젝트로 확인</button> `;
     return act+`<button type="button" class="lchip lgh" data-lopen="${esc(x.r.id)}">열기</button>`;
@@ -2073,17 +2073,19 @@ async function openLaborAudit(force){
   const orphans={};
   data.entries.forEach(e=>{if(used.has(e.i)||!e.hasWage)return;const key=e.nname||('#'+e.ncode);const o=orphans[key]||(orphans[key]={name:e.name||'(이름없음)',nname:e.nname,codes:new Set(),hours:0,people:new Set()});
     if(e.code)o.codes.add(e.code);o.hours+=e.hours;o.people.add(e.emp)});
-  const ol=Object.values(orphans).sort((a,b)=>b.hours-a.hours).slice(0,60);
-  const otr=ol.map(o=>{
+  const ol=Object.values(orphans).sort((a,b)=>b.hours-a.hours).slice(0,60);AUDIT_ORPH=ol;
+  const rowOpts=rows.map(({g,r})=>`<option value="${esc(r.id)}">${esc(r.name)} · ${esc(r.projCode||'코드 없음')} (${esc(g.name)})</option>`).join('');
+  const otr=ol.map((o,oi)=>{
     let best=null,bs=0;rows.forEach(({g,r})=>{const sc=dice(o.nname,normName(r.name));if(sc>bs){bs=sc;best={g,r}}});
     const cd=o.codes.size===1?[...o.codes][0]:'';
+    const manual=`<div style="margin-top:4px"><select class="inp" data-osel="${oi}" style="max-width:260px;font-size:11px"><option value="">직접 골라 연결…</option>${rowOpts}</select> <select class="inp" data-ocode="${oi}" style="font-size:11px"><option value="keep">코드는 프로젝트현황 것 유지</option><option value="adopt">코드를 근무일지 코드로 변경</option></select> <button type="button" class="lchip" data-olink="${oi}">연결</button></div>`;
     const sug=best&&bs>=0.7?`<small style="color:var(--warn)">${esc(best.r.name)} (${Math.round(bs*100)}%)</small><br>${cd&&cd!==(best.r.projCode||'')?`<button type="button" class="lchip" data-apply="${esc(best.r.id)}" data-code="${esc(cd)}">이 프로젝트 코드를 ${esc(cd)}로 적용</button> `:''}<button type="button" class="lchip lgh" data-lopen="${esc(best.r.id)}">열기</button>`:'<small style="color:var(--muted)">비슷한 공정표 프로젝트 없음(사무업무 등일 수 있음)</small>';
-    return `<tr><td style="white-space:normal;min-width:220px">${esc(o.name)}</td><td>${esc([...o.codes].join(', ')||'—')}</td><td style="text-align:right">${hrs(o.hours)}h</td><td style="text-align:right">${o.people.size}명</td><td style="white-space:normal;min-width:200px">${sug}</td></tr>`}).join('');
+    return `<tr><td style="white-space:normal;min-width:220px">${esc(o.name)}</td><td>${esc([...o.codes].join(', ')||'—')}</td><td style="text-align:right">${hrs(o.hours)}h</td><td style="text-align:right">${o.people.size}명</td><td style="white-space:normal;min-width:200px">${sug}${manual}</td></tr>`}).join('');
   // 일괄 적용 대상: 코드는 다르지만 이름(또는 괄호 제외 코드)으로 같은 프로젝트로 확인된 건 중, 근무일지 쪽 코드가 하나로 정해지는 것
   const codeUse={};rows.forEach(({r})=>{if(r.projCode)codeUse[r.projCode]=(codeUse[r.projCode]||0)+1});
   AUDIT_BULK={ok:[],skip:[]};const taken=new Set();
   res.forEach(x=>{
-    if(!(x.c.k==='name'||x.c.k==='norm'))return;
+    if(!(x.c.k==='name'||x.c.k==='norm')||x.c.ign)return;
     if(x.m.codes.length!==1){AUDIT_BULK.skip.push({x,why:'근무일지 쪽 코드가 여러 개라 하나로 정할 수 없음'});return}
     const nc=x.m.codes[0];if(nc===(x.r.projCode||''))return;
     if(codeUse[nc]||taken.has(nc)){AUDIT_BULK.skip.push({x,nc,why:`${nc}는 이미 다른 프로젝트에 쓰이고 있음`});return}
@@ -2103,6 +2105,15 @@ async function openLaborAudit(force){
   $('#laReload').onclick=()=>openLaborAudit(true);
 }
 $('#laBody').addEventListener('click',e=>{
+  const ol=e.target.closest('[data-olink]');
+  if(ol){const o=AUDIT_ORPH[+ol.dataset.olink],sel=ol.parentElement.querySelector('select');if(!o||!sel||!sel.value){toast('연결할 프로젝트를 먼저 고르세요');return}
+    const f=findRow(sel.value);if(!f)return;const codes=[...o.codes],nc0=codes.length===1?codes[0]:'',old=f.r.projCode||'(비어 있음)';
+    const adopt=ol.parentElement.querySelector('[data-ocode]').value==='adopt',nc=adopt?nc0:'';
+    const other=nc?finRows().find(({r})=>r.id!==f.r.id&&r.projCode===nc):null;
+    const msg=`근무일지 프로젝트 "${o.name}"을(를)\n프로젝트현황 "${f.r.name}"과(와) 같은 프로젝트로 연결합니다.\n\n`+(nc&&nc!==f.r.projCode?`· 코드: ${old} → ${nc}\n`:(codes.length>1?`· 근무일지 코드가 여러 개(${codes.join(', ')})라 코드는 바꾸지 않고 이름으로만 연결합니다\n`:`· 코드는 ${f.r.projCode||'(비어 있음)'} 그대로 유지${nc0&&nc0!==f.r.projCode?` (근무일지 코드 ${nc0}는 틀린 것으로 보고 근무일지에서 고쳐야 할 항목으로 표시합니다)`:''}\n`))+(other?`\n⚠ 코드 ${nc}는 이미 "${other.r.name}"에서 쓰고 있습니다. 그래도 진행할까요?\n`:'')+`\n계속할까요? (되돌리기로 취소할 수 있습니다)`;
+    if(!confirm(msg))return;
+    if($('#dFin').open)$('#dFin').close();
+    snap();if(nc)f.r.projCode=nc;else if(nc0&&nc0!==f.r.projCode)f.r.wlCodeIgnore=[...new Set([...(f.r.wlCodeIgnore||[]),nc0])];f.r.wlNames=[...new Set([...(f.r.wlNames||[]),o.name])];save();renderAll();toast('연결했습니다');openLaborAudit();return}
   const sm=e.target.closest('[data-same]');
   if(sm){const f=findRow(sm.dataset.same);if(!f)return;const o=AUDIT_BULK.same.find(x=>x.r.id===f.r.id);if(!o)return;
     snap();f.r.wlNames=[...new Set([...(f.r.wlNames||[]),...o.m.names])];save();toast('같은 프로젝트로 확인했습니다');openLaborAudit();return}
