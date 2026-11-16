@@ -170,6 +170,10 @@ html.is-mobile .drop{padding:18px 8px;font-size:15px}
 .catbtns{display:flex;gap:4px}
 .catdel{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px;color:var(--danger);background:var(--warn-soft);border-radius:6px;padding:8px}
 .foot.sticky{position:sticky;bottom:calc(-18px);background:var(--surface);padding:12px 0 calc(4px + env(safe-area-inset-bottom,0px));margin-top:4px;border-top:1px solid var(--line)}
+.autoread{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-size:13.5px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:5px 10px;cursor:pointer}
+.autoread small{color:var(--muted);font-size:12px}
+.autoread input{accent-color:var(--accent);width:16px;height:16px;margin:0}
+.reading .btn{margin-left:4px}
 .fab small{display:block;font-size:11.5px;font-weight:500;opacity:.85;line-height:1.1}
 .fab span{display:flex;flex-direction:column;align-items:flex-start}
 </style>
@@ -200,6 +204,7 @@ html.is-mobile .drop{padding:18px 8px;font-size:15px}
     <div class="bar">
       <div class="seg" role="group" aria-label="목록 묶는 방식"><button data-view="company" aria-pressed="true">회사별</button><button data-view="project" aria-pressed="false">프로젝트별</button><button data-view="recent" aria-pressed="false">최근 추가순</button></div>
       <div class="chips" id="chips"></div>
+      <label class="autoread" id="autoWrap"><input type="checkbox" id="autoRead"> 명함 자동 읽기 <small>(켜면 사진 1장당 소액 과금)</small></label>
     </div>
   </div>
 
@@ -249,7 +254,8 @@ if(!deviceId){deviceId="d-"+Date.now().toString(36)+Math.random().toString(36).s
 // 명함 자동 읽기(OCR) 켜짐 — readBusinessCard Cloud Function(Claude API)이 명함을 읽어 칸을 채운다.
 // 끄려면 false로 바꾸면 된다(사진 저장·직접 입력은 그대로 동작).
 const OCR_ENABLED=true;
-const ocrOn=()=>OCR_ENABLED;
+// 화면의 '명함 자동 읽기' 체크박스 — 끄면 사진만 저장하고 내용은 직접 입력(과금 없음). 이 브라우저에 기억됨.
+const ocrOn=()=>OCR_ENABLED&&LS("autoRead")!=="off";
 
 /* ---------- 공용 도구 ---------- */
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -695,10 +701,19 @@ async function handleFile(f){
   showForm("scan",null);
   if($("upState"))$("upState").textContent="사진을 서버에 올리는 중…";
   if(targetId){const t=byId(targetId);$("f_name").value=t.name||"";$("f_cell").value=t.cell||"";if(!cat&&current(t)){$("f_category").value=catOf(t)}updateMatch()}
-  if(!ocrOn()){$("readState").innerHTML=`사진은 서버에 저장됩니다. 사진을 보며 내용을 입력하세요.`;$("readState").classList.remove("reading");return}
+  if(!ocrOn()){
+    $("readState").classList.remove("reading");
+    $("readState").innerHTML=OCR_ENABLED?`자동 읽기가 꺼져 있어 사진만 저장합니다. 사진을 보며 내용을 입력하세요. <button type="button" class="btn sm" data-act="readnow">이 명함만 자동으로 읽기</button>`:`사진은 서버에 저장됩니다. 사진을 보며 내용을 입력하세요.`;
+    return;
+  }
+  await runRead(P);
+}
+async function runRead(P){
+  if(!$("readState"))return;
+  $("readState").classList.add("reading");$("readState").innerHTML=`<span class="spin"></span>명함을 읽는 중입니다…`;
   try{
-    const r=await readCard(blob);
-    if(mode!=="scan"||!$("form"))return;
+    const r=await readCard(P.blob);
+    if(mode!=="scan"||!$("form")||pending!==P)return;
     ["name","cell"].forEach(k=>{if(r?.[k]&&!$("f_"+k).value)$("f_"+k).value=k==="cell"?fmtCell(r[k]):String(r[k])});
     ["company","title","dept","tel","fax","email","address"].forEach(k=>{if(r?.[k])$("f_"+k).value=String(r[k])});
     applyCompanyCat(r?.category);
@@ -725,6 +740,7 @@ $("scanBtn").onclick=$("albumBtn").onclick=()=>startCapture("photo");
 $("camBtn").onclick=()=>startCapture("camera");
 $("addBtn").onclick=()=>{clearPending();showForm("new",null)};
 $("setBtn").onclick=()=>showSettings();
+if(OCR_ENABLED){$("autoRead").checked=ocrOn();$("autoRead").onchange=e=>{LS("autoRead",e.target.checked?"on":"off");toast(e.target.checked?"명함 자동 읽기를 켰습니다":"자동 읽기를 껐습니다 · 사진만 저장하고 직접 입력합니다")}}else $("autoWrap").hidden=true;
 $("q").oninput=e=>{query=e.target.value.trim();renderList()};
 $("chips").onclick=e=>{const b=e.target.closest(".chip[data-cat]");if(b){filter=b.dataset.cat;renderList()}};
 document.addEventListener("click",async e=>{
@@ -758,6 +774,7 @@ document.addEventListener("click",async e=>{
   else if(act==="move")showForm("move",selId);
   else if(act==="seen")markSeen();
   else if(act==="shownew"){showNewOnly=!showNewOnly;renderList()}
+  else if(act==="readnow"){if(pending?.blob)runRead(pending)}
   else if(act==="pick")startCapture("photo");
   else if(act==="cam")startCapture("camera");
   else if(act==="card"){const t=selId;clearPending();pending={targetId:t,cat:""};$("photo").click()}
