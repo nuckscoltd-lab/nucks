@@ -595,8 +595,17 @@ textarea.inp{width:100%;resize:vertical}
   </div>
 </dialog>
 
+<dialog id="dRename" class="wide">
+  <div class="dh"><h2>프로젝트명 통일 (근무일지 기준)</h2><div class="acts"><button class="btn pri" id="rnApply" type="button">선택한 이름 적용</button><button class="btn" data-close>닫기</button></div></div>
+  <div class="db">
+    <div class="fsum" id="rnSum"></div>
+    <div class="tw" style="max-height:56vh;overflow:auto"><table class="ft"><thead><tr><th style="width:34px"><input type="checkbox" id="rnAll" checked aria-label="전체 선택"></th><th>현재 이름 (프로젝트현황)</th><th>바뀔 이름 (근무일지 기준)</th><th>근거</th><th style="text-align:right">근무일지 기록</th><th>비고</th></tr></thead><tbody id="rnBody"></tbody></table></div>
+    <p class="hint" style="margin:0">근무일지에서 쓰는 프로젝트명을 기준 이름으로 삼습니다. 근거는 ① 이 프로젝트에 확인·연결해 둔 근무일지명 ② 기성청구현황에서 가져온 연결명입니다. 이름만 바뀌고 코드·금액·결산서 내용은 그대로이며, 옛 이름은 기록으로 남습니다. 근무일지에서 같은 이름을 찾지 못한 건(체크 해제 상태)은 이름이 근무일지와 다를 수 있으니 확인 후 직접 체크하세요. "(주)"가 붙은 이름과 안 붙은 이름은 서로 다른 프로젝트로 취급합니다.</p>
+  </div>
+</dialog>
+
 <dialog id="dLaborAudit" class="wide">
-  <div class="dh"><h2>근무일지 연결 점검</h2><button class="btn" data-close>닫기</button></div>
+  <div class="dh"><h2>근무일지 연결 점검</h2><div class="acts"><button class="btn" id="laRename" type="button" title="프로젝트현황의 이름을 근무일지에서 쓰는 이름으로 맞춥니다">프로젝트명 통일</button><button class="btn" data-close>닫기</button></div></div>
   <div class="db" id="laBody"></div>
 </dialog>
 
@@ -788,7 +797,14 @@ P=DB.projects.find(p=>p.id===DB.current)||DB.projects[0];
 // save()는 기본적으로 지금까지처럼 이 브라우저(localStorage)에만 저장한다. skipPush를 안 주면
 // 추가로 "지금 편집 중인 프로젝트(P)"를 서버(Firestore)에도 올리도록 예약한다(디바운스).
 // 서버에서 막 받아온 직후처럼 "다시 서버로 올릴 필요 없는" 저장은 save(true)로 건너뛴다.
-const save=(skipPush)=>{try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}if(!skipPush)scheduleServerPush(P)};
+/* 2026-11: "이 브라우저에만 있고 서버에 아직 안 올라간 편집"이 있는지(dirty)를 기억한다. 서버가 더 최신일 때
+   편집이 없던(깨끗한) 브라우저는 페이지를 열 때 서버 내용을 자동으로 받아오고, 편집이 남아 있으면 안내만 띄운다. */
+const DIRTY_KEY='nucks-schedule-dirty-v1',SYNCV2_KEY='nucks-schedule-syncv2';
+function dirtyMap(){try{return JSON.parse(localStorage.getItem(DIRTY_KEY))||{}}catch(e){return{}}}
+function setDirty(id,v){try{const m=dirtyMap();if(v)m[id]=1;else delete m[id];localStorage.setItem(DIRTY_KEY,JSON.stringify(m))}catch(e){}}
+const DIRTY_AT_LOAD=dirtyMap(); // 페이지를 연 시점의 값(열자마자 일어나는 자동 저장이 '편집'으로 잡히지 않도록 따로 기억)
+let EDIT_SEQ=0;
+const save=(skipPush)=>{try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}if(!skipPush){EDIT_SEQ++;if(P&&P.id)setDirty(P.id,true);scheduleServerPush(P)}};
 let hist=[];
 let redoS=[];
 const snap=()=>{redoS=[];hist.push(JSON.stringify(P));if(hist.length>60)hist.shift();$('#bUndo').disabled=false};
@@ -832,13 +848,14 @@ async function pushProjectToServer(p){
   if(SYNC.stale)return; // 서버에 더 최근 내용이 있는지 확인 중/확인됨 - 사용자가 받아오기·덮어쓰기를 고를 때까지 올리지 않음
   if(!SYNC.ready){setTimeout(()=>pushProjectToServer(p),1200);return} // 페이지를 연 직후 서버 최신본 확인이 끝날 때까지 대기
   if(SYNC.pushing.has(p.id))return; // 같은 프로젝트가 이미 올라가는 중이면 겹쳐 보내지 않음
-  SYNC.pushing.add(p.id);
+  p=(DB.projects.find(x=>x.id===p.id))||p; // 받아오기 등으로 교체됐을 수 있으니 항상 현재 객체를 올린다
+  SYNC.pushing.add(p.id);const seq0=EDIT_SEQ;
   try{
     const data=JSON.parse(JSON.stringify(p));
     data._pushedAt=firebase.firestore.FieldValue.serverTimestamp();
     try{data._pushedBy=(firebase.auth().currentUser&&firebase.auth().currentUser.email)||'';}catch(_){data._pushedBy=''}
     await db.collection(SCHED_COL).doc(p.id).set(data);
-    SYNC.lastPushAt[p.id]=Date.now();saveLastPushAt();SYNC.lastErr='';
+    SYNC.lastPushAt[p.id]=Date.now();saveLastPushAt();SYNC.lastErr='';if(EDIT_SEQ===seq0)setDirty(p.id,false);
   }catch(e){console.error('서버 저장 실패',e);SYNC.lastErr=String(e&&e.message||e)}
   finally{SYNC.pushing.delete(p.id);updateSyncStatus()}
 }
@@ -869,7 +886,7 @@ async function pushAllToServer(){
       const data=JSON.parse(JSON.stringify(p));
       data._pushedAt=firebase.firestore.FieldValue.serverTimestamp();
       try{data._pushedBy=(firebase.auth().currentUser&&firebase.auth().currentUser.email)||''}catch(_){data._pushedBy=''}
-      await db.collection(SCHED_COL).doc(p.id).set(data);SYNC.lastPushAt[p.id]=Date.now();saveLastPushAt();ok++;
+      await db.collection(SCHED_COL).doc(p.id).set(data);SYNC.lastPushAt[p.id]=Date.now();saveLastPushAt();setDirty(p.id,false);ok++;
     }catch(e){fail++;console.error('올리기 실패',p.id,e)}
   }
   updateSyncStatus();
@@ -890,7 +907,7 @@ async function pullProjectFromServer(id){
   const data=doc.data();delete data._pushedAt;delete data._pushedBy;
   const i=DB.projects.findIndex(x=>x.id===id);
   if(i>=0)DB.projects[i]=data;else DB.projects.push(data);
-  SYNC.lastPushAt[id]=Date.now();saveLastPushAt();
+  clearTimeout(SYNC.pushTimer);SYNC.lastPushAt[id]=Date.now();saveLastPushAt();setDirty(id,false);
   if(P.id===id)P=data;
   sel=null;hist=[];redoS=[];DB.current=DB.current||id;
   save(true);renderAll();
@@ -1903,6 +1920,7 @@ let FD=null;
      3) 근사: 코드에서 "(2)" 같은 괄호 구분을 뗀 값이 같음
    코드가 달라도 이름이 같으면 연결되고, 그 사실을 화면에 알려 준다. */
 function normCode(c){return String(c||'').replace(/\(\d+\)/g,'').trim()}
+function corpFlag(s){return /\(주\)|㈜|주식회사/.test(String(s||''))}
 function normName(s){return String(s||'').toLowerCase().replace(/m\s*\/\s*h/g,'mh').replace(/\(주\)|㈜|주식회사/g,'').replace(/[^0-9a-z가-힣]/g,'')}
 function bigrams(s){const b={};for(let i=0;i<s.length-1;i++){const g=s.slice(i,i+2);b[g]=(b[g]||0)+1}return b}
 function dice(a,b){if(!a||!b)return 0;const A=bigrams(a),B=bigrams(b);let it=0,ta=0,tb=0;for(const k in A){ta+=A[k];if(B[k])it+=Math.min(A[k],B[k])}for(const k in B)tb+=B[k];return ta+tb?2*it/(ta+tb):0}
@@ -1939,12 +1957,12 @@ async function loadLaborData(force){
 }
 /* 한 프로젝트(코드·이름)에 연결되는 근무일지 기록을 찾아 근로자별로 집계 */
 function laborMatch(data,projCode,projName,linked){
-  const code=String(projCode||'').trim(),nc=normCode(code),nn=normName(projName),lk=new Set((linked||[]).map(normName).filter(Boolean));
+  const cf=corpFlag(projName),code=String(projCode||'').trim(),nc=normCode(code),nn=normName(projName),lk=new Set((linked||[]).map(normName).filter(Boolean));
   const hits=[];
   for(const e of data.entries){
     let how=null;
     if(code&&e.code===code)how='code';
-    else if(nn&&e.nname&&e.nname===nn)how='name';
+    else if(nn&&e.nname&&e.nname===nn&&corpFlag(e.name)===cf)how='name';
     else if(e.nname&&lk.has(e.nname))how='name';
     else if(nc&&e.ncode&&e.ncode===nc)how='norm';
     if(how)hits.push(Object.assign({how},e));
@@ -2013,6 +2031,58 @@ $('#fLabor').addEventListener('click',e=>{
 $('#lbChips').addEventListener('click',e=>{const b=e.target.closest('[data-lbemp]');if(b)openLaborDetail(b.dataset.lbemp)});
 $('#fCode2').addEventListener('change',()=>renderFinLabor());
 $('#fName').addEventListener('change',()=>renderFinLabor());
+
+/* ---------- 프로젝트명 통일(근무일지 기준) ----------
+   프로젝트명은 근무일지가 기준이다. 이 화면은 공정표(프로젝트현황) 프로젝트 이름을 근무일지에서 쓰는 이름으로 일괄 바꾼다.
+   근거 1) 프로젝트에 이미 확인·연결해 둔 근무일지명(wlNames)이 정확히 1개  2) 2026-11-03 기성청구현황의 "근무일지 프로젝트명 연결"(아래 RN_SEED).
+   이름만 바꾸고 코드·금액은 건드리지 않는다. 옛 이름은 r.nameOld에 남기고, 결산서 이름은 직접 고친 적이 없을 때만 따라 바뀐다. */
+const RN_SEED={"몽촌토성역세권장기전세주택인테리어설계용역(방이동역세권청년주택인테리어설계용역)": "(주)동일건축-몽촌토성역세권 장기전세주택 인테리어 설계용역(방이동 역세권 청년주택 인테리어 설계용역)", "창원반지1구역재건축정비사업입찰설계용역": "하우드엔지니어링-창원 반지1구역 재건축정비사업 입찰설계 용역", "극동/천안주공4단지주택재건축단위세대인테리어설계용역": "극동건설-천안 극동스타클래스 더 퍼스트", "전농8재정비촉진구역주택재개발정비사업대안설계": "롯데건설-전농8 재정비 촉진구역 주택재개발 정비사업 대안설계", "HS/대치동비취타운설계용역": "HS-대치동 비취타운 설계용역", "롯데건설-용산산호아파트재개발수주설계용역": "롯데건설-용산 산호아파트 재건축정비사업 대안설계", "강원도속초시금호동공동주택신축공사": "현대엔지니어링-속초 금호동 힐스테이트", "HS/대명동공공민간임대인테리어설계용역": "HS-대명동 공공민간임대 인테리어 설계용역", "선사현대아파트리모델링대안설계": "롯데건설-암사 선사아파트 리모델링 대안설계", "극동/진주주약동주상복합인테리어설계": "극동건설-진주 백년문화공원 극동스타클래스", "개포우성4차재건축수주설계용역": "롯데건설-개포 우성4차 재건축 수주설계 용역", "HDC/광주운암3단지아이파크단위세대인테리어설계": "HDC-광주운암3단지 아이파크  단위세대 인테리어설계", "장안동오피스텔인테리어설계": "현대건설-힐스테이트 장안 라보니타", "잠원동리모델링입찰참여대안설계용역": "잠원동 힐스테이트 리모델링  대안설계용역", "광주운남구역재개발정비사업대안설계": "대우건설-광주 운남 재개발 정비사업 대안설계", "HS/청원맨션소규모재건축사업인테리어설계용역": "HS-청원맨션 소규모재건축사업 인테리어 설계용역", "장위15구역재건축대안설계용역": "하우드엔지니어링-장위15구역 재건축 대안설계용역", "광명아파트재건축정비사업인테리어설계용역": "HS-광명아파트 재건축정비사업 인테리어 설계용역", "만촌파크드림에디움인테리어설계용역": "HS-만촌 파크드림 에디움 인테리어 설계용역"};
+let RN_ITEMS=[];
+async function openRename(force){
+  const dlg=$('#dRename'),body=$('#rnBody');
+  if(!dlg.open)dlg.showModal();
+  body.innerHTML='<tr><td colspan="6" class="hint">근무일지를 불러오는 중...</td></tr>';
+  const data=await loadLaborData(!!force);
+  const wl={};
+  if(!data.err)data.entries.forEach(e=>{const k=String(e.name||'').trim();if(!k)return;const o=wl[k]||(wl[k]={n:0,h:0});o.n++;if(e.hasWage)o.h+=e.hours});
+  const rows=finRows(),names=new Map();rows.forEach(({r})=>names.set(String(r.name||'').trim(),r.id));
+  RN_ITEMS=[];let same=0,nolink=0,multi=0;
+  rows.forEach(({g,r})=>{
+    const cur=String(r.name||'').trim();
+    const linked=[...new Set((r.wlNames||[]).map(x=>String(x).trim()).filter(Boolean))];
+    let target='',src='';
+    if(linked.length===1){target=linked[0];src='확인해 둔 근무일지명'}
+    else if(linked.length>1){multi++;RN_ITEMS.push({r,g,cur,multi:linked});return}
+    else{const sd=RN_SEED[cur.replace(/\s+/g,'')];if(sd){target=sd;src='기성청구현황 연결명'}}
+    if(!target){nolink++;return}
+    if(target===cur){same++;return}
+    const dup=names.get(target),conflict=dup&&dup!==r.id;
+    const st=data.err?null:wl[target];
+    RN_ITEMS.push({r,g,cur,target,src,st,conflict,on:!conflict&&!!st});
+  });
+  const todo=RN_ITEMS.filter(x=>x.target);
+  $('#rnSum').innerHTML=`프로젝트 ${rows.length}건 · 이미 근무일지 이름과 같음 <b>${same}</b> · 바꿀 후보 <b>${todo.length}</b> · 근무일지 연결명 없음(현재 이름 유지) ${nolink}${multi?` · 연결명 여러 개라 건너뜀 ${multi}`:''}`;
+  body.innerHTML=RN_ITEMS.map((x,i)=>x.multi?`<tr><td></td><td style="white-space:normal">${esc(x.cur)}</td><td colspan="4" style="color:var(--warn)">근무일지명이 여러 개 연결되어 있어 자동으로 정할 수 없습니다: ${esc(x.multi.join(' / '))}</td></tr>`:
+    `<tr><td><input type="checkbox" data-rn="${i}" ${x.on?'checked':''} ${x.conflict?'disabled':''}></td><td style="white-space:normal;min-width:200px">${esc(x.cur)}</td><td style="white-space:normal;min-width:200px"><b>${esc(x.target)}</b></td><td>${esc(x.src)}</td><td style="text-align:right">${x.st?`${x.st.n}건 · ${hrs(x.st.h)}h`:'<span style="color:var(--warn)">같은 이름 없음</span>'}</td><td style="white-space:normal">${x.conflict?'<span style="color:var(--bad,#c9372c)">이미 같은 이름의 다른 프로젝트가 있음</span>':(x.st?'':'확인 후 선택')}</td></tr>`).join('')||'<tr><td colspan="6" class="hint">바꿀 이름이 없습니다. 이미 모두 근무일지 이름과 같거나, 연결된 근무일지명이 없습니다.</td></tr>';
+  $('#rnAll').checked=RN_ITEMS.some(x=>x.on);
+}
+$('#laRename').addEventListener('click',()=>openRename(false));
+$('#rnAll').addEventListener('change',e=>{document.querySelectorAll('#rnBody input[data-rn]:not(:disabled)').forEach(c=>c.checked=e.target.checked)});
+$('#rnApply').addEventListener('click',()=>{
+  const sel=[...document.querySelectorAll('#rnBody input[data-rn]:checked')].map(c=>RN_ITEMS[+c.dataset.rn]).filter(x=>x&&x.target&&!x.conflict);
+  if(!sel.length){toast('바꿀 항목을 선택하세요');return}
+  if(!confirm(`${sel.length}건의 프로젝트 이름을 근무일지 이름으로 바꿉니다.\n코드·금액은 그대로이고, 옛 이름은 기록으로 남습니다. 진행할까요?`))return;
+  snap();let n=0;
+  sel.forEach(it=>{
+    const f=findRow(it.r.id);if(!f)return;const r=f.r,old=r.name;
+    r.nameOld=[...new Set([...(r.nameOld||[]),old])];
+    r.wlNames=[...new Set([...(r.wlNames||[]),it.target])];
+    r.name=it.target;
+    if(r.settle){if(!(r.settle.edited&&r.settle.edited.name))r.settle.name=it.target;r.settle.workLogNames=[...new Set([...(r.settle.workLogNames||[]),it.target])];r.settle.updatedAt=nowIso()}
+    n++;
+  });
+  save();renderAll();toast(`${n}건의 프로젝트 이름을 바꿨습니다`);openRename(false);
+});
 
 /* ---------- 전체 프로젝트 근무일지 연결 점검 ----------
    공정표의 모든 프로젝트가 근무일지 기록과 어떻게 연결되는지 한 번에 보여 준다. 근무일지 쪽에는 있는데 어떤 공정표
@@ -3118,6 +3188,14 @@ async function checkServerNewer(){
     if(!doc.exists){SYNC.ready=true;return}
     const sv=doc.data(),svAt=sv._pushedAt&&sv._pushedAt.toMillis?sv._pushedAt.toMillis():0;
     if(!svAt||svAt<=(SYNC.lastPushAt[id]||0)+60000){SYNC.ready=true;return}
+    const firstRun=!(()=>{try{return localStorage.getItem(SYNCV2_KEY)}catch(e){return null}})();
+    try{localStorage.setItem(SYNCV2_KEY,'1')}catch(e){}
+    if(!firstRun&&!DIRTY_AT_LOAD[id]){
+      // 이 브라우저에는 서버에 못 올린 편집이 없다 → 서버의 최신 내용을 자동으로 받아온다(다른 기기에서 만든 결산서가 안 보이던 문제 방지)
+      try{const okp=await pullProjectFromServer(id);
+        if(okp){const c=syncCounts(P);SYNC.ready=true;toastL(`다른 기기에서 저장된 최신 내용을 자동으로 받아왔습니다 (프로젝트 ${c.n}건 · 결산서 ${c.s+c.ex}건)`,6000);updateSettleBadge&&updateSettleBadge();return}}
+      catch(e){console.warn('자동 받아오기 실패',e)}
+    }
     SYNC.stale=true;
     const a=syncCounts(sv),b=syncCounts(P);
     let bar=document.getElementById('syncBanner');
