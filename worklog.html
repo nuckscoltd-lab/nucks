@@ -560,7 +560,7 @@ if ('serviceWorker' in navigator) {
     <div class="panel-title">프로젝트명 정리 (중복 통합 · 이름 변경)</div>
     <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
       아래 목록은 프로젝트명 자동완성 드롭다운에 실제로 뜨는 이름 전체예요(근무일지에 이미 쓰인 이름 +
-      회계현황 대시보드·프로젝트 결산 등에서 동기화된 이름 모두 포함) - 근무일지에 아직 안 쓰인 이름도
+      회계종합현황·프로젝트 결산 등에서 동기화된 이름 모두 포함) - 근무일지에 아직 안 쓰인 이름도
       여기서 같이 정리할 수 있어요. <b>이름 하나만 체크</b>하고 아래에 새 이름을 입력한 뒤 "통합"을
       누르면 그 프로젝트명만 새 이름으로 바뀌어요(직접 자율입력 후 중복 통합할 필요 없이, 이 화면에서
       바로 이름을 수정하는 용도로 쓰시면 돼요). 여러 개를 체크하면 그 이름들을 전부 아래 이름 하나로
@@ -1710,8 +1710,69 @@ if ('serviceWorker' in navigator) {
   // officialProjects/list.codes로 다시 밀어넣는다(그쪽이 원본이라는 전제). 여기서 codes만 고치고
   // 결산서의 PROJ.NO는 그대로 두면, 다음에 프로젝트결산 페이지를 여는 순간 옛 값이 되살아나면서
   // 방금 고친 게 조용히 되돌아간다 - 그래서 결산서 쪽도 반드시 같이 갱신해야 한다.
+  // 프로젝트현황(nucks-schedule.html)의 서버 데이터(scheduleProjects/nucks-all-projects)에도 같은 변경을 반영한다
+  // (2026-11: 프로젝트현황이 기성청구현황·결산서를 대신하는 기준 페이지가 됨). 이 변경을 서버에 쓰면 저장 시각이
+  // 갱신되므로, 프로젝트현황을 다시 여는 기기는 최신 내용을 자동으로 받아간다. 동시에 수정되는 일이 없도록 트랜잭션으로 처리.
+  async function syncScheduleCode(name, newCode) {
+    const ref = db.collection('scheduleProjects').doc('nucks-all-projects');
+    let count = 0;
+    await db.runTransaction(async tx => {
+      const doc = await tx.get(ref);
+      if (!doc.exists) return;
+      const data = doc.data();
+      let n = 0;
+      (data.groups || []).forEach(g => (g.rows || []).forEach(r => {
+        const hit = (r.name || '').trim() === name || (r.wlNames || []).some(x => (x || '').trim() === name);
+        if (!hit || (r.projCode || '') === newCode) return;
+        r.projCode = newCode;
+        if (r.settle && !(r.settle.edited && r.settle.edited.projNo)) r.settle.projNo = newCode;
+        n++;
+      }));
+      if (!n) return;
+      count = n;
+      data._pushedAt = firebase.firestore.FieldValue.serverTimestamp();
+      data._pushedBy = 'worklog.html (프로젝트 코드 변경)';
+      tx.set(ref, data);
+    });
+    return count;
+  }
+  async function syncScheduleRename(oldNames, targetName) {
+    const ref = db.collection('scheduleProjects').doc('nucks-all-projects');
+    let count = 0;
+    await db.runTransaction(async tx => {
+      const doc = await tx.get(ref);
+      if (!doc.exists) return;
+      const data = doc.data();
+      const rowsAll = [];
+      (data.groups || []).forEach(g => (g.rows || []).forEach(r => rowsAll.push(r)));
+      let nameUsed = rowsAll.some(r => (r.name || '').trim() === targetName); // 같은 이름이 이미 있으면 이름은 건드리지 않고 연결명만 바꾼다
+      let n = 0;
+      rowsAll.forEach(r => {
+        const own = (r.name || '').trim();
+        const ownOld = oldNames.includes(own);
+        const linkedOld = (r.wlNames || []).some(x => oldNames.includes((x || '').trim()));
+        if (!ownOld && !linkedOld) return;
+        r.wlNames = [...new Set((r.wlNames || []).map(x => oldNames.includes((x || '').trim()) ? targetName : x))];
+        if (ownOld && !r.wlNames.includes(targetName)) r.wlNames.push(targetName);
+        if (ownOld && !nameUsed) {
+          r.nameOld = [...new Set([...(r.nameOld || []), own])];
+          r.name = targetName;
+          nameUsed = true;
+          if (r.settle && !(r.settle.edited && r.settle.edited.name)) r.settle.name = targetName;
+        }
+        n++;
+      });
+      if (!n) return;
+      count = n;
+      data._pushedAt = firebase.firestore.FieldValue.serverTimestamp();
+      data._pushedBy = 'worklog.html (프로젝트명 변경)';
+      tx.set(ref, data);
+    });
+    return count;
+  }
+
   async function propagateProjectCodeChange(name, newCode) {
-    const result = { worklogCount: 0, settlementCount: 0 };
+    const result = { worklogCount: 0, settlementCount: 0, scheduleCount: 0 };
 
     // 1) officialProjects/list.codes
     await updateSingleProjectCode(name, newCode);
@@ -1759,6 +1820,14 @@ if ('serviceWorker' in navigator) {
       const batch = db.batch();
       chunk.forEach(ref => batch.update(ref, { projNo: newCode }));
       await batch.commit();
+    }
+
+    // 4) 프로젝트현황(공정표) 서버 데이터의 프로젝트 코드·결산서 PROJ.NO. 실패해도 위 반영은 이미 끝난 뒤라 경고만 남긴다.
+    try {
+      result.scheduleCount = await syncScheduleCode(name, newCode);
+    } catch (err) {
+      console.warn('프로젝트현황 코드 반영 실패:', err);
+      result.scheduleError = true;
     }
 
     return result;
@@ -1857,7 +1926,7 @@ if ('serviceWorker' in navigator) {
           codeCell.innerHTML = `<span style="color:var(--muted);">반영 중...</span>`;
           propagateProjectCodeChange(name, newCode).then(result => {
             renderCodeRegistryList();
-            alert(`완료: "${name}" → "${newCode}"\n근무일지 ${result.worklogCount}건, 프로젝트결산 ${result.settlementCount}건에 반영했습니다.`);
+            alert(`완료: "${name}" → "${newCode}"\n근무일지 ${result.worklogCount}건, 프로젝트결산 ${result.settlementCount}건, 프로젝트현황 ${result.scheduleCount}건에 반영했습니다.` + (result.scheduleError ? '\n⚠ 프로젝트현황 반영은 실패했어요(권한/연결 확인). 프로젝트현황에서 직접 확인해주세요.' : ''));
           }).catch(err => {
             alert('저장 실패: ' + err.message);
             editBtn.disabled = false;
@@ -2045,6 +2114,15 @@ if ('serviceWorker' in navigator) {
         console.warn('결산서/기성청구 연결 정보 갱신 실패:', linkErr);
       }
 
+      // 프로젝트현황(공정표)의 프로젝트 이름·근무일지 연결명도 같이 갱신
+      let scheduleUpdated = 0, scheduleSyncError = false;
+      try {
+        scheduleUpdated = await syncScheduleRename(checked.filter(n => n !== targetName), targetName);
+      } catch (schErr) {
+        scheduleSyncError = true;
+        console.warn('프로젝트현황 이름 갱신 실패:', schErr);
+      }
+
       resultEl.style.color = '#3f6b52';
       let msg = checked.length === 1
         ? `완료: 근무일지 ${toUpdate.length}건 + 프로젝트명 목록에서 "${checked[0]}" → "${targetName}"(으)로 이름이 바뀌었습니다.`
@@ -2054,6 +2132,12 @@ if ('serviceWorker' in navigator) {
       }
       if (linkSyncError) {
         msg += ' ⚠ 단, 결산서/기성청구 쪽 연결 정보 갱신은 실패했어요 - 해당 페이지에서 직접 확인해주세요.';
+      }
+      if (scheduleUpdated) {
+        msg += ` (프로젝트현황 ${scheduleUpdated}건의 이름·연결명도 함께 갱신)`;
+      }
+      if (scheduleSyncError) {
+        msg += ' ⚠ 단, 프로젝트현황 쪽 이름 갱신은 실패했어요 - 프로젝트현황에서 직접 확인해주세요.';
       }
       resultEl.textContent = msg;
       document.getElementById('mergeTargetName').value = '';
@@ -2356,7 +2440,7 @@ if ('serviceWorker' in navigator) {
     btn.disabled = true;
     resultEl.style.color = 'var(--muted)';
 
-    let totalWorklog = 0, totalSettlement = 0;
+    let totalWorklog = 0, totalSettlement = 0, totalSchedule = 0;
     const failed = [];
     for (let i = 0; i < targets.length; i++) {
       const t = targets[i];
@@ -2365,6 +2449,7 @@ if ('serviceWorker' in navigator) {
         const result = await propagateProjectCodeChange(t.name, t.newCode);
         totalWorklog += result.worklogCount;
         totalSettlement += result.settlementCount;
+        totalSchedule += (result.scheduleCount || 0);
       } catch (err) {
         failed.push(`${t.name} (${err.message})`);
       }
@@ -2375,7 +2460,7 @@ if ('serviceWorker' in navigator) {
 
     if (failed.length === 0) {
       resultEl.style.color = '#3f6b52';
-      resultEl.textContent = `완료: ${targets.length}개 프로젝트 변환, 근무일지 ${totalWorklog}건·프로젝트결산 ${totalSettlement}건에 반영했습니다.`;
+      resultEl.textContent = `완료: ${targets.length}개 프로젝트 변환, 근무일지 ${totalWorklog}건·프로젝트결산 ${totalSettlement}건·프로젝트현황 ${totalSchedule}건에 반영했습니다.`;
     } else {
       resultEl.style.color = '#a4453c';
       resultEl.textContent = `${targets.length - failed.length}개 완료, ${failed.length}개 실패: ${failed.join(', ')}`;
