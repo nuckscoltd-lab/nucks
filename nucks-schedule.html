@@ -549,6 +549,8 @@ textarea.inp{width:100%;resize:vertical}
       <div class="f"><label for="fPay">기본 결제수단 (이 프로젝트)</label><select id="fPay" class="inp"><option value="">현금 (계좌이체)</option><option value="bill">전자어음 (B2B)</option></select></div>
       <div class="f"><label for="fSt">상태 (막대 색·글씨)</label><select id="fSt" class="inp"><option value="">그대로 두기</option><option>계약</option><option>실주</option><option>진행</option><option>완료</option></select></div>
       <div class="f span2"><label for="fTot">계약금액</label><div style="display:flex;gap:6px"><select id="fVat" class="inp" style="width:auto" aria-label="부가세"><option value="ex">부가세 별도 (공급가 입력)</option><option value="in">부가세 포함 (합계 입력)</option></select><input id="fTot" class="inp num" style="flex:1;min-width:0" placeholder="21,781,818 또는 2178만" autocomplete="off"></div><div class="hint" id="fVatInfo" style="margin-top:4px;font-family:var(--font-num)"></div></div>
+      <div class="f span2"><label for="fFinal">최종사업비 <small style="font-weight:400;color:var(--muted)">(중단·감액 등으로 계약금과 다르게 확정된 때만 입력 · 위 계약금액과 같은 부가세 기준 · 비우면 계약금액 그대로)</small></label><input id="fFinal" class="inp num" placeholder="예) 16,000,000" autocomplete="off"><div class="hint" id="fFinalInfo" style="margin-top:4px;font-family:var(--font-num)"></div></div>
+      <div class="f span2"><label for="fNote">특이사항</label><textarea id="fNote" class="inp" rows="2" placeholder="예) 인지세 납부 · 지급예상시기 26년 10월경" style="width:100%;resize:vertical"></textarea></div>
     </div>
     <div class="f">
       <label>기성 청구·수금 <b id="fVatNote"></b> (비율에 10 을 넣거나 금액 칸에 10% 라고 쓰면 총계약금 기준으로 계산 · 수금 예정일을 넣으면 월별 자금계획에 들어갑니다)</label>
@@ -1857,9 +1859,10 @@ function itemState(x,items){const c=+x.claim||0,pdv=+x.paid||0;
   const lim=P.payDays||30,due=x.dueDate||(x.claimDate?addD(x.claimDate,lim):'');
   if(due&&due<todayStr)return{k:'late',t:`지연 ${diff(due,todayStr)}일`};
   return{k:'wait',t:pdv?'일부 수금':'수금 대기'}}
-function finCalc(f){const it=(f&&f.items)||[],total=+(f&&f.total)||0;let claim=0,paid=0,bill=0,fee=0;const late=[];
+function finCalc(f){const it=(f&&f.items)||[],contract=+(f&&f.total)||0,total=+(f&&f.finalCost)>0?+f.finalCost:contract;let claim=0,paid=0,bill=0,fee=0;const late=[];
   it.forEach((x,i)=>{claim+=+x.claim||0;paid+=+x.paid||0;if(itemState(x,it).k==='late')late.push(i+1);if(x.payType==='bill'){if(itemState(x,it).k==='bill')bill+=+x.paid||0;if(x.discDate)fee+=+x.discFee||0}});
-  return{total,claim,paid,unpaid:Math.max(0,claim-paid),bal:total-paid,unclaimed:total-claim,late,bill,fee}}
+  return{total,contract,claim,paid,unpaid:Math.max(0,claim-paid),bal:total-paid,unclaimed:total-claim,late,bill,fee}}
+const finSupplyEff=f=>+(f&&f.finalCost)>0?Math.round(f.finalCost/1.1):(+(f&&f.supply)||0);
 const hasFin=r=>!!(r.fin&&(+r.fin.total||(r.fin.items||[]).length));
 // 계약·기성 관리 창을 처음 열어보는(= 상태를 한 번도 직접 고른 적 없는) 프로젝트는 항상 "그대로
 // 두기"로만 보여서, 관리자가 매번 일일이 계약/진행/완료를 골라줘야만 막대에 상태가 표시됐다.
@@ -1903,6 +1906,8 @@ function finMarks(r,pg){MSW=Math.max(4,pg.dw);let h='';const X=d=>diff(pg.cs,d)*
   return h}
 
 /* 프로젝트 입력창 */
+function finalVal(){const t=$('#fFinal').value.trim();if(!t)return 0;const v=parseAmt(t,0);if(isNaN(v))return NaN;return $('#fVat').value==='ex'?Math.round(v*1.1):v}
+function finalInfo(){const el=$('#fFinalInfo');if(!el)return;const v=finalVal();if(!v||isNaN(v)){el.textContent='';return}const c=fTotal();el.textContent=`포함 ${won(v)} · 공급가 ${won(Math.round(v/1.1))}${c&&c>v?` · 계약금액보다 ${won(c-v)} 적음`:''} → 이 프로젝트의 매출·미청구·잔금은 최종사업비 기준으로 계산됩니다`}
 function vatNote(){const n=$('#fVatNote');if(n)n.textContent='· 금액 '+VATL()}
 function fTotal(){const v=parseAmt($('#fTot').value,0);if(isNaN(v))return NaN;return $('#fVat').value==='ex'?Math.round(v*1.1):v}
 function vatInfo(){const t=fTotal(),el=$('#fVatInfo');if(!el)return;if(!t||isNaN(t)){el.textContent='';return}
@@ -2081,7 +2086,7 @@ $('#rnApply').addEventListener('click',()=>{
     if(r.settle){if(!(r.settle.edited&&r.settle.edited.name))r.settle.name=it.target;r.settle.workLogNames=[...new Set([...(r.settle.workLogNames||[]),it.target])];r.settle.updatedAt=nowIso()}
     n++;
   });
-  save();renderAll();toast(`${n}건의 프로젝트 이름을 바꿨습니다`);openRename(false);
+  save();renderAll();toast(`${n}건의 프로젝트 이름을 바꿨습니다`);registerOfficialNames(sel.map(x=>x.target));openRename(false);
 });
 
 /* ---------- 전체 프로젝트 근무일지 연결 점검 ----------
@@ -2297,7 +2302,8 @@ function openFin(rowId){
   // (예: 자동 생성된 "계약 2025.5.1" 같은 라벨)가 들어있거나 한 번도 고른 적 없는 경우는 매칭되는
   // 옵션이 없어 늘 "그대로 두기"로만 보였는데, 이제는 계약일·진행기간·기성 데이터를 보고 적절한
   // 상태(계약/진행/완료)를 추측해 미리 선택해둔다 (실주는 자동으로 판단할 수 없어 제외).
-  $('#fSt').value=(b&&['계약','실주','진행','완료'].includes(b.inner))?b.inner:suggestFinStatus(r);const vx=fn.vatEx!==false&&(fn.vatEx||!+fn.total);$('#fVat').value=vx?'ex':'in';$('#fTot').value=+fn.total?won(vx?(+fn.supply||Math.round(fn.total/1.1)):fn.total):'';setTimeout(vatInfo);
+  $('#fSt').value=(b&&['계약','실주','진행','완료'].includes(b.inner))?b.inner:suggestFinStatus(r);const vx=true;/* 2026-11: 항상 "부가세 별도"를 기본으로 연다(포함/별도를 바꾸면 칸의 금액도 그 기준으로 바뀐다) */$('#fVat').value=vx?'ex':'in';$('#fVat').dataset.prev='ex';$('#fTot').value=+fn.total?won((fn.vatEx===true&&+fn.supply)?+fn.supply:Math.round(fn.total/1.1)):'';setTimeout(vatInfo);
+  $('#fFinal').value=+fn.finalCost?won(vx?Math.round(fn.finalCost/1.1):fn.finalCost):'';$('#fNote').value=fn.note||'';setTimeout(finalInfo);
   if(!FD.items.length)FD.items.push({claimDate:'',claim:0,payDate:'',paid:0});
   vatNote();$('#fDelFin').hidden=!(r&&r.fin);renderFinItems();finSum();renderFinAttach();renderFinLabor();renderFinSettle(rowId);$('#dFin').showModal();
   setTimeout(()=>{(r?$('#fTot'):$('#fCo')).focus()},30)}
@@ -2321,8 +2327,8 @@ function renderFinItems(){const won=n=>WON(vx(n)),man=n=>MAN(vx(n));
       <label>할인 수수료 <input class="inp num" data-k="discFee" value="${+x.discFee?WON(x.discFee):''}" placeholder="0" autocomplete="off"></label>
       <label>통장 입금 (부가세 포함 실입금) <b>${+x.paid?`${fmtS(cashDate(x))} · ${WON((+x.paid||0)-(x.discDate?(+x.discFee||0):0))}원`:'—'}</b></label></div></td></tr>`:''}`}).join('')}
 function finSum(){const won=n=>WON(vx(n)),man=n=>MAN(vx(n));
-  const tot=fTotal();const c=finCalc({total:isNaN(tot)?0:tot,items:FD.items});
-  $('#fSum').innerHTML=`<div>총계약금 (${VATL()})<b>${won(c.total)}</b></div><div>청구 합계<b>${won(c.claim)}</b></div><div>수금 합계<b>${won(c.paid)}</b></div>
+  const tot=fTotal();const fv=finalVal();const c=finCalc({total:isNaN(tot)?0:tot,finalCost:isNaN(fv)?0:fv,items:FD.items});
+  $('#fSum').innerHTML=`<div>${c.contract&&c.contract!==c.total?'최종사업비':'총계약금'} (${VATL()})<b>${won(c.total)}</b></div><div>청구 합계<b>${won(c.claim)}</b></div><div>수금 합계<b>${won(c.paid)}</b></div>
     ${c.bill?`<div class="bill">어음 보유 (현금화 전)<b>${won(c.bill)}</b></div>`:''}${c.fee?`<div>어음 할인 수수료<b>${WON(c.fee)}</b></div>`:''}
     <div class="${c.unpaid?(c.late.length?'late':'due'):''}">청구미수금<b>${won(c.unpaid)}</b></div><div>잔금 (총계약금 − 수금)<b>${won(c.bal)}</b></div><div>미청구 잔액<b>${won(c.unclaimed)}</b></div>
     ${c.late.length?`<div class="late">지연<b>${c.late.map(n=>n+'차').join(', ')}</b></div>`:''}
@@ -2366,7 +2372,14 @@ $('#fPay').addEventListener('change',e=>{const v=e.target.value;let n=0;FD.items
 $('#fAdd').onclick=()=>{FD.items.push({claimDate:'',claim:0,payDate:'',paid:0,payType:$('#fPay').value});renderFinItems();finSum();const ins=$('#fItems').querySelectorAll('tr:last-child input');ins[0]&&ins[0].focus()};
 $('#fTot').addEventListener('change',e=>{const v=parseAmt(e.target.value,0);if(isNaN(v)){toast('금액을 알아볼 수 없습니다. 예: 79,200,000 / 7920만');return}e.target.value=v?won(v):'';const t=fTotal();FD.items.forEach(x=>{if(+x.pct&&t)x.plan=Math.round(t*x.pct/100)});renderFinItems();finSum();vatInfo()});
 $('#fTot').addEventListener('input',()=>{finSum();vatInfo()});
-$('#fVat').addEventListener('change',()=>{const v=fTotal();FD.items.forEach(x=>{if(+x.pct&&v)x.plan=Math.round(v*x.pct/100)});renderFinItems();finSum();vatInfo()});
+$('#fFinal').addEventListener('input',()=>{finalInfo();finSum()});$('#fFinal').addEventListener('change',()=>{finalInfo();finSum()});
+$('#fVat').addEventListener('change',()=>{
+  // 포함/별도를 바꾸면 계약금액·최종사업비 칸의 금액을 새 기준으로 바꿔 보여준다 (포함 16,500,000 ↔ 별도 15,000,000)
+  const sel=$('#fVat'),prev=sel.dataset.prev||'ex',cur=sel.value;
+  [$('#fTot'),$('#fFinal')].forEach(el=>{const t=el.value.trim();if(!t)return;const n=parseAmt(t,0);if(isNaN(n)||!n)return;
+    const inc=prev==='ex'?Math.round(n*1.1):n;el.value=won(cur==='ex'?Math.round(inc/1.1):inc)});
+  sel.dataset.prev=cur;
+  const v=fTotal();FD.items.forEach(x=>{if(+x.pct&&v)x.plan=Math.round(v*x.pct/100)});renderFinItems();finSum();finalInfo();vatInfo()});
 $('#fDelFin').onclick=e=>{const b=e.currentTarget;if(b.dataset.armed!=='1'){b.dataset.armed='1';b.textContent='한 번 더 누르면 지웁니다';setTimeout(()=>{b.dataset.armed='';b.textContent='기성 정보 지우기'},3000);return}
   const f=findRow(FD.rowId);if(f){snap();delete f.r.fin;save()}b.dataset.armed='';b.textContent='기성 정보 지우기';$('#dFin').close();renderAll();if($('#dFinAll').open)renderFinAll();toast('기성 정보를 지웠습니다')};
 $('#fSave').onclick=()=>{
@@ -2376,6 +2389,8 @@ $('#fSave').onclick=()=>{
   const enT=$('#fEnd').value.trim(),en=enT?parseD(enT,refYear()):'';if(enT&&!en){toast('작업완료일을 알아볼 수 없습니다. 예: 2026.12.31');$('#fEnd').focus();return}
   const perT=$('#fPer').value.trim(),per=perT?parsePeriod(perT):null;if(perT&&!per){toast('용역기간을 알아볼 수 없습니다. 예: 2026.4.23 ~ 12.31');$('#fPer').focus();return}
   const total=fTotal();if(isNaN(total)){toast('총계약금을 확인하세요');$('#fTot').focus();return}
+  const finalCost=finalVal();if(isNaN(finalCost)){toast('최종사업비를 확인하세요');$('#fFinal').focus();return}
+  const fnote=$('#fNote').value.trim();
   snap();
   let g=P.groups.find(x=>x.name.trim()===co);
   if(!g&&co){g={id:uid(),name:co,rows:[]};P.groups.push(g)}
@@ -2391,13 +2406,14 @@ $('#fSave').onclick=()=>{
   items.forEach((v,i)=>{if(!v.name)v.name=itemName(v,i)});
   const vEx=$('#fVat').value==='ex';
   r.fin={total,payType:$('#fPay').value,vatEx:vEx,supply:vEx?parseAmt($('#fTot').value,0):Math.round(total/1.1),contractDate:cd||'',endDate:en||'',items};
+  if(finalCost>0&&finalCost!==total)r.fin.finalCost=finalCost;if(fnote)r.fin.note=fnote;
   if(en&&!per&&r.bars[0]&&(r.bars[0].startOnly||r.bars[0].end<en)){const b=r.bars[0];if(en>=b.start){b.end=en;if(en>P.chartEnd)P.chartEnd=en}}
   if(per){let b=r.bars[0];if(!b){b=B(per[0],per[1],cd?`계약 ${fmtS(cd)}`:'','#e1863a');r.bars.unshift(b)}b.start=per[0];b.end=per[1];
     if(per[1]>P.chartEnd)P.chartEnd=per[1];if(per[0]<P.chartStart&&!r.bars.length)P.chartStart=per[0]}
   const stv=$('#fSt').value;if(stv&&r.bars[0]){r.bars[0].inner=stv;r.bars[0].color={'완료':'#b9b0a8','진행':'#e1863a','계약':'#9aa0a6','실주':'#c9372c'}[stv]}
   if(P.rowRemarks&&/^계약 /.test(P.rowRemarks[r.id]||''))delete P.rowRemarks[r.id];
   if(!P.remark)P.remark='right';
-  sel={t:'row',id:r.id};save();$('#dFin').close();renderAll();if($('#dFinAll').open)renderFinAll();if($('#dCash').open)renderCash();toast(f?'저장했습니다':'새 프로젝트를 등록했습니다');settleOnFinSave(r.id).catch(e=>console.error('결산서 자동 작성 실패',e))};
+  sel={t:'row',id:r.id};save();$('#dFin').close();renderAll();if($('#dFinAll').open)renderFinAll();if($('#dCash').open)renderCash();toast(f?'저장했습니다':'새 프로젝트를 등록했습니다');settleOnFinSave(r.id).catch(e=>console.error('결산서 자동 작성 실패',e));if(!f)registerOfficialNames([r.name]).then(n=>{if(n)toastL('근무일지 프로젝트명 자동완성 목록에도 등록했습니다',3500)})};
 
 /* ---------- 프로젝트 결산서 (2026-11 신규) ----------
    기존 project-settlement.html(프로젝트 결산) 페이지의 구성(기본정보·대외업체·진행내용·투입인원·특이사항)을
@@ -2412,6 +2428,34 @@ $('#fSave').onclick=()=>{
      새로고침"이나 계약·기성 저장 때 다시 덮어쓰지 않는다. 자동으로 들어온 인원(auto:true)은 새로 계산된 값으로
      갱신되지만, 직접 추가·수정한 인원과 직접 지운 인원(s.removedPeople)은 그대로 존중한다. "확정"한 결산서는
      자동 갱신이 일절 건드리지 않는다(새로고침 버튼을 직접 눌렀을 때만 확인 후 반영). */
+/* ---------- 기성청구현황에서 옮겨온 정보 (2026-11-17 기준, 1회) ----------
+   특이사항 4건과 최종사업비 1건(서대신동 · 중단으로 계약금 8,800만 원 중 1,760만 원만 확정·수령)을 프로젝트 코드로 찾아 채운다.
+   이미 사람이 입력한 값은 덮어쓰지 않고, 이 프로젝트 데이터(P)에서는 한 번만 실행한다. */
+const BILLING_EXTRAS={"2021-02-05": {"finalCost": 17600000}, "2026-02-01": {"note": "계약이행보증보험발행\n인지세납부"}, "2026-01-01": {"note": "인지세납부"}, "2026-00-02": {"note": "지급예상시기: 26년10월경"}, "2026-00-03": {"note": "지급예상시기: 27년1월경"}};
+function migrateBillingExtras(){
+  if(!P||P.extrasMig)return;
+  let n=0;
+  finRows().forEach(({r})=>{const x=BILLING_EXTRAS[r.projCode];if(!x||!r.fin)return;
+    if(x.note&&!r.fin.note){r.fin.note=x.note;n++}
+    if(x.finalCost&&!(+r.fin.finalCost)){r.fin.finalCost=x.finalCost;n++}});
+  P.extrasMig=1;save();
+}
+/* 새 프로젝트를 만들거나 이름을 바꿀 때, 근무일지 프로젝트명 자동완성 목록(officialProjects/list.names)에 이름을 올린다.
+   근무일지에서 "프로젝트명 정리"로 일부러 제외한 이름(excluded)은 다시 넣지 않고, 코드(codes)는 건드리지 않는다
+   (코드는 근무일지가 원본이라 이 페이지에서 쓰지 않는다). 올린 이름 수를 돌려준다. */
+async function registerOfficialNames(names){
+  try{
+    if(!fsReady())return 0;
+    const list=[...new Set((names||[]).map(n=>String(n||'').trim()).filter(Boolean))];if(!list.length)return 0;
+    const ref=db.collection('officialProjects').doc('list'),doc=await ref.get(),d=(doc.exists&&doc.data())||{};
+    const ex=d.excluded||[],cur=d.names||[];
+    const add=list.filter(n=>!ex.includes(n)&&!cur.includes(n));
+    if(!add.length)return 0;
+    await ref.set({names:[...new Set([...cur,...add])].sort(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+    LABOR_CACHE=null;return add.length;
+  }catch(e){console.warn('프로젝트명 자동완성 목록 등록 실패',e);return 0}
+}
+
 const SETTLE_PARTNERS=[['orderer','발주처'],['developer','시행사'],['constructor','건설사'],['architect','건축사'],['salesAgency','분양대행사']];
 const SET_UI={st:'all',ct:'',yr:'',q:'',open:new Set(),edit:null};
 const sIso=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'')&&+String(v).slice(5,7)>=1&&+String(v).slice(5,7)<=12&&+String(v).slice(8,10)>=1;
@@ -2457,7 +2501,7 @@ async function settleAutoValues(r,withLabor){
     startDate:(b&&!b.startOnly&&b.start)||f.contractDate||(b&&b.start)||'',
     endDate:f.endDate||(b&&!b.startOnly&&b.end)||'',
     orderer:r.client||'',people:[],workLogNames:[],laborOk:false,laborErr:'',
-    snap:{total:c.total,supply:+f.supply||0,paid:c.paid,fee:c.fee,at:nowIso()}};
+    snap:{total:c.total,supply:finSupplyEff(f),paid:c.paid,fee:c.fee,at:nowIso()}};
   if(withLabor){
     const data=await loadLaborData();
     if(data.err)v.laborErr=data.err;
@@ -2674,7 +2718,7 @@ async function settleImportLegacy(){
       people:(l.people||[]).map(x=>({name:x.name||'',role:x.role||''})),notes:(l.notes||[]).slice(),workLogNames:(l.workLogProjectNames||[]).slice(),
       autoNote:'',edited:{projNo:1,name:1,pm:1,startDate:1,endDate:1,orderer:1,autoNote:1}});
     const m=match.get(i);
-    if(m){const c=finCalc(m.r.fin||{});s.snap=Object.assign({},m.r.settle&&m.r.settle.snap,{total:c.total,supply:+(m.r.fin&&m.r.fin.supply)||0,paid:c.paid,fee:c.fee,at:nowIso()});m.r.settle=s}
+    if(m){const c=finCalc(m.r.fin||{});s.snap=Object.assign({},m.r.settle&&m.r.settle.snap,{total:c.total,supply:finSupplyEff(m.r.fin),paid:c.paid,fee:c.fee,at:nowIso()});m.r.settle=s}
     else P.settleExtras.push(s);
   });
   save();updateSettleBadge();renderSettle();toastL(`기존 결산서 ${todo.length}건을 가져왔습니다 (행 연결 ${match.size}건 · 단독 ${todo.length-match.size}건)`);
@@ -3216,6 +3260,7 @@ async function checkServerNewer(){
 }
 setTimeout(()=>{SYNC.ready=true},12000); // 로그인이 안 되는 등 확인이 영영 안 끝나도 12초 뒤엔 올리기 허용
 try{if(typeof auth!=='undefined'&&auth&&auth.onAuthStateChanged)auth.onAuthStateChanged(u=>{if(u)setTimeout(checkServerNewer,700)})}catch(e){}
+try{migrateBillingExtras()}catch(e){console.warn('기성청구 정보 이전 실패',e)}
 renderAll();
 })();
 </script>

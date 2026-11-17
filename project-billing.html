@@ -353,6 +353,10 @@ if ('serviceWorker' in navigator) {
   // 이름도 자동완성 드롭다운에서 고를 수 있게 해준다. 실제로 "같은 프로젝트"인지 연결하는 것은 이것과
   // 별개로 workLogProjectNames 필드가 담당한다(이름이 다르면 이 동기화만으로는 연결되지 않음).
   async function syncBillingProjectNamesToOfficialList(projects){
+    // 2026-11: 프로젝트현황(nucks-schedule.html)이 이 페이지를 대신하는 기준 페이지가 되면서, 이 페이지가 열릴 때마다
+    // 근무일지 프로젝트명 목록(officialProjects/list.names)과 코드표(codes)에 옛 이름·코드를 다시 써넣던 동기화를 끈다.
+    // (삭제 전까지 실수로 열어도 근무일지 코드·이름이 되살아나거나 덮어써지지 않게 하기 위함)
+    return;
     try{
       const names = (projects || []).map(p => (p.name || '').trim()).filter(Boolean);
       if (!names.length) return;

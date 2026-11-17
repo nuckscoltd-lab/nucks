@@ -332,6 +332,10 @@ if ('serviceWorker' in navigator) {
   // 프로젝트명으로 통일될 예정이라, 프로젝트 결산 쪽을 자동완성 목록의 기준으로 삼는다. 기존에
   // 다른 곳(회계현황 대시보드 등)에서 채워둔 이름과는 덮어쓰지 않고 합쳐서(Set) 저장한다.
   async function syncSettlementProjectNamesToOfficialList(settlements){
+    // 2026-11: 프로젝트현황(nucks-schedule.html)이 이 페이지를 대신하는 기준 페이지가 되면서, 이 페이지가 열릴 때마다
+    // 근무일지 프로젝트명 목록(officialProjects/list.names)과 코드표(codes)에 옛 이름·코드를 다시 써넣던 동기화를 끈다.
+    // (삭제 전까지 실수로 열어도 근무일지 코드·이름이 되살아나거나 덮어써지지 않게 하기 위함)
+    return;
     try{
       const names = settlements.map(p => (p.name || '').trim()).filter(Boolean);
       if (!names.length) return;
