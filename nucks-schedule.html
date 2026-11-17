@@ -822,12 +822,15 @@ function saveLastPushAt(){try{localStorage.setItem(SYNC_PUSHAT_KEY,JSON.stringif
 const SYNC={pushTimer:null,pushing:new Set(),lastPushAt:loadLastPushAt(),lastErr:''};
 function fsReady(){try{return typeof firebase!=='undefined'&&typeof db!=='undefined'&&!!db}catch(e){return false}}
 function scheduleServerPush(p){
+  if(SYNC.stale)return; // 서버에 더 최근 내용이 있는 걸 확인하는 동안에는 자동으로 덮어쓰지 않는다
   if(!fsReady()||!p||!p.id)return;
   clearTimeout(SYNC.pushTimer);
   SYNC.pushTimer=setTimeout(()=>{pushProjectToServer(p)},2500);
 }
 async function pushProjectToServer(p){
   if(!fsReady()||!p||!p.id)return;
+  if(SYNC.stale)return; // 서버에 더 최근 내용이 있는지 확인 중/확인됨 - 사용자가 받아오기·덮어쓰기를 고를 때까지 올리지 않음
+  if(!SYNC.ready){setTimeout(()=>pushProjectToServer(p),1200);return} // 페이지를 연 직후 서버 최신본 확인이 끝날 때까지 대기
   if(SYNC.pushing.has(p.id))return; // 같은 프로젝트가 이미 올라가는 중이면 겹쳐 보내지 않음
   SYNC.pushing.add(p.id);
   try{
@@ -3100,6 +3103,41 @@ function toggleWide(d){const w=d.getBoundingClientRect().width;dlgW(d,w>=innerWi
 document.addEventListener('dblclick',e=>{const g=e.target.closest('.dgrip');if(g)toggleWide(g.closest('dialog'))});
 document.addEventListener('click',e=>{const b=e.target.closest('[data-wide]');if(b)toggleWide(document.getElementById(b.dataset.wide))});
 
+/* ---------- 서버에 더 최근 내용이 있을 때 안내 (2026-11) ----------
+   이 페이지의 데이터는 각 브라우저(기기)의 localStorage에 따로 저장되고, 서버(scheduleProjects)에는 편집할 때
+   자동으로 "올리기"만 한다. 그래서 다른 기기·다른 브라우저(또는 사이트 데이터를 지운 브라우저)로 열면 서버에
+   있는 최신 내용(결산서 포함)이 아니라 그 브라우저에 남아 있던 옛 내용이 보였다. 이제 페이지를 열 때 서버의
+   저장 시각을 확인해서, 이 브라우저가 마지막으로 서버와 맞춘 시각보다 서버가 더 최근이면 위쪽에 안내를 띄우고
+   "받아오기"/"덮어쓰기" 중 하나를 고를 때까지 이 브라우저의 자동 서버 저장을 잠시 멈춘다(실수로 최신 내용을
+   옛 내용으로 덮어쓰지 않도록). */
+function syncCounts(o){let n=0,s=0;(o.groups||[]).forEach(g=>(g.rows||[]).forEach(r=>{n++;if(r.settle)s++}));return{n,s,ex:(o.settleExtras||[]).length}}
+async function checkServerNewer(){
+  try{
+    if(!fsReady()||!P||!P.id){SYNC.ready=true;return}
+    const id=P.id,doc=await db.collection(SCHED_COL).doc(id).get();
+    if(!doc.exists){SYNC.ready=true;return}
+    const sv=doc.data(),svAt=sv._pushedAt&&sv._pushedAt.toMillis?sv._pushedAt.toMillis():0;
+    if(!svAt||svAt<=(SYNC.lastPushAt[id]||0)+60000){SYNC.ready=true;return}
+    SYNC.stale=true;
+    const a=syncCounts(sv),b=syncCounts(P);
+    let bar=document.getElementById('syncBanner');
+    if(!bar){bar=document.createElement('div');bar.id='syncBanner';bar.style.cssText='position:fixed;left:0;right:0;top:0;z-index:9999;background:#fff4e0;border-bottom:2px solid #d0702e;color:#1c2227;padding:10px 16px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;box-shadow:0 2px 10px rgba(0,0,0,.15)';document.body.appendChild(bar)}
+    const when=new Date(svAt).toLocaleString('ko-KR');
+    bar.innerHTML=`<span style="flex:1;min-width:240px"><b>서버에 이 브라우저보다 더 최근에 저장된 내용이 있습니다</b> (${esc(sv._pushedBy||'알 수 없음')} · ${esc(when)}) — 서버: 프로젝트 ${a.n}건 · 결산서 ${a.s+a.ex}건 / 이 브라우저: 프로젝트 ${b.n}건 · 결산서 ${b.s+b.ex}건. 선택하기 전에는 이 브라우저의 변경이 서버에 저장되지 않습니다.</span>
+      <button class="btn pri" id="syncPull" type="button">서버 내용 받아오기 (권장)</button><button class="btn" id="syncPushMine" type="button" style="border:1px solid var(--line)">이 브라우저 내용으로 서버 덮어쓰기</button>`;
+    $('#syncPull').onclick=async()=>{
+      if(!confirm('이 브라우저의 내용을 서버의 최근 내용으로 바꿉니다.\n(이 브라우저에만 있고 서버에 올라가지 않은 변경은 사라집니다) 계속할까요?'))return;
+      try{const okp=await pullProjectFromServer(id);if(!okp){toast('서버에서 받아오지 못했습니다');return}
+        SYNC.stale=false;bar.remove();toast('서버의 최근 내용을 받아왔습니다');updateSettleBadge&&updateSettleBadge()}
+      catch(e){toast('받아오기 실패: '+(e&&e.message||e))}};
+    $('#syncPushMine').onclick=async()=>{
+      if(!confirm('서버에 저장된 더 최근 내용이 사라지고 이 브라우저의 내용으로 바뀝니다. 정말 덮어쓸까요?'))return;
+      SYNC.stale=false;bar.remove();await pushProjectToServer(P);toast('이 브라우저 내용으로 서버를 덮어썼습니다')};
+    SYNC.ready=true;
+  }catch(e){console.warn('서버 최신본 확인 실패',e);SYNC.ready=true}
+}
+setTimeout(()=>{SYNC.ready=true},12000); // 로그인이 안 되는 등 확인이 영영 안 끝나도 12초 뒤엔 올리기 허용
+try{if(typeof auth!=='undefined'&&auth&&auth.onAuthStateChanged)auth.onAuthStateChanged(u=>{if(u)setTimeout(checkServerNewer,700)})}catch(e){}
 renderAll();
 })();
 </script>
