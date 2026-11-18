@@ -51,6 +51,13 @@
   .panel-title{ font-size:15px; font-weight:600; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; }
   .panel[data-tool] > .panel-title{ cursor:pointer; user-select:none; }
   .panel[data-tool] > .panel-title.closed{ margin-bottom:0; }
+  .rec-totals{ display:flex; flex-wrap:wrap; gap:10px; margin-top:16px; }
+  .rec-totals .rt{ background:#f7f6f3; border:1px solid var(--line); border-radius:6px; padding:10px 16px; min-width:150px; }
+  .rec-totals .rt .l{ font-size:11.5px; color:var(--muted); }
+  .rec-totals .rt .v{ font-size:17px; font-weight:600; margin-top:3px; }
+  .rec-totals .rt .s{ font-size:11px; color:var(--muted); margin-top:2px; }
+  .rec-totals .rt.out .v{ color:var(--out-color); }
+  .rec-totals .rt.in .v{ color:var(--in-color); }
   .panel-title .toggle-btn{ margin-left:10px; }
   /* 도구 묶음(1차 토글) + 개별 도구(2차 토글): 작고 가는 제목 + "펼치기 ▾" */
   .panel.tool-group{ padding:18px 24px; }
@@ -456,7 +463,8 @@
       <div class="import-help" style="margin-top:6px;">여기 적어둔 계정과목·프로젝트는 "일괄 추가"로 만들어지는 예정 거래에 그대로 들어갑니다. 확정할 때 분류를 다시 입력하지 않아도 회계종합현황에 정확히 반영돼요. (급여는 "임원급여"/"직원급여"로, 카드대금은 계정과목 "미지급금"으로 적어주세요.)</div>
       <div class="status-line" id="recurringStatus"></div>
 
-      <div class="table-wrap" style="margin-top:16px;">
+      <div id="recurringTotals" class="rec-totals" style="display:none;"></div>
+      <div class="table-wrap" style="margin-top:12px;">
         <table id="recurringTable" style="display:none;">
           <thead>
             <tr><th>구분</th><th>지급일</th><th>금액</th><th>내용</th><th>계정과목</th><th>프로젝트</th><th>증빙</th><th>비고</th><th>관리</th></tr>
@@ -1603,11 +1611,33 @@
     renderSummary(); // 고정 항목이 바뀌면 예상잔고 계산(미등록분 예상치)에도 바로 반영
   }
 
+  // 고정 항목 합계: 항목을 추가·수정·삭제할 때마다 renderRecurringTable()이 불리므로 자동으로 다시 계산된다.
+  function renderRecurringTotals(){
+    const box = document.getElementById('recurringTotals');
+    if (!box) return;
+    if (!allRecurring.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    const outs = allRecurring.filter(r => r.type !== '입금');
+    const ins = allRecurring.filter(r => r.type === '입금');
+    const sum = a => a.reduce((t, r) => t + (Number(r.amount) || 0), 0);
+    const outTotal = sum(outs), inTotal = sum(ins);
+    const card = outs.filter(r => SPEND_EXCLUDE_ACCOUNTS.includes(r.account));
+    const cardTotal = sum(card);
+    const noAcct = outs.filter(r => !r.account).length;
+    let html = `<div class="rt out"><div class="l">월 고정 지출 합계</div><div class="v">${fmtWon(outTotal)}</div><div class="s">출금 ${outs.length}건 · 연 환산 ${fmtWon(outTotal * 12)}</div></div>`;
+    if (cardTotal > 0) html += `<div class="rt"><div class="l">그 중 미지급금(카드대금)</div><div class="v">${fmtWon(cardTotal)}</div><div class="s">${card.length}건 · 카드 사용분과 이중 집계되지 않도록 지출 집계에서 제외되는 금액</div></div>
+      <div class="rt out"><div class="l">미지급금 제외 고정 지출</div><div class="v">${fmtWon(outTotal - cardTotal)}</div><div class="s">${outs.length - card.length}건 · 실제 지출 집계 기준</div></div>`;
+    if (inTotal > 0) html += `<div class="rt in"><div class="l">월 고정 수입 합계</div><div class="v">${fmtWon(inTotal)}</div><div class="s">입금 ${ins.length}건</div></div>
+      <div class="rt"><div class="l">월 고정 순수지(수입 − 지출)</div><div class="v">${inTotal - outTotal < 0 ? '-' : ''}${fmtWon(Math.abs(inTotal - outTotal))}</div></div>`;
+    if (noAcct) html += `<div class="rt" style="flex:1 1 100%;background:none;border-style:dashed;"><div class="s">계정과목이 비어 있는 지출 항목 ${noAcct}건 — 채워두면 위 구분이 더 정확해집니다.</div></div>`;
+    box.innerHTML = html; box.style.display = 'flex';
+  }
+
   function renderRecurringTable(){
     const table = document.getElementById('recurringTable');
     const tbody = document.getElementById('recurringTableBody');
     const emptyMsg = document.getElementById('recurringEmptyMsg');
 
+    renderRecurringTotals();
     if (allRecurring.length === 0) {
       table.style.display = 'none';
       emptyMsg.style.display = 'block';
