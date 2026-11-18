@@ -49,6 +49,9 @@
     padding:22px 24px; margin-bottom:24px;
   }
   .panel-title{ font-size:15px; font-weight:600; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; }
+  .panel[data-tool] > .panel-title{ cursor:pointer; user-select:none; }
+  .panel[data-tool] > .panel-title.closed{ margin-bottom:0; }
+  .panel-title .toggle-btn{ margin-left:10px; }
   .panel-title .toggle-btn{ font-size:12px; color:var(--muted); background:none; border:1px solid var(--line); border-radius:4px; padding:5px 10px; cursor:pointer; }
 
   .form-row{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
@@ -408,14 +411,41 @@
           <label for="r-memo">비고 (선택)</label>
           <input type="text" id="r-memo">
         </div>
+      </div>
+      <div class="form-row" style="margin-top:10px;">
+        <div class="field">
+          <label for="r-channel">결제수단</label>
+          <select id="r-channel"><option value="통장">통장</option><option value="카드">카드</option></select>
+        </div>
+        <div class="field">
+          <label for="r-account">계정과목</label>
+          <input type="text" id="r-account" list="cbAccountList" placeholder="예: 보험료, 임차료">
+        </div>
+        <div class="field wide">
+          <label for="r-project">프로젝트</label>
+          <input type="text" id="r-project" list="cbProjectList" placeholder="프로젝트명 또는 일반관리 등">
+        </div>
+        <div class="field">
+          <label for="r-pmajor">프로젝트대분류</label>
+          <select id="r-pmajor"><option value="">-</option><option value="설계">설계</option><option value="공사">공사</option><option value="자본">자본</option><option value="법인세">법인세</option></select>
+        </div>
+        <div class="field">
+          <label for="r-client">발주처</label>
+          <input type="text" id="r-client" list="cbClientList">
+        </div>
+        <div class="field">
+          <label for="r-evType">증빙 (선택)</label>
+          <select id="r-evType"><option value="">없음 / 미입력</option><option value="세금계산서">세금계산서</option><option value="현금영수증">현금영수증</option><option value="일반계산서">일반계산서</option></select>
+        </div>
         <button class="btn-primary" id="saveRecurringBtn">등록</button>
       </div>
+      <div class="import-help" style="margin-top:6px;">여기 적어둔 계정과목·프로젝트는 "일괄 추가"로 만들어지는 예정 거래에 그대로 들어갑니다. 확정할 때 분류를 다시 입력하지 않아도 회계종합현황에 정확히 반영돼요. (급여는 "임원급여"/"직원급여"로, 카드대금은 계정과목 "미지급금"으로 적어주세요.)</div>
       <div class="status-line" id="recurringStatus"></div>
 
       <div class="table-wrap" style="margin-top:16px;">
         <table id="recurringTable" style="display:none;">
           <thead>
-            <tr><th>구분</th><th>지급일</th><th>금액</th><th>내용</th><th>비고</th><th>관리</th></tr>
+            <tr><th>구분</th><th>지급일</th><th>금액</th><th>내용</th><th>계정과목</th><th>프로젝트</th><th>증빙</th><th>비고</th><th>관리</th></tr>
           </thead>
           <tbody id="recurringTableBody"></tbody>
         </table>
@@ -428,13 +458,14 @@
           <input type="month" id="recurringMonth">
         </div>
         <button class="btn-primary" id="applyRecurringBtn">이 달에 고정 항목 일괄 추가 (예정)</button>
+        <button id="backfillRecurringBtn" title="이미 만들어진 예정 거래 중 분류가 비어 있는 것에, 고정 항목에 적어둔 분류를 채워 넣습니다.">기존 예정 건에 분류 채우기</button>
       </div>
       <div class="status-line" id="applyRecurringStatus"></div>
     </div>
   </div>
 
   <!-- 증빙 발행 현황 -->
-  <div class="panel">
+  <div class="panel" data-tool="1">
     <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
       <span>세금계산서·현금영수증·일반계산서 발행 현황</span>
       <select id="evYear" style="padding:6px 8px;border:1px solid var(--line);border-radius:4px;font-size:12.5px;"></select>
@@ -445,7 +476,7 @@
   </div>
 
   <!-- 홈택스 증빙 자동 연결 -->
-  <div class="panel">
+  <div class="panel" data-tool="1">
     <div class="panel-title">홈택스 증빙 자동 연결 (세금계산서 · 계산서 · 현금영수증)</div>
     <div class="import-row">
       <input type="file" id="htFile" accept=".xlsx,.xls" multiple>
@@ -462,7 +493,7 @@
   </div>
 
   <!-- 엑셀 가져오기/내보내기 -->
-  <div class="panel">
+  <div class="panel" data-tool="1">
     <div class="panel-title">엑셀 일괄 가져오기 / 내보내기</div>
     <div class="import-row">
       <input type="file" id="importFile" accept=".xlsx,.xls,.csv">
@@ -479,7 +510,7 @@
   </div>
 
   <!-- 회계 거래내역 엑셀 이전 -->
-  <div class="panel">
+  <div class="panel" data-tool="1">
     <div class="panel-title">회계 거래내역 엑셀 이전 (계정과목·프로젝트 포함)</div>
     <div class="import-row">
       <input type="file" id="xlFile" accept=".xlsx,.xls">
@@ -495,7 +526,7 @@
   </div>
 
   <!-- 중복 의심 거래 정리 -->
-  <div class="panel">
+  <div class="panel" data-tool="1">
     <div class="panel-title">중복 의심 거래 정리 (합계로 나눠 입력된 중복)</div>
     <div class="import-row"><button class="btn-primary" id="dupScanBtn">점검하기</button></div>
     <div class="import-help">
@@ -508,7 +539,7 @@
   </div>
 
   <!-- 카드 이용내역 업로드 -->
-  <div class="panel">
+  <div class="panel" data-tool="1">
     <div class="panel-title">카드 이용내역 엑셀 업로드 (신한카드 · 현대카드)</div>
     <div class="import-row">
       <input type="file" id="cuFile" accept=".xlsx,.xls" multiple>
@@ -1179,7 +1210,7 @@
         const day = Math.min(28, Math.max(1, Number(r.day) || 1));
         const occDate = new Date(y, m, day).toISOString().slice(0, 10);
         if (occDate >= fromDate && occDate <= toDate) {
-          occurrences.push({ recurringId: r.id, date: occDate, type: r.type, amount: r.amount, content: r.content, memo: r.memo });
+          occurrences.push({ recurringId: r.id, date: occDate, type: r.type, amount: r.amount, content: r.content, memo: r.memo, ...recClassOf(r) });
         }
       });
       cursor.setMonth(cursor.getMonth() + 1);
@@ -1580,7 +1611,10 @@
         <td>${r.type || ''}</td>
         <td class="nowrap">매월 ${r.day || 1}일</td>
         <td class="amount ${r.type === '입금' ? 'in' : 'out'}">${r.type === '입금' ? '+' : '-'}${fmtWon(r.amount)}</td>
-        <td>${esc(r.content)}</td>
+        <td>${esc(r.content)}${r.channel === '카드' ? ' <span class="maj-badge">카드</span>' : ''}</td>
+        <td>${r.account ? esc(r.account) : '<span style="color:var(--warn,#c0392b)" title="계정과목이 비어 있으면 회계종합현황에서 미분류로 잡혀요">미지정</span>'}</td>
+        <td>${r.project ? esc(r.project) + (r.pmajor ? ` <span class="maj-badge">${esc(r.pmajor)}</span>` : '') : '<span style="color:var(--muted)">-</span>'}</td>
+        <td>${r.evType ? esc(r.evType) : '<span style="color:var(--muted)">-</span>'}</td>
         <td>${esc(r.memo)}</td>
         <td>
           <div class="row-actions">
@@ -1606,8 +1640,48 @@
     });
   }
 
+  // 고정 항목에 적어둔 분류(계정과목·프로젝트…)를 거래에 복사할 때 쓰는 값
+  function recClassOf(r){
+    const o = { channel: r.channel === '카드' ? '카드' : '통장' };
+    if (r.account) o.account = r.account;
+    if (r.project) o.project = r.project;
+    if (r.pmajor) o.pmajor = r.pmajor;
+    if (r.client) o.client = r.client;
+    if (r.evType && o.channel !== '카드') o.evType = r.evType;
+    return o;
+  }
+  function readRecClass(){
+    return {
+      channel: document.getElementById('r-channel').value === '카드' ? '카드' : '통장',
+      account: document.getElementById('r-account').value.trim(),
+      project: document.getElementById('r-project').value.trim(),
+      pmajor: document.getElementById('r-pmajor').value,
+      client: document.getElementById('r-client').value.trim(),
+      evType: document.getElementById('r-evType').value
+    };
+  }
+  function writeRecClass(r){
+    document.getElementById('r-channel').value = (r && r.channel === '카드') ? '카드' : '통장';
+    document.getElementById('r-account').value = (r && r.account) || '';
+    document.getElementById('r-project').value = (r && r.project) || '';
+    document.getElementById('r-pmajor').value = (r && r.pmajor) || '';
+    document.getElementById('r-client').value = (r && r.client) || '';
+    document.getElementById('r-evType').value = (r && r.evType) || '';
+    document.getElementById('r-pmajor').dataset.auto = '0';
+    document.getElementById('r-client').dataset.auto = '0';
+  }
+  ['r-pmajor', 'r-client'].forEach(id => document.getElementById(id).addEventListener('input', ev => { ev.target.dataset.auto = '0'; }));
+  document.getElementById('r-project').addEventListener('change', () => {
+    const info = projInfoFor(document.getElementById('r-project').value);
+    if (!info) return;
+    const mj = document.getElementById('r-pmajor'), cl = document.getElementById('r-client');
+    if (info.major && (!mj.value || mj.dataset.auto === '1')) { mj.value = info.major; mj.dataset.auto = '1'; }
+    if (info.client && (!cl.value || cl.dataset.auto === '1')) { cl.value = info.client; cl.dataset.auto = '1'; }
+  });
+
   function startEditRecurring(r){
     editingRecurringId = r.id;
+    writeRecClass(r);
     document.getElementById('r-type').value = r.type || '출금';
     document.getElementById('r-day').value = r.day || 15;
     setMoneyInputValue(document.getElementById('r-amount'), r.amount);
@@ -1624,6 +1698,7 @@
     document.getElementById('r-amount').value = '';
     document.getElementById('r-content').value = '';
     document.getElementById('r-memo').value = '';
+    writeRecClass(null);
     document.getElementById('saveRecurringBtn').textContent = '등록';
   }
 
@@ -1640,14 +1715,21 @@
       statusEl.textContent = '금액 / 내용은 필수입니다.';
       return;
     }
+    const cls = readRecClass();
+    if (cls.account === '급여') {
+      statusEl.className = 'status-line err';
+      statusEl.textContent = '급여는 "임원급여" 또는 "직원급여" 중에서 골라 입력해주세요.';
+      return;
+    }
+    if (cls.channel === '카드') cls.evType = '';
 
     try {
       if (editingRecurringId) {
-        await recurringRef.doc(editingRecurringId).update({ type, day, amount, content, memo });
+        await recurringRef.doc(editingRecurringId).update({ type, day, amount, content, memo, ...cls });
         statusEl.className = 'status-line ok';
         statusEl.textContent = '수정되었습니다.';
       } else {
-        await recurringRef.add({ type, day, amount, content, memo, order: Date.now() });
+        await recurringRef.add({ type, day, amount, content, memo, ...cls, order: Date.now() });
         statusEl.className = 'status-line ok';
         statusEl.textContent = '등록되었습니다.';
       }
@@ -1691,6 +1773,7 @@
         const date = `${y}-${m}-${day}`;
         batch.set(entriesRef.doc(), {
           date, type: r.type, status: '예정', amount: r.amount, content: r.content, memo: r.memo,
+          ...recClassOf(r),
           recurringId: r.id, order: Date.now() + i,
           linkTargetCollection: null, linkTargetCardId: null, linkTargetCardLabel: null,
           linkApplied: false, linkAppliedYm: null, linkAppliedAmount: null,
@@ -1700,7 +1783,8 @@
       await batch.commit();
 
       statusEl.className = 'status-line ok';
-      statusEl.textContent = `${toAdd.length}건 추가되었습니다.${already.size ? ` (이미 있던 ${already.size}건은 건너뜀)` : ''} 연동 대상은 자동으로 지정되지 않으니, 필요하면 목록에서 직접 지정해주세요.`;
+      const noAcct = toAdd.filter(r => !r.account).length;
+      statusEl.textContent = `${toAdd.length}건 추가되었습니다.${already.size ? ` (이미 있던 ${already.size}건은 건너뜀)` : ''} 연동 대상은 자동으로 지정되지 않으니, 필요하면 목록에서 직접 지정해주세요.${noAcct ? ` ※ 계정과목이 비어 있는 고정 항목이 ${noAcct}건 있어요. 위 목록에서 수정해 채워두면 다음 달부터 자동으로 들어갑니다.` : ''}`;
       await loadEntries();
     } catch (err) {
       statusEl.className = 'status-line err';
@@ -1708,6 +1792,32 @@
     } finally {
       btn.disabled = false;
     }
+  });
+
+  // 이미 만들어진 예정 거래(고정 항목에서 생성) 중 계정과목이 비어 있는 것에 고정 항목의 분류를 채운다. 확정 거래·이미 분류된 거래는 건드리지 않는다.
+  document.getElementById('backfillRecurringBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('applyRecurringStatus');
+    const byId = {}; allRecurring.forEach(r => { byId[r.id] = r; });
+    const targets = allEntries.filter(e => e.recurringId && e.status === '예정' && !e.account && byId[e.recurringId] && byId[e.recurringId].account);
+    if (!targets.length) { statusEl.className = 'status-line ok'; statusEl.textContent = '채울 예정 거래가 없습니다. (고정 항목에 계정과목을 먼저 적어두었는지 확인해주세요.)'; return; }
+    if (!confirm(`분류가 비어 있는 예정 거래 ${targets.length}건에 고정 항목의 계정과목·프로젝트를 채워 넣을까요?\n(확정된 거래와 이미 분류된 거래는 바뀌지 않습니다.)`)) return;
+    const btn = document.getElementById('backfillRecurringBtn'); btn.disabled = true;
+    try {
+      for (let i = 0; i < targets.length; i += 400) {
+        const batch = db.batch();
+        targets.slice(i, i + 400).forEach(e => {
+          const c = recClassOf(byId[e.recurringId]); delete c.channel;
+          batch.update(entriesRef.doc(e.id), c);
+        });
+        await batch.commit();
+      }
+      statusEl.className = 'status-line ok';
+      statusEl.textContent = `${targets.length}건에 분류를 채웠습니다.`;
+      await loadEntries();
+    } catch (err) {
+      statusEl.className = 'status-line err';
+      statusEl.textContent = '채우기 실패: ' + err.message;
+    } finally { btn.disabled = false; }
   });
 
   // ---------- 엑셀 가져오기 ----------
@@ -2691,6 +2801,25 @@
       await loadEntries();
     } catch (err) { st.className = 'status-line err'; st.textContent = '저장 실패: ' + err.message; if (btn) btn.disabled = false; }
   }
+
+  // ---------- 도구 패널 접기/펼치기 (기본은 접힌 상태, 펼친 상태는 기억) ----------
+  (function initToolToggles(){
+    document.querySelectorAll('.panel[data-tool]').forEach(panel => {
+      const title = panel.querySelector('.panel-title'); if (!title) return;
+      const label = (title.querySelector('span') || title).textContent.trim().slice(0, 30);
+      const key = 'cb-tool-open:' + label;
+      const body = document.createElement('div'); body.className = 'tool-body';
+      while (title.nextSibling) body.appendChild(title.nextSibling);
+      panel.appendChild(body);
+      const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'toggle-btn'; title.appendChild(btn);
+      let open = false; try { open = localStorage.getItem(key) === '1'; } catch (e) {}
+      const apply = () => { body.style.display = open ? '' : 'none'; btn.textContent = open ? '접기' : '펼치기'; title.classList.toggle('closed', !open); };
+      const flip = () => { open = !open; apply(); try { localStorage.setItem(key, open ? '1' : '0'); } catch (e) {} };
+      btn.addEventListener('click', e => { e.stopPropagation(); flip(); });
+      title.addEventListener('click', e => { if (e.target.closest('select, input, button, option')) return; flip(); });
+      apply();
+    });
+  })();
 
   (async function init(){
     await loadConfig();
