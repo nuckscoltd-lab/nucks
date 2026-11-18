@@ -494,6 +494,19 @@
     <div id="xlPreview"></div>
   </div>
 
+  <!-- 중복 의심 거래 정리 -->
+  <div class="panel">
+    <div class="panel-title">중복 의심 거래 정리 (합계로 나눠 입력된 중복)</div>
+    <div class="import-row"><button class="btn-primary" id="dupScanBtn">점검하기</button></div>
+    <div class="import-help">
+      같은 거래를 한쪽은 합계 1건, 다른 쪽은 여러 건(카드별 카드대금, 직원별 급여 등)으로 입력해 <b>엑셀 이전 후 둘 다 남은 경우</b>를 찾습니다.
+      같은 날짜(±3일)에서 여러 건의 합계가 1건과 정확히 같은 묶음만 보여주고, 미리보기에서 <b>어느 쪽을 남길지</b> 고를 수 있습니다(기본은 더 잘게 나뉜 쪽을 유지).
+      연동이 반영된 거래는 자동으로 지우지 않습니다. 지운 엑셀 거래는 기억해 두어서 엑셀을 다시 올려도 되살아나지 않습니다. 분류가 비어 있는 기존 지출도 함께 보여드립니다.
+    </div>
+    <div class="status-line" id="dupStatus"></div>
+    <div id="dupPreview"></div>
+  </div>
+
   <!-- 카드 이용내역 업로드 -->
   <div class="panel">
     <div class="panel-title">카드 이용내역 엑셀 업로드 (신한카드 · 현대카드)</div>
@@ -2013,9 +2026,11 @@
       push(exact, [ch, e.date, e.type, e.amount, normC(e.content)].join('|'), e);
       push(loose, [ch, e.date, e.type, e.amount].join('|'), e);
     });
-    const used = new Set(), plan = { fresh: [], same: [], guess: [], enrich: [], pendingHit: 0, pendingNet: 0 };
+    const used = new Set(), plan = { fresh: [], same: [], guess: [], enrich: [], pendingHit: 0, pendingNet: 0, ignored: 0 };
+    const ign = Object.assign({}, importIgnore); // 중복 정리 때 지운 엑셀 거래는 다시 추가하지 않는다
     items.slice().sort((a, b) => a.order - b.order).forEach(it => {
       const kE = [it.channel, it.date, it.type, it.amount, normC(it.content)].join('|'), kL = [it.channel, it.date, it.type, it.amount].join('|');
+      if (ign[kE] > 0) { ign[kE]--; plan.ignored++; return; }
       let hit = (exact.get(kE) || []).find(e => !used.has(e.id)), how = 'same';
       if (!hit) { hit = (loose.get(kL) || []).find(e => !used.has(e.id)); how = 'guess'; }
       if (!hit) { plan.fresh.push(it); return; }
@@ -2051,7 +2066,7 @@
     let html = `<div class="import-help" style="color:var(--ink);">
       <b>${XL.sheetInfo}</b> · 읽은 거래 ${XL.cands.length}건 (${dates[0] || ''} ~ ${dates[dates.length - 1] || ''})${XL.skipped ? ` · 건너뜀 ${XL.skipped}건(날짜·금액 없음)` : ''}<br>
       ① 이미 있는 거래와 같음 <b>${p.same.length}</b>건 · 내용만 달라 같은 건으로 본 것 <b>${p.guess.length}</b>건 → 건너뜀 (이 중 ${p.enrich.length}건은 비어 있던 계정과목·프로젝트만 채워넣음)<br>
-      ② 새로 추가될 거래 <b>${p.fresh.length}</b>건 (통장 ${p.fresh.length - cards}건 · 카드 ${cards}건)<br>
+      ${p.ignored ? `(중복 정리로 제외해둔 ${p.ignored}건은 다시 추가하지 않습니다)<br>` : ''}② 새로 추가될 거래 <b>${p.fresh.length}</b>건 (통장 ${p.fresh.length - cards}건 · 카드 ${cards}건)<br>
       ③ 통장 잔액 영향: 기준일(${config.startDate || '미설정'}) 이후 새 통장 거래 ${bankNew.length}건, 순증감 <b>${fmtSigned(net)}</b> → 현재 잔액 ${fmtWon(cur)} → <b>${fmtWon(after)}</b>
       ${last ? `<br>(참고: 엑셀의 마지막 통장 잔액은 ${last.date} 기준 ${fmtWon(last.balance)}${Math.abs(last.balance - effAfter) > 1 ? ` — 이 숫자와 <b style="color:var(--out-color)">${fmtWon(Math.abs(last.balance - effAfter))} 차이</b>가 납니다. 이월잔액 설정(기준일·잔액)이나 겹침 판정을 확인해보세요.` : (p.pendingNet ? ' — "예정" 건을 확정하면 정확히 일치합니다.' : ' — 정확히 일치합니다.')})` : ''}
       ${p.pendingHit ? `<br><span style="color:var(--pending-text)">※ "예정" 상태로 남아 있는 ${p.pendingHit}건(통장 반영 시 ${fmtSigned(p.pendingNet || 0)})이 엑셀의 실제 거래와 겹쳤습니다. 자동으로 확정하지는 않으니 이전 후 목록에서 "확정 처리"를 눌러주세요.</span>` : ''}
@@ -2102,7 +2117,7 @@
         await batch.commit();
       }
       statusEl.className = 'status-line ok';
-      statusEl.textContent = `완료: ${p.fresh.length}건 추가, ${p.enrich.length}건 분류 채움. (엑셀 이전분은 연동 대상이 지정되지 않아 공과금·보험 등 월별 합계에는 반영되지 않습니다)`;
+      statusEl.textContent = `완료: ${p.fresh.length}건 추가, ${p.enrich.length}건 분류 채움. (엑셀 이전분은 연동 대상이 지정되지 않아 공과금·보험 등 월별 합계에는 반영되지 않습니다) 이전 후에는 아래 "중복 의심 거래 정리"를 한 번 실행해 합계로 나눠 입력된 중복이 없는지 확인해주세요.`;
       XL.plan = null; document.getElementById('xlFile').value = ''; renderImportPreview();
       await loadEntries();
     } catch (err) {
@@ -2546,6 +2561,137 @@
     } catch (err) { st.className = 'status-line err'; st.textContent = '저장 실패: ' + err.message; if (btn) btn.disabled = false; }
   }
 
+  // ═════════════════════════════════════════════════════════════════════════════
+  // 중복 의심 거래 정리 (합계가 같은 묶음 중복)
+  //  엑셀 이전은 "1건 ↔ 1건"이 같은 거래만 겹침으로 봅니다. 그런데 같은 거래를 한쪽은 합계 1건, 다른 쪽은 여러 건으로
+  //  나눠 적어둔 경우(예: 카드대금을 카드별로 나눠 입력 ↔ 엑셀엔 합계 1건 / 급여를 직원별로 ↔ 합계 1건)에는
+  //  서로 다른 거래로 보여 둘 다 남아 중복 집계됩니다. 여기서는 같은 날짜(±3일) 안에서 "여러 건의 합계 = 1건"인
+  //  묶음을 찾아 한쪽을 정리합니다. (연동이 반영된 거래는 건드리지 않습니다)
+  // ═════════════════════════════════════════════════════════════════════════════
+  const DUP = { groups: [], unclassified: [] };
+  const importIgnore = {}; // 정리하면서 지운 엑셀 거래의 키 → 개수 (엑셀을 다시 올려도 되살아나지 않게)
+  const igKey = e => [isCard(e) ? '카드' : '통장', e.date, e.type, e.amount, normC(e.content)].join('|');
+  async function loadImportIgnore(){
+    try {
+      const s = await db.collection('cashbookConfig').doc('importIgnore').get();
+      Object.keys(importIgnore).forEach(k => delete importIgnore[k]);
+      if (s.exists) (s.data().keys || []).forEach(k => { importIgnore[k] = (importIgnore[k] || 0) + 1; });
+    } catch (err) { console.warn('importIgnore 불러오기 실패:', err); }
+  }
+  const isProtected = e => !!(e.linkApplied || e.linkedInvestEntryId); // 연동 반영분이 있는 거래는 자동 삭제 대상에서 제외
+  const dayDiff = (a, b) => Math.abs(Math.round((new Date(a + 'T00:00:00Z') - new Date(b + 'T00:00:00Z')) / 86400000));
+  function subsetSum(target, pool, minK, maxK){
+    const arr = pool.filter(p => p.amount < target).sort((a, b) => b.amount - a.amount).slice(0, 26);
+    let found = null, nodes = 0;
+    (function dfs(i, sum, chosen){
+      if (found || nodes++ > 150000) return;
+      if (sum === target && chosen.length >= minK) { found = chosen.slice(); return; }
+      if (sum >= target || chosen.length >= maxK) return;
+      for (let j = i; j < arr.length; j++) { if (sum + arr[j].amount > target) continue; chosen.push(arr[j]); dfs(j + 1, sum + arr[j].amount, chosen); chosen.pop(); if (found) return; }
+    })(0, 0, []);
+    return found;
+  }
+  function dupScan(){
+    const base = allEntries.filter(e => e.status === '확정' && isBank(e) && e.amount > 0);
+    const X = base.filter(e => e.src !== 'excel' && e.src !== 'card-upload').sort((a, b) => a.date.localeCompare(b.date));
+    const E = base.filter(e => e.src === 'excel').sort((a, b) => a.date.localeCompare(b.date));
+    const usedX = new Set(), usedE = new Set(), groups = [];
+    const near = (list, used, ref) => list.filter(c => !used.has(c.id) && c.type === ref.type && dayDiff(c.date, ref.date) <= 3);
+    // A: 기존 1건 = 엑셀 여러 건
+    X.forEach(x => {
+      const hit = subsetSum(x.amount, near(E, usedE, x), 2, 8); if (!hit) return;
+      usedX.add(x.id); hit.forEach(h => usedE.add(h.id)); groups.push({ existing: [x], excel: hit });
+    });
+    // B: 엑셀 1건 = 기존 여러 건
+    E.forEach(e => {
+      if (usedE.has(e.id)) return;
+      const hit = subsetSum(e.amount, near(X, usedX, e), 2, 8); if (!hit) return;
+      usedE.add(e.id); hit.forEach(h => usedX.add(h.id)); groups.push({ existing: hit, excel: [e] });
+    });
+    groups.forEach(g => {
+      // 기본 제안: 건수가 많은(더 잘게 나뉜) 쪽을 유지. 연동이 반영된 쪽은 지울 수 없으니 반대로.
+      let keep = g.existing.length > g.excel.length ? 'existing' : 'excel';
+      const prot = side => g[side].some(isProtected);
+      if (prot(keep === 'existing' ? 'excel' : 'existing')) keep = keep === 'existing' ? 'excel' : 'existing';
+      const removeSide = keep === 'existing' ? 'excel' : 'existing';
+      g.keep = keep; g.blocked = prot(removeSide);
+      g.on = !g.blocked;
+    });
+    groups.sort((a, b) => b.excel[0].date.localeCompare(a.excel[0].date));
+    // 분류 안 된 기존(수기 입력) 지출 + 자동 채우기 제안
+    const hist = new Map();
+    allEntries.forEach(e => { if (e.account && e.src === 'excel') { const k = normC(e.content); if (!k) return; const t = hist.get(k) || new Map(); const kk = [e.account, e.project, e.pmajor, e.client].join('\u0001'); const o = t.get(kk) || { n: 0, e }; o.n++; t.set(kk, o); hist.set(k, t); } });
+    const best = k => { const t = hist.get(k); if (!t) return null; let b = null; t.forEach(v => { if (!b || v.n > b.n) b = v; }); return b ? b.e : null; };
+    const groupedIds = new Set(); groups.forEach(g => g.existing.concat(g.excel).forEach(e => groupedIds.add(e.id)));
+    const un = allEntries.filter(e => e.src !== 'excel' && e.src !== 'card-upload' && !e.account && e.type === '출금' && e.amount > 0 && !groupedIds.has(e.id)).map(e => {
+      let sug = null, why = '';
+      if (e.linkTargetCollection === 'corporateCards' || /카드대금/.test(e.content || '')) { sug = { account: '미지급금', project: '일반관리', pmajor: '설계', client: '넉스' }; why = '법인카드 결제대금'; }
+      else { const h = best(normC(e.content)); if (h) { sug = { account: h.account, project: h.project || '', pmajor: h.pmajor || '', client: h.client || '' }; why = '같은 내용의 과거 분류'; } }
+      return { e, sug, why, on: !!sug };
+    });
+    return { groups, un };
+  }
+  const entLine = e => `${esc(e.content)}${e.memo ? ' <span style="color:var(--muted)">(' + esc(e.memo) + ')</span>' : ''} <b>${fmtWon(e.amount)}</b>${isProtected(e) ? ' <span class="ev-badge" style="background:#e8eef8;color:#2f4f8a">연동 반영</span>' : ''}${e.account ? ' <span class="maj-badge">' + esc(e.account) + '</span>' : ''}`;
+  function dupRender(){
+    const box = document.getElementById('dupPreview'), r = DUP.res; if (!r) { box.innerHTML = ''; return; }
+    const sel = r.groups.filter(g => g.on);
+    const net = sel.reduce((s, g) => s + (g.keep === 'existing' ? g.excel : g.existing).reduce((t, e) => t + ((!config.startDate || e.date > config.startDate) ? (e.type === '입금' ? -e.amount : e.amount) : 0), 0), 0);
+    const cur = currentBankBalance();
+    let html = `<div class="import-help" style="color:var(--ink);">
+      <b>① 합계가 같은 묶음 중복 의심 ${r.groups.length}건</b>${r.groups.some(g => g.blocked) ? ` (연동 반영분 때문에 자동 정리가 안 되는 ${r.groups.filter(g => g.blocked).length}건 포함)` : ''} — 정리 시 통장 잔액 ${fmtWon(cur)} → <b>${fmtWon(cur + net)}</b> (${fmtSigned(net)})<br>
+      <b>② 분류가 비어 있는 기존 지출 ${r.un.length}건</b> (그중 자동 채움 제안 ${r.un.filter(u => u.sug).length}건) — 회계종합현황에서 "미분류"로 집계되는 거래입니다.</div>`;
+    if (r.groups.length) html += `<div class="table-wrap" style="margin-top:10px;max-height:460px;overflow:auto;"><table class="ev-tbl"><thead><tr><th>정리</th><th>날짜</th><th>기존에 입력한 거래</th><th>엑셀에서 온 거래</th><th>유지할 쪽</th></tr></thead><tbody>${r.groups.map((g, i) => `<tr class="${g.blocked ? 'cu-need' : ''}">
+      <td><input type="checkbox" data-dg="${i}" ${g.on ? 'checked' : ''} ${g.blocked ? 'disabled' : ''}></td><td class="nowrap">${g.excel[0].date}</td>
+      <td style="white-space:normal">${g.existing.map(entLine).join('<br>')}</td><td style="white-space:normal">${g.excel.map(entLine).join('<br>')}</td>
+      <td><select data-dk="${i}" ${g.blocked ? 'disabled' : ''}><option value="existing"${g.keep === 'existing' ? ' selected' : ''}>기존 ${g.existing.length}건 유지 (엑셀 삭제)</option><option value="excel"${g.keep === 'excel' ? ' selected' : ''}>엑셀 ${g.excel.length}건 유지 (기존 삭제)</option></select>${g.blocked ? '<div style="font-size:11px;color:var(--out-color)">연동 반영분이 있어 수동 정리 필요</div>' : ''}</td></tr>`).join('')}</tbody></table></div>`;
+    if (r.un.length) html += `<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:12.5px;">분류가 비어 있는 기존 지출 ${r.un.length}건 보기 / 자동 채우기</summary><div class="table-wrap" style="max-height:340px;overflow:auto;"><table class="ev-tbl"><thead><tr><th>채움</th><th>날짜</th><th>내용</th><th>금액</th><th>제안</th></tr></thead><tbody>${r.un.slice(0, 200).map((u, i) => `<tr><td><input type="checkbox" data-du="${i}" ${u.on ? 'checked' : ''} ${u.sug ? '' : 'disabled'}></td><td class="nowrap">${u.e.date}</td><td>${esc(u.e.content)}${u.e.memo ? ' <span style="color:var(--muted)">(' + esc(u.e.memo) + ')</span>' : ''}</td><td class="amount out">${fmtWon(u.e.amount)}</td><td>${u.sug ? `${esc(u.sug.account)} / ${esc(u.sug.project || '-')} <span style="font-size:11px;color:var(--muted)">(${u.why})</span>` : '<span style="color:var(--muted)">제안 없음 — 목록에서 수정</span>'}</td></tr>`).join('')}</tbody></table></div></details>`;
+    const nSel = sel.length, nUn = r.un.filter(u => u.on).length;
+    html += `<div style="margin-top:12px;"><button class="btn-primary" id="dupConfirmBtn" ${(nSel || nUn) ? '' : 'disabled'}>${(nSel || nUn) ? `선택한 중복 ${nSel}건 정리 + 분류 ${nUn}건 채우기` : '적용할 내용이 없습니다'}</button></div>`;
+    box.innerHTML = html;
+    box.querySelectorAll('[data-dg]').forEach(c => c.addEventListener('change', () => { r.groups[+c.dataset.dg].on = c.checked; dupRender(); }));
+    box.querySelectorAll('[data-dk]').forEach(s => s.addEventListener('change', () => {
+      const g = r.groups[+s.dataset.dk]; const removeSide = s.value === 'existing' ? 'excel' : 'existing';
+      g.keep = s.value; g.blocked = g[removeSide].some(isProtected); if (g.blocked) { g.on = false; g.keep = s.value === 'existing' ? 'excel' : 'existing'; }
+      dupRender();
+    }));
+    box.querySelectorAll('[data-du]').forEach(c => c.addEventListener('change', () => { r.un[+c.dataset.du].on = c.checked; dupRender(); }));
+    const b = document.getElementById('dupConfirmBtn'); if (b) b.addEventListener('click', dupConfirm);
+  }
+  document.getElementById('dupScanBtn').addEventListener('click', () => {
+    const st = document.getElementById('dupStatus'); st.className = 'status-line'; st.textContent = '점검 중...';
+    setTimeout(() => { try { DUP.res = dupScan(); st.textContent = ''; dupRender(); } catch (err) { st.className = 'status-line err'; st.textContent = '점검 실패: ' + err.message; } }, 30);
+  });
+  async function dupConfirm(){
+    const r = DUP.res, st = document.getElementById('dupStatus'), btn = document.getElementById('dupConfirmBtn'); if (!r) return;
+    btn.disabled = true; st.className = 'status-line';
+    try {
+      const ops = [], newKeys = [];
+      r.groups.filter(g => g.on && !g.blocked).forEach(g => {
+        const keepList = g.keep === 'existing' ? g.existing : g.excel, removeList = g.keep === 'existing' ? g.excel : g.existing;
+        if (g.keep === 'existing') { // 기존 거래를 유지 → 지우는 엑셀 거래들의 계정과목·프로젝트(모두 같은 값일 때)를 기존 거래에 복사
+          const common = {}; ['account', 'project', 'pmajor', 'client'].forEach(f => { const vals = [...new Set(removeList.map(e => e[f] || ''))]; if (vals.length === 1 && vals[0]) common[f] = vals[0]; });
+          keepList.forEach(k => { const upd = {}; Object.keys(common).forEach(f => { if (!k[f]) upd[f] = common[f]; }); if (Object.keys(upd).length) ops.push({ kind: 'update', id: k.id, data: upd }); });
+        }
+        removeList.forEach(e => { ops.push({ kind: 'delete', id: e.id }); if (e.src === 'excel') newKeys.push(igKey(e)); });
+      });
+      r.un.filter(u => u.on && u.sug).forEach(u => ops.push({ kind: 'update', id: u.e.id, data: { account: u.sug.account, project: u.sug.project, pmajor: u.sug.pmajor, client: u.sug.client } }));
+      for (let i = 0; i < ops.length; i += 400) {
+        st.textContent = `저장 중... (${Math.min(i + 400, ops.length)}/${ops.length})`;
+        const batch = db.batch();
+        ops.slice(i, i + 400).forEach(o => { const ref = entriesRef.doc(o.id); if (o.kind === 'delete') batch.delete(ref); else batch.update(ref, o.data); });
+        await batch.commit();
+      }
+      if (newKeys.length) { // 지운 엑셀 거래가 엑셀을 다시 올릴 때 되살아나지 않도록 기억해둔다
+        const all = []; Object.keys(importIgnore).forEach(k => { for (let n = 0; n < importIgnore[k]; n++) all.push(k); });
+        newKeys.forEach(k => { all.push(k); importIgnore[k] = (importIgnore[k] || 0) + 1; });
+        await db.collection('cashbookConfig').doc('importIgnore').set({ keys: all });
+      }
+      st.className = 'status-line ok'; st.textContent = `완료: 중복 ${r.groups.filter(g => g.on && !g.blocked).length}건 정리, 분류 ${r.un.filter(u => u.on && u.sug).length}건 채움.`;
+      DUP.res = null; dupRender();
+      await loadEntries();
+    } catch (err) { st.className = 'status-line err'; st.textContent = '저장 실패: ' + err.message; if (btn) btn.disabled = false; }
+  }
+
   (async function init(){
     await loadConfig();
     await loadLinkTargetCards();
@@ -2554,6 +2700,7 @@
     // allRecurring이 이미 채워져 있어서 예상잔고 계산에 고정항목 예상치가 처음부터 반영된다.
     await loadRecurring();
     await loadEntries();
+    loadImportIgnore();
     loadProjectNames(); // 자동완성용이라 다른 로딩을 막지 않도록 await하지 않음
     loadScheduleProjectInfo(); // 프로젝트 칸 자동완성·대분류/발주처 자동채움용
   })();
