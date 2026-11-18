@@ -95,6 +95,9 @@ if ('serviceWorker' in navigator) {
     input, select{ font-size:16px !important; }
     table.month-table{ font-size:11.5px; }
   }
+ .src-tag{ display:inline-block; font-size:10.5px; padding:1px 6px; border-radius:10px; margin-left:4px; white-space:nowrap; vertical-align:middle; }
+  .src-tag.auto{ background:#e8f3ec; color:#2f6b45; }
+  .src-tag.diff{ background:#fdf0e3; color:#a0560f; }
 </style>
 </head>
 <body>
@@ -257,11 +260,77 @@ if ('serviceWorker' in navigator) {
     ['Total', 'Supply', 'Tax'].map(metric => spKey(t.prefix, dir, metric))
   ));
 
-  function spFor(ym){
+  // 수기/홈택스 입력값(quarterlySalesPurchase)만 그대로 읽은 것 - 입력 폼·엑셀 템플릿은 이 값을 쓴다
+  function spRaw(ym){
     const raw = salesPurchaseByMonth[ym] || {};
     const sp = {};
     SP_FIELD_KEYS.forEach(k => { sp[k] = Number(raw[k]) || 0; });
     return sp;
+  }
+
+  // ── 현금출납부 증빙 자동 집계 ─────────────────────────────────────────────
+  // 현금출납부 거래에 증빙(세금계산서/현금영수증/일반계산서)을 입력하면 입금=매출, 출금=매입으로 보고
+  // "증빙 발행일(없으면 거래일)"의 달에 합산한다. 월·증빙·방향별로 수기(홈택스) 입력값이 있으면 그 값을 우선하고,
+  // 없을 때만 이 자동 집계값을 쓴다 (홈택스 확정값을 입력하면 그 값으로 덮어쓰는 효과).
+  const CASH_EV_TYPES = ['세금계산서', '현금영수증', '일반계산서'];
+  let cashEvByMonth = {}; // { 'YYYY-MM': { [spKey Total/Supply/Tax]: 금액, ['n:'+totalKey]: 건수 } }
+  async function loadCashbookEvidence(){
+    cashEvByMonth = {};
+    try {
+      const snap = await db.collection('cashbookEntries').where('evType', 'in', CASH_EV_TYPES).get();
+      const acc = {};
+      snap.docs.forEach(doc => {
+        const e = doc.data();
+        if (e.channel === '카드') return;
+        const ym = String(e.evDate || e.date || '').slice(0, 7);
+        if (!/^\d{4}-\d{2}$/.test(ym)) return;
+        const t = SP_DOC_TYPES.find(x => x.label === e.evType); if (!t) return;
+        const dir = e.type === '입금' ? 'sales' : 'purchase';
+        const amt = Number(e.evTotal) > 0 ? Number(e.evTotal) : (Number(e.amount) || 0);
+        const k = ym + '|' + spKey(t.prefix, dir, 'Total');
+        const c = acc[k] || (acc[k] = { ym, t, dir, total: 0, supply: 0, tax: 0, n: 0 });
+        // 홈택스 계산서와 자동 연결된 거래는 계산서의 실제 공급가액·세액을 쓰고, 직접 입력한 거래는 합계로 계산한다
+        const taxable = t.prefix !== 'plainInvoice';
+        const sup = typeof e.evSupply === 'number' ? e.evSupply : (taxable ? Math.round(amt / 1.1) : amt);
+        const tx = typeof e.evTax === 'number' ? e.evTax : (amt - sup);
+        c.total += amt; c.supply += sup; c.tax += tx; c.n++;
+      });
+      Object.values(acc).forEach(c => {
+        const m = cashEvByMonth[c.ym] || (cashEvByMonth[c.ym] = {});
+        m[spKey(c.t.prefix, c.dir, 'Total')] = c.total;
+        m[spKey(c.t.prefix, c.dir, 'Supply')] = c.supply;
+        m[spKey(c.t.prefix, c.dir, 'Tax')] = c.tax;
+        m['n:' + spKey(c.t.prefix, c.dir, 'Total')] = c.n;
+      });
+    } catch (err) { console.warn('현금출납부 증빙 자동집계를 불러오지 못했습니다:', err); }
+  }
+  // 수기 입력값 + 자동 집계값을 합친 월별 값 (화면 합계·손익 계산은 모두 이 값을 쓴다)
+  function spFor(ym){
+    const sp = spRaw(ym), auto = cashEvByMonth[ym];
+    if (!auto) return sp;
+    SP_DOC_TYPES.forEach(t => ['sales', 'purchase'].forEach(d => {
+      const kT = spKey(t.prefix, d, 'Total');
+      if (!sp[kT] && auto[kT]) { ['Total', 'Supply', 'Tax'].forEach(mt => { const k = spKey(t.prefix, d, mt); sp[k] = auto[k] || 0; }); }
+    }));
+    return sp;
+  }
+  // 월·방향(매출/매입)별 자동/확정 상태: {auto: 자동값이 쓰인 증빙 수, diff: 수기값 - 출납부집계(둘 다 있는 증빙만)}
+  function spSourceInfo(ym, dir){
+    const raw = spRaw(ym), auto = cashEvByMonth[ym] || {};
+    let usedAuto = 0, diff = 0, hasBoth = false;
+    SP_DOC_TYPES.forEach(t => {
+      const kT = spKey(t.prefix, dir, 'Total');
+      if (!raw[kT] && auto[kT]) usedAuto++;
+      if (raw[kT] && auto[kT]) { hasBoth = true; diff += raw[kT] - auto[kT]; }
+    });
+    return { usedAuto, diff, hasBoth };
+  }
+  function spTagHtml(ym, dir){
+    const s = spSourceInfo(ym, dir);
+    let h = '';
+    if (s.usedAuto) h += ' <span class="src-tag auto" title="현금출납부에 입력한 증빙 합계가 자동으로 들어간 값입니다. 홈택스 확정 금액을 \"입력\"하면 그 값이 우선합니다.">자동</span>';
+    if (s.hasBoth && s.diff) h += ` <span class="src-tag diff" title="입력하신 홈택스 확정값과 현금출납부 증빙 집계의 차이(확정값 − 출납부)입니다. 출납부 쪽 증빙 입력 누락·금액 오류를 점검해보세요.">출납부와 ${s.diff > 0 ? '+' : ''}${s.diff.toLocaleString('ko-KR')}원</span>`;
+    return h;
   }
 
   // 증빙 종류 상관없이 합산한 총매출/총매입 (연/분기/월 집계와 예상손익 계산에 사용)
@@ -269,7 +338,7 @@ if ('serviceWorker' in navigator) {
   function spPurchaseAll(sp){ return SP_DOC_TYPES.reduce((s, t) => s + (sp[spKey(t.prefix, 'purchase', 'Total')] || 0), 0); }
 
   async function loadAll(){
-    await Promise.all([loadExpenses(), loadSalesPurchase()]);
+    await Promise.all([loadExpenses(), loadSalesPurchase(), loadCashbookEvidence()]);
     renderAll();
   }
 
@@ -277,6 +346,7 @@ if ('serviceWorker' in navigator) {
     const years = new Set();
     Object.keys(expenseByMonth).forEach(ym => years.add(ym.slice(0, 4)));
     Object.keys(salesPurchaseByMonth).forEach(ym => years.add(ym.slice(0, 4)));
+    Object.keys(cashEvByMonth).forEach(ym => years.add(ym.slice(0, 4)));
     years.add(String(new Date().getFullYear()));
     return [...years].sort().reverse();
   }
@@ -292,7 +362,7 @@ if ('serviceWorker' in navigator) {
           공과금은 항목별로 포함 여부가 정해져 있어요(기본: 수도요금·통신료·임대료만 포함, 전기요금·도시가스·인터넷 등은 매입계산서와 중복될 수 있어 제외) - 공과금 관리 화면에서 항목을 펼치면 "일반지출 자동집계" 체크박스로 직접 켜고 끌 수 있어요.
           고정 분류 탭이 따로 없는 일시적 지출건은 현금출납부의 "일반지출(기타) 카드 관리"에서 카드를 만들어 연동하면 여기 일반지출에 함께 집계돼요.
           주식·배당은 회사 영업 손익과 무관한 항목이라 일반지출/기타수입 자동집계·예상손익 계산에서 제외돼요.
-          "매출/매입"은 부가세 신고 자료를 바탕으로 각 월 항목의 "입력" 버튼을 눌러 채워주세요 - 세금계산서·현금영수증·일반계산서 세 증빙별로 각각 입력하며, 화면의 매출/매입 합계에는 셋을 모두 더한 값이 표시돼요. 각 총합계(VAT포함)만 넣으면 공급가액·세액은 자동 계산되고, 실제 서류 금액과 다르면 직접 수정할 수 있어요.
+          "매출/매입"은 부가세 신고 자료를 바탕으로 각 월 항목의 "입력" 버튼을 눌러 채워주세요 - 세금계산서·현금영수증·일반계산서 세 증빙별로 각각 입력하며, 화면의 매출/매입 합계에는 셋을 모두 더한 값이 표시돼요. 각 총합계(VAT포함)만 넣으면 공급가액·세액은 자동 계산되고, 실제 서류 금액과 다르면 직접 수정할 수 있어요. <b>현금출납부에서 거래에 증빙(세금계산서·현금영수증·일반계산서)을 입력해두면 그 합계가 증빙 발행일 기준 월별로 "자동" 표시와 함께 채워지며</b>(입금=매출, 출금=매입), 월말에 홈택스 확정 금액을 "입력"하면 그 값이 우선하고 출납부 집계와의 차이가 표시돼요.
         </div>
       </div>
       <div class="panel" id="xlsxPanel">
@@ -459,10 +529,10 @@ if ('serviceWorker' in navigator) {
       <tr>
         <td>${label}</td>
         <td>
-          ${fmtWon(salesTotal)}
+          ${fmtWon(salesTotal)}${spTagHtml(ym, 'sales')}
           ${spBreakdown ? `<button class="breakdown-toggle" data-toggle-breakdown="sp-${ym}">${openBreakdown.has('sp-' + ym) ? '숨기기' : '내역보기'}</button>` : ''}
         </td>
-        <td>${fmtWon(purchaseTotal)}</td>
+        <td>${fmtWon(purchaseTotal)}${spTagHtml(ym, 'purchase')}</td>
         <td>
           ${fmtWon(exp)}
           ${expBreakdown ? `<button class="breakdown-toggle" data-toggle-breakdown="exp-${ym}">${openBreakdown.has('exp-' + ym) ? '숨기기' : '내역보기'}</button>` : ''}
@@ -680,6 +750,7 @@ if ('serviceWorker' in navigator) {
   // 모양(매출/매입 × 총합계·공급가액·세액)으로 반복 생성한다.
   function spSectionHtml(docType, sp, ym){
     const val = (k) => sp[k] ? sp[k].toLocaleString('ko-KR') : '';
+    const autoV = (dir) => { const a = (cashEvByMonth[ym] || {})[spKey(docType.prefix, dir, 'Total')]; return a ? `placeholder="출납부 자동 ${a.toLocaleString('ko-KR')}"` : ''; };
     const kSalesTotal = spKey(docType.prefix, 'sales', 'Total');
     const kSalesSupply = spKey(docType.prefix, 'sales', 'Supply');
     const kSalesTax = spKey(docType.prefix, 'sales', 'Tax');
@@ -689,12 +760,12 @@ if ('serviceWorker' in navigator) {
     return `
       <div style="font-size:12px; font-weight:600; color:var(--muted); margin:14px 0 6px; ${docType.prefix ? 'border-top:1px solid var(--line); padding-top:14px;' : ''}">${docType.label}</div>
       <div class="form-row">
-        <div class="field"><label>매출 총합계(VAT포함)</label><input type="text" inputmode="numeric" class="money-in" id="sp-${kSalesTotal}-${ym}" value="${val(kSalesTotal)}"></div>
+        <div class="field"><label>매출 총합계(VAT포함)</label><input type="text" inputmode="numeric" class="money-in" id="sp-${kSalesTotal}-${ym}" value="${val(kSalesTotal)}" ${autoV('sales')}></div>
         <div class="field"><label>매출 공급가액</label><input type="text" inputmode="numeric" class="money-in" id="sp-${kSalesSupply}-${ym}" value="${val(kSalesSupply)}"></div>
         <div class="field"><label>매출 세액</label><input type="text" inputmode="numeric" class="money-in" id="sp-${kSalesTax}-${ym}" value="${val(kSalesTax)}"></div>
       </div>
       <div class="form-row">
-        <div class="field"><label>매입 총합계(VAT포함)</label><input type="text" inputmode="numeric" class="money-in" id="sp-${kPurchaseTotal}-${ym}" value="${val(kPurchaseTotal)}"></div>
+        <div class="field"><label>매입 총합계(VAT포함)</label><input type="text" inputmode="numeric" class="money-in" id="sp-${kPurchaseTotal}-${ym}" value="${val(kPurchaseTotal)}" ${autoV('purchase')}></div>
         <div class="field"><label>매입 공급가액</label><input type="text" inputmode="numeric" class="money-in" id="sp-${kPurchaseSupply}-${ym}" value="${val(kPurchaseSupply)}"></div>
         <div class="field"><label>매입 세액</label><input type="text" inputmode="numeric" class="money-in" id="sp-${kPurchaseTax}-${ym}" value="${val(kPurchaseTax)}"></div>
       </div>
@@ -704,11 +775,14 @@ if ('serviceWorker' in navigator) {
   function openEditForm(ym){
     const row = document.querySelector(`[data-edit-row="${ym}"]`);
     if (!row) return;
-    const sp = spFor(ym);
+    const sp = spRaw(ym); // 폼에는 수기 입력값만 보여준다(자동값은 칸을 비워두면 그대로 적용됨)
     row.style.display = 'table-row';
+    const autoM = cashEvByMonth[ym];
+    const autoHint = autoM ? `<div class="import-help" style="margin:0 0 6px;">현금출납부 증빙 자동 집계: ${SP_DOC_TYPES.map(t => ['sales', 'purchase'].map(d => { const k = spKey(t.prefix, d, 'Total'); return autoM[k] ? `${t.label} ${d === 'sales' ? '매출' : '매입'} ${autoM['n:' + k]}건 ${autoM[k].toLocaleString('ko-KR')}원` : ''; }).filter(Boolean).join(' · ')).filter(Boolean).join(' · ')}<br>칸을 <b>비워두면</b> 이 자동값이 쓰이고, 홈택스 확정 금액을 <b>입력하면</b> 입력한 값이 우선합니다.</div>` : '';
     row.innerHTML = `
       <td colspan="7">
         <div class="edit-form" style="margin:0; border:none; background:none; padding:10px 0;">
+          ${autoHint}
           ${SP_DOC_TYPES.map(t => spSectionHtml(t, sp, ym)).join('')}
           <div style="margin-top:14px; display:flex; gap:8px;">
             <button id="sp-save-${ym}">저장</button>
@@ -751,7 +825,7 @@ if ('serviceWorker' in navigator) {
 
     const rows = [];
     months.forEach(ym => {
-      const sp = spFor(ym); // 이미 입력된 값이 있으면 그 값으로, 없으면 0으로 채워줌
+      const sp = spRaw(ym); // 수기 입력값만(자동 집계값을 템플릿에 넣었다가 다시 올리면 확정값처럼 굳어버리므로)
       SP_DOC_TYPES.forEach(t => {
         rows.push({
           '월': ym,
