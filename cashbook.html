@@ -52,6 +52,18 @@
   .panel[data-tool] > .panel-title{ cursor:pointer; user-select:none; }
   .panel[data-tool] > .panel-title.closed{ margin-bottom:0; }
   .panel-title .toggle-btn{ margin-left:10px; }
+  /* 도구 묶음(1차 토글) + 개별 도구(2차 토글): 작고 가는 제목 + "펼치기 ▾" */
+  .panel.tool-group{ padding:18px 24px; }
+  .tool-group > .panel-title, .tool-group .panel[data-tool] > .panel-title{ font-weight:400; letter-spacing:.16em; color:var(--muted); font-size:11px; margin-bottom:0; gap:12px; }
+  .tool-group > .panel-title{ font-size:12px; color:var(--ink); font-weight:500; }
+  .tool-group > .panel-title.closed{ margin-bottom:0; }
+  .tool-group > .panel-title:not(.closed){ margin-bottom:6px; }
+  .tool-group .panel-title .tg-ico{ font-size:12.5px; letter-spacing:0; color:var(--muted); white-space:nowrap; margin-left:auto; font-weight:400; }
+  .tool-group .panel-title > span:first-child:not(.tg-ico){ flex:1 1 auto; }
+  .tool-group .panel[data-tool]{ border:none; border-top:1px solid var(--line); border-radius:0; margin:0; padding:14px 0; background:transparent; }
+  .tool-group .panel[data-tool] > .panel-title:not(.closed){ margin-bottom:14px; }
+  .tg-body > .panel:first-child{ border-top:none; }
+  .tool-group > .panel-title{ cursor:pointer; user-select:none; }
   .panel-title .toggle-btn{ font-size:12px; color:var(--muted); background:none; border:1px solid var(--line); border-radius:4px; padding:5px 10px; cursor:pointer; }
 
   .form-row{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
@@ -378,13 +390,15 @@
     </div>
   </div>
 
+  <!-- 도구 묶음 (1차 토글): 고정 항목 ~ 카드 이용내역 업로드 -->
+  <div class="panel tool-group" id="toolGroup">
+    <div class="panel-title"><span>도구 · 고정 항목 / 증빙 / 엑셀 / 중복 정리 / 카드 업로드</span></div>
+    <div class="tg-body">
+
   <!-- 고정 항목 (매월 반복되는 거래) -->
-  <div class="panel">
-    <div class="panel-title">
-      고정 항목 (매월 반복되는 거래)
-      <button type="button" class="toggle-btn" id="toggleRecurringBtn">펼치기</button>
-    </div>
-    <div id="recurringBody" style="display:none;">
+  <div class="panel" data-tool="1">
+    <div class="panel-title"><span>고정 항목 (매월 반복되는 거래)</span></div>
+    <div id="recurringBody">
       <div class="import-help">임차료·급여·통신비처럼 매달 같은 금액이 나가는 항목을 여기 한 번 등록해두면, 아래 "이 달에 일괄 추가" 버튼 한 번으로 예정 거래가 자동으로 채워집니다. 이미 추가된 달에는 같은 항목이 중복으로 들어가지 않아요.</div>
 
       <div class="form-row" style="margin-top:14px;">
@@ -458,7 +472,7 @@
           <input type="month" id="recurringMonth">
         </div>
         <button class="btn-primary" id="applyRecurringBtn">이 달에 고정 항목 일괄 추가 (예정)</button>
-        <button id="backfillRecurringBtn" title="이미 만들어진 예정 거래 중 분류가 비어 있는 것에, 고정 항목에 적어둔 분류를 채워 넣습니다.">기존 예정 건에 분류 채우기</button>
+        <button id="backfillRecurringBtn" style="padding:9px 14px;border:1px solid var(--line);background:#fff;border-radius:4px;font-family:inherit;font-size:13px;cursor:pointer;" title="이미 만들어진 예정 거래 중 분류가 비어 있는 것에, 고정 항목에 적어둔 분류를 채워 넣습니다.">기존 예정 건에 분류 채우기</button>
       </div>
       <div class="status-line" id="applyRecurringStatus"></div>
     </div>
@@ -553,6 +567,9 @@
     <div class="status-line" id="cuStatus"></div>
     <div id="cuPreview"></div>
   </div>
+
+    </div><!-- /tg-body -->
+  </div><!-- /toolGroup -->
 
   <!-- 내역 -->
   <div class="filter-bar">
@@ -1574,13 +1591,6 @@
   });
 
   // ---------- 고정 항목 (매월 반복되는 거래) ----------
-  document.getElementById('toggleRecurringBtn').addEventListener('click', () => {
-    const body = document.getElementById('recurringBody');
-    const show = body.style.display === 'none';
-    body.style.display = show ? 'block' : 'none';
-    document.getElementById('toggleRecurringBtn').textContent = show ? '접기' : '펼치기';
-  });
-
   (function initRecurringMonth(){
     const d = new Date();
     document.getElementById('recurringMonth').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -2804,18 +2814,28 @@
 
   // ---------- 도구 패널 접기/펼치기 (기본은 접힌 상태, 펼친 상태는 기억) ----------
   (function initToolToggles(){
-    document.querySelectorAll('.panel[data-tool]').forEach(panel => {
-      const title = panel.querySelector('.panel-title'); if (!title) return;
+    // 1차: 도구 묶음 전체 접기/펼치기
+    const group = document.getElementById('toolGroup');
+    const gTitle = group.querySelector(':scope > .panel-title');
+    const gBody = group.querySelector(':scope > .tg-body');
+    const gIco = document.createElement('span'); gIco.className = 'tg-ico'; gTitle.appendChild(gIco);
+    let gOpen = false; try { gOpen = localStorage.getItem('cb-toolgroup-open') === '1'; } catch (e) {}
+    const gApply = () => { gBody.style.display = gOpen ? '' : 'none'; gIco.textContent = gOpen ? '접기 ▲' : '펼치기 ▾'; gTitle.classList.toggle('closed', !gOpen); };
+    gTitle.addEventListener('click', () => { gOpen = !gOpen; gApply(); try { localStorage.setItem('cb-toolgroup-open', gOpen ? '1' : '0'); } catch (e) {} });
+    gApply();
+
+    // 2차: 묶음 안의 개별 도구
+    group.querySelectorAll('.panel[data-tool]').forEach(panel => {
+      const title = panel.querySelector(':scope > .panel-title'); if (!title) return;
       const label = (title.querySelector('span') || title).textContent.trim().slice(0, 30);
       const key = 'cb-tool-open:' + label;
       const body = document.createElement('div'); body.className = 'tool-body';
       while (title.nextSibling) body.appendChild(title.nextSibling);
       panel.appendChild(body);
-      const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'toggle-btn'; title.appendChild(btn);
+      const ico = document.createElement('span'); ico.className = 'tg-ico'; title.appendChild(ico);
       let open = false; try { open = localStorage.getItem(key) === '1'; } catch (e) {}
-      const apply = () => { body.style.display = open ? '' : 'none'; btn.textContent = open ? '접기' : '펼치기'; title.classList.toggle('closed', !open); };
+      const apply = () => { body.style.display = open ? '' : 'none'; ico.textContent = open ? '접기 ▲' : '펼치기 ▾'; title.classList.toggle('closed', !open); };
       const flip = () => { open = !open; apply(); try { localStorage.setItem(key, open ? '1' : '0'); } catch (e) {} };
-      btn.addEventListener('click', e => { e.stopPropagation(); flip(); });
       title.addEventListener('click', e => { if (e.target.closest('select, input, button, option')) return; flip(); });
       apply();
     });
