@@ -2515,10 +2515,11 @@ const cbNKey=s=>String(s||'').replace(/\s+/g,'').toLowerCase();
 let CBP=null;
 async function loadCbProj(){
   if(CBP&&Date.now()-CBP.at<300000)return CBP;
-  const o={at:Date.now(),map:new Map(),err:''};
+  const o={at:Date.now(),map:new Map(),err:'',evStart:'2026-11-01'};
   try{
     if(!fsReady()){o.err='서버 연결 안 됨'}
     else{
+      try{const es=await db.collection('cashbookConfig').doc('evSettings').get();if(es.exists)o.evStart=es.data().evStartDate||''}catch(e){}
       const snap=await db.collection('cashbookEntries').where('project','>','').get();
       snap.docs.forEach(d=>{const e=d.data();
         if(e.status!=='확정'||e.type!=='출금'||e.account==='미지급금')return;
@@ -2528,8 +2529,9 @@ async function loadCbProj(){
   }catch(err){o.err=(err&&err.code==='permission-denied')?'현금출납부는 관리자만 읽을 수 있습니다':String(err&&err.message||err)}
   CBP=o;return o;
 }
-function cbEntrySupply(e){
+function cbEntrySupply(e,cut){
   const paid=+e.amount||0;
+  if(cut&&String(e.date||'').slice(0,10)<cut)return Math.round(paid/1.1); // 증빙 관리 시작일 이전: 증빙과 관계없이 ÷1.1 추정
   if(e.channel!=='카드'&&e.evType){
     const tot=+e.evTotal>0?+e.evTotal:paid;
     if(e.evType==='세금계산서'||e.evType==='현금영수증'){const sp=typeof e.evSupply==='number'?e.evSupply:Math.round(tot/1.1);return tot<paid?(paid-tot)+sp:sp}
@@ -2540,9 +2542,9 @@ function cbEntrySupply(e){
 async function cbCostFor(r){
   const o=await loadCbProj();
   if(o.err)return{ok:false,err:o.err};
-  const names=[r.name].concat(r.wlNames||[],r.nameOld?[r.nameOld]:[]).filter(Boolean),seen=new Set();let paid=0,supply=0,cnt=0,mcnt=0;
-  names.forEach(n=>{const k=cbNKey(n);if(seen.has(k))return;seen.add(k);(o.map.get(k)||[]).forEach(e=>{paid+=+e.amount||0;supply+=cbEntrySupply(e);cnt++;if(e.evType&&e.channel!=='카드')mcnt++})});
-  return{ok:true,paid:Math.round(paid),supply:Math.round(supply),cnt,mcnt};
+  const names=[r.name].concat(r.wlNames||[],r.nameOld?[r.nameOld]:[]).filter(Boolean),seen=new Set();let paid=0,supply=0,cnt=0,mcnt=0,ecnt=0;
+  names.forEach(n=>{const k=cbNKey(n);if(seen.has(k))return;seen.add(k);(o.map.get(k)||[]).forEach(e=>{paid+=+e.amount||0;supply+=cbEntrySupply(e,o.evStart);cnt++;if(o.evStart&&String(e.date||'').slice(0,10)<o.evStart)ecnt++;else if(e.evType&&e.channel!=='카드')mcnt++})});
+  return{ok:true,paid:Math.round(paid),supply:Math.round(supply),cnt,mcnt,ecnt,evStart:o.evStart};
 }
 function pnlShell(rowId){return`<div class="pnl" data-pnl="${rowId}"><div class="hint" style="margin:0">손익 계산 중…</div></div>`}
 /* 회계종합현황(accounting-dashboard.html)의 프로젝트 손익과 같은 규칙으로 맞춘 부분:
@@ -2612,7 +2614,7 @@ async function fillPnl(root){
       ${T('일반관리비 배분',admin===null?'-':won(admin)+'원')}
       ${T('손익',(profit>=0?'+':'')+won(profit)+'원',profit>=0?'pos':'neg')}
       ${T('손익율',rate===null?'-':rate.toFixed(1)+'%',rate===null?'':rate>=0?'pos':'neg')}</div>
-      <div class="hint" style="margin:6px 0 0">${cost.ok?(cost.cnt?`매입원가: 현금출납부에서 이 프로젝트로 태그된 확정 지출 ${cost.cnt}건(증빙 연결 ${cost.mcnt}건)`:'현금출납부에서 이 프로젝트로 태그된 확정 지출이 아직 없습니다(프로젝트 칸 이름 확인)'):'매입원가를 불러오지 못해 손익에서 제외했습니다 — '+esc(cost.err)}${laborHow?` · 인건비: ${esc(laborHow)}`:' · 인건비가 아직 계산되지 않아 손익에서 제외했습니다.'}${adminNote?` · 일반관리비: ${esc(adminNote)}`:''}</div>`;
+      <div class="hint" style="margin:6px 0 0">${cost.ok?(cost.cnt?`매입원가: 현금출납부에서 이 프로젝트로 태그된 확정 지출 ${cost.cnt}건(증빙 연결 ${cost.mcnt}건${cost.ecnt?` · ${cost.evStart} 이전 ${cost.ecnt}건은 ÷1.1 추정`:''})`:'현금출납부에서 이 프로젝트로 태그된 확정 지출이 아직 없습니다(프로젝트 칸 이름 확인)'):'매입원가를 불러오지 못해 손익에서 제외했습니다 — '+esc(cost.err)}${laborHow?` · 인건비: ${esc(laborHow)}`:' · 인건비가 아직 계산되지 않아 손익에서 제외했습니다.'}${adminNote?` · 일반관리비: ${esc(adminNote)}`:''}</div>`;
   }
 }
 async function settleAutoValues(r,withLabor){

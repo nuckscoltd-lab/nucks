@@ -235,6 +235,30 @@
       </div>
       <div class="import-help">이 기준일 이후의 거래만 아래 목록에 반영/집계됩니다. 지금까지 쓰시던 엑셀의 "이월잔액" 행에 해당하는 값이에요.</div>
       <div class="status-line" id="configStatus"></div>
+      <hr style="border:0; border-top:1px solid var(--line); margin:16px 0 12px;">
+      <div class="form-row">
+        <div class="field">
+          <label for="cfg-kbStartDate">국민은행 기준일</label>
+          <input type="date" id="cfg-kbStartDate">
+        </div>
+        <div class="field wide">
+          <label for="cfg-kbStartBalance">국민은행 기준일 잔액</label>
+          <input type="text" inputmode="numeric" id="cfg-kbStartBalance" placeholder="예: 5,000,000">
+        </div>
+        <button class="btn-primary" id="saveKbConfigBtn">저장</button>
+      </div>
+      <div class="import-help">위 이월잔액은 <b>신한은행</b> 기준입니다. 국민은행은 여기에 따로 설정하세요(설정 전에는 잔액 0원에서 시작해 입력한 거래만 반영합니다). 현재 잔액 카드는 두 계좌의 합계이고, 계좌별 금액은 그 아래에 함께 표시됩니다.</div>
+      <div class="status-line" id="kbConfigStatus"></div>
+      <hr style="border:0; border-top:1px solid var(--line); margin:16px 0 12px;">
+      <div class="form-row">
+        <div class="field">
+          <label for="cfg-evStart">증빙 관리 시작일</label>
+          <input type="date" id="cfg-evStart">
+        </div>
+        <button class="btn-primary" id="saveEvStartBtn">저장</button>
+      </div>
+      <div class="import-help">이 날짜 <b>이전</b>의 프로젝트 지출은 증빙 연결 여부와 관계없이 <b>지급액 ÷ 1.1</b>(부가세 별도)로 추정해 회계종합현황·프로젝트현황의 매입원가에 반영합니다. 이 날짜부터는 거래에 입력한 증빙(공급가액)을 그대로 씁니다. 날짜를 비우면 추정하지 않고 증빙 입력값만 씁니다. (처음 값: 2026-11-01)</div>
+      <div class="status-line" id="evStartStatus"></div>
     </div>
   </div>
 
@@ -288,6 +312,10 @@
       <div class="field">
         <label for="f-channel">결제수단</label>
         <select id="f-channel"><option value="통장">통장</option><option value="카드">카드</option></select>
+      </div>
+      <div class="field" id="f-bank-field">
+        <label for="f-bank">계좌</label>
+        <select id="f-bank"><option value="신한">신한은행</option><option value="국민">국민은행</option></select>
       </div>
       <div class="field">
         <label for="f-account">계정과목 (선택)</label>
@@ -412,7 +440,7 @@
 
   <!-- 도구 묶음 (1차 토글): 고정 항목 ~ 카드 이용내역 업로드 -->
   <div class="panel tool-group" id="toolGroup">
-    <div class="panel-title"><span>도구 · 고정 항목 / 증빙 / 엑셀 / 중복 정리 / 카드 업로드</span></div>
+    <div class="panel-title"><span>도구 · 고정 항목 / 증빙 / 계좌간 이체 / 국민은행 업로드 / 엑셀 / 중복 정리 / 카드 업로드</span></div>
     <div class="tg-body">
 
   <!-- 고정 항목 (매월 반복되는 거래) -->
@@ -527,11 +555,43 @@
     <div id="htPreview"></div>
   </div>
 
+  <!-- 계좌간 이체 -->
+  <div class="panel" data-tool="1">
+    <div class="panel-title"><span>계좌간 이체 등록 (국민 ↔ 신한)</span></div>
+    <div class="form-row">
+      <div class="field"><label for="tf-date">이체일</label><input type="date" id="tf-date"></div>
+      <div class="field"><label for="tf-dir">방향</label>
+        <select id="tf-dir"><option value="국민>신한">국민은행 → 신한은행</option><option value="신한>국민">신한은행 → 국민은행</option></select></div>
+      <div class="field"><label for="tf-amount">금액</label><input type="text" inputmode="numeric" id="tf-amount" placeholder="0"></div>
+      <div class="field wide"><label for="tf-memo">비고 (선택)</label><input type="text" id="tf-memo" placeholder="예: b2b 어음 대금 이체"></div>
+      <button class="btn-primary" id="tfBtn">이체 등록</button>
+    </div>
+    <div class="import-help">한 번 누르면 보내는 계좌의 <b>출금</b>과 받는 계좌의 <b>입금</b> 두 건이 "내부이체" 계정으로 함께 만들어집니다. 두 계좌 잔액에는 반영되고, 매출·지출 집계에서는 자동으로 빠집니다.</div>
+    <div class="status-line" id="tfStatus"></div>
+  </div>
+
+  <!-- 국민은행 거래내역 업로드 -->
+  <div class="panel" data-tool="1">
+    <div class="panel-title"><span>국민은행 거래내역 업로드</span></div>
+    <div class="import-row">
+      <input type="file" id="kbFile" accept=".xlsx,.xls">
+      <button class="btn-primary" id="kbAnalyzeBtn">분석하기</button>
+    </div>
+    <div class="import-help">
+      국민은행 인터넷뱅킹에서 내려받은 거래내역 엑셀(No / 거래일시 / 보낸분·받는분 / 출금액 / 입금액 / 잔액 / 적요 …)을 그대로 올리면 됩니다.
+      <b>이미 등록된 거래(같은 날짜·구분·금액)는 건너뛰고 새 거래만</b> 국민은행 계좌로 추가합니다. 계정과목·프로젝트는 같은 거래처로 입력해 둔 값이 있으면 미리 채워 두고, 나머지는 목록에서 수정하세요.
+      <br>내부이체: 보낸분/받는분에 아래 글자가 들어 있는 거래는 계정과목을 "내부이체"로 넣습니다(신한↔국민 송금 등). <input type="text" id="kbSelfName" value="넉스" style="width:110px; margin:0 4px;"> 비우면 적용하지 않습니다.
+    </div>
+    <div class="status-line" id="kbStatus"></div>
+    <div id="kbPreview"></div>
+  </div>
+
   <!-- 엑셀 가져오기/내보내기 -->
   <div class="panel" data-tool="1">
     <div class="panel-title">엑셀 일괄 가져오기 / 내보내기</div>
     <div class="import-row">
       <input type="file" id="importFile" accept=".xlsx,.xls,.csv">
+      <select id="importBank" title="엑셀에 '계좌' 열이 없을 때 이 계좌로 들어갑니다"><option value="신한">신한은행으로 가져오기</option><option value="국민">국민은행으로 가져오기</option></select>
       <button class="btn-primary" id="importBtn">가져오기</button>
       <button class="btn-ghost" id="exportBtn">현재 내역 엑셀로 내보내기</button>
       <button class="btn-ghost danger" id="clearAllBtn">전체 내역 삭제</button>
@@ -605,6 +665,11 @@
       <option value="통장">통장만</option>
       <option value="카드">카드만</option>
     </select>
+    <select id="bankFilter">
+      <option value="전체">전체 계좌</option>
+      <option value="신한">신한은행</option>
+      <option value="국민">국민은행</option>
+    </select>
     <select id="evFilter">
       <option value="전체">증빙 전체</option>
       <option value="세금계산서">세금계산서</option>
@@ -652,7 +717,7 @@
   const recurringRef = db.collection('cashbookRecurring');
   const generalExpenseRef = db.collection('generalExpenseItems');
 
-  let config = { startDate: '', startBalance: 0 };
+  let config = { startDate: '', startBalance: 0, kbStartDate: '', kbStartBalance: 0 };
   let allEntries = [];
   let allRecurring = [];
   let editingId = null;
@@ -1162,10 +1227,42 @@
 
   async function loadConfig(){
     const snap = await configRef.get();
-    if (snap.exists) config = { startDate: snap.data().startDate || '', startBalance: snap.data().startBalance || 0 };
+    if (snap.exists) config = Object.assign({}, config, { startDate: snap.data().startDate || '', startBalance: snap.data().startBalance || 0 });
     document.getElementById('cfg-startDate').value = config.startDate;
     setMoneyInputValue(document.getElementById('cfg-startBalance'), config.startBalance);
+    try {
+      const kb = await db.collection('cashbookConfig').doc('kb').get();
+      if (kb.exists) config = Object.assign({}, config, { kbStartDate: kb.data().startDate || '', kbStartBalance: kb.data().startBalance || 0 });
+    } catch (e) {}
+    document.getElementById('cfg-kbStartDate').value = config.kbStartDate;
+    setMoneyInputValue(document.getElementById('cfg-kbStartBalance'), config.kbStartBalance);
+    try {
+      const es = await db.collection('cashbookConfig').doc('evSettings').get();
+      document.getElementById('cfg-evStart').value = es.exists ? (es.data().evStartDate || '') : '2026-11-01';
+    } catch (e) { document.getElementById('cfg-evStart').value = '2026-11-01'; }
   }
+
+  attachMoneyInputFormatter(document.getElementById('cfg-kbStartBalance'));
+  document.getElementById('saveKbConfigBtn').addEventListener('click', async () => {
+    const startDate = document.getElementById('cfg-kbStartDate').value;
+    const startBalance = parseMoneyInput(document.getElementById('cfg-kbStartBalance'));
+    const st = document.getElementById('kbConfigStatus');
+    try {
+      await db.collection('cashbookConfig').doc('kb').set({ startDate: startDate || '', startBalance: startBalance || 0 });
+      config = Object.assign({}, config, { kbStartDate: startDate || '', kbStartBalance: startBalance || 0 });
+      st.className = 'status-line ok'; st.textContent = '저장되었습니다.';
+      renderAll();
+    } catch (err) { st.className = 'status-line err'; st.textContent = '저장 실패: ' + err.message; }
+  });
+
+  document.getElementById('saveEvStartBtn').addEventListener('click', async () => {
+    const v = document.getElementById('cfg-evStart').value, st = document.getElementById('evStartStatus');
+    try {
+      await db.collection('cashbookConfig').doc('evSettings').set({ evStartDate: v || '' });
+      st.className = 'status-line ok';
+      st.textContent = v ? `저장되었습니다. ${v} 이전 지출은 지급액÷1.1로 추정합니다.` : '저장되었습니다. 추정 없이 증빙 입력값만 사용합니다.';
+    } catch (err) { st.className = 'status-line err'; st.textContent = '저장 실패: ' + err.message; }
+  });
 
   document.getElementById('toggleConfigBtn').addEventListener('click', () => {
     const body = document.getElementById('configBody');
@@ -1181,7 +1278,7 @@
     if (!startDate) { statusEl.className = 'status-line err'; statusEl.textContent = '기준일을 입력해주세요.'; return; }
     try {
       await configRef.set({ startDate, startBalance });
-      config = { startDate, startBalance };
+      config = Object.assign({}, config, { startDate, startBalance });
       statusEl.className = 'status-line ok';
       statusEl.textContent = '저장되었습니다.';
       renderAll();
@@ -1220,6 +1317,7 @@
   document.getElementById('monthFilter').addEventListener('change', (e) => { activeMonth = e.target.value; renderAll(); });
   document.getElementById('statusFilter').addEventListener('change', (e) => { activeStatus = e.target.value; renderAll(); });
   document.getElementById('channelFilter').addEventListener('change', () => renderTable());
+  document.getElementById('bankFilter').addEventListener('change', () => renderTable());
   document.getElementById('evFilter').addEventListener('change', () => renderTable());
   document.getElementById('searchFilter').addEventListener('input', () => renderTable());
 
@@ -1270,9 +1368,11 @@
 
   function renderSummary(){
     // 기준일 잔액에는 기준일 당일 거래까지 이미 반영돼 있으므로, 집계는 기준일 "이후"(당일 제외)부터
-    const confirmedAfterStart = allEntries.filter(e => isBank(e) && e.status === '확정' && (!config.startDate || e.date > config.startDate));
-    const confirmedNet = confirmedAfterStart.reduce((sum, e) => sum + (e.type === '입금' ? e.amount : -e.amount), 0);
-    const actual = config.startBalance + confirmedNet;
+    const confirmedAfterStart = allEntries.filter(e => isBank(e) && e.status === '확정' && afterBankStart(e));
+    const netOf = b => confirmedAfterStart.filter(e => bankOf(e) === b).reduce((sum, e) => sum + (e.type === '입금' ? e.amount : -e.amount), 0);
+    const actualShin = config.startBalance + netOf('신한'), actualKb = (config.kbStartBalance || 0) + netOf('국민');
+    const hasKb = allEntries.some(e => isBank(e) && bankOf(e) === '국민') || !!config.kbStartDate;
+    const actual = actualShin + actualKb;
 
     // 기준일까지 발생 예정인 "예정" 항목을 전부 반영 (월 경계에 상관없이 자유롭게 지정 가능)
     const forecastDateInput = document.getElementById('forecastDate');
@@ -1284,7 +1384,7 @@
 
     const pendingUntilDate = allEntries.filter(e =>
       isBank(e) && e.status === '예정' &&
-      (!config.startDate || e.date > config.startDate) &&
+      afterBankStart(e) &&
       e.date && e.date <= forecastDate
     );
 
@@ -1312,7 +1412,7 @@
     `;
 
     document.getElementById('actualBalance').textContent = fmtWon(actual);
-    document.getElementById('actualBalanceSub').textContent = config.startDate ? `${config.startDate} 기준 ${fmtWon(config.startBalance)} + 확정 내역` : '이월잔액을 먼저 설정해주세요';
+    document.getElementById('actualBalanceSub').textContent = hasKb ? `신한 ${fmtWon(actualShin)} + 국민 ${fmtWon(actualKb)}` : (config.startDate ? `${config.startDate} 기준 ${fmtWon(config.startBalance)} + 확정 내역` : '이월잔액을 먼저 설정해주세요');
 
     document.getElementById('forecastLabel').textContent = `예상잔고 (${forecastDate} 기준)`;
     document.getElementById('forecastBalance').textContent = fmtWon(forecast);
@@ -1355,6 +1455,8 @@
     if (activeStatus !== '전체') rows = rows.filter(e => e.status === activeStatus);
     const chF = document.getElementById('channelFilter').value;
     if (chF === '통장') rows = rows.filter(isBank); else if (chF === '카드') rows = rows.filter(isCard);
+    const bkF = document.getElementById('bankFilter').value;
+    if (bkF !== '전체') rows = rows.filter(e => isBank(e) && bankOf(e) === bkF);
     const evF = document.getElementById('evFilter').value;
     if (evF === '있음') rows = rows.filter(e => e.evType); else if (evF === '없음') rows = rows.filter(e => !e.evType); else if (evF !== '전체') rows = rows.filter(e => e.evType === evF);
     const qF = normC(document.getElementById('searchFilter').value);
@@ -1370,20 +1472,21 @@
     table.style.display = 'table';
 
     // 잔액은 "확정" 항목만 날짜/입력순으로 누적, 예정 항목은 잔액 컬럼에 표시하지 않음
-    let running = config.startBalance;
+    const runningBy = { '신한': config.startBalance, '국민': config.kbStartBalance || 0 };
     const balanceById = {};
     allEntries.forEach(e => {
-      if (config.startDate && e.date <= config.startDate) return;
+      if (!afterBankStart(e)) return;
       if (e.status !== '확정') return;
       if (isCard(e)) return; // 카드 사용 내역은 통장 잔액에 반영하지 않음
-      running += (e.type === '입금' ? e.amount : -e.amount);
-      balanceById[e.id] = running;
+      const bk = bankOf(e);
+      runningBy[bk] += (e.type === '입금' ? e.amount : -e.amount);
+      balanceById[e.id] = runningBy[bk];
     });
 
     tbody.innerHTML = rows.slice().reverse().map(e => `
       <tr class="${isCard(e) ? 'row-card' : ''}">
         <td class="nowrap">${e.date || ''}</td>
-        <td>${e.type || ''}${isCard(e) ? '<span class="ch-badge" title="카드 사용 내역: 통장 잔액에는 반영되지 않습니다.">카드</span>' : ''}</td>
+        <td>${e.type || ''}${isCard(e) ? '<span class="ch-badge" title="카드 사용 내역: 통장 잔액에는 반영되지 않습니다.">카드</span>' : (bankOf(e) === '국민' ? '<span class="ch-badge" title="국민은행 계좌 거래">국민</span>' : '')}</td>
         <td><span class="status-badge ${e.status === '확정' ? 'confirmed' : 'pending'}">${e.status || ''}</span></td>
         <td class="amount ${e.type === '입금' ? 'in' : 'out'}">${e.type === '입금' ? '+' : '-'}${fmtWon(e.amount)}</td>
         <td>${esc(e.content)}</td>
@@ -1919,6 +2022,7 @@
           date, type, status: (status === '예정' ? '예정' : '확정'),
           amount, content, memo, order: Date.now() + toImport.length,
           channel: String(row['결제수단'] || '').trim() === '카드' ? '카드' : '통장',
+          bank: String(row['결제수단'] || '').trim() === '카드' ? '' : (/국민|KB/i.test(String(row['계좌'] || '')) ? '국민' : (String(row['계좌'] || '').trim() ? '신한' : (document.getElementById('importBank').value === '국민' ? '국민' : '신한'))),
           account: String(row['계정과목'] || '').trim(), project: String(row['프로젝트'] || '').trim(),
           pmajor: String(row['프로젝트대분류'] || '').trim(), client: String(row['발주처'] || '').trim(),
           evType: EV_TYPES.some(t => t.label === String(row['증빙'] || '').trim()) ? String(row['증빙']).trim() : '',
@@ -1957,6 +2061,147 @@
       btn.disabled = false;
     }
   });
+
+  // ---------- 계좌간 이체 (국민 ↔ 신한) ----------
+  attachMoneyInputFormatter(document.getElementById('tf-amount'));
+  document.getElementById('tf-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('tfBtn').addEventListener('click', async () => {
+    const st = document.getElementById('tfStatus'), btn = document.getElementById('tfBtn');
+    const date = document.getElementById('tf-date').value, dir = document.getElementById('tf-dir').value;
+    const amount = parseMoneyInput(document.getElementById('tf-amount')), memo = document.getElementById('tf-memo').value.trim();
+    if (!date || !(amount > 0)) { st.className = 'status-line err'; st.textContent = '이체일과 금액을 입력해주세요.'; return; }
+    const [from, to] = dir.split('>');
+    const base = { date, status: '확정', amount, memo, channel: '통장', account: '내부이체', project: '', pmajor: '', client: '', evType: '', evDate: '', evTotal: 0,
+      linkTargetCollection: null, linkTargetCardId: null, linkTargetCardLabel: null, linkApplied: false, linkAppliedYm: null, linkAppliedAmount: null };
+    btn.disabled = true;
+    try {
+      const t = Date.now(), batch = db.batch();
+      batch.set(entriesRef.doc(), Object.assign({}, base, { type: '출금', bank: from, content: `${from}→${to} 이체`, order: t, createdAt: firebase.firestore.FieldValue.serverTimestamp() }));
+      batch.set(entriesRef.doc(), Object.assign({}, base, { type: '입금', bank: to, content: `${from}→${to} 이체`, order: t + 1, createdAt: firebase.firestore.FieldValue.serverTimestamp() }));
+      await batch.commit();
+      st.className = 'status-line ok'; st.textContent = `${from}은행 출금 / ${to}은행 입금 ${fmtWon(amount)} 등록했습니다.`;
+      document.getElementById('tf-amount').value = ''; document.getElementById('tf-memo').value = '';
+      await loadEntries();
+    } catch (err) { st.className = 'status-line err'; st.textContent = '등록 실패: ' + err.message; }
+    finally { btn.disabled = false; }
+  });
+
+  // ---------- 국민은행 거래내역 엑셀 업로드 ----------
+  //  열: No / 거래일시 / 보낸분·받는분 / 출금액(원) / 입금액(원) / 잔액(원) / 내 통장 표시 / 메모 / 적요 / 처리점 / 구분
+  //  거래일시 "2026.11.11 14:58:51", 최신 거래가 위쪽(No 1)에 오는 순서. 같은 날짜·구분·금액인 기존 국민은행 거래는 중복으로 보고 건너뜀.
+  let KB = null;
+  function kbParseDate(v){
+    if (typeof v === 'number') { const d = XLSX.SSF.parse_date_code(v); if (!d) return null; return { date: `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`, time: `${String(d.H||0).padStart(2,'0')}:${String(d.M||0).padStart(2,'0')}:${String(Math.floor(d.S||0)).padStart(2,'0')}` }; }
+    const m = String(v || '').match(/(\d{4})[.\-\/]\s*(\d{1,2})[.\-\/]\s*(\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+    if (!m) return null;
+    return { date: `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`, time: `${(m[4]||'00').padStart(2,'0')}:${m[5]||'00'}:${m[6]||'00'}` };
+  }
+  const kbNum = v => { const n = parseFloat(String(v === undefined || v === null ? '' : v).replace(/[,\s원]/g, '')); return isNaN(n) ? 0 : n; };
+  async function kbParse(file){
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    for (const name of wb.SheetNames) {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: '' });
+      const hi = rows.findIndex(r => r.some(c => String(c).replace(/\s/g, '') === '거래일시') && r.some(c => /^출금액/.test(String(c).replace(/\s/g, ''))) && r.some(c => /^입금액/.test(String(c).replace(/\s/g, ''))));
+      if (hi < 0) continue;
+      const col = {}; rows[hi].forEach((c, i) => { const k = String(c).replace(/\s/g, ''); if (k) col[k.replace(/\(원\)$/, '')] = i; });
+      const out = []; let skipped = 0;
+      for (let i = hi + 1; i < rows.length; i++) {
+        const r = rows[i]; if (!r || !r.some(x => x !== '')) continue;
+        const dt = kbParseDate(r[col['거래일시']]); if (!dt) { skipped++; continue; }
+        const outAmt = kbNum(r[col['출금액']]), inAmt = kbNum(r[col['입금액']]);
+        if (!(outAmt > 0) && !(inAmt > 0)) { skipped++; continue; }
+        const g = k => (col[k] !== undefined ? String(r[col[k]] || '').trim() : '');
+        const no = kbNum(r[col['No']]) || (rows.length - i);
+        out.push({ no, date: dt.date, txTime: dt.date + ' ' + dt.time, type: inAmt > 0 && !(outAmt > 0) ? '입금' : '출금', amount: inAmt > 0 && !(outAmt > 0) ? inAmt : outAmt,
+          party: g('보낸분/받는분'), memo: [g('적요'), g('내통장표시'), g('메모')].filter(Boolean).join(' · '),
+          balance: col['잔액'] !== undefined ? kbNum(r[col['잔액']]) : null,
+          ts: new Date(dt.date + 'T' + dt.time + 'Z').getTime() });
+      }
+      if (out.length) { out.sort((a, b) => a.ts - b.ts || b.no - a.no); return { sheet: name, items: out, skipped }; }
+    }
+    return null;
+  }
+  function kbBalanceNow(){
+    return (config.kbStartBalance || 0) + allEntries.filter(e => isBank(e) && bankOf(e) === '국민' && e.status === '확정' && afterBankStart(e))
+      .reduce((sm, e) => sm + (e.type === '입금' ? e.amount : -e.amount), 0);
+  }
+  function kbPlan(items){
+    const exist = allEntries.filter(e => isBank(e) && bankOf(e) === '국민'), used = new Set(), fresh = [], dup = [];
+    items.forEach(it => {
+      const idx = exist.findIndex((e, i) => !used.has(i) && e.date === it.date && e.type === it.type && e.amount === it.amount && (!e.txTime || e.txTime === it.txTime));
+      if (idx >= 0) { used.add(idx); dup.push(it); } else fresh.push(it);
+    });
+    const selfName = document.getElementById('kbSelfName').value.trim();
+    // 같은 거래처로 입력해 둔 계정과목·프로젝트가 있으면 미리 채움
+    const hist = new Map();
+    allEntries.slice().sort((a, b) => (a.order || 0) - (b.order || 0)).forEach(e => { if (e.account || e.project) hist.set(e.type + '|' + normC(e.content), e); });
+    fresh.forEach(it => {
+      it.self = !!selfName && it.party.includes(selfName);
+      const h = hist.get(it.type + '|' + normC(it.party));
+      it.account = it.self ? '내부이체' : (h ? (h.account || '') : '');
+      it.project = it.self ? '' : (h ? (h.project || '') : ''); it.pmajor = it.self ? '' : (h ? (h.pmajor || '') : ''); it.client = it.self ? '' : (h ? (h.client || '') : '');
+    });
+    return { fresh, dup };
+  }
+  document.getElementById('kbAnalyzeBtn').addEventListener('click', async () => {
+    const st = document.getElementById('kbStatus'), box = document.getElementById('kbPreview');
+    const f = document.getElementById('kbFile').files[0];
+    box.innerHTML = ''; KB = null;
+    if (!f) { st.className = 'status-line err'; st.textContent = '국민은행 거래내역 엑셀 파일을 선택해주세요.'; return; }
+    try {
+      const parsed = await kbParse(f);
+      if (!parsed) { st.className = 'status-line err'; st.textContent = '거래일시 / 출금액 / 입금액 열을 찾지 못했습니다. 국민은행에서 내려받은 거래내역 파일이 맞는지 확인해주세요.'; return; }
+      const plan = kbPlan(parsed.items), last = parsed.items[parsed.items.length - 1], first = parsed.items[0];
+      const hasKb = allEntries.some(e => isBank(e) && bankOf(e) === '국민') || !!config.kbStartDate;
+      const net = plan.fresh.filter(i => afterBankStart({ bank: '국민', date: i.date })).reduce((sm, i) => sm + (i.type === '입금' ? i.amount : -i.amount), 0);
+      const canBaseline = !hasKb && first.balance !== null;
+      // 이월잔액을 파일 기준으로 자동 설정하는 경우: 첫 거래 직전 잔액에서 시작해 파일의 모든 거래를 반영한 값
+      const projected = canBaseline ? (first.balance - (first.type === '입금' ? first.amount : -first.amount)) + parsed.items.reduce((sm, i) => sm + (i.type === '입금' ? i.amount : -i.amount), 0) : kbBalanceNow() + net;
+      KB = { parsed, plan, canBaseline };
+      const rowsHtml = plan.fresh.slice(-40).reverse().map(i => `<tr><td class="nowrap">${i.txTime.slice(0, 16)}</td><td>${i.type}</td><td class="amount ${i.type === '입금' ? 'in' : 'out'}">${i.type === '입금' ? '+' : '-'}${fmtWon(i.amount)}</td><td>${esc(i.party)}</td><td>${esc(i.account || '')}${i.self ? ' <span class="excl-badge">집계 제외</span>' : ''}</td><td>${esc(i.project || '')}</td><td class="memo">${esc(i.memo)}</td></tr>`).join('');
+      box.innerHTML = `<div class="import-help" style="color:var(--ink);">
+        <b>${esc(f.name)}</b> · 거래 ${parsed.items.length}건 (${first.date} ~ ${last.date}) → ① 새로 추가 <b>${plan.fresh.length}</b>건 ② 이미 등록된 것으로 보고 건너뜀 <b>${plan.dup.length}</b>건${parsed.skipped ? ` ③ 읽지 못한 행 ${parsed.skipped}건` : ''}<br>
+        엑셀의 마지막 잔액 <b>${last.balance !== null ? fmtWon(last.balance) : '-'}</b> (${last.txTime.slice(0, 16)}) · 추가 후 장부의 국민은행 잔액 <b>${fmtWon(projected)}</b>${last.balance !== null ? (Math.abs(last.balance - projected) <= 1 ? ' — 일치합니다' : ` — 차이 ${fmtSigned(projected - last.balance)} (이월잔액 설정이나 누락된 거래를 확인하세요)`) : ''}</div>
+        ${KB.canBaseline ? `<label style="display:flex; gap:6px; align-items:center; font-size:13px; margin:8px 0;"><input type="checkbox" id="kbBase" checked> 국민은행 이월잔액을 이 파일 기준으로 자동 설정 (기준일 ${prevDay(first.date)}, 잔액 ${fmtWon(first.balance - (first.type === '입금' ? first.amount : -first.amount))})</label>` : ''}
+        ${plan.fresh.length ? `<div class="table-wrap"><table><thead><tr><th>거래일시</th><th>구분</th><th class="r">금액</th><th>보낸분/받는분</th><th>계정과목</th><th>프로젝트</th><th>적요·메모</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>${plan.fresh.length > 40 ? `<div class="import-help">최근 40건만 표시했습니다.</div>` : ''}
+        <div style="margin-top:10px;"><button class="btn-primary" id="kbConfirmBtn">${plan.fresh.length}건 국민은행 거래로 추가</button></div>` : '<div class="import-help">새로 추가할 거래가 없습니다.</div>'}`;
+      st.className = 'status-line ok'; st.textContent = '분석 완료. 내용을 확인한 뒤 추가 버튼을 눌러주세요.';
+      const cb = document.getElementById('kbConfirmBtn');
+      if (cb) cb.addEventListener('click', kbConfirm);
+    } catch (err) { st.className = 'status-line err'; st.textContent = '분석 실패: ' + err.message; }
+  });
+  function prevDay(d){ const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() - 1); return t.toISOString().slice(0, 10); }
+  async function kbConfirm(){
+    if (!KB) return;
+    const st = document.getElementById('kbStatus'), btn = document.getElementById('kbConfirmBtn');
+    btn.disabled = true; st.className = 'status-line'; st.textContent = '저장 중...';
+    try {
+      const fresh = KB.plan.fresh;
+      for (let i = 0; i < fresh.length; i += 400) {
+        const batch = db.batch();
+        fresh.slice(i, i + 400).forEach(it => batch.set(entriesRef.doc(), {
+          date: it.date, type: it.type, status: '확정', amount: it.amount, content: it.party || '(내용 없음)', memo: it.memo, order: it.ts,
+          channel: '통장', bank: '국민', txTime: it.txTime, src: 'kb-upload',
+          account: it.account || '', project: it.project || '', pmajor: it.pmajor || '', client: it.client || '',
+          evType: '', evDate: '', evTotal: 0,
+          linkTargetCollection: null, linkTargetCardId: null, linkTargetCardLabel: null, linkApplied: false, linkAppliedYm: null, linkAppliedAmount: null,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        }));
+        await batch.commit();
+      }
+      const baseBox = document.getElementById('kbBase');
+      if (baseBox && baseBox.checked) {
+        const first = KB.parsed.items[0];
+        const startDate = prevDay(first.date), startBalance = first.balance - (first.type === '입금' ? first.amount : -first.amount);
+        await db.collection('cashbookConfig').doc('kb').set({ startDate, startBalance });
+        config = Object.assign({}, config, { kbStartDate: startDate, kbStartBalance: startBalance });
+        document.getElementById('cfg-kbStartDate').value = startDate; setMoneyInputValue(document.getElementById('cfg-kbStartBalance'), startBalance);
+      }
+      await loadEntries();
+      st.className = 'status-line ok'; st.textContent = `국민은행 거래 ${fresh.length}건을 추가했습니다. 국민은행 장부 잔액: ${fmtWon(kbBalanceNow())}`;
+      document.getElementById('kbPreview').innerHTML = ''; document.getElementById('kbFile').value = ''; KB = null;
+    } catch (err) { st.className = 'status-line err'; st.textContent = '저장 실패: ' + err.message; btn.disabled = false; }
+  }
 
   // ---------- 전체 내역 삭제 ----------
   document.getElementById('clearAllBtn').addEventListener('click', async () => {
@@ -2009,7 +2254,7 @@
     const rows = allEntries.map(e => ({
       '거래일자': e.date, '구분': e.type, '상태': e.status,
       '금액': e.amount, '내용': e.content, '비고': e.memo,
-      '결제수단': isCard(e) ? '카드' : '통장', '계정과목': e.account || '', '프로젝트': e.project || '', '프로젝트대분류': e.pmajor || '', '발주처': e.client || '',
+      '결제수단': isCard(e) ? '카드' : '통장', '계좌': isCard(e) ? '' : bankOf(e), '계정과목': e.account || '', '프로젝트': e.project || '', '프로젝트대분류': e.pmajor || '', '발주처': e.client || '',
       '증빙': e.evType || '', '증빙발행일': e.evDate || '', '증빙금액': e.evTotal || '',
       '연동대상': cardLabelFor(e) || '', '연동카드': e.linkTargetCardLabel || '', '연동반영여부': e.linkApplied ? 'O' : ''
     }));
@@ -2041,9 +2286,11 @@
     '기타수입': { major: '설계', client: '넉스' },
     '세금': { major: '법인세', client: '법인세' }
   };
-  const DEFAULT_ACCOUNTS = ['가수금','가지급','공사매출','공사외주비','광고료','국고지원금','기부금','기타매출','노무비','대출이자','미지급금','배당금수익','법인세','보증금','보통예금','보험료','복리후생비','부식','비품','상환','선지급금','세금과공과금','소모품비','수도광열비','수선료','수선비','수수료','여비교통비','영업권','예금저축','외주비','운반료','운반비','원재료(도급)','이자수익','일반기타','임원급여','자본금','전도금','접대비','정기보험','주유비','주차료','중간배당금','지급','지급수수료','지급임차료','직원급여','차량운반구','차량유지비','채권','통신료','퇴직급여'];
+  const DEFAULT_ACCOUNTS = ['내부이체','가수금','가지급','공사매출','공사외주비','광고료','국고지원금','기부금','기타매출','노무비','대출이자','미지급금','배당금수익','법인세','보증금','보통예금','보험료','복리후생비','부식','비품','상환','선지급금','세금과공과금','소모품비','수도광열비','수선료','수선비','수수료','여비교통비','영업권','예금저축','외주비','운반료','운반비','원재료(도급)','이자수익','일반기타','임원급여','자본금','전도금','접대비','정기보험','주유비','주차료','중간배당금','지급','지급수수료','지급임차료','직원급여','차량운반구','차량유지비','채권','통신료','퇴직급여'];
   const isCard = e => e.channel === '카드';
   const isBank = e => !isCard(e);
+  const bankOf = e => (e && e.bank === '국민') ? '국민' : '신한';   // bank 값이 없는 기존 거래는 모두 신한은행
+  const afterBankStart = e => { const sd = bankOf(e) === '국민' ? config.kbStartDate : config.startDate; return !sd || e.date > sd; };
   const isExcludedSpend = e => SPEND_EXCLUDE_ACCOUNTS.includes(e.account);
   let PROJ_INFO = {}; // 프로젝트명 → {major, client} (프로젝트현황 + 이름 규칙)
 
@@ -2085,9 +2332,12 @@
     if (info.major && (!mj.value || mj.dataset.auto === '1')) { mj.value = info.major; mj.dataset.auto = '1'; }
     if (info.client && (!cl.value || cl.dataset.auto === '1')) { cl.value = info.client; cl.dataset.auto = '1'; }
   });
+  function syncBankField(){ document.getElementById('f-bank-field').style.display = document.getElementById('f-channel').value === '카드' ? 'none' : ''; }
+  document.getElementById('f-channel').addEventListener('change', syncBankField);
   function readClassFields(){
     return {
       channel: document.getElementById('f-channel').value === '카드' ? '카드' : '통장',
+      bank: document.getElementById('f-channel').value === '카드' ? '' : (document.getElementById('f-bank').value === '국민' ? '국민' : '신한'),
       account: document.getElementById('f-account').value.trim(),
       project: document.getElementById('f-project').value.trim(),
       pmajor: document.getElementById('f-pmajor').value,
@@ -2097,6 +2347,8 @@
   }
   function writeClassFields(e){
     document.getElementById('f-channel').value = (e && e.channel === '카드') ? '카드' : '통장';
+    document.getElementById('f-bank').value = (e && e.bank === '국민') ? '국민' : '신한';
+    syncBankField();
     document.getElementById('f-account').value = (e && e.account) || '';
     document.getElementById('f-project').value = (e && e.project) || '';
     document.getElementById('f-pmajor').value = (e && e.pmajor) || '';
@@ -2114,7 +2366,7 @@
   // ---------- 목록 표시용 조각 ----------
   function acctCellHtml(e){
     if (!e.account) return '<span style="color:var(--muted)">-</span>';
-    return esc(e.account) + (isExcludedSpend(e) ? ' <span class="excl-badge" title="법인카드 결제대금이라 카드 사용분과 이중 집계되지 않도록 지출 집계에서는 제외됩니다(통장 잔액에는 반영).">집계 제외</span>' : '');
+    return esc(e.account) + (isExcludedSpend(e) ? ' <span class="excl-badge" title="법인카드 결제대금이라 카드 사용분과 이중 집계되지 않도록 지출 집계에서는 제외됩니다(통장 잔액에는 반영).">집계 제외</span>' : '') + (e.account === '내부이체' ? ' <span class="excl-badge" title="내 계좌 사이의 이동이라 매출·지출 집계에서는 제외됩니다(계좌 잔액에는 반영).">집계 제외</span>' : '');
   }
   function projCellHtml(e){
     if (!e.project) return '<span style="color:var(--muted)">-</span>';
@@ -2188,6 +2440,7 @@
     const exact = new Map(), loose = new Map();
     const push = (m, k, e) => { if (!m.has(k)) m.set(k, []); m.get(k).push(e); };
     allEntries.forEach(e => {
+      if (!isCard(e) && bankOf(e) !== '신한') return;   // 이 이전 도구는 신한은행 거래내역 기준
       const ch = isCard(e) ? '카드' : '통장';
       push(exact, [ch, e.date, e.type, e.amount, normC(e.content)].join('|'), e);
       push(loose, [ch, e.date, e.type, e.amount].join('|'), e);
@@ -2202,7 +2455,7 @@
       if (!hit) { plan.fresh.push(it); return; }
       used.add(hit.id);
       (how === 'same' ? plan.same : plan.guess).push({ it, e: hit });
-      if (hit.status === '예정') { plan.pendingHit++; if (isBank(hit) && (!config.startDate || hit.date > config.startDate)) plan.pendingNet += (hit.type === '입금' ? hit.amount : -hit.amount); }
+      if (hit.status === '예정') { plan.pendingHit++; if (isBank(hit) && bankOf(hit) === '신한' && (!config.startDate || hit.date > config.startDate)) plan.pendingNet += (hit.type === '입금' ? hit.amount : -hit.amount); }
       // 겹치는 기존 거래에 분류가 비어 있으면 엑셀 값으로 채움(금액·상태·연동은 건드리지 않음)
       const upd = {};
       ['account', 'project', 'pmajor', 'client'].forEach(k => { if (!hit[k] && it[k]) upd[k] = it[k]; });
@@ -2212,7 +2465,7 @@
     return plan;
   }
   function currentBankBalance(){
-    const net = allEntries.filter(e => isBank(e) && e.status === '확정' && (!config.startDate || e.date > config.startDate))
+    const net = allEntries.filter(e => isBank(e) && bankOf(e) === '신한' && e.status === '확정' && (!config.startDate || e.date > config.startDate))
       .reduce((s, e) => s + (e.type === '입금' ? e.amount : -e.amount), 0);
     return config.startBalance + net;
   }
@@ -2469,7 +2722,7 @@
     { label: '일반계산서', prefix: 'plainInvoice', taxable: false }
   ];
   // 증빙이 필요 없는 계정(급여·카드대금·대출·세금·자본거래 등) - "증빙 미입력" 점검에서 제외
-  const NO_EVIDENCE_ACCOUNTS = ['직원급여', '임원급여', '퇴직급여', '미지급금', '법인세', '대출이자', '상환', '자본금', '가수금', '가지급', '보증금', '예금저축', '중간배당금', '배당금수익', '이자수익', '영업권', '채권', '선지급금', '전도금', '지급', '보통예금'];
+  const NO_EVIDENCE_ACCOUNTS = ['내부이체', '직원급여', '임원급여', '퇴직급여', '미지급금', '법인세', '대출이자', '상환', '자본금', '가수금', '가지급', '보증금', '예금저축', '중간배당금', '배당금수익', '이자수익', '영업권', '채권', '선지급금', '전도금', '지급', '보통예금'];
   const evMonthOf = e => String(e.evDate || e.date || '').slice(0, 7);
   const evAmountOf = e => (Number(e.evTotal) > 0 ? Number(e.evTotal) : (Number(e.amount) || 0));
   function evCellHtml(e){

@@ -807,7 +807,8 @@ var DC = (function(){
       var s=m?m.sup:r.paid;
       var p=P[r.proj];
       if(!p){ p=P[r.proj]={n:r.proj, major:r.major2, paid:0, supply:0, cnt:0, mcnt:0, mpaid:0, by:{}}; plist.push(p); }
-      p.paid+=r.paid; p.supply+=s; p.cnt++; if(m){ p.mcnt++; p.mpaid+=r.paid; mRows++; mPaid+=r.paid; }
+      var isEst=!!(r.pre && r.pre.est);
+      p.paid+=r.paid; p.supply+=s; p.cnt++; if(isEst) p.ecnt=(p.ecnt||0)+1; if(m && !isEst){ p.mcnt++; p.mpaid+=r.paid; mRows++; mPaid+=r.paid; }
       var y=p.by[r.y]=p.by[r.y]||{paid:0,supply:0}; y.paid+=r.paid; y.supply+=s;
       var k=r.major2+'|'+r.y; var b=by[k]=by[k]||{m:r.major2,y:r.y,paid:0,supply:0}; b.paid+=r.paid; b.supply+=s;
       paidAll+=r.paid; supAll+=s;
@@ -1689,6 +1690,7 @@ var DC = (function(){
     if(acctReady){
       conf.forEach(function(e){
         var ym = ymOf(e.date), y = ym.slice(0,4), amt = num(e.amount); yearsSet[y] = 1;
+        if(e.account === '내부이체') return;               // 신한↔국민 계좌간 이체는 매출·지출 어디에도 잡지 않는다
         var isCard = e.channel === '카드';
         if(!isCard){
           var mo = monthly[ym] || (monthly[ym] = {inc:0, exp:0});
@@ -3234,7 +3236,7 @@ var DC = (function(){
   //    dashboardData/directCost(+ directCostRows_N)에 저장 → 어느 기기에서 열어도 같은 값.
   //  · 인건비(laborAlloc)·참여인원은 아직 근무일지 스냅샷(위 PD_SNAPSHOT) 값을 코드/이름으로 이어 붙입니다.
   // ═════════════════════════════════════════════════════════════════════════════════
-  var LIVE = { ok:false, doc:null, dc:null, dcUp:null, unlinkedNames:[], cbErr:'', dcErr:'', err:'', vat:'ex', rowsP:null, unlinked:0 };
+  var LIVE = { evStart:'2026-11-01', ok:false, doc:null, dc:null, dcUp:null, unlinkedNames:[], cbErr:'', dcErr:'', err:'', vat:'ex', rowsP:null, unlinked:0 };
   try{ var _sv = localStorage.getItem('nucks-dash-vat'); if(_sv==='in' || _sv==='ex') LIVE.vat = _sv; }catch(e){}
   var PD_SNAPSHOT = PD_PROJECTS.slice();
   var SNAP = JSON.parse(JSON.stringify({ DIRECT_BY_YEAR:DIRECT_BY_YEAR, ADMIN_OPTIONAL_BY_YEAR:ADMIN_OPTIONAL_BY_YEAR, LABOR_BY_YEAR:LABOR_BY_YEAR }));
@@ -3607,7 +3609,9 @@ var DC = (function(){
       // 2026-11: 현금출납부의 프로젝트 태그 거래로 직접비를 직접 계산한다. 태그된 거래가 충분하면 업로드 결과보다 이쪽을 우선한다.
       LIVE.dcUp = LIVE.dc; LIVE.cbErr = '';
       if(typeof window.__cbGet !== 'function') return;
-      return window.__cbGet().then(function(entries){
+      return db.collection('cashbookConfig').doc('evSettings').get().then(function(d){
+        if(d.exists) LIVE.evStart = d.data().evStartDate || '';    // 비어 있으면 추정 없음
+      }).catch(function(){}).then(function(){ return window.__cbGet(); }).then(function(entries){
         var d = cbToDc(entries, LIVE.dcUp);
         if(d){ LIVE.dc = d; LIVE.rowsP = null; }
       }).catch(function(e){ LIVE.cbErr = String((e && e.message) || e); });
@@ -3621,6 +3625,7 @@ var DC = (function(){
   function cbToDc(entries, up){
     if(!entries || !entries.length) return null;
     var rows = [], ymdOf = function(v){ return String(v||'').slice(0,10); };
+    var evCut = LIVE.evStart || '';
     entries.forEach(function(e){
       if(e.status !== '확정' || e.type !== '출금') return;
       var proj = String(e.project||'').trim(); if(!proj) return;
@@ -3628,7 +3633,10 @@ var DC = (function(){
       var d = ymdOf(e.date); if(!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
       var paid = +e.amount || 0; if(!paid) return;   // 카드 취소·환불처럼 마이너스 금액도 그대로 더해 상쇄시킨다
       var r = { d:d, y:d.slice(0,4), paid:paid, proj:proj, major:e.pmajor||'', acct:e.account||'', content:String(e.content||''), memo:String(e.memo||''), kind:'', ev:e.evType||'' };
-      if(e.channel !== '카드' && e.evType){
+      if(evCut && d < evCut){
+        // 증빙 관리 시작일 이전: 증빙 연결 여부와 관계없이 지급액÷1.1(부가세 별도)로 추정
+        r.pre = { sup:Math.round(paid/1.1), shop:'', est:true }; r.ev = '추정(÷1.1)';
+      } else if(e.channel !== '카드' && e.evType){
         var tot = (+e.evTotal > 0) ? +e.evTotal : paid, sup;
         if(e.evType === '세금계산서' || e.evType === '현금영수증'){
           var sp = (typeof e.evSupply === 'number') ? e.evSupply : Math.round(tot/1.1);
@@ -3673,7 +3681,7 @@ var DC = (function(){
       '<div class="modal-backdrop" id="costEvBackdrop"><div class="modal-card" style="max-width:780px;">' +
         '<div class="modal-hd"><div class="modal-title">🧾 직접비 근거 · ' + esc(p.name) + '</div><button class="modal-close" id="costEvClose">✕</button></div>' +
         '<div class="modal-share">' + (LIVE.dc && LIVE.dc.source === 'cashbook'
-            ? '<b>현금출납부</b>에서 이 프로젝트로 태그된 확정 지출을 모았습니다. 세금계산서·현금영수증이 달린 건은 증빙의 <b>공급가액</b>, 나머지는 지급액 그대로입니다 · 증빙 연결 ' + info.mcnt + '/' + info.cnt + '건(지급액 기준 ' + matchedPct + '%)'
+            ? '<b>현금출납부</b>에서 이 프로젝트로 태그된 확정 지출을 모았습니다. ' + (LIVE.evStart ? '<b>' + esc(LIVE.evStart) + ' 이전</b> 지출은 증빙과 관계없이 지급액÷1.1로 추정(표에 "추정"), 그 이후는 ' : '') + '세금계산서·현금영수증이 달린 건은 증빙의 <b>공급가액</b>, 나머지는 지급액 그대로입니다 · 증빙 연결 ' + info.mcnt + '/' + info.cnt + '건(지급액 기준 ' + matchedPct + '%)'
             : '업로드한 거래내역에서 이 프로젝트 태그의 지출을 모은 뒤, 홈택스 매입 세금계산서와 연결해 <b>공급가액</b>을 구했습니다 · 연결된 지급 ' + info.mcnt + '/' + info.cnt + '건(지급액 기준 ' + matchedPct + '%)') + '</div>' +
         '<div class="modal-sub-hd"><span>지급액 합계(부가세 포함)</span><span class="num">' + won(info.paid) + '원</span></div>' +
         '<div class="modal-sub-hd"><span>직접비 — 공급가액 기준 (증빙 연결분은 공급가액, 나머지는 지급액 그대로)</span><span class="num">' + won(info.supply) + '원</span></div>' +
