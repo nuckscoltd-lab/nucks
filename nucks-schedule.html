@@ -292,6 +292,10 @@ dialog.wide{width:min(1200px,calc(100vw - 32px))}
 .billbox b{font-family:var(--font-num)}
 .fa .two .bl{color:#5b3fa3}
 .fsum .bill b{color:#5b3fa3}
+.pnl{margin-top:8px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--bg)}
+.pnl .ph{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:12px;font-weight:600}
+.pnl .ph .vatv{font-size:12px;padding:3px 6px}
+.pnl .neg b{color:var(--bad)}.pnl .pos b{color:#1a7f5a}
 .cstrip{display:flex;border:2px solid var(--line-strong);border-top:0;height:70px;background:var(--paper);font-family:var(--font-num);font-variant-numeric:tabular-nums}
 .csl{flex:none;border-right:2px solid var(--line-strong);background:var(--head);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-family:var(--font-ui)}
 .csl b{font-size:12px}.csl span{font-size:10px;color:var(--muted)}
@@ -2495,6 +2499,114 @@ function topTags(entries){const cnt={};entries.forEach(e=>(e.tags||[]).forEach(t
   return Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]).slice(0,3).join(', ')}
 
 /* 프로젝트 행 → 결산서에 자동으로 채울 값 */
+/* ---------- 프로젝트 손익(매출 − 매입원가 − 인건비) — 2026-11 ----------
+   매입원가는 현금출납부에서 "프로젝트" 칸이 이 프로젝트 이름(또는 근무일지 이름·예전 이름)인 확정 출금을 모은 값.
+   증빙(세금계산서·현금영수증)이 달린 거래는 공급가액, 나머지는 지급액 그대로. 미지급금(카드대금)은 카드 사용분과 겹치므로 제외.
+   부가세 별도/포함은 이 페이지 공통 설정(P.vatView, 기본 별도)을 따른다. 설계 프로젝트는 일반관리비를 계약금액 비율로 배분해 회계종합현황의 손익·손익율과 같은 값이 나오게 한다. */
+const cbNKey=s=>String(s||'').replace(/\s+/g,'').toLowerCase();
+let CBP=null;
+async function loadCbProj(){
+  if(CBP&&Date.now()-CBP.at<300000)return CBP;
+  const o={at:Date.now(),map:new Map(),err:''};
+  try{
+    if(!fsReady()){o.err='서버 연결 안 됨'}
+    else{
+      const snap=await db.collection('cashbookEntries').where('project','>','').get();
+      snap.docs.forEach(d=>{const e=d.data();
+        if(e.status!=='확정'||e.type!=='출금'||e.account==='미지급금')return;
+        const k=cbNKey(e.project);if(!k)return;
+        if(!o.map.has(k))o.map.set(k,[]);o.map.get(k).push(e)});
+    }
+  }catch(err){o.err=(err&&err.code==='permission-denied')?'현금출납부는 관리자만 읽을 수 있습니다':String(err&&err.message||err)}
+  CBP=o;return o;
+}
+function cbEntrySupply(e){
+  const paid=+e.amount||0;
+  if(e.channel!=='카드'&&e.evType){
+    const tot=+e.evTotal>0?+e.evTotal:paid;
+    if(e.evType==='세금계산서'||e.evType==='현금영수증'){const sp=typeof e.evSupply==='number'?e.evSupply:Math.round(tot/1.1);return tot<paid?(paid-tot)+sp:sp}
+    return paid;
+  }
+  return paid;
+}
+async function cbCostFor(r){
+  const o=await loadCbProj();
+  if(o.err)return{ok:false,err:o.err};
+  const names=[r.name].concat(r.wlNames||[],r.nameOld?[r.nameOld]:[]).filter(Boolean),seen=new Set();let paid=0,supply=0,cnt=0,mcnt=0;
+  names.forEach(n=>{const k=cbNKey(n);if(seen.has(k))return;seen.add(k);(o.map.get(k)||[]).forEach(e=>{paid+=+e.amount||0;supply+=cbEntrySupply(e);cnt++;if(e.evType&&e.channel!=='카드')mcnt++})});
+  return{ok:true,paid:Math.round(paid),supply:Math.round(supply),cnt,mcnt};
+}
+function pnlShell(rowId){return`<div class="pnl" data-pnl="${rowId}"><div class="hint" style="margin:0">손익 계산 중…</div></div>`}
+/* 회계종합현황(accounting-dashboard.html)의 프로젝트 손익과 같은 규칙으로 맞춘 부분:
+   - 매출: 부가세 별도 = 총계약금(또는 최종금액)÷1.1 (부가세 별도로 입력해 둔 계약이면 입력한 공급가액), 포함 = 총계약금
+   - 일반관리비 배분(설계 프로젝트만): 그 해(프로젝트 코드 앞 4자리) 현금출납부 "일반관리" 지출(직원급여·임원급여·미지급금·자산/자본/차입 등 비용이 아닌 계정 제외)
+     × 이 프로젝트 계약금액 ÷ 그 해 설계 프로젝트 계약금액 합계(계약·진행·완료·실주 모두 포함)
+   - 인건비: 근무일지 투입시간 × 시급(기본급÷209). 근무일지에 연결된 기록이 없으면 그 해 대분류 인건비 풀을 계약금액 비율로 나눈 근사치(회계종합현황과 같은 값) */
+const PNL_ADMIN_EXCL=new Set(['직원급여','임원급여','미지급금','보증금','가지급','가수금','중간배당금','영업권','자본금','예금저축','상환','채권','선지급금','전도금','보통예금','차량운반구','공사매출','기타매출','국고지원금','배당금수익','이자수익']);
+const PNL_LABOR_POOL={'공사':{2021:0,2022:1312747,2023:30651232,2024:33464074,2025:25334161,2026:1077029},'설계':{2021:14621840,2022:129525777,2023:103392891,2024:82639139,2025:114203301,2026:76713203}};
+const PNL_CC_MAJOR={'00':'설계','01':'설계','02':'설계','03':'설계','04':'설계','11':'공사','12':'공사','13':'공사'};
+function pnlMajor(r){
+  if(r.category==='공사'||r.category==='설계')return r.category;
+  const nc=String(r.projCode||'').trim().replace(/-11\((\d)\)-/,(_,d)=>'-1'+(+d)+'-'),m=nc.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m&&PNL_CC_MAJOR[m[2]])return PNL_CC_MAJOR[m[2]];
+  return /^C-/.test(r.code||'')?'공사':'설계';
+}
+function pnlYear(r){const y=String(r.projCode||'').slice(0,4);return /^\d{4}$/.test(y)&&+y>=2021&&+y<=2040?y:null}
+function pnlRev(r,ex){
+  const f=r.fin||{},c=finCalc(f);
+  if(!ex)return c.total;
+  if(f.vatEx===true&&+f.supply>0&&!(+f.finalCost>0))return Math.round(+f.supply);
+  return Math.round(c.total/1.1);
+}
+function cbAdminPool(o){
+  if(o.admin)return o.admin;
+  const m={};
+  (o.map.get(cbNKey('일반관리'))||[]).forEach(e=>{
+    const d=String(e.date||'').slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return;
+    const a=+e.amount||0;if(!a||PNL_ADMIN_EXCL.has(e.account))return;
+    m[d.slice(0,4)]=(m[d.slice(0,4)]||0)+a;
+  });
+  return o.admin=m;
+}
+async function pnlCompute(r,ex){
+    const cost=await cbCostFor(r),sn=(r.settle&&r.settle.snap)||{};
+    const rev=pnlRev(r,ex),major=pnlMajor(r),yr=pnlYear(r);
+    const costV=cost.ok?(ex?cost.supply:cost.paid):null;
+    // 같은 해·같은 대분류 프로젝트 계약금액 합계(배분 분모)
+    let denom=0;if(yr)finRows().forEach(({r:q})=>{if(pnlYear(q)===yr&&pnlMajor(q)===major)denom+=pnlRev(q,ex)});
+    // 인건비: 근무일지 직접 집계 → 없으면 연도 풀 근사 → 근무일지를 못 읽었으면 결산서 스냅샷
+    let labor,laborHow='';
+    const ld=await loadLaborData();
+    if(!ld.err){
+      const m=laborMatch(ld,r.projCode,r.name,r.wlNames);
+      if(m.hours>0){labor=Math.round(m.cost);laborHow=`근무일지 ${m.emps.length}명 · ${hrs(m.hours)}시간`}
+      else{const pool=yr?((PNL_LABOR_POOL[major]||{})[yr]||0):0;labor=denom>0?Math.round(pool*rev/denom):0;laborHow='근무일지 연결 기록 없음 → 연도 인건비 풀 근사배분(회계종합현황과 동일)'}
+    }else if(sn.laborCost!==undefined){labor=sn.laborCost;laborHow='근무일지를 읽지 못해 결산서에 저장된 값 사용'}
+    // 일반관리비 배분(설계만)
+    let admin=null,adminNote='';
+    if(major!=='설계')adminNote='공사 프로젝트는 일반관리비를 배분하지 않습니다';
+    else if(!cost.ok)adminNote='현금출납부를 읽지 못했습니다';
+    else if(!yr||denom<=0)adminNote='프로젝트 코드의 연도를 알 수 없어 배분하지 못했습니다';
+    else{const o=await loadCbProj(),pool=cbAdminPool(o)[yr]||0;admin=Math.round(pool*rev/denom);adminNote=`${yr}년 설계 일반관리비 ${won(pool)}원 × 계약금액 비율 ${(rev/denom*100).toFixed(1)}%`}
+    const profit=rev-(costV||0)-(labor||0)-(admin||0),rate=rev>0?profit/rev*100:null;
+    return{cost,rev,major,costV,labor,laborHow,admin,adminNote,profit,rate};
+}
+async function fillPnl(root){
+  const boxes=(root||document).querySelectorAll('[data-pnl]');
+  for(const box of boxes){
+    const f=findRow(box.dataset.pnl);if(!f)continue;const r=f.r,ex=P.vatView!=='in';
+    const {cost,rev,major,costV,labor,laborHow,admin,adminNote,profit,rate}=await pnlCompute(r,ex);
+    const T=(l,v,cls)=>`<div${cls?` class="${cls}"`:''}>${l}<b>${v}</b></div>`;
+    box.innerHTML=`<div class="ph"><span>프로젝트 손익</span><select class="inp vatv" style="width:auto"><option value="ex" ${ex?'selected':''}>부가세 별도</option><option value="in" ${ex?'':'selected'}>부가세 포함</option></select><span class="hint" style="margin:0;font-weight:400">매출 − 매입원가 − 인건비${major==='설계'?' − 일반관리비 배분':''}</span></div>
+      <div class="fsum">${T(ex?'매출(공급가액)':'매출(총계약금)',won(rev)+'원')}
+      ${T('매입원가(출납부 태그)',cost.ok?won(costV)+'원':'-')}
+      ${T('인건비',labor!==undefined?won(labor)+'원':'-')}
+      ${T('일반관리비 배분',admin===null?'-':won(admin)+'원')}
+      ${T('손익',(profit>=0?'+':'')+won(profit)+'원',profit>=0?'pos':'neg')}
+      ${T('손익율',rate===null?'-':rate.toFixed(1)+'%',rate===null?'':rate>=0?'pos':'neg')}</div>
+      <div class="hint" style="margin:6px 0 0">${cost.ok?(cost.cnt?`매입원가: 현금출납부에서 이 프로젝트로 태그된 확정 지출 ${cost.cnt}건(증빙 연결 ${cost.mcnt}건)`:'현금출납부에서 이 프로젝트로 태그된 확정 지출이 아직 없습니다(프로젝트 칸 이름 확인)'):'매입원가를 불러오지 못해 손익에서 제외했습니다 — '+esc(cost.err)}${laborHow?` · 인건비: ${esc(laborHow)}`:' · 인건비가 아직 계산되지 않아 손익에서 제외했습니다.'}${adminNote?` · 일반관리비: ${esc(adminNote)}`:''}</div>`;
+  }
+}
 async function settleAutoValues(r,withLabor){
   const b=r.bars&&r.bars[0],f=r.fin||{},c=finCalc(f);
   const v={projNo:r.projCode||'',name:r.name||'',
@@ -2614,7 +2726,7 @@ function renderSettle(){
     html+=settleSorted(list).map(settleCard).join('');
     if(!list.length&&!html)html='<div class="hint" style="padding:24px;text-align:center">조건에 맞는 결산서가 없습니다.</div>';
   }
-  $('#seList').innerHTML=html||'<div class="hint" style="padding:24px;text-align:center">조건에 맞는 항목이 없습니다.</div>';
+  $('#seList').innerHTML=html||'<div class="hint" style="padding:24px;text-align:center">조건에 맞는 항목이 없습니다.</div>';fillPnl($('#seList'));
 }
 function settleCard(it){
   const s=it.s,open=SET_UI.open.has(it.key),cf=s.status==='confirmed';
@@ -2629,7 +2741,7 @@ function settleViewHtml(it){
   const hasLab=sn.laborHours!==undefined;
   const sum=sn.total?`<div class="fsum"><div>총계약금<b>${won(sn.total)}원</b></div><div>공급가액<b>${won(sn.supply)}원</b></div><div>수금 합계<b>${won(sn.paid)}원</b></div>
     <div>투입 인건비(추정)<b>${hasLab?won(sn.laborCost)+'원':'-'}</b></div><div>투입시간 · 인원<b>${hasLab?hrs(sn.laborHours)+'시간 · '+sn.headcount+'명':'-'}</b></div>
-    <div>공급가 − 인건비(참고)<b>${hasLab?won((sn.supply||0)-(sn.laborCost||0))+'원':'-'}</b></div></div><div class="hint" style="margin:0">${sn.at?'기준 '+esc(String(sn.at).slice(0,10))+' · ':''}인건비는 근무일지 기반 추정치이며 경비·외주비는 포함되지 않습니다.</div>`:'';
+    <div>공급가 − 인건비(참고)<b>${hasLab?won((sn.supply||0)-(sn.laborCost||0))+'원':'-'}</b></div></div><div class="hint" style="margin:0">${sn.at?'기준 '+esc(String(sn.at).slice(0,10))+' · ':''}인건비는 근무일지 기반 추정치입니다. 매입원가를 반영한 손익은 아래 "프로젝트 손익"을 보세요.</div>${it.r?pnlShell(it.r.id):''}`:'';
   const warn=[];
   if(it.r&&s.status==='draft'&&!settleEligible(it.r))warn.push('이 프로젝트가 지금은 "완료·전액수금" 상태가 아닙니다 (상태/수금이 바뀌었는지 확인하세요).');
   if(s.laborErr)warn.push('근무일지를 불러오지 못해 투입인원이 비어 있을 수 있습니다: '+s.laborErr);
@@ -2646,6 +2758,7 @@ function settleViewHtml(it){
       ${it.r?`<button class="btn" data-act="refresh" data-key="${it.key}" type="button" style="border:1px solid var(--line)" title="계약·수금·근무일지 최신 내용을 다시 반영(직접 고친 항목은 유지)">자동 내용 새로고침</button><button class="btn" data-act="openfin" data-key="${it.key}" type="button" style="border:1px solid var(--line)">계약·기성 열기</button>`:''}
       <button class="btn ${cf?'':'pri'}" data-act="toggle" data-key="${it.key}" type="button" ${cf?'style="border:1px solid var(--line)"':''}>${cf?'초안으로 되돌리기':'확정'}</button>
       <button class="btn" data-act="print" data-key="${it.key}" type="button" style="border:1px solid var(--line)">인쇄 / PDF</button>
+      ${it.r?`<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)" title="체크하면 인쇄물에 매출·매입원가·인건비·일반관리비 배분·손익이 들어갑니다(내부 보고용). 외부에 줄 때는 체크를 해제하세요"><input type="checkbox" data-pnlchk ${PRINT_PNL?'checked':''}>손익 포함(내부용)</label>`:''}
       <span style="flex:1"></span><button class="btn danger" data-act="del" data-key="${it.key}" type="button">결산서 삭제</button></div>`;
 }
 function settleListRows(kind,items){
@@ -2723,8 +2836,16 @@ async function settleImportLegacy(){
   });
   save();updateSettleBadge();renderSettle();toastL(`기존 결산서 ${todo.length}건을 가져왔습니다 (행 연결 ${match.size}건 · 단독 ${todo.length-match.size}건)`);
 }
-function settlePrint(key){
+let PRINT_PNL=false;
+async function settlePrint(key){
   const it=settleFind(key);if(!it)return;const s=it.s,p=s.partners||{},sn=s.snap||{};
+  let pnlHtml='';
+  if(PRINT_PNL&&it.r){
+    try{
+      const ex=P.vatView!=='in',c=await pnlCompute(it.r,ex),sg=n=>(n>=0?'+':'')+won(n)+'원';
+      pnlHtml=`<h2>프로젝트 손익 (내부용 · ${ex?'부가세 별도':'부가세 포함'} 기준)</h2><table><tr><th>${ex?'매출(공급가액)':'매출(총계약금)'}</th><td>${won(c.rev)}원</td><th>매입원가</th><td>${c.cost.ok?won(c.costV)+'원':'-'}</td></tr><tr><th>인건비</th><td>${c.labor!==undefined?won(c.labor)+'원':'-'}</td><th>일반관리비 배분</th><td>${c.admin===null?'-':won(c.admin)+'원'}</td></tr><tr><th>손익</th><td><b>${sg(c.profit)}</b></td><th>손익율</th><td><b>${c.rate===null?'-':c.rate.toFixed(1)+'%'}</b></td></tr></table><p class="m">${c.cost.ok?'매입원가: 현금출납부 프로젝트 태그 지출':'매입원가를 불러오지 못해 제외'}${c.laborHow?' · 인건비: '+esc(c.laborHow):''}${c.adminNote?' · 일반관리비: '+esc(c.adminNote):''}</p>`;
+    }catch(e){toast('손익을 계산하지 못해 손익 없이 인쇄합니다')}
+  }
   const li=a=>(a||[]).length?`<ul>${a.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'<p class="m">-</p>';
   const html=`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${esc(s.name)} 결산서</title><style>
     @page{size:A4;margin:16mm}body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;color:#1c2227;font-size:12px;line-height:1.55}
@@ -2735,6 +2856,7 @@ function settlePrint(key){
     <h2>기본 정보</h2><table><tr><th>PROJ. NO.</th><td>${esc(s.projNo||'-')}</td><th>PM</th><td>${esc(s.pm||'-')}</td></tr><tr><th>프로젝트명</th><td colspan="3">${esc(s.name)}</td></tr><tr><th>시작일</th><td>${sDate(s.startDate)}</td><th>종료일</th><td>${sDate(s.endDate)}</td></tr></table>
     <h2>대외업체</h2><table>${SETTLE_PARTNERS.map(([k,l])=>`<tr><th>${l}</th><td>${esc((p[k]&&p[k].company)||'-')}</td><td>${esc((p[k]&&p[k].contacts)||'')}</td></tr>`).join('')}</table>
     ${sn.total?`<h2>계약·수금 요약</h2><table><tr><th>총계약금</th><td>${won(sn.total)}원</td><th>공급가액</th><td>${won(sn.supply)}원</td></tr><tr><th>수금 합계</th><td>${won(sn.paid)}원</td><th>추정 인건비</th><td>${sn.laborHours!==undefined?won(sn.laborCost)+'원 ('+hrs(sn.laborHours)+'시간 · '+sn.headcount+'명)':'-'}</td></tr></table><p class="m">인건비는 근무일지 기반 추정치이며 경비·외주비는 포함되지 않습니다.</p>`:''}
+    ${pnlHtml}
     <h2>프로젝트 진행 내용</h2>${li(s.progressItems)}
     <h2>투입인원</h2>${(s.people||[]).length?`<table><tr><th>이름</th><th style="width:auto">업무 내용</th></tr>${s.people.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.role)}</td></tr>`).join('')}</table>`:'<p class="m">-</p>'}
     <h2>특이사항</h2>${li(s.notes)}</body></html>`;
@@ -2752,6 +2874,7 @@ $('#seSt').onchange=e=>{SET_UI.st=e.target.value;renderSettle()};
 $('#seCt').onchange=e=>{SET_UI.ct=e.target.value;renderSettle()};
 $('#seYr').onchange=e=>{SET_UI.yr=e.target.value;renderSettle()};
 $('#seQ').oninput=e=>{SET_UI.q=e.target.value.trim();renderSettle()};
+$('#seList').addEventListener('change',e=>{const c=e.target.closest('[data-pnlchk]');if(c)PRINT_PNL=c.checked});
 $('#seList').addEventListener('click',e=>{
   const act=e.target.closest('[data-act]');
   if(act){
@@ -2786,7 +2909,7 @@ function renderFinSettle(rowId){
     const s=r.settle,sn=s.snap||{},cf=s.status==='confirmed',ppl=(s.people||[]).map(p=>`${esc(p.name)}${p.hours!==undefined?` <small>${hrs(p.hours)}h</small>`:''}`).join(', ')||'-';
     el.innerHTML=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><span class="sc-tag ${cf?'cf':'dr'}">${cf?'확정':'초안'}</span><b>${esc(s.name||r.name)}</b><span style="flex:1"></span><button type="button" class="lchip" data-setopen="${r.id}">결산서 열어서 수정</button></div>
       <div class="fsum" style="margin-bottom:6px"><div>PROJ.NO<b style="font-size:13px">${esc(s.projNo||'-')}</b></div><div>기간<b style="font-size:13px">${sDate(s.startDate)} ~ ${sDate(s.endDate)}</b></div><div>총계약금<b style="font-size:13px">${sn.total?won(sn.total)+'원':'-'}</b></div><div>추정 인건비<b style="font-size:13px">${sn.laborHours!==undefined?won(sn.laborCost)+'원':'-'}</b></div></div>
-      <div style="font-size:12px;line-height:1.7"><b>투입인원</b> ${ppl}<br><b>진행 내용</b> ${(s.progressItems||[]).length?esc(s.progressItems.join(' / ')):'<span style="color:var(--muted)">아직 입력 없음</span>'}<br><b>특이사항</b> ${(s.notes||[]).length?esc(s.notes.join(' / ')):'<span style="color:var(--muted)">없음</span>'}</div>`;return}
+      ${pnlShell(r.id)}<div style="font-size:12px;line-height:1.7;margin-top:8px"><b>투입인원</b> ${ppl}<br><b>진행 내용</b> ${(s.progressItems||[]).length?esc(s.progressItems.join(' / ')):'<span style="color:var(--muted)">아직 입력 없음</span>'}<br><b>특이사항</b> ${(s.notes||[]).length?esc(s.notes.join(' / ')):'<span style="color:var(--muted)">없음</span>'}</div>`;fillPnl(el);return}
   if(settleEligible(r)){el.innerHTML=`완료·전액수금 조건을 채웠습니다. 저장하면 결산서 초안이 자동으로 만들어집니다. <button type="button" class="lchip" data-setmake="${r.id}">지금 초안 만들기</button>`;return}
   const b=r.bars&&r.bars[0],c=hasFin(r)?finCalc(r.fin):null,need=[];
   if(!b||b.inner!=='완료')need.push('상태를 "완료"로 저장');
@@ -2869,7 +2992,7 @@ function renderFinAll(){const won=n=>WON(vx(n)),man=n=>MAN(vx(n));
   $('#payDays').value=P.payDays||30;
   VIEW.finCopy={list,maxN}}
 $('#bFin').onclick=()=>{renderFinAll();$('#dFinAll').showModal()};
-document.addEventListener('change',e=>{if(!e.target.classList||!e.target.classList.contains('vatv'))return;P.vatView=e.target.value;save();if($('#dFinAll').open)renderFinAll();if($('#dCash').open)renderCash();toast(`금액을 ${VATL()}로 표시합니다`)});
+document.addEventListener('change',e=>{if(!e.target.classList||!e.target.classList.contains('vatv'))return;P.vatView=e.target.value;save();if($('#dFinAll').open)renderFinAll();if($('#dCash').open)renderCash();fillPnl(document);toast(`금액을 ${VATL()}로 표시합니다`)});
 $('#faFilt').addEventListener('click',e=>{
   if(e.target.closest('#faLost')){P.finShowLost=!P.finShowLost;save();renderFinAll();return}
   const b=e.target.closest('[data-st]');if(!b)return;const F=P.finFilter;
