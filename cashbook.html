@@ -258,7 +258,15 @@
         <button class="btn-primary" id="saveEvStartBtn">저장</button>
       </div>
       <div class="import-help">이 날짜 <b>이전</b>의 프로젝트 지출은 증빙 연결 여부와 관계없이 <b>지급액 ÷ 1.1</b>(부가세 별도)로 추정해 회계종합현황·프로젝트현황의 매입원가에 반영합니다. 이 날짜부터는 거래에 입력한 증빙(공급가액)을 그대로 씁니다. 날짜를 비우면 추정하지 않고 증빙 입력값만 씁니다. (처음 값: 2026-11-01)</div>
-      <div class="status-line" id="evStartStatus"></div>
+      <div class="form-row" style="margin-top:12px;">
+        <div class="field" style="flex:1; min-width:260px;">
+          <label for="cfg-invNames">계산서 발행 업체로 보는 외주 이름 (쉼표로 구분)</label>
+          <input type="text" id="cfg-invNames" placeholder="예: 전호식, 홍길동">
+        </div>
+        <button class="btn-primary" id="saveInvNamesBtn">저장</button>
+      </div>
+      <div class="import-help">외주비 계정에서 내용이 사람 이름뿐인 건(예: 이정은, 이주연(목동))은 노무처럼 <b>차인지급액</b>으로 보고 ÷1.1 추정에서 뺍니다. 그런데 그중 실제로 세금계산서를 발행하는 업체인 분은 여기에 이름을 적어두세요. 적힌 이름은 일반 외주처럼 ÷1.1(또는 증빙 공급가액)로 계산합니다.</div>
+      <div class="status-line" id="invNamesStatus"></div>
     </div>
   </div>
 
@@ -1267,7 +1275,8 @@
     try {
       const es = await db.collection('cashbookConfig').doc('evSettings').get();
       document.getElementById('cfg-evStart').value = es.exists ? (es.data().evStartDate || '') : '2026-11-01';
-    } catch (e) { document.getElementById('cfg-evStart').value = '2026-11-01'; }
+      document.getElementById('cfg-invNames').value = (es.exists && Array.isArray(es.data().invNames) ? es.data().invNames : ['전호식']).join(', ');
+    } catch (e) { document.getElementById('cfg-evStart').value = '2026-11-01'; document.getElementById('cfg-invNames').value = '전호식'; }
   }
 
   attachMoneyInputFormatter(document.getElementById('cfg-kbStartBalance'));
@@ -1283,10 +1292,18 @@
     } catch (err) { st.className = 'status-line err'; st.textContent = '저장 실패: ' + err.message; }
   });
 
+  const invNamesFromInput = () => document.getElementById('cfg-invNames').value.split(/[,，、\s]+/).map(x => x.trim()).filter(Boolean);
+  document.getElementById('saveInvNamesBtn').addEventListener('click', async () => {
+    const st = document.getElementById('invNamesStatus'), v = document.getElementById('cfg-evStart').value;
+    try {
+      await db.collection('cashbookConfig').doc('evSettings').set({ evStartDate: v || '', invNames: invNamesFromInput() });
+      st.className = 'status-line ok'; st.textContent = '저장되었습니다. 회계종합현황·프로젝트현황을 새로고침하면 반영됩니다.';
+    } catch (err) { st.className = 'status-line err'; st.textContent = '저장 실패: ' + err.message; }
+  });
   document.getElementById('saveEvStartBtn').addEventListener('click', async () => {
     const v = document.getElementById('cfg-evStart').value, st = document.getElementById('evStartStatus');
     try {
-      await db.collection('cashbookConfig').doc('evSettings').set({ evStartDate: v || '' });
+      await db.collection('cashbookConfig').doc('evSettings').set({ evStartDate: v || '', invNames: invNamesFromInput() });
       st.className = 'status-line ok';
       st.textContent = v ? `저장되었습니다. ${v} 이전 지출은 지급액÷1.1로 추정합니다.` : '저장되었습니다. 추정 없이 증빙 입력값만 사용합니다.';
     } catch (err) { st.className = 'status-line err'; st.textContent = '저장 실패: ' + err.message; }

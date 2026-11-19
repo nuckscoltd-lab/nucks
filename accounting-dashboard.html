@@ -3242,7 +3242,7 @@ var DC = (function(){
   //    dashboardData/directCost(+ directCostRows_N)에 저장 → 어느 기기에서 열어도 같은 값.
   //  · 인건비(laborAlloc)·참여인원은 아직 근무일지 스냅샷(위 PD_SNAPSHOT) 값을 코드/이름으로 이어 붙입니다.
   // ═════════════════════════════════════════════════════════════════════════════════
-  var LIVE = { evStart:'2026-11-01', ok:false, doc:null, dc:null, dcUp:null, unlinkedNames:[], cbErr:'', dcErr:'', err:'', vat:'ex', rowsP:null, unlinked:0 };
+  var LIVE = { evStart:'2026-11-01', invNames:['전호식'], ok:false, doc:null, dc:null, dcUp:null, unlinkedNames:[], cbErr:'', dcErr:'', err:'', vat:'ex', rowsP:null, unlinked:0 };
   try{ var _sv = localStorage.getItem('nucks-dash-vat'); if(_sv==='in' || _sv==='ex') LIVE.vat = _sv; }catch(e){}
   var PD_SNAPSHOT = PD_PROJECTS.slice();
   var SNAP = JSON.parse(JSON.stringify({ DIRECT_BY_YEAR:DIRECT_BY_YEAR, ADMIN_OPTIONAL_BY_YEAR:ADMIN_OPTIONAL_BY_YEAR, LABOR_BY_YEAR:LABOR_BY_YEAR }));
@@ -3616,7 +3616,7 @@ var DC = (function(){
       LIVE.dcUp = LIVE.dc; LIVE.cbErr = '';
       if(typeof window.__cbGet !== 'function') return;
       return db.collection('cashbookConfig').doc('evSettings').get().then(function(d){
-        if(d.exists) LIVE.evStart = d.data().evStartDate || '';    // 비어 있으면 추정 없음
+        if(d.exists){ LIVE.evStart = d.data().evStartDate || ''; if(Array.isArray(d.data().invNames)) LIVE.invNames = d.data().invNames; }    // evStart 비어 있으면 추정 없음
       }).catch(function(){}).then(function(){ return window.__cbGet(); }).then(function(entries){
         var d = cbToDc(entries, LIVE.dcUp);
         if(d){ LIVE.dc = d; LIVE.rowsP = null; }
@@ -3628,6 +3628,15 @@ var DC = (function(){
   // 대상: 확정된 출금(통장·카드) 중 프로젝트 칸이 채워진 거래. 미지급금(카드대금)은 카드 사용분과 겹치므로 제외.
   // 공급가액: 세금계산서·현금영수증이 달린 거래는 증빙 공급가액(홈택스 연결값 우선, 없으면 합계÷1.1, 증빙 금액이 지급액보다 작으면 그 부분만),
   //          일반계산서·증빙 없음은 지급액 그대로.
+  function cbPersonName(c){
+    var t = String(c||'').trim();
+    var m = t.match(/^([가-힣]{2,4})(\([^()]*\))?$/);   // "이정은" 또는 "이정은(목동)" (괄호가 닫힌 현장 메모)
+    if(!m) return false;
+    var nm = m[1], SUR = '김이박최정강조윤장임한오서신권황안송류유홍전고문양손배백허남심노하곽성차주우구나민진지엄채원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제모탁국어은편용예경봉사부가갈';
+    if(SUR.indexOf(nm.charAt(0)) < 0 && ['남궁','황보','선우','독고','제갈','사공'].indexOf(nm.slice(0,2)) < 0) return false;
+    if((LIVE.invNames || []).indexOf(nm) >= 0) return false;   // 계산서 발행 업체로 등록된 이름
+    return !/(건설|산업|종합|상사|디자인|인테리어|공업|개발|전기|설비|엔지니어|건축|기업|기술|기획|시스템|테크|정화|조명|도장|유리|금속|철물|페인트|타일|가구|목공|방수|미장|설계|환경|물류|통신|전자|센터|스튜디오|공사|외주|용역|자재)/.test(t);
+  }
   function cbToDc(entries, up){
     if(!entries || !entries.length) return null;
     var rows = [], ymdOf = function(v){ return String(v||'').slice(0,10); };
@@ -3639,7 +3648,13 @@ var DC = (function(){
       var d = ymdOf(e.date); if(!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
       var paid = +e.amount || 0; if(!paid) return;   // 카드 취소·환불처럼 마이너스 금액도 그대로 더해 상쇄시킨다
       var r = { d:d, y:d.slice(0,4), paid:paid, proj:proj, major:e.pmajor||'', acct:e.account||'', content:String(e.content||''), memo:String(e.memo||''), kind:'', ev:e.evType||'' };
-      if(evCut && d < evCut){
+      if(e.account === '노무비'){
+        // 노무비는 계산서가 아니라 노무신고 후 차인지급액이 나간 것이라 부가세가 없다 → ÷1.1 추정 없이 지급액 그대로
+        r.pre = { sup:paid, shop:'' }; r.ev = '노무비(지급액)';
+      } else if(e.account === '외주비' && cbPersonName(e.content) && !(e.evType && e.channel !== '카드')){
+        // 외주비 중 내용이 사람 이름뿐인 건은 계산서 발행 외주가 아니라 노무처럼 차인지급된 금액 → 지급액 그대로 (단, 세금계산서 등 증빙이 달린 건은 계산서 매입이므로 아래 일반 규칙)
+        r.pre = { sup:paid, shop:'' }; r.ev = '차인지급(지급액)';
+      } else if(evCut && d < evCut){
         // 증빙 관리 시작일 이전: 증빙 연결 여부와 관계없이 지급액÷1.1(부가세 별도)로 추정
         r.pre = { sup:Math.round(paid/1.1), shop:'', est:true }; r.ev = '추정(÷1.1)';
       } else if(e.channel !== '카드' && e.evType){
@@ -3687,7 +3702,7 @@ var DC = (function(){
       '<div class="modal-backdrop" id="costEvBackdrop"><div class="modal-card" style="max-width:780px;">' +
         '<div class="modal-hd"><div class="modal-title">🧾 직접비 근거 · ' + esc(p.name) + '</div><button class="modal-close" id="costEvClose">✕</button></div>' +
         '<div class="modal-share">' + (LIVE.dc && LIVE.dc.source === 'cashbook'
-            ? '<b>현금출납부</b>에서 이 프로젝트로 태그된 확정 지출을 모았습니다. ' + (LIVE.evStart ? '<b>' + esc(LIVE.evStart) + ' 이전</b> 지출은 증빙과 관계없이 지급액÷1.1로 추정(표에 "추정"), 그 이후는 ' : '') + '세금계산서·현금영수증이 달린 건은 증빙의 <b>공급가액</b>, 나머지는 지급액 그대로입니다 · 증빙 연결 ' + info.mcnt + '/' + info.cnt + '건(지급액 기준 ' + matchedPct + '%)'
+            ? '<b>현금출납부</b>에서 이 프로젝트로 태그된 확정 지출을 모았습니다. ' + (LIVE.evStart ? '<b>' + esc(LIVE.evStart) + ' 이전</b> 지출은 증빙과 관계없이 지급액÷1.1로 추정(표에 "추정", 단 <b>노무비 계정, 그리고 내용이 사람 이름뿐인 외주비는 차인지급액이라 지급액 그대로</b>(증빙이 달린 건은 계산서 매입으로 계산), 단 현금출납부에 "계산서 발행 업체"로 등록한 이름은 제외), 그 이후는 ' : '') + '세금계산서·현금영수증이 달린 건은 증빙의 <b>공급가액</b>, 나머지는 지급액 그대로입니다 · 증빙 연결 ' + info.mcnt + '/' + info.cnt + '건(지급액 기준 ' + matchedPct + '%)'
             : '업로드한 거래내역에서 이 프로젝트 태그의 지출을 모은 뒤, 홈택스 매입 세금계산서와 연결해 <b>공급가액</b>을 구했습니다 · 연결된 지급 ' + info.mcnt + '/' + info.cnt + '건(지급액 기준 ' + matchedPct + '%)') + '</div>' +
         '<div class="modal-sub-hd"><span>지급액 합계(부가세 포함)</span><span class="num">' + won(info.paid) + '원</span></div>' +
         '<div class="modal-sub-hd"><span>직접비 — 공급가액 기준 (증빙 연결분은 공급가액, 나머지는 지급액 그대로)</span><span class="num">' + won(info.supply) + '원</span></div>' +

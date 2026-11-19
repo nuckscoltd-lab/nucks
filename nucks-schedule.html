@@ -2519,7 +2519,7 @@ async function loadCbProj(){
   try{
     if(!fsReady()){o.err='서버 연결 안 됨'}
     else{
-      try{const es=await db.collection('cashbookConfig').doc('evSettings').get();if(es.exists)o.evStart=es.data().evStartDate||''}catch(e){}
+      try{const es=await db.collection('cashbookConfig').doc('evSettings').get();if(es.exists){o.evStart=es.data().evStartDate||'';if(Array.isArray(es.data().invNames))CB_INV_NAMES=es.data().invNames}}catch(e){}
       const snap=await db.collection('cashbookEntries').where('project','>','').get();
       snap.docs.forEach(d=>{const e=d.data();
         if(e.status!=='확정'||e.type!=='출금'||e.account==='미지급금')return;
@@ -2529,8 +2529,13 @@ async function loadCbProj(){
   }catch(err){o.err=(err&&err.code==='permission-denied')?'현금출납부는 관리자만 읽을 수 있습니다':String(err&&err.message||err)}
   CBP=o;return o;
 }
+function cbPersonName(c){const t=String(c||'').trim();const m=t.match(/^([가-힣]{2,4})(\([^()]*\))?$/);if(!m)return false;const nm=m[1];const SUR='김이박최정강조윤장임한오서신권황안송류유홍전고문양손배백허남심노하곽성차주우구나민진지엄채원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제모탁국어은편용예경봉사부가갈';if(SUR.indexOf(nm.charAt(0))<0&&['남궁','황보','선우','독고','제갈','사공'].indexOf(nm.slice(0,2))<0)return false;if((CB_INV_NAMES||[]).indexOf(nm)>=0)return false;return!/(건설|산업|종합|상사|디자인|인테리어|공업|개발|전기|설비|엔지니어|건축|기업|기술|기획|시스템|테크|정화|조명|도장|유리|금속|철물|페인트|타일|가구|목공|방수|미장|설계|환경|물류|통신|전자|센터|스튜디오|공사|외주|용역|자재)/.test(t)}
+let CB_INV_NAMES=['전호식']; // 현금출납부 설정의 "계산서 발행 업체로 보는 외주 이름"
+// 노무비, 그리고 내용이 사람 이름뿐인 외주비(증빙 없는 건)는 차인지급액 → ÷1.1 추정 제외
+function cbPaidAsIs(e,cut){if(e.account==='노무비')return true;if(e.account==='외주비'&&cbPersonName(e.content))return!(e.evType&&e.channel!=='카드');return false}
 function cbEntrySupply(e,cut){
   const paid=+e.amount||0;
+  if(cbPaidAsIs(e,cut))return paid; // 노무비·사람이름 외주비: 차인지급액 — 계산서가 없으므로 ÷1.1 추정 없이 지급액 그대로
   if(cut&&String(e.date||'').slice(0,10)<cut)return Math.round(paid/1.1); // 증빙 관리 시작일 이전: 증빙과 관계없이 ÷1.1 추정
   if(e.channel!=='카드'&&e.evType){
     const tot=+e.evTotal>0?+e.evTotal:paid;
@@ -2543,7 +2548,7 @@ async function cbCostFor(r){
   const o=await loadCbProj();
   if(o.err)return{ok:false,err:o.err};
   const names=[r.name].concat(r.wlNames||[],r.nameOld?[r.nameOld]:[]).filter(Boolean),seen=new Set();let paid=0,supply=0,cnt=0,mcnt=0,ecnt=0;
-  names.forEach(n=>{const k=cbNKey(n);if(seen.has(k))return;seen.add(k);(o.map.get(k)||[]).forEach(e=>{paid+=+e.amount||0;supply+=cbEntrySupply(e,o.evStart);cnt++;if(o.evStart&&String(e.date||'').slice(0,10)<o.evStart)ecnt++;else if(e.evType&&e.channel!=='카드')mcnt++})});
+  names.forEach(n=>{const k=cbNKey(n);if(seen.has(k))return;seen.add(k);(o.map.get(k)||[]).forEach(e=>{paid+=+e.amount||0;supply+=cbEntrySupply(e,o.evStart);cnt++;if(o.evStart&&String(e.date||'').slice(0,10)<o.evStart&&!cbPaidAsIs(e,o.evStart))ecnt++;else if(e.evType&&e.channel!=='카드')mcnt++})});
   return{ok:true,paid:Math.round(paid),supply:Math.round(supply),cnt,mcnt,ecnt,evStart:o.evStart};
 }
 function pnlShell(rowId){return`<div class="pnl" data-pnl="${rowId}"><div class="hint" style="margin:0">손익 계산 중…</div></div>`}
@@ -2614,7 +2619,7 @@ async function fillPnl(root){
       ${T('일반관리비 배분',admin===null?'-':won(admin)+'원')}
       ${T('손익',(profit>=0?'+':'')+won(profit)+'원',profit>=0?'pos':'neg')}
       ${T('손익율',rate===null?'-':rate.toFixed(1)+'%',rate===null?'':rate>=0?'pos':'neg')}</div>
-      <div class="hint" style="margin:6px 0 0">${cost.ok?(cost.cnt?`매입원가: 현금출납부에서 이 프로젝트로 태그된 확정 지출 ${cost.cnt}건(증빙 연결 ${cost.mcnt}건${cost.ecnt?` · ${cost.evStart} 이전 ${cost.ecnt}건은 ÷1.1 추정`:''})`:'현금출납부에서 이 프로젝트로 태그된 확정 지출이 아직 없습니다(프로젝트 칸 이름 확인)'):'매입원가를 불러오지 못해 손익에서 제외했습니다 — '+esc(cost.err)}${laborHow?` · 인건비: ${esc(laborHow)}`:' · 인건비가 아직 계산되지 않아 손익에서 제외했습니다.'}${adminNote?` · 일반관리비: ${esc(adminNote)}`:''}</div>`;
+      <div class="hint" style="margin:6px 0 0">${cost.ok?(cost.cnt?`매입원가: 현금출납부에서 이 프로젝트로 태그된 확정 지출 ${cost.cnt}건(증빙 연결 ${cost.mcnt}건${cost.ecnt?` · ${cost.evStart} 이전 ${cost.ecnt}건은 ÷1.1 추정(노무비·사람이름 외주비 제외)`:''})`:'현금출납부에서 이 프로젝트로 태그된 확정 지출이 아직 없습니다(프로젝트 칸 이름 확인)'):'매입원가를 불러오지 못해 손익에서 제외했습니다 — '+esc(cost.err)}${laborHow?` · 인건비: ${esc(laborHow)}`:' · 인건비가 아직 계산되지 않아 손익에서 제외했습니다.'}${adminNote?` · 일반관리비: ${esc(adminNote)}`:''}</div>`;
   }
 }
 async function settleAutoValues(r,withLabor){
