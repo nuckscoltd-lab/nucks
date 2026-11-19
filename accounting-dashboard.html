@@ -499,8 +499,8 @@ tr.group-hd .group-hd-meta{float:right; color:var(--muted); font-size:11.5px;}
   </section>
 
   <section style="margin-bottom:8px">
-    <div class="sec-hd"><h2>소분류 비교</h2><span class="desc">프로젝트 코드 분류 구간 기준 · 소분류 연결 56 / 전체 56건(100%)</span></div>
-    <div class="note-line" style="margin:0 0 12px">소분류는 프로젝트 코드의 분류 구간(예: 2025-02-01의 "02")에서 직접 추출한 값으로, 이전 버전처럼 근무일지·계약 시트 간 이름 유사도로 대조한 결과가 아닙니다. 신규 수주 2건(목동1단지, 남성역세권)은 아직 근무일지 기록이 없어 매입원가·인건비가 0으로 집계되지만, 코드 배정 기준으로는 소분류가 확정되어 있어 전체 56건에 포함했습니다.</div>
+    <div class="sec-hd"><h2>소분류 비교</h2><span class="desc" id="subDesc">프로젝트 코드 분류 구간 기준 · 소분류 연결 56 / 전체 56건(100%)</span></div>
+    <div class="note-line" id="subNote" style="margin:0 0 12px">소분류는 프로젝트 코드의 분류 구간(예: 2025-02-01의 "02")에서 직접 추출한 값으로, 이전 버전처럼 근무일지·계약 시트 간 이름 유사도로 대조한 결과가 아닙니다. 신규 수주 2건(목동1단지, 남성역세권)은 아직 근무일지 기록이 없어 매입원가·인건비가 0으로 집계되지만, 코드 배정 기준으로는 소분류가 확정되어 있어 전체 56건에 포함했습니다.</div>
     <div class="major-grid" id="subCards"></div>
   </section>
 
@@ -2342,11 +2342,13 @@ var DC = (function(){
     }
     var zy = y(0);
     svg += '<line x1="'+padL+'" y1="'+zy+'" x2="'+(W-padR)+'" y2="'+zy+'" stroke="var(--ink-2)" stroke-width="1" opacity="0.4" />';
+    wrap._bars = bars;
     bars.forEach(function(b, i){
       var cx = padL + slot*(i+0.5), v = (b.rate === null ? 0 : b.rate), yy = y(v);
       var top = Math.min(yy, zy), h = Math.max(1, Math.abs(zy - yy));
       var tip = b.name + ' · ' + (b.rate === null ? '원가 확정 프로젝트 없음' : b.rate.toFixed(1) + '%') + ' · 매출 ' + fmtWon(b.rev) + '원 · ' + b.count + '건' + (b.known < b.count ? ' (원가 확정 ' + b.known + '건)' : '');
-      svg += '<path d="'+barPath(cx-bw/2, top, bw, h, v>=0)+'" fill="'+b.color+'"><title>'+esc(tip)+'</title></path>';
+      if(b.f) svg += '<rect class="bar-hit" data-bar="'+i+'" x="'+(cx-slot/2)+'" y="'+padT+'" width="'+slot+'" height="'+(H-padT)+'" fill="transparent" style="cursor:pointer"><title>'+esc(tip+' — 클릭하면 프로젝트 목록')+'</title></rect>';
+      svg += '<path d="'+barPath(cx-bw/2, top, bw, h, v>=0)+'" fill="'+b.color+'" style="pointer-events:none"><title>'+esc(tip)+'</title></path>';
       svg += '<text x="'+cx+'" y="'+(v>=0 ? top-4 : top+h+11)+'" text-anchor="middle" font-size="10" font-weight="600" fill="var(--ink)" font-family="JetBrains Mono, monospace">'+(b.rate === null ? '-' : b.rate.toFixed(1)+'%')+'</text>';
       var nm = b.name.length > 8 ? b.name.slice(0,7)+'…' : b.name;
       svg += '<text x="'+cx+'" y="'+(H-24)+'" text-anchor="middle" font-size="10" fill="var(--ink-2)">'+esc(nm)+'</text>';
@@ -2354,6 +2356,50 @@ var DC = (function(){
     });
     svg += '</svg>';
     wrap.innerHTML = svg + (note ? '<div class="cap" style="margin-top:4px;">'+note+'</div>' : '');
+    if(!wrap._barBound){
+      wrap._barBound = true;
+      wrap.addEventListener('click', function(e){
+        var t = e.target.closest ? e.target.closest('[data-bar]') : null; if(!t) return;
+        var b = wrap._bars && wrap._bars[parseInt(t.getAttribute('data-bar'), 10)]; if(b && b.f) openBarProjectsModal(b);
+      });
+    }
+  }
+  // 막대에 해당하는 프로젝트 목록 팝업(집계 조건 b.f = pdAgg와 같은 형식)
+  function pdProjectsFor(o){
+    return PD_PROJECTS.filter(function(p){
+      if(o.major && p.major !== o.major) return false;
+      if(o.sub && p.subLabel !== o.sub) return false;
+      if(o.client && normClient(p.client) !== o.client) return false;
+      if(o.year && pdProjectYear(p) !== o.year) return false;
+      return true;
+    });
+  }
+  function openBarProjectsModal(b){
+    var f = b.f, list = pdProjectsFor(f).map(function(p){
+      var known = pdHasCost(p), prof = known ? pdProfit(p, !!f.admin) : null;
+      return { p:p, known:known, profit:prof, rate:(known && p.contractAmt > 0) ? prof/p.contractAmt*100 : null };
+    }).sort(function(a,b2){ return (b2.p.contractAmt||0) - (a.p.contractAmt||0); });
+    var rows = list.map(function(x){
+      var p = x.p, idx = PD_PROJECTS.indexOf(p);
+      return '<div class="modal-row" style="gap:10px; align-items:flex-start;">' +
+        '<span class="nm" style="flex:1; min-width:0;"><a href="#" class="pd-bar-open" data-idx="'+idx+'" style="color:var(--ink); text-decoration:underline;">'+esc(p.name)+'</a><br><span style="font-size:11px; color:var(--muted);">'+esc(p.client||'')+' · '+esc(p.code||'코드 없음')+' · '+esc(p.status4||p.status||'')+'</span></span>' +
+        '<span class="right num" style="text-align:right; white-space:nowrap;">'+fmtWon(p.contractAmt||0)+'원<br><span style="font-size:11px; color:'+(x.known ? (x.profit>=0 ? 'var(--pos)' : 'var(--neg, #b3402a)') : 'var(--muted)')+'">'+(x.known ? (x.profit>=0?'+':'')+fmtWon(x.profit)+'원 · '+x.rate.toFixed(1)+'%' : '원가 미확정(손익율 제외)')+'</span></span></div>';
+    }).join('');
+    var old = document.getElementById('barListBackdrop'); if(old) old.remove();
+    var holder = document.createElement('div');
+    holder.innerHTML = '<div class="modal-backdrop" id="barListBackdrop"><div class="modal-card" style="max-width:640px; max-height:80vh; overflow:auto;">' +
+      '<div class="modal-hd"><div class="modal-title">'+esc(b.name)+' · 프로젝트 '+list.length+'건</div><button class="modal-close" id="barListClose">✕</button></div>' +
+      '<div class="modal-share">'+(f.year ? f.year+'년 계약 · ' : '전체 연도 · ')+'계약금액 큰 순 · 손익은 '+(f.admin ? '일반관리비 배분 포함(설계)' : '일반관리비 미포함')+' · 프로젝트명을 누르면 상세로 이동합니다</div>' +
+      (rows || '<div style="padding:20px; text-align:center; color:var(--muted);">해당 프로젝트가 없습니다.</div>') + '</div></div>';
+    document.body.appendChild(holder.firstChild);
+    var bd = document.getElementById('barListBackdrop');
+    function close(){ bd.remove(); }
+    document.getElementById('barListClose').addEventListener('click', close);
+    bd.addEventListener('click', function(e){
+      if(e.target === bd){ close(); return; }
+      var a = e.target.closest ? e.target.closest('.pd-bar-open') : null;
+      if(a){ e.preventDefault(); close(); var i = parseInt(a.getAttribute('data-idx'), 10); if(typeof pdOpenProject === 'function') pdOpenProject(i); }
+    });
   }
   function barPath(x, y, w, h, up){
     var r = Math.min(4, w/2, h);
@@ -2385,11 +2431,11 @@ var DC = (function(){
       var bars = [];
       if(selSub){
         var a1 = pdAgg({year:yr, major:selMajor, sub:selSub, admin:STATE.includeAdmin});
-        if(a1.count) bars.push({ name:selMajor+' · '+selSub, color:colorForSub(selSub), rate:a1.rate, rev:a1.rev, count:a1.count, known:a1.known });
+        if(a1.count) bars.push({ name:selMajor+' · '+selSub, color:colorForSub(selSub), rate:a1.rate, rev:a1.rev, count:a1.count, known:a1.known, f:{year:yr, major:selMajor, sub:selSub, admin:STATE.includeAdmin} });
       } else {
         MAJORS.filter(function(m){ return !selMajor || m === selMajor; }).forEach(function(m){
           var a2 = pdAgg({year:yr, major:m, admin:STATE.includeAdmin});
-          if(a2.count) bars.push({ name:m, color:MAJOR_COLOR[m], rate:a2.rate, rev:a2.rev, count:a2.count, known:a2.known });
+          if(a2.count) bars.push({ name:m, color:MAJOR_COLOR[m], rate:a2.rate, rev:a2.rev, count:a2.count, known:a2.known, f:{year:yr, major:m, admin:STATE.includeAdmin} });
         });
       }
       renderBars('chartMajor', bars, STATE.includeAdmin ? '설계는 일반관리비 배분 포함' : '일반관리비 미포함');
@@ -2410,7 +2456,7 @@ var DC = (function(){
       PD_PROJECTS.forEach(function(p){ if(pf(p) && pdProjectYear(p) === yr) cmap[normClient(p.client)] = 1; });
       var cl = Object.keys(cmap).map(function(c){ var a = pdAgg({year:yr, major:selMajor, sub:selSub, client:c}); a.name = c; return a; })
         .filter(function(a){ return a.known > 0; }).sort(function(a,b){ return b.profit - a.profit; }).slice(0,5);
-      renderBars('chartClient', cl.map(function(a, i){ return { name:a.name, color:'var('+CLIENT_COLOR_SLOTS[i % CLIENT_COLOR_SLOTS.length]+')', rate:a.rate, rev:a.rev, count:a.count, known:a.known }; }), '손익 기여 상위 5곳(원가 확정분)');
+      renderBars('chartClient', cl.map(function(a, i){ return { name:a.name, color:'var('+CLIENT_COLOR_SLOTS[i % CLIENT_COLOR_SLOTS.length]+')', rate:a.rate, rev:a.rev, count:a.count, known:a.known, f:{year:yr, major:selMajor, sub:selSub, client:a.name, admin:STATE.includeAdmin} }; }), '손익 기여 상위 5곳(원가 확정분)');
     }
 
     // 소분류 (공사 / 설계)
@@ -2421,7 +2467,7 @@ var DC = (function(){
       if(!show) return;
       var its = (DATA[m].items || []).filter(function(x){ return !selSub || x.key === selSub; });
       if(!yr){ renderTrend(cid, { items:its }); return; }
-      var bs = its.map(function(x){ var a = pdAgg({year:yr, major:m, sub:x.key}); return { name:x.name, color:colorForSub(x.key), rate:a.rate, rev:a.rev, count:a.count, known:a.known }; })
+      var bs = its.map(function(x){ var a = pdAgg({year:yr, major:m, sub:x.key}); return { name:x.name, color:colorForSub(x.key), rate:a.rate, rev:a.rev, count:a.count, known:a.known, f:{year:yr, major:m, sub:x.key, admin:STATE.includeAdmin} }; })
         .filter(function(b){ return b.count > 0; });
       renderBars(cid, bs);
     });
@@ -2431,6 +2477,8 @@ var DC = (function(){
   function pdRefreshViews(){
     syncGlobalBar();
     renderKPI(); renderMosaic(); renderCharts(); renderProfitCards(); renderSubCards();
+    var ds = document.getElementById('detailSection');   // 열려 있는 "프로젝트 상세" 목록도 같은 연도 기준으로 다시 그림
+    if(ds && ds.style.display !== 'none' && typeof pdRender === 'function') pdRender();
   }
 
   // ── 수익성 추정(하한선) 카드 ──────────────────────────────────────
@@ -2477,6 +2525,12 @@ var DC = (function(){
   // ── 소분류 비교 카드 ──────────────────────────────────────
   function renderSubCards(){
     var el = document.getElementById('subCards');
+    (function(){   // 소분류 비교 머리말의 건수는 지금 불러온 프로젝트 수 기준으로 갱신
+      var tot = PD_PROJECTS.length, withSub = PD_PROJECTS.filter(function(p){ return p.subLabel; }).length;
+      var d = document.getElementById('subDesc'), n = document.getElementById('subNote');
+      if(d) d.textContent = '프로젝트 코드 분류 구간 기준 · 소분류 연결 ' + withSub + ' / 전체 ' + tot + '건(' + (tot ? Math.round(withSub/tot*100) : 0) + '%)';
+      if(n) n.textContent = '소분류는 프로젝트 코드의 분류 구간(예: 2025-02-01의 "02")에서 직접 추출한 값으로, 근무일지·계약 시트 간 이름 유사도로 대조한 결과가 아닙니다. 근무일지·출납부 기록이 아직 없는 신규 수주 프로젝트는 매입원가·인건비가 0(또는 근사)으로 집계되지만, 코드 배정 기준으로는 소분류가 확정되어 있어 전체 ' + tot + '건에 포함했습니다.';
+    })();
     var yr = pdGYear(), selMajor = selected ? selected.major : null, selSub = (selected && selected.key) ? selected.key : null;
     var byMajor = {};
     SUB_CARDS.forEach(function(s0){
@@ -2716,6 +2770,15 @@ var DC = (function(){
     section.scrollIntoView({behavior:'smooth', block:'start'});
   }
 
+  // 막대 팝업에서 프로젝트명을 눌렀을 때: 그 프로젝트의 상세 화면으로 이동
+  function pdOpenProject(i){
+    var p = PD_PROJECTS[i]; if(!p) return;
+    pdState.view = 'detail'; pdState.i = i; pdState.cmp = 'major'; pdState.major = p.major; pdState.q = ''; pdState.sub = '';
+    var section = document.getElementById('detailSection'); section.style.display = '';
+    pdRender();
+    section.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+
   document.getElementById('pdCloseBtn').addEventListener('click', function(e){
     e.preventDefault();
     document.getElementById('detailSection').style.display = 'none';
@@ -2778,10 +2841,10 @@ var DC = (function(){
     var filtered = PD_PROJECTS.filter(function(p, idx){ p.__idx = idx; return true; });
     if(major !== 'all') filtered = filtered.filter(function(p){ return p.major === major; });
     if(sub) filtered = filtered.filter(function(p){ return p.subLabel === sub; });
-    if(status4 === '진행+완료'){
-      if(pdState.year === '전체') filtered = filtered.filter(function(p){ return p.status4 === '진행' || p.status4 === '완료'; });
-      else filtered = filtered.filter(function(p){ return pdYearBucket(p, pdState.year) !== null; });
-    }
+    // 2026-11: 연도는 페이지 맨 위 "연도" 선택(프로젝트 코드 연도 = 계약 연도 기준) 하나로 통일 — 요약 타일과 같은 프로젝트 집합에서 진행상태로 거른다
+    var gy = pdGYear();
+    if(gy) filtered = filtered.filter(function(p){ return pdProjectYear(p) === gy; });
+    if(status4 === '진행+완료') filtered = filtered.filter(function(p){ return p.status4 === '진행' || p.status4 === '완료'; });
     else if(status4 !== 'all') filtered = filtered.filter(function(p){ return p.status4 === status4; });
     if(q) filtered = filtered.filter(function(p){ return (p.name+p.client).toLowerCase().indexOf(q.toLowerCase()) >= 0; });
 
@@ -2895,10 +2958,7 @@ var DC = (function(){
           PD_STATUS4_OPTIONS.map(function(s){ return '<button class="seg-btn'+(status4===s?' on':'')+'" data-pd-status4="'+s+'">'+s+'</button>'; }).join('') +
           '<button class="seg-btn'+(status4==='진행+완료'?' on':'')+'" data-pd-status4="진행+완료" title="진행과 완료를 함께 봅니다">진행+완료</button>' +
         '</span>' +
-        '<select class="filter-select" id="pdYearSel" title="\'진행+완료\'를 선택했을 때만 적용됩니다 — 그 해에 종료된 완료건 + 올해 기준 진행 중인 건만 보여줍니다. 다른 상태 버튼에는 영향이 없습니다.">' +
-          '<option value="전체"'+(pdState.year==='전체'?' selected':'')+'>연도 전체</option>' +
-          YEARS.map(function(y){ return '<option value="'+y+'"'+(pdState.year===y?' selected':'')+'>'+y+'년</option>'; }).join('') +
-        '</select>' +
+        '<span class="hint" style="margin-left:4px; font-size:11.5px; color:var(--muted);">'+(gy ? esc(gy)+'년 계약 프로젝트 중 (연도는 맨 위 선택 기준)' : '전체 연도 (연도는 맨 위에서 선택)')+'</span>' +
         '</span>' +
         '<input class="search-input" id="pdSearchBox" placeholder="프로젝트명·발주처 검색" value="'+q.replace(/"/g,'&quot;')+'">' +
         (sub ? '<span class="sub-filter-chip">소분류 · '+sub+' <a href="#" class="sub-filter-clear pd-clear-sub" title="필터 해제">✕</a></span>' : '') +
@@ -2926,10 +2986,6 @@ var DC = (function(){
     document.querySelectorAll('[data-pd-status4]').forEach(function(btn){
       btn.addEventListener('click', function(){ pdState.status4 = btn.getAttribute('data-pd-status4'); pdRender(); });
     });
-    var pdYearSel = document.getElementById('pdYearSel');
-    if(pdYearSel){
-      pdYearSel.addEventListener('change', function(){ pdState.year = pdYearSel.value; pdRender(); });
-    }
     var sb = document.getElementById('pdSearchBox');
     if(sb){
       sb.addEventListener('input', function(){ pdState.q = sb.value; pdRender(); });
