@@ -595,7 +595,7 @@
       <button class="btn-primary" id="xfFindBtn">찾기</button>
     </div>
     <div class="import-help">
-      내용·비고에 위 글자(회사명, 국민은행 등)가 들어 있는 거래 중 아직 "내부이체"가 아닌 것을 찾아 목록으로 보여드립니다. 다른 계좌에 <b>같은 날짜·같은 금액의 반대 거래</b>가 있으면 "짝 있음"으로 표시합니다. 체크한 거래만 계정과목을 "내부이체"로 한 번에 바꿉니다(프로젝트·대분류·발주처는 비워 집계에서 빠지게 합니다). 증빙이 입력된 거래는 매출·매입 증빙일 수 있어 목록에서 제외합니다.
+      ① 이미 "내부이체"로 되어 있는 거래의 상대 계좌 쪽 짝 거래(같은 금액·반대 구분·±3일)와, 내용·비고에 위 글자가 들어 있는 신한 거래 중 아직 "내부이체"가 아닌 것을 후보로 보여드립니다. ② 반대로 내부이체인데 상대 계좌 장부에 짝이 아예 없는 건도 따로 알려드립니다. 체크한 거래만 계정과목을 "내부이체"로 한 번에 바꿉니다(프로젝트·대분류·발주처는 비워 집계에서 빠지게 합니다). 증빙이 입력된 거래는 매출·매입 증빙일 수 있어 목록에서 제외합니다.
     </div>
     <div class="status-line" id="xfStatus"></div>
     <div id="xfPreview"></div>
@@ -2219,35 +2219,50 @@
   }
 
   // ---------- 내부이체 일괄 찾기 ----------
-  let XF = [];
+  let XF = [], XO = [];
+  const xfNear = (a, b) => Math.abs(new Date(a.date) - new Date(b.date)) <= 3 * 864e5;
+  const xfDiff = (a, b) => Math.abs(new Date(a.date) - new Date(b.date));
+  function xfPairOf(e, list){
+    return list.filter(o => o.id !== e.id && bankOf(o) !== bankOf(e) && o.type !== e.type && o.amount === e.amount && xfNear(o, e))
+      .sort((x, y) => xfDiff(x, e) - xfDiff(y, e))[0] || null;
+  }
   document.getElementById('xfFindBtn').addEventListener('click', () => {
     const st = document.getElementById('xfStatus'), box = document.getElementById('xfPreview');
     const keys = document.getElementById('xfKeys').value.split(',').map(x => normC(x)).filter(Boolean);
     const scope = document.getElementById('xfScope').value;
-    box.innerHTML = ''; XF = [];
-    if (!keys.length) { st.className = 'status-line err'; st.textContent = '찾을 글자를 한 개 이상 입력해주세요.'; return; }
-    const pool = allEntries.filter(e => isBank(e));
-    const cand = pool.filter(e => (scope === '전체' || bankOf(e) === '신한') && e.account !== '내부이체' && !e.evType && e.status === '확정'
-      && keys.some(k => normC([e.content, e.memo].join(' ')).includes(k)));
-    cand.forEach(e => {
-      const pair = pool.find(o => o !== e && o.id !== e.id && bankOf(o) !== bankOf(e) && o.date === e.date && o.amount === e.amount && o.type !== e.type);
-      XF.push({ e, pair, paired: !!pair });
-    });
+    box.innerHTML = ''; XF = []; XO = [];
+    const pool = allEntries.filter(e => isBank(e) && e.status === '확정');
+    const tagged = pool.filter(e => e.account === '내부이체');
+    // A. 내부이체로 바꿀 후보: ① 내용에 키워드가 들어 있는 신한(또는 전체) 거래 ② 이미 내부이체인 거래의 상대 계좌 쪽 짝 거래
+    const cand = pool.filter(e => e.account !== '내부이체' && !e.evType && (
+      (keys.length && (scope === '전체' || bankOf(e) === '신한') && keys.some(k => normC([e.content, e.memo].join(' ')).includes(k))) ||
+      !!xfPairOf(e, tagged)));
+    cand.forEach(e => { const pair = xfPairOf(e, pool); XF.push({ e, pair, paired: !!pair, viaTag: !!xfPairOf(e, tagged) }); });
     XF.sort((a, b) => (b.e.date || '').localeCompare(a.e.date || ''));
-    if (!XF.length) { st.className = 'status-line ok'; st.textContent = '해당하는 거래가 없습니다.'; return; }
-    st.className = 'status-line ok'; st.textContent = `${XF.length}건을 찾았습니다(짝 있음 ${XF.filter(x => x.paired).length}건). 내용을 확인하고 체크를 조정한 뒤 변경 버튼을 눌러주세요.`;
-    box.innerHTML = `<div class="table-wrap" style="max-height:420px; overflow:auto;"><table><thead><tr><th><input type="checkbox" id="xfAll" checked></th><th>거래일자</th><th>계좌</th><th>구분</th><th class="r">금액</th><th>내용</th><th>비고</th><th>현재 계정·프로젝트</th><th>짝</th></tr></thead><tbody>${
-      XF.map((x, i) => `<tr><td><input type="checkbox" class="xf-ck" data-i="${i}" checked></td><td class="nowrap">${esc(x.e.date)}</td><td>${bankOf(x.e)}</td><td>${esc(x.e.type)}</td><td class="amount ${x.e.type === '입금' ? 'in' : 'out'}">${x.e.type === '입금' ? '+' : '-'}${fmtWon(x.e.amount)}</td><td>${esc(x.e.content)}</td><td class="memo">${esc(x.e.memo)}</td><td>${esc([x.e.account, x.e.project].filter(Boolean).join(' · ') || '-')}</td><td>${x.paired ? '짝 있음' : ''}</td></tr>`).join('')
+    // B. 이미 내부이체인데 상대 계좌에 짝 거래(±3일, 같은 금액)가 아예 없는 건
+    XO = tagged.filter(e => !xfPairOf(e, pool)).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    if (!XF.length && !XO.length) { st.className = 'status-line ok'; st.textContent = '정리할 거래가 없습니다.'; return; }
+    st.className = 'status-line ok';
+    st.textContent = `① 내부이체로 바꿀 후보 ${XF.length}건(내부이체의 짝 ${XF.filter(x => x.viaTag).length}건 포함) · ② 내부이체인데 상대 계좌에 짝이 없는 건 ${XO.length}건`;
+    let html = '';
+    if (XF.length) html += `<div style="font-weight:700; margin:12px 0 6px;">① 내부이체로 바꿀 후보</div><div class="table-wrap" style="max-height:380px; overflow:auto;"><table><thead><tr><th><input type="checkbox" id="xfAll" checked></th><th>거래일자</th><th>계좌</th><th>구분</th><th class="r">금액</th><th>내용</th><th>비고</th><th>현재 계정·프로젝트</th><th>이유</th></tr></thead><tbody>${
+      XF.map((x, i) => `<tr><td><input type="checkbox" class="xf-ck" data-i="${i}" checked></td><td class="nowrap">${esc(x.e.date)}</td><td>${bankOf(x.e)}</td><td>${esc(x.e.type)}</td><td class="amount ${x.e.type === '입금' ? 'in' : 'out'}">${x.e.type === '입금' ? '+' : '-'}${fmtWon(x.e.amount)}</td><td>${esc(x.e.content)}</td><td class="memo">${esc(x.e.memo)}</td><td>${esc([x.e.account, x.e.project].filter(Boolean).join(' · ') || '-')}</td><td>${x.viaTag ? '내부이체의 짝' : (x.paired ? '글자 일치 · 짝 있음' : '글자 일치')}</td></tr>`).join('')
     }</tbody></table></div><div style="margin-top:10px;"><button class="btn-primary" id="xfApplyBtn">체크한 거래를 내부이체로 변경</button></div>`;
-    document.getElementById('xfAll').addEventListener('change', ev => box.querySelectorAll('.xf-ck').forEach(c => { c.checked = ev.target.checked; }));
-    document.getElementById('xfApplyBtn').addEventListener('click', async () => {
+    if (XO.length) html += `<div style="font-weight:700; margin:18px 0 6px;">② 내부이체인데 상대 계좌에 짝이 없는 건</div><div class="import-help">상대 계좌 장부에 같은 금액의 반대 거래가 ±3일 안에 없는 경우입니다. 실제로 상대 계좌에 입금·출금이 있었다면 그 계좌 장부가 누락된 것이니, 아래에서 체크하면 짝 거래를 만들어 드립니다(기본은 체크 해제 — 먼저 상대 계좌 내역에서 날짜가 많이 다른 같은 금액 거래가 없는지 확인해주세요).</div><div class="table-wrap" style="max-height:300px; overflow:auto;"><table><thead><tr><th>만들기</th><th>거래일자</th><th>계좌</th><th>구분</th><th class="r">금액</th><th>내용</th><th>만들어질 짝</th></tr></thead><tbody>${
+      XO.map((e, i) => { const ob = bankOf(e) === '신한' ? '국민' : '신한'; return `<tr><td><input type="checkbox" class="xo-ck" data-i="${i}"></td><td class="nowrap">${esc(e.date)}</td><td>${bankOf(e)}</td><td>${esc(e.type)}</td><td class="amount ${e.type === '입금' ? 'in' : 'out'}">${e.type === '입금' ? '+' : '-'}${fmtWon(e.amount)}</td><td>${esc(e.content)}</td><td>${ob}은행 ${e.type === '입금' ? '출금' : '입금'}</td></tr>`; }).join('')
+    }</tbody></table></div><div style="margin-top:10px;"><button class="btn-primary" id="xoApplyBtn">체크한 건의 짝 거래 만들기</button></div>`;
+    box.innerHTML = html;
+    const all = document.getElementById('xfAll');
+    if (all) all.addEventListener('change', ev => box.querySelectorAll('.xf-ck').forEach(c => { c.checked = ev.target.checked; }));
+    const ap = document.getElementById('xfApplyBtn');
+    if (ap) ap.addEventListener('click', async () => {
       const chosen = [...box.querySelectorAll('.xf-ck')].filter(c => c.checked).map(c => XF[+c.dataset.i]);
       const sel = []; const seen = new Set();
       chosen.forEach(x => [x.e, x.pair].forEach(e => { if (e && e.account !== '내부이체' && !e.evType && !seen.has(e.id)) { seen.add(e.id); sel.push(e); } }));
       if (!sel.length) { st.className = 'status-line err'; st.textContent = '체크한 거래가 없습니다.'; return; }
       const withProj = sel.filter(e => e.project).length;
       if (!confirm(`${sel.length}건(짝이 있는 상대 계좌 거래 포함)의 계정과목을 "내부이체"로 바꾸고 프로젝트·대분류·발주처를 비웁니다.${withProj ? `\n(이 중 ${withProj}건은 프로젝트가 입력되어 있어 매입원가에서도 빠집니다)` : ''}\n진행할까요?`)) return;
-      const btn = document.getElementById('xfApplyBtn'); btn.disabled = true;
+      ap.disabled = true;
       try {
         for (let i = 0; i < sel.length; i += 400) {
           const batch = db.batch();
@@ -2255,8 +2270,31 @@
           await batch.commit();
         }
         await loadEntries();
-        st.className = 'status-line ok'; st.textContent = `${sel.length}건을 내부이체로 변경했습니다(짝이 있는 상대 계좌 거래 포함).`; box.innerHTML = ''; XF = [];
-      } catch (err) { st.className = 'status-line err'; st.textContent = '변경 실패: ' + err.message; btn.disabled = false; }
+        st.className = 'status-line ok'; st.textContent = `${sel.length}건을 내부이체로 변경했습니다. 다시 "찾기"를 눌러 남은 건을 확인해보세요.`; box.innerHTML = ''; XF = []; XO = [];
+      } catch (err) { st.className = 'status-line err'; st.textContent = '변경 실패: ' + err.message; ap.disabled = false; }
+    });
+    const xo = document.getElementById('xoApplyBtn');
+    if (xo) xo.addEventListener('click', async () => {
+      const sel = [...box.querySelectorAll('.xo-ck')].filter(c => c.checked).map(c => XO[+c.dataset.i]);
+      if (!sel.length) { st.className = 'status-line err'; st.textContent = '체크한 거래가 없습니다.'; return; }
+      if (!confirm(`${sel.length}건의 상대 계좌 짝 거래(내부이체)를 새로 만듭니다. 상대 계좌 잔액이 그만큼 바뀝니다.\n진행할까요?`)) return;
+      xo.disabled = true;
+      try {
+        const t = Date.now();
+        for (let i = 0; i < sel.length; i += 200) {
+          const batch = db.batch();
+          sel.slice(i, i + 200).forEach((e, k) => {
+            const ob = bankOf(e) === '신한' ? '국민' : '신한';
+            batch.set(entriesRef.doc(), { date: e.date, type: e.type === '입금' ? '출금' : '입금', status: '확정', amount: e.amount, content: e.type === '입금' ? `${ob}→${bankOf(e)} 이체` : `${bankOf(e)}→${ob} 이체`, memo: '짝 거래 자동 생성',
+              channel: '통장', bank: ob, account: '내부이체', project: '', pmajor: '', client: '', evType: '', evDate: '', evTotal: 0, order: t + i + k,
+              linkTargetCollection: null, linkTargetCardId: null, linkTargetCardLabel: null, linkApplied: false, linkAppliedYm: null, linkAppliedAmount: null,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+          });
+          await batch.commit();
+        }
+        await loadEntries();
+        st.className = 'status-line ok'; st.textContent = `${sel.length}건의 짝 거래를 만들었습니다.`; box.innerHTML = ''; XF = []; XO = [];
+      } catch (err) { st.className = 'status-line err'; st.textContent = '생성 실패: ' + err.message; xo.disabled = false; }
     });
   });
 
