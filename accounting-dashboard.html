@@ -1353,28 +1353,32 @@ var DC = (function(){
   function renderMonthlyChart(MONTHLY){
     var W = 900, H = 280, padL = 46, padR = 16, padT = 16, padB = 30;
     var n = MONTHLY.length;
-    var maxV = Math.max.apply(null, MONTHLY.map(function(d){return Math.max(d.inc,d.exp);})) * 1.15;
-    var minNet = Math.min(0, Math.min.apply(null, MONTHLY.map(function(d){return d.inc-d.exp;})));
+    // 순현금흐름이 마이너스인 달이 있으면 0선 아래 영역도 축에 포함 (그래야 선이 그래프 밖으로 안 나감)
+    var hiRaw = Math.max(0, Math.max.apply(null, MONTHLY.map(function(d){return Math.max(d.inc,d.exp,d.inc-d.exp);})));
+    var loRaw = Math.min(0, Math.min.apply(null, MONTHLY.map(function(d){return Math.min(d.inc,d.exp,d.inc-d.exp);})));
+    var rough = ((hiRaw - loRaw) || 1) / 5, mag = Math.pow(10, Math.floor(Math.log(rough)/Math.LN10)), stepV = mag;
+    [1,2,2.5,5,10].some(function(m){ stepV = m*mag; return stepV >= rough; });
+    var minV = Math.floor(loRaw/stepV)*stepV, maxV = Math.ceil(hiRaw/stepV)*stepV;
+    if(maxV === minV) maxV = minV + stepV;
     var groupW = (W-padL-padR)/n;
     var barW = groupW * 0.32;
     var x = function(i){ return padL + groupW*i + groupW/2; };
-    var y = function(v){ return padT + (H-padT-padB) * (1 - v/maxV); };
+    var y = function(v){ return padT + (H-padT-padB) * (maxV - v)/(maxV - minV); };
     var incColor = isDark() ? '#4A8AC4' : '#2F6FB0';
     var expColor = isDark() ? '#C17F2E' : '#C97A2E';
     var netColor = isDark() ? '#F1ECE2' : '#2A2621';
 
     var svg = '<svg class="chart-svg" viewBox="0 0 '+W+' '+H+'" id="monthlySvg">';
-    var steps = 4;
-    for(var s=0;s<=steps;s++){
-      var v = maxV*s/steps, yy=y(v);
-      svg += '<line class="gridline" x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" />';
-      svg += '<text class="axislabel" x="'+(padL-8)+'" y="'+(yy+3)+'" text-anchor="end">'+fmtWon(v)+'</text>';
+    for(var tv=minV; tv<=maxV+stepV/2; tv+=stepV){
+      var yy=y(tv), isZero = Math.abs(tv) < stepV/1000;
+      svg += '<line class="gridline" x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'"'+(isZero?' style="stroke-width:1.5; opacity:1;"':'')+' />';
+      svg += '<text class="axislabel" x="'+(padL-8)+'" y="'+(yy+3)+'" text-anchor="end">'+(isZero?'0':fmtWon(Math.round(tv)))+'</text>';
     }
     var zeroY = y(0);
     MONTHLY.forEach(function(d,i){
       var cx = x(i);
-      svg += '<rect x="'+(cx-barW-2)+'" y="'+y(d.inc)+'" width="'+barW+'" height="'+(zeroY-y(d.inc))+'" rx="2" fill="'+incColor+'" data-i="'+i+'" data-f="inc" />';
-      svg += '<rect x="'+(cx+2)+'" y="'+y(d.exp)+'" width="'+barW+'" height="'+(zeroY-y(d.exp))+'" rx="2" fill="'+expColor+'" data-i="'+i+'" data-f="exp" />';
+      svg += '<rect x="'+(cx-barW-2)+'" y="'+Math.min(y(d.inc),zeroY)+'" width="'+barW+'" height="'+Math.abs(zeroY-y(d.inc))+'" rx="2" fill="'+incColor+'" data-i="'+i+'" data-f="inc" />';
+      svg += '<rect x="'+(cx+2)+'" y="'+Math.min(y(d.exp),zeroY)+'" width="'+barW+'" height="'+Math.abs(zeroY-y(d.exp))+'" rx="2" fill="'+expColor+'" data-i="'+i+'" data-f="exp" />';
       svg += '<text class="axislabel" x="'+cx+'" y="'+(H-10)+'" text-anchor="middle">'+d.m+'</text>';
     });
     // net line (같은 원 단위 축 공유 — 별도 축 아님)
@@ -3567,7 +3571,7 @@ var DC = (function(){
       var pct = s.paid > 0 ? (s.matchedPaid/s.paid*100).toFixed(0) : '0';
       if(LIVE.dc.source === 'cashbook'){
         h.push('<span class="lb-ok">●</span> 직접비 — <b>현금출납부 프로젝트 태그에서 자동 계산</b> · 프로젝트 지급 ' + (s.rows||0) + '건 중 증빙(공급가액) 연결 ' + (s.matchedRows||0) + '건(지급액 기준 ' + pct + '%)');
-        if(LIVE.unlinked) h.push('<span class="lb-warn">●</span> 출납부 프로젝트 칸 이름 중 프로젝트현황과 연결 안 된 것 <b>' + LIVE.unlinked + '건</b> — ' + esc(LIVE.unlinkedNames.slice(0,6).join(', ')) + (LIVE.unlinked > 6 ? ' 외' : '') + ' (출납부에서 프로젝트 칸을 프로젝트현황 이름으로 맞춰주세요)');
+        if(LIVE.unlinked) h.push('<span class="lb-warn">●</span> 출납부 프로젝트 칸 이름 중 프로젝트현황과 연결 안 된 것 <b>' + LIVE.unlinked + '건</b> — ' + '출납부에서 프로젝트 칸을 프로젝트현황 이름으로 맞춰주세요 (현금출납부 도구 → 프로젝트명 일괄 변경)' + '<ol style="margin:4px 0 0 18px; padding:0; font-size:12.5px; color:var(--ink-2);">' + LIVE.unlinkedNames.map(function(n){ return '<li>' + esc(n) + '</li>'; }).join('') + '</ol>');
       }else{
         h.push('<span class="lb-ok">●</span> 직접비 — ' + esc(fmtTs(LIVE.dc.uploadedAt)) + ' 업로드 · 프로젝트 지급 ' + (s.rows||0) + '건 중 세금계산서 연결 ' + (s.matchedRows||0) + '건(지급액 기준 ' + pct + '%)');
         if(LIVE.unlinked) h.push('<span class="lb-warn">●</span> 거래내역 프로젝트명 중 프로젝트현황과 연결 안 된 것 <b>' + LIVE.unlinked + '건</b> — <a href="#" id="lbOpenUnlinked">연결하러 가기</a>');

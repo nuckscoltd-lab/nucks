@@ -440,7 +440,7 @@
 
   <!-- 도구 묶음 (1차 토글): 고정 항목 ~ 카드 이용내역 업로드 -->
   <div class="panel tool-group" id="toolGroup">
-    <div class="panel-title"><span>도구 · 고정 항목 / 증빙 / 계좌간 이체 / 국민은행 업로드 / 내부이체 정리 / 엑셀 / 중복 정리 / 카드 업로드</span></div>
+    <div class="panel-title"><span>도구 · 고정 항목 / 증빙 / 계좌간 이체 / 국민은행 업로드 / 내부이체 정리 / 프로젝트명 변경 / 엑셀 / 중복 정리 / 카드 업로드</span></div>
     <div class="tg-body">
 
   <!-- 고정 항목 (매월 반복되는 거래) -->
@@ -599,6 +599,19 @@
     </div>
     <div class="status-line" id="xfStatus"></div>
     <div id="xfPreview"></div>
+  </div>
+
+  <!-- 프로젝트명 일괄 변경 -->
+  <div class="panel" data-tool="1">
+    <div class="panel-title"><span>프로젝트명 일괄 변경</span></div>
+    <div class="import-help">출납부의 프로젝트 칸 이름을 프로젝트현황 이름으로 한 번에 맞춥니다. "바꿀 이름"과 같은 프로젝트명이 달린 모든 거래(예정 거래, 고정 항목 포함)가 "새 이름"으로 바뀝니다(띄어쓰기 차이는 같은 이름으로 봅니다). 먼저 "대상 확인"으로 건수를 보시고 "변경 적용"을 눌러주세요.</div>
+    <div id="prRows"></div>
+    <div class="import-row" style="margin-top:8px;">
+      <button class="btn-ghost" id="prAddBtn" type="button">+ 행 추가</button>
+      <button class="btn-ghost" id="prCheckBtn" type="button">대상 확인</button>
+      <button class="btn-primary" id="prApplyBtn" type="button">변경 적용</button>
+    </div>
+    <div class="status-line" id="prStatus"></div>
   </div>
 
   <!-- 엑셀 가져오기/내보내기 -->
@@ -2296,6 +2309,63 @@
         st.className = 'status-line ok'; st.textContent = `${sel.length}건의 짝 거래를 만들었습니다.`; box.innerHTML = ''; XF = []; XO = [];
       } catch (err) { st.className = 'status-line err'; st.textContent = '생성 실패: ' + err.message; xo.disabled = false; }
     });
+  });
+
+  // ---------- 프로젝트명 일괄 변경 ----------
+  const PR_DEFAULT = [
+    ['현대건설-힐스테이트 장안 라보니타', '장안동 오피스텔 인테리어설계'],
+    ['극동건설-진주 백년문화공원 극동스타클래스', '극동/진주 주약동 주상복합인테리어설계'],
+    ['현대엔지니어링-속초 금호동 힐스테이트', '강원도 속초시 금호동 공동주택 신축공사'],
+    ['HS-만촌 파크드림 에디움 인테리어 설계용역', '만촌 파크드림 에디움 인테리어 설계용역'],
+    ['HS-대치동 비취타운 설계용역', 'HS/대치동 비취타운 설계용역'],
+    ['HS-청원맨션 소규모재건축사업 인테리어 설계용역', 'HS/청원맨션 소규모건축사업 인테리어 설계용역']
+  ];
+  const prBox = document.getElementById('prRows');
+  function prAddRow(o, n){
+    const d = document.createElement('div'); d.className = 'pr-row'; d.style.cssText = 'display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap;';
+    d.innerHTML = `<input class="cu-in pr-old" list="cbProjectList" style="flex:1; min-width:220px;" placeholder="바꿀 이름(현재 출납부 프로젝트명)" value="${esc(o || '')}"><span>→</span><input class="cu-in pr-new" list="cbProjectList" style="flex:1; min-width:220px;" placeholder="새 이름(프로젝트현황 이름)" value="${esc(n || '')}"><span class="pr-info" style="font-size:12px; color:var(--muted); min-width:120px;"></span><button type="button" class="btn-ghost pr-del" title="이 행 지우기">✕</button>`;
+    d.querySelector('.pr-del').addEventListener('click', () => d.remove());
+    prBox.appendChild(d);
+  }
+  PR_DEFAULT.forEach(x => prAddRow(x[0], x[1]));
+  document.getElementById('prAddBtn').addEventListener('click', () => prAddRow('', ''));
+  function prCollect(){
+    const out = [];
+    prBox.querySelectorAll('.pr-row').forEach(d => {
+      const o = d.querySelector('.pr-old').value.trim(), n = d.querySelector('.pr-new').value.trim(), info = d.querySelector('.pr-info');
+      info.textContent = ''; info.style.color = 'var(--muted)';
+      if (!o && !n) return;
+      if (!o || !n) { info.textContent = '이름을 모두 입력'; info.style.color = 'var(--out-color)'; return; }
+      const ents = allEntries.filter(e => normC(e.project) === normC(o) && e.project !== n);
+      const recs = allRecurring.filter(r => normC(r.project) === normC(o) && r.project !== n);
+      info.textContent = (ents.length || recs.length) ? `거래 ${ents.length}건${recs.length ? ' · 고정 ' + recs.length + '건' : ''}` : '해당 거래 없음';
+      if (!ents.length && !recs.length) info.style.color = 'var(--out-color)';
+      out.push({ o, n, ents, recs });
+    });
+    return out;
+  }
+  document.getElementById('prCheckBtn').addEventListener('click', () => {
+    const st = document.getElementById('prStatus'), list = prCollect();
+    const tot = list.reduce((sm, x) => sm + x.ents.length + x.recs.length, 0);
+    st.className = 'status-line ok'; st.textContent = list.length ? `총 ${tot}건이 바뀝니다. 건수가 0이면 "바꿀 이름"이 출납부의 프로젝트명과 다르게 적힌 것이니, 칸을 누르고 목록에서 골라 맞춰주세요.` : '입력된 행이 없습니다.';
+  });
+  document.getElementById('prApplyBtn').addEventListener('click', async () => {
+    const st = document.getElementById('prStatus'), btn = document.getElementById('prApplyBtn'), list = prCollect();
+    const tot = list.reduce((sm, x) => sm + x.ents.length + x.recs.length, 0);
+    if (!tot) { st.className = 'status-line err'; st.textContent = '바뀔 거래가 없습니다.'; return; }
+    if (!confirm(`프로젝트명 ${list.filter(x => x.ents.length || x.recs.length).length}개, 거래 ${tot}건의 프로젝트 칸을 새 이름으로 바꿉니다.\n진행할까요?`)) return;
+    btn.disabled = true; st.className = 'status-line'; st.textContent = '저장 중...';
+    try {
+      const ops = [];
+      list.forEach(x => { x.ents.forEach(e => ops.push([entriesRef.doc(e.id), { project: x.n }])); x.recs.forEach(r => ops.push([recurringRef.doc(r.id), { project: x.n }])); });
+      for (let i = 0; i < ops.length; i += 400) {
+        const batch = db.batch(); ops.slice(i, i + 400).forEach(op => batch.update(op[0], op[1])); await batch.commit();
+      }
+      await loadEntries(); await loadRecurring();
+      st.className = 'status-line ok'; st.textContent = `${tot}건의 프로젝트명을 바꿨습니다. 회계종합현황에서 새로고침하면 반영됩니다.`;
+      prBox.innerHTML = ''; PR_DEFAULT.length = 0; prAddRow('', '');
+    } catch (err) { st.className = 'status-line err'; st.textContent = '변경 실패: ' + err.message; }
+    btn.disabled = false;
   });
 
   // ---------- 전체 내역 삭제 ----------
