@@ -2384,7 +2384,9 @@ var DC = (function(){
     var rows = list.map(function(x){
       var p = x.p, idx = PD_PROJECTS.indexOf(p);
       return '<div class="modal-row" style="gap:10px; align-items:flex-start;">' +
-        '<span class="nm" style="flex:1; min-width:0;"><a href="#" class="pd-bar-open" data-idx="'+idx+'" style="color:var(--ink); text-decoration:underline;">'+esc(p.name)+'</a><br><span style="font-size:11px; color:var(--muted);">'+esc(p.client||'')+' · '+esc(p.code||'코드 없음')+' · '+esc(p.status4||p.status||'')+'</span></span>' +
+        '<span class="nm" style="flex:1; min-width:0; display:block;"><a href="#" class="pd-bar-open" data-idx="'+idx+'" style="color:var(--ink); text-decoration:underline;">'+esc(p.name)+'</a>' +
+          '<span style="display:block; font-size:12px; color:var(--ink-2, #555); font-weight:500; margin-top:3px;">'+esc(p.client||'발주처 없음')+'</span>' +
+          '<span style="display:block; font-size:11px; color:var(--muted); font-weight:500; margin-top:1px;">'+esc(p.code||'코드 없음')+' · '+esc(p.status4||p.status||'')+'</span></span>' +
         '<span class="right num" style="text-align:right; white-space:nowrap;">'+fmtWon(p.contractAmt||0)+'원<br><span style="font-size:11px; color:'+(x.known ? (x.profit>=0 ? 'var(--pos)' : 'var(--neg, #b3402a)') : 'var(--muted)')+'">'+(x.known ? (x.profit>=0?'+':'')+fmtWon(x.profit)+'원 · '+x.rate.toFixed(1)+'%' : '원가 미확정(손익율 제외)')+'</span></span></div>';
     }).join('');
     var old = document.getElementById('barListBackdrop'); if(old) old.remove();
