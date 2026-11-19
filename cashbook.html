@@ -440,7 +440,7 @@
 
   <!-- 도구 묶음 (1차 토글): 고정 항목 ~ 카드 이용내역 업로드 -->
   <div class="panel tool-group" id="toolGroup">
-    <div class="panel-title"><span>도구 · 고정 항목 / 증빙 / 계좌간 이체 / 국민은행 업로드 / 엑셀 / 중복 정리 / 카드 업로드</span></div>
+    <div class="panel-title"><span>도구 · 고정 항목 / 증빙 / 계좌간 이체 / 국민은행 업로드 / 내부이체 정리 / 엑셀 / 중복 정리 / 카드 업로드</span></div>
     <div class="tg-body">
 
   <!-- 고정 항목 (매월 반복되는 거래) -->
@@ -584,6 +584,21 @@
     </div>
     <div class="status-line" id="kbStatus"></div>
     <div id="kbPreview"></div>
+  </div>
+
+  <!-- 내부이체 일괄 찾기 -->
+  <div class="panel" data-tool="1">
+    <div class="panel-title"><span>내부이체 일괄 찾기 (지난 거래 정리)</span></div>
+    <div class="import-row">
+      <input type="text" id="xfKeys" value="넉스, 국민" style="min-width:220px;" title="쉼표로 여러 개">
+      <select id="xfScope"><option value="신한">신한은행 거래에서</option><option value="전체">전체 계좌 거래에서</option></select>
+      <button class="btn-primary" id="xfFindBtn">찾기</button>
+    </div>
+    <div class="import-help">
+      내용·비고에 위 글자(회사명, 국민은행 등)가 들어 있는 거래 중 아직 "내부이체"가 아닌 것을 찾아 목록으로 보여드립니다. 다른 계좌에 <b>같은 날짜·같은 금액의 반대 거래</b>가 있으면 "짝 있음"으로 표시합니다. 체크한 거래만 계정과목을 "내부이체"로 한 번에 바꿉니다(프로젝트·대분류·발주처는 비워 집계에서 빠지게 합니다). 증빙이 입력된 거래는 매출·매입 증빙일 수 있어 목록에서 제외합니다.
+    </div>
+    <div class="status-line" id="xfStatus"></div>
+    <div id="xfPreview"></div>
   </div>
 
   <!-- 엑셀 가져오기/내보내기 -->
@@ -2202,6 +2217,48 @@
       document.getElementById('kbPreview').innerHTML = ''; document.getElementById('kbFile').value = ''; KB = null;
     } catch (err) { st.className = 'status-line err'; st.textContent = '저장 실패: ' + err.message; btn.disabled = false; }
   }
+
+  // ---------- 내부이체 일괄 찾기 ----------
+  let XF = [];
+  document.getElementById('xfFindBtn').addEventListener('click', () => {
+    const st = document.getElementById('xfStatus'), box = document.getElementById('xfPreview');
+    const keys = document.getElementById('xfKeys').value.split(',').map(x => normC(x)).filter(Boolean);
+    const scope = document.getElementById('xfScope').value;
+    box.innerHTML = ''; XF = [];
+    if (!keys.length) { st.className = 'status-line err'; st.textContent = '찾을 글자를 한 개 이상 입력해주세요.'; return; }
+    const pool = allEntries.filter(e => isBank(e));
+    const cand = pool.filter(e => (scope === '전체' || bankOf(e) === '신한') && e.account !== '내부이체' && !e.evType && e.status === '확정'
+      && keys.some(k => normC([e.content, e.memo].join(' ')).includes(k)));
+    cand.forEach(e => {
+      const pair = pool.find(o => o !== e && o.id !== e.id && bankOf(o) !== bankOf(e) && o.date === e.date && o.amount === e.amount && o.type !== e.type);
+      XF.push({ e, pair, paired: !!pair });
+    });
+    XF.sort((a, b) => (b.e.date || '').localeCompare(a.e.date || ''));
+    if (!XF.length) { st.className = 'status-line ok'; st.textContent = '해당하는 거래가 없습니다.'; return; }
+    st.className = 'status-line ok'; st.textContent = `${XF.length}건을 찾았습니다(짝 있음 ${XF.filter(x => x.paired).length}건). 내용을 확인하고 체크를 조정한 뒤 변경 버튼을 눌러주세요.`;
+    box.innerHTML = `<div class="table-wrap" style="max-height:420px; overflow:auto;"><table><thead><tr><th><input type="checkbox" id="xfAll" checked></th><th>거래일자</th><th>계좌</th><th>구분</th><th class="r">금액</th><th>내용</th><th>비고</th><th>현재 계정·프로젝트</th><th>짝</th></tr></thead><tbody>${
+      XF.map((x, i) => `<tr><td><input type="checkbox" class="xf-ck" data-i="${i}" checked></td><td class="nowrap">${esc(x.e.date)}</td><td>${bankOf(x.e)}</td><td>${esc(x.e.type)}</td><td class="amount ${x.e.type === '입금' ? 'in' : 'out'}">${x.e.type === '입금' ? '+' : '-'}${fmtWon(x.e.amount)}</td><td>${esc(x.e.content)}</td><td class="memo">${esc(x.e.memo)}</td><td>${esc([x.e.account, x.e.project].filter(Boolean).join(' · ') || '-')}</td><td>${x.paired ? '짝 있음' : ''}</td></tr>`).join('')
+    }</tbody></table></div><div style="margin-top:10px;"><button class="btn-primary" id="xfApplyBtn">체크한 거래를 내부이체로 변경</button></div>`;
+    document.getElementById('xfAll').addEventListener('change', ev => box.querySelectorAll('.xf-ck').forEach(c => { c.checked = ev.target.checked; }));
+    document.getElementById('xfApplyBtn').addEventListener('click', async () => {
+      const chosen = [...box.querySelectorAll('.xf-ck')].filter(c => c.checked).map(c => XF[+c.dataset.i]);
+      const sel = []; const seen = new Set();
+      chosen.forEach(x => [x.e, x.pair].forEach(e => { if (e && e.account !== '내부이체' && !e.evType && !seen.has(e.id)) { seen.add(e.id); sel.push(e); } }));
+      if (!sel.length) { st.className = 'status-line err'; st.textContent = '체크한 거래가 없습니다.'; return; }
+      const withProj = sel.filter(e => e.project).length;
+      if (!confirm(`${sel.length}건(짝이 있는 상대 계좌 거래 포함)의 계정과목을 "내부이체"로 바꾸고 프로젝트·대분류·발주처를 비웁니다.${withProj ? `\n(이 중 ${withProj}건은 프로젝트가 입력되어 있어 매입원가에서도 빠집니다)` : ''}\n진행할까요?`)) return;
+      const btn = document.getElementById('xfApplyBtn'); btn.disabled = true;
+      try {
+        for (let i = 0; i < sel.length; i += 400) {
+          const batch = db.batch();
+          sel.slice(i, i + 400).forEach(e => batch.update(entriesRef.doc(e.id), { account: '내부이체', project: '', pmajor: '', client: '' }));
+          await batch.commit();
+        }
+        await loadEntries();
+        st.className = 'status-line ok'; st.textContent = `${sel.length}건을 내부이체로 변경했습니다(짝이 있는 상대 계좌 거래 포함).`; box.innerHTML = ''; XF = [];
+      } catch (err) { st.className = 'status-line err'; st.textContent = '변경 실패: ' + err.message; btn.disabled = false; }
+    });
+  });
 
   // ---------- 전체 내역 삭제 ----------
   document.getElementById('clearAllBtn').addEventListener('click', async () => {
