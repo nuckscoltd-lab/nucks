@@ -89,7 +89,8 @@ body.colresize,body.colresize *{cursor:col-resize!important;user-select:none}
 .lg-name.multi .lgn-t{padding-inline-start:.2em}
 .lg-name.horiz .lgn-t{padding-inline-start:0}
 .lg-name.multi{letter-spacing:.2em;line-height:1.7}
-.lg-name.horiz{writing-mode:horizontal-tb;letter-spacing:0;font-size:11px;line-height:1.2;padding:0 4px;text-align:center;word-break:keep-all}
+.lg-name.horiz{writing-mode:horizontal-tb;letter-spacing:0;font-size:11px;line-height:1.35;padding:0 4px;text-align:center;word-break:keep-all}
+.lg-name.horiz .lgn-t{display:block;width:100%;text-align:center}
 .lr{height:var(--rowh);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:center;text-align:center;padding:0 6px;font-size:12px;line-height:1.2;cursor:pointer;overflow:hidden;word-break:keep-all;overflow-wrap:anywhere;touch-action:none}
 .lr.drop-a{box-shadow:inset 0 3px 0 var(--sel)!important}.lr.drop-b{box-shadow:inset 0 -3px 0 var(--sel)!important}
 .lg-name.drop-in{background:var(--accent-soft);box-shadow:inset 0 0 0 2px var(--sel)}
@@ -1171,17 +1172,21 @@ function renderSheet(){
     if((P.gw||62)>=80){el.classList.add('horiz');el.style.fontSize='12px';return}
     const t=el.textContent.trim(),u=t.replace(/\s+/g,''),cap=Math.floor((el.clientHeight-14)/(13*1.35));
     if(u.length<=cap)return;
-    if(cap<2){el.classList.add('horiz');return}
-    let cols=/\s/.test(t)?t.split(/\s+/):null;
-    // 띄어쓰기가 없는 복합명사(예: "인테리어공사")는 자연스럽게 끊을 경계가 없어 결국 글자 수
-    // 기준으로 나눠야 하는데, 예전에는 전체 길이를 칸 수로 "균등 분배"했다(예: 10자를 3칸이면
-    // 4·4·2자씩) - 매번 다른 길이로 끊기다 보니 어디서 끊길지 예측하기 어려워 줄바꿈이 무작위로
-    // 느껴졌다. 이제는 앞 칸부터 cap(한 칸에 들어가는 글자 수)만큼 최대한 채우고 남는 글자를 다음
-    // 칸으로 넘기는 방식(그리디 채우기)으로 바꿔서, 가로쓰기 글이 줄바꿈되는 순서와 같게 - 앞에서부터
-    // 꽉 채워서 - 끊기도록 했다.
-    if(!cols||cols.some(c=>c.length>cap)){cols=[];for(let i=0;i<u.length;i+=cap)cols.push(u.slice(i,i+cap))}
-    if(cols.length>3){el.classList.add('horiz');return}
-    el.innerHTML='<span class="lgn-t">'+cols.map(esc).join('<br>')+'</span>';el.classList.add('multi')});
+    // 세로 한 줄에 다 안 들어가면(대분류 칸 높이가 낮거나 이름이 긴 경우) 세로 여러 줄로 쪼개지 않고
+    // 가로쓰기로 바꿔 칸 너비에 맞춰 균등하게 줄바꿈한다 - 줄마다 글자 수가 고르고 글자 간격이 항상 같다.
+    // (예전에는 세로 2~3열로 쪼개서 열마다 간격·길이가 제각각이라 읽기 어려웠다)
+    const wpx=el.clientWidth||P.gw||62,hpx=el.clientHeight||40,words=t.split(/\s+/).filter(Boolean);
+    const wrap=fs=>{
+      const n=Math.max(3,Math.floor((wpx-8)/fs)),pieces=[];
+      words.forEach(w=>{const ch=[...w];if(ch.length<=n)pieces.push(w);else{const k=Math.ceil(ch.length/n),per=Math.ceil(ch.length/k);for(let i=0;i<ch.length;i+=per)pieces.push(ch.slice(i,i+per).join(''))}});
+      const out=[];pieces.forEach(w=>{const last=out[out.length-1];if(last!==undefined&&[...last].length+1+[...w].length<=n)out[out.length-1]=last+' '+w;else out.push(w)});
+      return out;
+    };
+    // 칸 높이에 다 들어갈 때까지 글자 크기를 11 → 9px로 줄여 가며 줄 수를 줄인다(1줄당 글자 수가 늘어남)
+    let fs=11,lines=wrap(fs);
+    while(fs>9&&lines.length*fs*1.3>hpx-4){fs--;lines=wrap(fs)}
+    el.style.fontSize=fs+'px';
+    el.innerHTML='<span class="lgn-t">'+lines.map(esc).join('<br>')+'</span>';el.classList.add('horiz')});
   let ps=document.getElementById('pageStyle');if(!ps){ps=document.createElement('style');ps.id='pageStyle';document.head.appendChild(ps)}
   ps.textContent=L.mode==='a4'?'@page{size:A4 landscape;margin:0}':L.mode==='a3'?'@page{size:A3 landscape;margin:0}':'@page{size:A3 landscape;margin:8mm}';
 }
