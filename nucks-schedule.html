@@ -1965,14 +1965,17 @@ async function loadLaborData(force){
   return LABOR_CACHE;
 }
 /* 한 프로젝트(코드·이름)에 연결되는 근무일지 기록을 찾아 근로자별로 집계 */
-function laborMatch(data,projCode,projName,linked){
-  const cf=corpFlag(projName),code=String(projCode||'').trim(),nc=normCode(code),nn=normName(projName),lk=new Set((linked||[]).map(normName).filter(Boolean));
+/* excluded = 이 프로젝트와 다른 프로젝트로 확인해 둔 근무일지명(r.wlExclude). (주) 유무까지 같은 이름이어야 제외/연결된다 */
+function laborMatch(data,projCode,projName,linked,excluded){
+  const nk=n=>normName(n)+'|'+(corpFlag(n)?1:0);
+  const cf=corpFlag(projName),code=String(projCode||'').trim(),nc=normCode(code),nn=normName(projName),lk=new Set((linked||[]).filter(n=>normName(n)).map(nk)),exs=new Set((excluded||[]).filter(n=>normName(n)).map(nk));
   const hits=[];
   for(const e of data.entries){
     let how=null;
+    if(e.nname&&exs.has(nk(e.name)))continue;
     if(code&&e.code===code)how='code';
     else if(nn&&e.nname&&e.nname===nn&&corpFlag(e.name)===cf)how='name';
-    else if(e.nname&&lk.has(e.nname))how='name';
+    else if(e.nname&&lk.has(nk(e.name)))how='name';
     else if(nc&&e.ncode&&e.ncode===nc)how='norm';
     if(how)hits.push(Object.assign({how},e));
   }
@@ -1995,7 +1998,7 @@ async function renderFinLabor(){
   if(($('#fCode2').value.trim()+'\u0001'+$('#fName').value.trim())!==key)return; // 불러오는 사이 코드·이름을 또 바꿨으면 그 결과는 버림
   if(data.err){el.textContent='불러오지 못했습니다: '+data.err;return}
   const fr0=FD&&FD.rowId?findRow(FD.rowId):null,linked=(fr0&&fr0.r.wlNames)||[];
-  const m=laborMatch(data,projCode,projName,linked);
+  const m=laborMatch(data,projCode,projName,linked,fr0&&fr0.r.wlExclude);
   LABOR_VIEW={m,projName,projCode};
   const auditBtn=' <button type="button" class="lchip lgh" data-laudit>전체 프로젝트 연결 점검</button>';
   if(!m.hits.length){el.innerHTML=`${projCode?`코드 "${esc(projCode)}"`:'이 프로젝트'}${projName?' · 프로젝트명':''}으로 근무일지에서 찾은 기록이 없습니다.`+auditBtn;return}
@@ -2125,7 +2128,7 @@ async function openLaborAudit(force){
   const gl=Object.values(groups);
   // 1차: 모든 공정표 프로젝트의 연결 결과를 먼저 구한다(이미 다른 프로젝트에 연결된 근무일지 기록은 추천 후보에서 뺀다)
   const res=rows.map(({g,r})=>{
-    const m=laborMatch(data,r.projCode,r.name,r.wlNames);m.hits.forEach(h=>used.add(h.i));
+    const m=laborMatch(data,r.projCode,r.name,r.wlNames,r.wlExclude);m.hits.forEach(h=>used.add(h.i));
     return{g,r,m,c:auditClassify(r,m),sug:null};
   });
   // 2차: 연결이 안 된 프로젝트에만, 아직 어느 공정표 프로젝트에도 쓰이지 않은 근무일지 프로젝트 중 이름이 아주 비슷한 것을 추천
@@ -2578,7 +2581,7 @@ async function pnlCompute(r,ex){
     let labor,laborHow='';
     const ld=await loadLaborData();
     if(!ld.err){
-      const m=laborMatch(ld,r.projCode,r.name,r.wlNames);
+      const m=laborMatch(ld,r.projCode,r.name,r.wlNames,r.wlExclude);
       if(m.hours>0){labor=Math.round(m.cost);laborHow=`근무일지 ${m.emps.length}명 · ${hrs(m.hours)}시간`}
       else{const pool=yr?((PNL_LABOR_POOL[major]||{})[yr]||0):0;labor=denom>0?Math.round(pool*rev/denom):0;laborHow='근무일지 연결 기록 없음 → 연도 인건비 풀 근사배분(회계종합현황과 동일)'}
     }else if(sn.laborCost!==undefined){labor=sn.laborCost;laborHow='근무일지를 읽지 못해 결산서에 저장된 값 사용'}
@@ -2618,7 +2621,7 @@ async function settleAutoValues(r,withLabor){
     const data=await loadLaborData();
     if(data.err)v.laborErr=data.err;
     else{
-      const m=laborMatch(data,r.projCode,r.name,r.wlNames);
+      const m=laborMatch(data,r.projCode,r.name,r.wlNames,r.wlExclude);
       v.laborOk=true;v.workLogNames=m.names;
       v.people=m.emps.map(e=>({name:e.emp,role:topTags(e.entries),hours:hrs(e.hours),auto:true}));
       v.snap.laborHours=hrs(m.hours);v.snap.laborCost=Math.round(m.cost);v.snap.headcount=m.emps.length;
@@ -2749,7 +2752,7 @@ function settleViewHtml(it){
   const lst=a=>(a||[]).length?`<ul class="sc-ul">${a.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'<div class="hint">등록된 내용이 없습니다.</div>';
   return`${warn.map(w=>`<div class="hint" style="color:var(--warn);margin:0">⚠ ${esc(w)}</div>`).join('')}
     ${sum}
-    <div class="sc-sec">근무일지 연결</div>${(s.workLogNames||[]).length?`<div style="display:flex;gap:6px;flex-wrap:wrap">${s.workLogNames.map(n=>`<span class="sc-tag">${esc(n)}</span>`).join('')}</div>`:'<div class="hint">연결된 근무일지 프로젝트명이 없습니다.</div>'}
+    <div class="sc-sec">근무일지 연결</div>${(s.workLogNames||[]).length?`<div style="display:flex;gap:6px;flex-wrap:wrap">${s.workLogNames.map(n=>`<span class="sc-tag">${esc(n)}${it.r?` <button type="button" data-act="wlx" data-key="${it.key}" data-wl="${esc(n)}" title="이 근무일지 이름은 다른 프로젝트입니다 - 이 프로젝트에서 제외" style="border:0;background:none;cursor:pointer;color:var(--bad);font-weight:700;padding:0 0 0 2px">×</button>`:''}</span>`).join('')}</div>${it.r?'<div class="hint" style="margin:2px 0 0">다른 프로젝트인데 같이 묶인 이름은 ×를 눌러 제외하세요. 인건비·인원이 다시 계산됩니다(매입원가는 그대로).</div>':''}`:'<div class="hint">연결된 근무일지 프로젝트명이 없습니다.</div>'}
     <div class="sc-sec">대외업체</div><div class="sc-partners">${SETTLE_PARTNERS.map(([k,l])=>`<div><small>${l}</small><b style="font-weight:500">${esc((p[k]&&p[k].company)||'-')}</b>${p[k]&&p[k].contacts?`<small>${esc(p[k].contacts)}</small>`:''}</div>`).join('')}</div>
     <div class="sc-sec">프로젝트 진행 내용</div>${lst(s.progressItems)}
     <div class="sc-sec">투입인원</div>${ppl}
@@ -2885,6 +2888,10 @@ $('#seList').addEventListener('click',e=>{
     else if(a==='cancel'){SET_UI.edit=null;renderSettle()}
     else if(a==='save')settleSaveEdit(key,card);
     else if(a==='refresh')settleRefresh(key);
+    else if(a==='wlx'){const f=findRow(key),nm=act.dataset.wl;if(!f||!nm)return;
+      if(!confirm(`"${nm}" 근무일지는 이 프로젝트가 아닌 다른 프로젝트로 처리합니다.\n이 이름의 투입시간·인건비·참여인원이 이 프로젝트에서 빠집니다.\n(현금출납부 매입원가는 그대로입니다)\n계속할까요?`))return;
+      snap();f.r.wlExclude=[...new Set([...(f.r.wlExclude||[]),nm])];save();
+      settleRefresh(key)}
     else if(a==='openfin'){$('#dSettle').close();openFin(key)}
     else if(a==='toggle'){const it=settleFind(key);if(it){snap();it.s.status=it.s.status==='confirmed'?'draft':'confirmed';it.s.updatedAt=nowIso();save();renderSettle();toast(it.s.status==='confirmed'?'확정했습니다':'초안으로 되돌렸습니다')}}
     else if(a==='print')settlePrint(key);

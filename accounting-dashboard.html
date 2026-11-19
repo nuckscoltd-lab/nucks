@@ -3268,13 +3268,17 @@ var DC = (function(){
   // 한 프로젝트(코드·이름·연결 이름들)에 해당하는 근무일지 기록을 근로자별로 집계
   function laborFor(r){
     var cf = corpFlag(r.name), code = String(r.projCode||'').trim(), nc = wlNormCode(code), nn = wlNormName(r.name);
-    var lk = {}; (r.wlNames||[]).forEach(function(n){ var k = wlNormName(n); if(k) lk[k] = 1; });
+    var nk = function(n){ return wlNormName(n) + '|' + (corpFlag(n) ? 1 : 0); };
+    var lk = {}, exs = {};
+    (r.wlNames||[]).forEach(function(n){ if(wlNormName(n)) lk[nk(n)] = 1; });
+    (r.wlExclude||[]).forEach(function(n){ if(wlNormName(n)) exs[nk(n)] = 1; });   // 프로젝트현황에서 "다른 프로젝트"로 제외해 둔 근무일지명
     var hits = 0, how = {code:0, name:0, norm:0}, byEmp = {}, noWage = 0;
     LABOR.entries.forEach(function(e){
       var h = null;
+      if(e.nname && exs[nk(e.name)]) return;
       if(code && e.code === code) h = 'code';
       else if(nn && e.nname && e.nname === nn && corpFlag(e.name) === cf) h = 'name';
-      else if(e.nname && lk[e.nname]) h = 'name';
+      else if(e.nname && lk[nk(e.name)]) h = 'name';
       else if(nc && e.ncode && e.ncode === nc) h = 'norm';
       if(!h) return;
       hits++; how[h]++;
