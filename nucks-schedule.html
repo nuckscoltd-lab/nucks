@@ -2555,7 +2555,7 @@ function pnlShell(rowId){return`<div class="pnl" data-pnl="${rowId}"><div class=
 /* 회계종합현황(accounting-dashboard.html)의 프로젝트 손익과 같은 규칙으로 맞춘 부분:
    - 매출: 부가세 별도 = 총계약금(또는 최종금액)÷1.1 (부가세 별도로 입력해 둔 계약이면 입력한 공급가액), 포함 = 총계약금
    - 일반관리비 배분(설계 프로젝트만): 그 해(프로젝트 코드 앞 4자리) 현금출납부 "일반관리" 지출(직원급여·임원급여·미지급금·내부이체 제외, 자산·자본성·퇴직급여는 토글 — 기본 포함)
-     × 이 프로젝트 계약금액 ÷ 그 해 설계 프로젝트 계약금액 합계(계약·진행·완료·실주 모두 포함)
+     → 그 해 진행 중이던 설계 프로젝트(계약·진행·완료·실주 모두 포함)가 계약금액을 진행 기간에 일수 비례로 펼친 값의 비율로 나눠 가짐
    - 인건비: 근무일지 투입시간 × 시급(기본급÷209). 근무일지에 연결된 기록이 없으면 그 해 대분류 인건비 풀을 계약금액 비율로 나눈 근사치(회계종합현황과 같은 값) */
 const PNL_ADMIN_EXCL=new Set(['직원급여','임원급여','미지급금','내부이체']); // 항상 뺌: 급여(근무일지 인건비와 중복)·카드대금 이중계산·계좌 이동
 const PNL_ADMIN_NX=new Set(['보증금','가지급','가수금','중간배당금','영업권','자본금','예금저축','상환','채권','선지급금','전도금','보통예금','차량운반구','공사매출','기타매출','국고지원금','배당금수익','이자수익']); // 비용이 아닌 계정 — 토글(기본 포함, 회계종합현황과 같은 값을 공유)
@@ -2589,6 +2589,68 @@ function cbAdminPool(o){
   });
   return o.admin=m;
 }
+  // ── 일반관리비 배분 방식 (2026-11 개정, 프로젝트현황·회계종합현황 공통 규칙) ───────────────────────────
+  // 예전: 그 해 풀을 "코드 앞 4자리가 그 해인 설계 프로젝트"끼리만 계약금액 비율로 나눔 → 여러 해에 걸친 프로젝트도 계약연도 풀만 받고,
+  //       전년도에 계약해서 그 해에 진행 중인 프로젝트는 풀을 못 받아 계약연도 프로젝트에 부담이 몰렸음.
+  // 지금: 각 프로젝트의 계약금액을 진행 기간(시작~종료)에 일수 비례로 펼쳐서 연도별 매출 가중치를 만들고,
+  //       그 해 풀을 "그 해 진행 중이던 설계 프로젝트"가 가중치 비율로 나눠 가짐. 기간을 모르면 코드 앞 4자리 연도 1년으로 봄. 공사는 배분 없음(기존 원칙).
+  function admIso(v){ v = String(v == null ? '' : v).slice(0,10); return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : ''; }
+  function admDay(s){ var a = s.split('-'); return Math.round(Date.UTC(+a[0], +a[1]-1, +a[2]) / 86400000); }
+  function admCompute(items, poolOf){
+    var W = {}, info = [];
+    items.forEach(function(it){
+      var rev = +it.rev || 0; if(rev <= 0) return;
+      var s = admIso(it.start), e = admIso(it.end);
+      if(!s && /^\d{4}$/.test(it.cy || '')){ s = it.cy + '-01-01'; e = it.cy + '-12-31'; }
+      if(!s) return;
+      if(!e || e < s) e = s;
+      var y0 = +s.slice(0,4), y1 = Math.min(+e.slice(0,4), 2100);
+      if(y0 < 2000) return;
+      var d0 = admDay(s), d1 = admDay(e), tot = d1 - d0 + 1, ws = {};
+      for(var y = y0; y <= y1; y++){
+        var a = Math.max(d0, admDay(y + '-01-01')), b = Math.min(d1, admDay(y + '-12-31'));
+        if(b < a) continue;
+        var w = rev * (b - a + 1) / tot; ws[y] = w; W[y] = (W[y] || 0) + w;
+      }
+      info.push({k:it.k, ws:ws});
+    });
+    var out = {};
+    info.forEach(function(x){
+      var amt = 0, parts = [];
+      Object.keys(x.ws).forEach(function(y){
+        var pool = poolOf(String(y)) || 0; if(!pool || !W[y]) return;
+        var a = pool * x.ws[y] / W[y]; amt += a;
+        parts.push({y:String(y), pool:pool, w:x.ws[y], W:W[y], amt:a});
+      });
+      out[x.k] = {amt:amt, parts:parts};
+    });
+    return out;
+  }
+
+// 진행 기간: 회계종합현황과 같은 규칙 — 시작 = 계약일·막대·기성(청구/수금/예정)·일정 중 가장 이른 날, 종료 = 계약정보 종료일 → 결산서 종료일 → 위 기록 중 가장 늦은 날(끝나지 않은 건은 오늘까지)
+function admPeriodOf(r,status){
+  const f=r.fin||{},ds=[],de=[],today=new Date().toISOString().slice(0,10);
+  const add=(arr,v)=>{v=(typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v))?v:'';if(v)arr.push(v)};
+  add(ds,f.contractDate);
+  (r.bars||[]).forEach(b=>{add(ds,b.start);if(!b.startOnly)add(de,b.end)});
+  (f.items||[]).forEach(x=>{[x.claimDate,x.payDate,x.dueDate].forEach(d=>{d=(typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d))?d:'';if(d){ds.push(d);de.push(d)}})});
+  (r.events||[]).forEach(e=>{add(ds,e.date);add(de,e.date)});
+  const fe=admIso(f.endDate)||admIso(r.settle&&r.settle.endDate);
+  if(!ds.length&&!fe)return null;
+  ds.sort();de.sort();
+  const start=ds.length?ds[0]:fe;let end=fe;
+  if(!end){const last=de.length?de[de.length-1]:start;end=(status!=='완료'&&today>last)?today:last}
+  if(end<start)end=start;
+  return{start,end};
+}
+function admRowSpan(r){
+  const f=r.fin||{},items=f.items||[];let claim=0,paid=0;items.forEach(x=>{claim+=+x.claim||0;paid+=+x.paid||0});
+  const total=(+f.finalCost>0)?+f.finalCost:(+f.total||0),b=(r.bars&&r.bars[0])||null;
+  let st=b&&b.inner;if(['계약','실주','진행','완료'].indexOf(st)<0)st=(total>0&&claim>=total&&paid>=total)?'완료':(claim>0?'진행':'계약');
+  const end0=admIso(f.endDate)||admIso(r.settle&&r.settle.endDate)||((st==='진행'&&b&&b.end)?b.end:null);
+  const per=admPeriodOf(r,st);
+  return{start:per?per.start:(f.contractDate||(b&&b.start)||null),end:per?per.end:end0};
+}
 async function pnlCompute(r,ex){
     const cost=await cbCostFor(r),sn=(r.settle&&r.settle.snap)||{};
     const rev=pnlRev(r,ex),major=pnlMajor(r),yr=pnlYear(r);
@@ -2603,12 +2665,18 @@ async function pnlCompute(r,ex){
       if(m.hours>0){labor=Math.round(m.cost);laborHow=`근무일지 ${m.emps.length}명 · ${hrs(m.hours)}시간`}
       else{const pool=yr?((PNL_LABOR_POOL[major]||{})[yr]||0):0;labor=denom>0?Math.round(pool*rev/denom):0;laborHow='근무일지 연결 기록 없음 → 연도 인건비 풀 근사배분(회계종합현황과 동일)'}
     }else if(sn.laborCost!==undefined){labor=sn.laborCost;laborHow='근무일지를 읽지 못해 결산서에 저장된 값 사용'}
-    // 일반관리비 배분(설계만)
+    // 일반관리비 배분(설계만): 연도별 풀을 그 해 진행 중이던 설계 프로젝트가 계약금액(진행 기간에 일수 비례) 비율로 나눠 가짐
     let admin=null,adminNote='';
     if(major!=='설계')adminNote='공사 프로젝트는 일반관리비를 배분하지 않습니다';
     else if(!cost.ok)adminNote='현금출납부를 읽지 못했습니다';
-    else if(!yr||denom<=0)adminNote='프로젝트 코드의 연도를 알 수 없어 배분하지 못했습니다';
-    else{const o=await loadCbProj(),b=cbAdminPool(o)[yr]||{pool:0,opt:0,nx:0},incNx=pnlAdminPref('nucks-admin-nx'),incOpt=pnlAdminPref('nucks-admin-opt'),pool=b.pool-(incNx?0:b.nx)-(incOpt?0:b.opt);admin=Math.round(pool*rev/denom);adminNote=`${yr}년 설계 일반관리비 ${won(pool)}원${incNx?'':' (자산·자본성 제외)'}${incOpt?'':' (퇴직급여 제외)'} × 계약금액 비율 ${(rev/denom*100).toFixed(1)}%`}
+    else{
+      const o=await loadCbProj(),pools=cbAdminPool(o),incNx=pnlAdminPref('nucks-admin-nx'),incOpt=pnlAdminPref('nucks-admin-opt');
+      const poolOf=y=>{const b=pools[y];return b?b.pool-(incNx?0:b.nx)-(incOpt?0:b.opt):0};
+      const items=[];finRows().forEach(({r:q})=>{if(pnlMajor(q)!=='설계')return;const sp=admRowSpan(q);items.push({k:q.id,rev:pnlRev(q,ex),start:sp.start,end:sp.end,cy:String(q.projCode||'').slice(0,4)})});
+      const det=admCompute(items,poolOf)[r.id];
+      if(!det||!det.parts.length)adminNote='진행 기간(또는 프로젝트 코드 연도)을 알 수 없거나 계약금액이 0이라 배분하지 못했습니다';
+      else{admin=Math.round(det.amt);adminNote=det.parts.map(t=>`${t.y}년 풀 ${won(t.pool)}원 × ${(t.w/t.W*100).toFixed(1)}%`).join(' + ')+`${incNx?'':' (자산·자본성 제외)'}${incOpt?'':' (퇴직급여 제외)'} — 그 해 진행 중이던 설계 프로젝트가 계약금액(진행 기간 일수 비례) 비율로 나눔`}
+    }
     const profit=rev-(costV||0)-(labor||0)-(admin||0),rate=rev>0?profit/rev*100:null;
     return{cost,rev,major,costV,labor,laborHow,admin,adminNote,profit,rate};
 }
