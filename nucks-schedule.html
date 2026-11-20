@@ -2554,10 +2554,15 @@ async function cbCostFor(r){
 function pnlShell(rowId){return`<div class="pnl" data-pnl="${rowId}"><div class="hint" style="margin:0">손익 계산 중…</div></div>`}
 /* 회계종합현황(accounting-dashboard.html)의 프로젝트 손익과 같은 규칙으로 맞춘 부분:
    - 매출: 부가세 별도 = 총계약금(또는 최종금액)÷1.1 (부가세 별도로 입력해 둔 계약이면 입력한 공급가액), 포함 = 총계약금
-   - 일반관리비 배분(설계 프로젝트만): 그 해(프로젝트 코드 앞 4자리) 현금출납부 "일반관리" 지출(직원급여·임원급여·미지급금·자산/자본/차입 등 비용이 아닌 계정 제외)
+   - 일반관리비 배분(설계 프로젝트만): 그 해(프로젝트 코드 앞 4자리) 현금출납부 "일반관리" 지출(직원급여·임원급여·미지급금·내부이체 제외, 자산·자본성·퇴직급여는 토글 — 기본 포함)
      × 이 프로젝트 계약금액 ÷ 그 해 설계 프로젝트 계약금액 합계(계약·진행·완료·실주 모두 포함)
    - 인건비: 근무일지 투입시간 × 시급(기본급÷209). 근무일지에 연결된 기록이 없으면 그 해 대분류 인건비 풀을 계약금액 비율로 나눈 근사치(회계종합현황과 같은 값) */
-const PNL_ADMIN_EXCL=new Set(['직원급여','임원급여','미지급금','보증금','가지급','가수금','중간배당금','영업권','자본금','예금저축','상환','채권','선지급금','전도금','보통예금','차량운반구','공사매출','기타매출','국고지원금','배당금수익','이자수익']);
+const PNL_ADMIN_EXCL=new Set(['직원급여','임원급여','미지급금','내부이체']); // 항상 뺌: 급여(근무일지 인건비와 중복)·카드대금 이중계산·계좌 이동
+const PNL_ADMIN_NX=new Set(['보증금','가지급','가수금','중간배당금','영업권','자본금','예금저축','상환','채권','선지급금','전도금','보통예금','차량운반구','공사매출','기타매출','국고지원금','배당금수익','이자수익']); // 비용이 아닌 계정 — 토글(기본 포함, 회계종합현황과 같은 값을 공유)
+const PNL_ADMIN_OPT=new Set(['퇴직급여']);
+// 회계종합현황과 같은 localStorage 값을 공유: 'ex'면 미포함, 그 외(없음 포함)는 포함
+function pnlAdminPref(k){try{return localStorage.getItem(k)!=='ex'}catch(e){return true}}
+function pnlAdminSet(k,inc){try{localStorage.setItem(k,inc?'in':'ex')}catch(e){}}
 const PNL_LABOR_POOL={'공사':{2021:0,2022:1312747,2023:30651232,2024:33464074,2025:25334161,2026:1077029},'설계':{2021:14621840,2022:129525777,2023:103392891,2024:82639139,2025:114203301,2026:76713203}};
 const PNL_CC_MAJOR={'00':'설계','01':'설계','02':'설계','03':'설계','04':'설계','11':'공사','12':'공사','13':'공사'};
 function pnlMajor(r){
@@ -2579,7 +2584,8 @@ function cbAdminPool(o){
   (o.map.get(cbNKey('일반관리'))||[]).forEach(e=>{
     const d=String(e.date||'').slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return;
     const a=+e.amount||0;if(!a||PNL_ADMIN_EXCL.has(e.account))return;
-    m[d.slice(0,4)]=(m[d.slice(0,4)]||0)+a;
+    const y=d.slice(0,4),b=m[y]||(m[y]={pool:0,opt:0,nx:0});
+    b.pool+=a;if(PNL_ADMIN_OPT.has(e.account))b.opt+=a;else if(PNL_ADMIN_NX.has(e.account))b.nx+=a;
   });
   return o.admin=m;
 }
@@ -2602,7 +2608,7 @@ async function pnlCompute(r,ex){
     if(major!=='설계')adminNote='공사 프로젝트는 일반관리비를 배분하지 않습니다';
     else if(!cost.ok)adminNote='현금출납부를 읽지 못했습니다';
     else if(!yr||denom<=0)adminNote='프로젝트 코드의 연도를 알 수 없어 배분하지 못했습니다';
-    else{const o=await loadCbProj(),pool=cbAdminPool(o)[yr]||0;admin=Math.round(pool*rev/denom);adminNote=`${yr}년 설계 일반관리비 ${won(pool)}원 × 계약금액 비율 ${(rev/denom*100).toFixed(1)}%`}
+    else{const o=await loadCbProj(),b=cbAdminPool(o)[yr]||{pool:0,opt:0,nx:0},incNx=pnlAdminPref('nucks-admin-nx'),incOpt=pnlAdminPref('nucks-admin-opt'),pool=b.pool-(incNx?0:b.nx)-(incOpt?0:b.opt);admin=Math.round(pool*rev/denom);adminNote=`${yr}년 설계 일반관리비 ${won(pool)}원${incNx?'':' (자산·자본성 제외)'}${incOpt?'':' (퇴직급여 제외)'} × 계약금액 비율 ${(rev/denom*100).toFixed(1)}%`}
     const profit=rev-(costV||0)-(labor||0)-(admin||0),rate=rev>0?profit/rev*100:null;
     return{cost,rev,major,costV,labor,laborHow,admin,adminNote,profit,rate};
 }
@@ -2612,7 +2618,7 @@ async function fillPnl(root){
     const f=findRow(box.dataset.pnl);if(!f)continue;const r=f.r,ex=P.vatView!=='in';
     const {cost,rev,major,costV,labor,laborHow,admin,adminNote,profit,rate}=await pnlCompute(r,ex);
     const T=(l,v,cls)=>`<div${cls?` class="${cls}"`:''}>${l}<b>${v}</b></div>`;
-    box.innerHTML=`<div class="ph"><span>프로젝트 손익</span><select class="inp vatv" style="width:auto"><option value="ex" ${ex?'selected':''}>부가세 별도</option><option value="in" ${ex?'':'selected'}>부가세 포함</option></select><span class="hint" style="margin:0;font-weight:400">매출 − 매입원가 − 인건비${major==='설계'?' − 일반관리비 배분':''}</span></div>
+    box.innerHTML=`<div class="ph"><span>프로젝트 손익</span><select class="inp vatv" style="width:auto"><option value="ex" ${ex?'selected':''}>부가세 별도</option><option value="in" ${ex?'':'selected'}>부가세 포함</option></select>${major==='설계'?`<select class="inp admt" data-k="nucks-admin-nx" style="width:auto;font-size:12px;padding:3px 6px" title="보증금·영업권·자본금·중간배당금·가지급 등 비용이 아닌 계정을 일반관리비에 넣을지 (회계종합현황과 같은 설정)"><option value="in" ${pnlAdminPref('nucks-admin-nx')?'selected':''}>자산·자본성 포함</option><option value="ex" ${pnlAdminPref('nucks-admin-nx')?'':'selected'}>자산·자본성 미포함</option></select><select class="inp admt" data-k="nucks-admin-opt" style="width:auto;font-size:12px;padding:3px 6px" title="퇴직급여를 일반관리비에 넣을지 (회계종합현황과 같은 설정)"><option value="in" ${pnlAdminPref('nucks-admin-opt')?'selected':''}>퇴직급여 포함</option><option value="ex" ${pnlAdminPref('nucks-admin-opt')?'':'selected'}>퇴직급여 미포함</option></select>`:''}<span class="hint" style="margin:0;font-weight:400">매출 − 매입원가 − 인건비${major==='설계'?' − 일반관리비 배분':''}</span></div>
       <div class="fsum">${T(ex?'매출(공급가액)':'매출(총계약금)',won(rev)+'원')}
       ${T('매입원가(출납부 태그)',cost.ok?won(costV)+'원':'-')}
       ${T('인건비',labor!==undefined?won(labor)+'원':'-')}
@@ -3011,7 +3017,7 @@ function renderFinAll(){const won=n=>WON(vx(n)),man=n=>MAN(vx(n));
   $('#payDays').value=P.payDays||30;
   VIEW.finCopy={list,maxN}}
 $('#bFin').onclick=()=>{renderFinAll();$('#dFinAll').showModal()};
-document.addEventListener('change',e=>{if(!e.target.classList||!e.target.classList.contains('vatv'))return;P.vatView=e.target.value;save();if($('#dFinAll').open)renderFinAll();if($('#dCash').open)renderCash();fillPnl(document);toast(`금액을 ${VATL()}로 표시합니다`)});
+document.addEventListener('change',e=>{if(e.target.classList&&e.target.classList.contains('admt')){pnlAdminSet(e.target.dataset.k,e.target.value==='in');fillPnl(document);toast('일반관리비 기준을 바꿨습니다 (회계종합현황에도 같이 적용됩니다)');return}if(!e.target.classList||!e.target.classList.contains('vatv'))return;P.vatView=e.target.value;save();if($('#dFinAll').open)renderFinAll();if($('#dCash').open)renderCash();fillPnl(document);toast(`금액을 ${VATL()}로 표시합니다`)});
 $('#faFilt').addEventListener('click',e=>{
   if(e.target.closest('#faLost')){P.finShowLost=!P.finShowLost;save();renderFinAll();return}
   const b=e.target.closest('[data-st]');if(!b)return;const F=P.finFilter;

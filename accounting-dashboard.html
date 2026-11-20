@@ -571,8 +571,10 @@ var DC = (function(){
   var NON = {'일반관리':1,'보험':1,'대출자본':1,'대출이자 및 상환':1,'기타수입':1,'세금':1};
   // 일반관리비 풀에서 뺄 계정(임원·직원급여는 배분인건비와 중복, 미지급금은 법인카드결제대금이라 이중계산)
   // 2026-11: 비용이 아닌 계정(자산·자본·대여·차입 원금·배당 등 — 재무 현황의 NONEXP와 같은 목록)도 풀에서 뺀다.
-  var ADMIN_EXCL = {'직원급여':1,'임원급여':1,'미지급금':1,'내부이체':1,
-    '보증금':1,'가지급':1,'가수금':1,'중간배당금':1,'영업권':1,'자본금':1,'예금저축':1,'상환':1,'채권':1,'선지급금':1,'전도금':1,'보통예금':1,'차량운반구':1,'공사매출':1,'기타매출':1,'국고지원금':1,'배당금수익':1,'이자수익':1};
+  // 일반관리비 풀에서 항상 뺄 계정: 급여는 근무일지 인건비와 중복, 미지급금은 카드대금 이중계산, 내부이체는 계좌 간 이동
+  var ADMIN_EXCL = {'직원급여':1,'임원급여':1,'미지급금':1,'내부이체':1};
+  // 비용이 아닌(자산·자본·대여·차입 원금·배당 등) 계정 — 리뉴얼 전처럼 풀에 넣되 화면의 토글로 포함/미포함을 고른다(ADMIN_NX)
+  var ADMIN_NX = {'보증금':1,'가지급':1,'가수금':1,'중간배당금':1,'영업권':1,'자본금':1,'예금저축':1,'상환':1,'채권':1,'선지급금':1,'전도금':1,'보통예금':1,'차량운반구':1,'공사매출':1,'기타매출':1,'국고지원금':1,'배당금수익':1,'이자수익':1};
   // 일반관리비 중 "매년 반복되는 운영비로 보기 애매한" 계정(토글로 포함/제외)
   var ADMIN_OPT = {'퇴직급여':1};
   var TOL = 1500;     // 지급액과 계산서 합계금액이 이 금액 이하로 다르면 같은 건으로 봄(이체수수료 등)
@@ -787,10 +789,11 @@ var DC = (function(){
     var admin={}, projRows=[];
     trade.rows.forEach(function(r){
       if(r.proj==='일반관리'){
-        var a=admin[r.y]=admin[r.y]||{total:0,excl:0,opt:0};
+        var a=admin[r.y]=admin[r.y]||{total:0,excl:0,opt:0,nx:0};
         a.total+=r.paid;
         if(ADMIN_EXCL[r.acct]) a.excl+=r.paid;
-        if(ADMIN_OPT[r.acct]) a.opt+=r.paid;
+        else if(ADMIN_OPT[r.acct]) a.opt+=r.paid;
+        else if(ADMIN_NX[r.acct]) a.nx+=r.paid;
         return;
       }
       if(!r.proj || NON[r.proj]) return;
@@ -819,12 +822,12 @@ var DC = (function(){
       p.byList=Object.keys(p.by).sort().map(function(y){ return {y:y,paid:Math.round(p.by[y].paid),supply:Math.round(p.by[y].supply)}; });
     });
     var byYear=Object.keys(by).map(function(k){ var b=by[k]; return {m:b.m,y:b.y,paid:Math.round(b.paid),supply:Math.round(b.supply)}; });
-    var adminList=Object.keys(admin).sort().map(function(y){ var a=admin[y]; return {y:y,total:Math.round(a.total),pool:Math.round(a.total-a.excl),opt:Math.round(a.opt)}; });
+    var adminList=Object.keys(admin).sort().map(function(y){ var a=admin[y]; return {y:y,total:Math.round(a.total),pool:Math.round(a.total-a.excl),opt:Math.round(a.opt),nx:Math.round(a.nx)}; });
     return {rows:projRows, projects:plist, byYear:byYear, admin:adminList,
       stats:{rows:projRows.length, matchedRows:mRows, paid:Math.round(paidAll), supply:Math.round(supAll), matchedPaid:Math.round(mPaid), invoices:(invoices||[]).length}};
   }
 
-  return {ymd:ymd, num:num, p2:p2, parseTrade:parseTrade, parseInvoices:parseInvoices, looksLikeTrade:looksLikeTrade, looksLikeInvoice:looksLikeInvoice, link:link, run:run, NON:NON, ADMIN_EXCL:ADMIN_EXCL};
+  return {ymd:ymd, num:num, p2:p2, parseTrade:parseTrade, parseInvoices:parseInvoices, looksLikeTrade:looksLikeTrade, looksLikeInvoice:looksLikeInvoice, link:link, run:run, NON:NON, ADMIN_EXCL:ADMIN_EXCL, ADMIN_NX:ADMIN_NX};
 })();
 </script>
 <script>
@@ -1968,6 +1971,8 @@ var DC = (function(){
   var ADMIN_OPTIONAL_BY_YEAR = {
     '설계': { 2021:0, 2022:68317477, 2023:114604537, 2024:278963930, 2025:164599449, 2026:47276471 }
   };
+  // 비용이 아닌 계정(보증금·영업권·자본금·배당 등)의 연도별 금액 — 풀에 들어 있고, 토글을 "미포함"으로 하면 뺀다
+  var ADMIN_NX_BY_YEAR = {'설계':{}};
   var LABOR_BY_YEAR = {
     '공사': {2021:0, 2022:1312747, 2023:30651232, 2024:33464074, 2025:25334161, 2026:1077029},
     '설계': {2021:14621840, 2022:129525777, 2023:103392891, 2024:82639139, 2025:114203301, 2026:76713203}
@@ -2575,7 +2580,10 @@ var DC = (function(){
   }
 
   // ── 인라인 프로젝트 상세 패널 (project-detail-real.html의 목록/상세 로직을 그대로 이식) ──
-  var pdState = {view:'list', major:'all', q:'', group:'none', sub:'', i:null, cmp:'major', includeAdmin:true, includeAdminOptional:true, status4:'all', year:'2026'};
+  // 프로젝트현황 페이지와 같은 localStorage 값을 공유: 'ex'면 미포함, 그 외(없음 포함)는 포함
+  function pdAdminPref(k){ try{ return localStorage.getItem(k) !== 'ex'; }catch(e){ return true; } }
+  function pdAdminSave(k, inc){ try{ localStorage.setItem(k, inc ? 'in' : 'ex'); }catch(e){} }
+  var pdState = {view:'list', major:'all', q:'', group:'none', sub:'', i:null, cmp:'major', includeAdmin:true, includeAdminOptional:pdAdminPref('nucks-admin-opt'), includeAdminNx:pdAdminPref('nucks-admin-nx'), status4:'all', year:'2026'};
   // 일반관리비 포함/미포함은 이 페이지 전체(위 요약 KPI·대분류·소분류 구성 모자이크·"프로젝트 상세" 목록/상세)가
   // 하나의 상태(pdState.includeAdmin)를 공유합니다 — 어느 토글을 눌러도 전부 같이 바뀝니다.
   function syncTopAdminToggle(){
@@ -2636,10 +2644,14 @@ var DC = (function(){
     return null;
   }
   // includeOptional(기본 true)이 false면 영업권·중간배당금·퇴직급여(ADMIN_OPTIONAL_BY_YEAR)를 풀에서 뺍니다.
-  function pdAdminPoolForYear(y, includeOptional){
+  function pdAdminPoolForYear(y, includeOptional, includeNx){
     var base = DIRECT_BY_YEAR['설계'][y] ? DIRECT_BY_YEAR['설계'][y].admin : 0;
     if(includeOptional === false){
       base -= (ADMIN_OPTIONAL_BY_YEAR['설계'][y] || 0);
+    }
+    if(includeNx === undefined) includeNx = (pdState.includeAdminNx !== false);
+    if(includeNx === false){
+      base -= ((ADMIN_NX_BY_YEAR['설계'] && ADMIN_NX_BY_YEAR['설계'][y]) || 0);
     }
     return base;
   }
@@ -2726,6 +2738,7 @@ var DC = (function(){
     var y = pdProjectYear(p);
     var pool = y ? pdAdminPoolForYear(y, pdState.includeAdminOptional) : 0;
     var poolOptional = y ? (ADMIN_OPTIONAL_BY_YEAR['설계'][y] || 0) : 0;
+    var poolNx = y ? ((ADMIN_NX_BY_YEAR['설계'] && ADMIN_NX_BY_YEAR['설계'][y]) || 0) : 0;
     var designTotal = y ? (MAJOR_DATA['설계'][y] ? MAJOR_DATA['설계'][y].contractAmount : 0) : 0;
     var ratio = (isDesign && y && designTotal>0) ? (p.contractAmt||0)/designTotal*100 : 0;
     var alloc = pdAdminAlloc(p);
@@ -2738,7 +2751,7 @@ var DC = (function(){
     }else{
       bodyHtml =
         '<div class="modal-row"><span class="nm">귀속 연도</span><span class="right"><span class="amt num">'+y+'년</span></span></div>' +
-        '<div class="modal-row"><span class="nm">그 해 설계 일반관리비 풀'+(pdState.includeAdminOptional?'':' (퇴직급여 제외)')+'</span><span class="right"><span class="amt num">'+fmtWon(pool)+'원</span></span></div>' +
+        '<div class="modal-row"><span class="nm">그 해 설계 일반관리비 풀'+(pdState.includeAdminOptional?'':' (퇴직급여 제외)')+(pdState.includeAdminNx!==false?'':' (자산·자본성 계정 제외)')+'</span><span class="right"><span class="amt num">'+fmtWon(pool)+'원</span></span></div>' +
         '<div class="modal-row"><span class="nm">그 해 설계 전체 계약금액</span><span class="right"><span class="amt num">'+fmtWon(designTotal)+'원</span></span></div>' +
         '<div class="modal-row"><span class="nm">이 프로젝트 계약금액</span><span class="right"><span class="amt num">'+fmtWon(p.contractAmt)+'원</span></span></div>' +
         '<div class="modal-row"><span class="nm">배분 비율</span><span class="right"><span class="amt num">'+ratio.toFixed(2)+'%</span></span></div>';
@@ -2752,7 +2765,7 @@ var DC = (function(){
             '<button class="modal-close" id="adminEvClose">✕</button>' +
           '</div>' +
           '<div class="modal-share">회사 전체 일반관리 태그 거래 합계(임원·직원급여, 법인카드결제대금(미지급금)은 원래 거래에서 이미 집계돼 중복 방지를 위해 제외)를 그 해 설계 전체 계약금액 대비 이 프로젝트 계약금액 비율로 나눈 근사배분입니다.</div>' +
-          (isDesign && y ? '<div style="font-size:11.5px; color:var(--muted); margin:2px 0 4px;">퇴직급여(그 해 '+fmtWon(poolOptional)+'원)는 매년 반복되는 운영비로 보기 애매해 위 "퇴직급여" 토글로 포함/제외를 선택할 수 있습니다 — 현재 '+(pdState.includeAdminOptional?'포함':'제외')+' 상태로 계산되어 있습니다.</div>' : '') +
+          (isDesign && y ? (isDesign && y && poolNx ? '<div style="font-size:11.5px; color:var(--muted); margin:2px 0 4px;">보증금·영업권·자본금·중간배당금·가지급 같은 비용이 아닌 계정(그 해 '+fmtWon(poolNx)+'원)은 위 "자산·자본성" 토글로 포함/제외를 선택할 수 있습니다 — 현재 '+(pdState.includeAdminNx!==false?'포함':'제외')+'.</div>' : '') + '<div style="font-size:11.5px; color:var(--muted); margin:2px 0 4px;">퇴직급여(그 해 '+fmtWon(poolOptional)+'원)는 매년 반복되는 운영비로 보기 애매해 위 "퇴직급여" 토글로 포함/제외를 선택할 수 있습니다 — 현재 '+(pdState.includeAdminOptional?'포함':'제외')+' 상태로 계산되어 있습니다.</div>' : '') +
           '<div class="modal-sub-hd"><span>계산 상세</span></div>' +
           bodyHtml +
           '<div class="modal-sub-hd" style="margin-top:14px;"><span>배분 결과</span><span class="num">'+fmtWon(alloc)+'원</span></div>' +
@@ -2772,7 +2785,7 @@ var DC = (function(){
     // 일반관리비 포함/미포함, 진행상태 필터 선택이 초기화되지 않도록 함
     var prevIncludeAdmin = (pdState && pdState.includeAdmin !== undefined) ? pdState.includeAdmin : true;
     var prevStatus4 = (pdState && pdState.status4) ? pdState.status4 : 'all';
-    pdState = {view:'list', major:major, q:'', group:'none', sub:sub, i:null, cmp:'major', includeAdmin:prevIncludeAdmin, status4:prevStatus4};
+    pdState = {view:'list', major:major, q:'', group:'none', sub:sub, i:null, cmp:'major', includeAdmin:prevIncludeAdmin, includeAdminOptional:(pdState.includeAdminOptional!==false), includeAdminNx:(pdState.includeAdminNx!==false), status4:prevStatus4};
     var section = document.getElementById('detailSection');
     section.style.display = '';
     pdRender();
@@ -2967,10 +2980,17 @@ var DC = (function(){
         '</span>' +
         '</span>' +
         '<span class="filter-group">' +
-        '<label title="퇴직급여 — 매년 반복되는 운영비로 보기 애매해 선택적으로 뺄 수 있게 했습니다(영업권·중간배당금 등 비용이 아닌 계정은 항상 제외)">퇴직급여</label>' +
+        '<label title="퇴직급여 — 매년 반복되는 운영비로 보기 애매해 선택적으로 뺄 수 있게 했습니다(보증금·영업권·배당 등 비용이 아닌 계정은 옆의 \'자산·자본성\' 토글)">퇴직급여</label>' +
         '<span class="seg">' +
           '<button class="seg-btn'+(pdState.includeAdminOptional?' on':'')+'" data-pd-admin-optional="1">포함</button>' +
           '<button class="seg-btn'+(!pdState.includeAdminOptional?' on':'')+'" data-pd-admin-optional="0">미포함</button>' +
+        '</span>' +
+        '</span>' +
+        '<span class="filter-group">' +
+        '<label title="보증금·영업권·자본금·중간배당금·가지급처럼 비용이 아닌 계정이 \'일반관리\' 태그로 들어 있는 금액입니다. 리뉴얼 전에는 일반관리비에 포함되어 있었습니다.">자산·자본성</label>' +
+        '<span class="seg">' +
+          '<button class="seg-btn'+(pdState.includeAdminNx!==false?' on':'')+'" data-pd-admin-nx="1">포함</button>' +
+          '<button class="seg-btn'+(pdState.includeAdminNx===false?' on':'')+'" data-pd-admin-nx="0">미포함</button>' +
         '</span>' +
         '</span>' +
         '<span class="filter-group">' +
@@ -3010,7 +3030,10 @@ var DC = (function(){
       btn.addEventListener('click', function(){ setIncludeAdmin(btn.getAttribute('data-pd-admin')==='1'); });
     });
     document.querySelectorAll('[data-pd-admin-optional]').forEach(function(btn){
-      btn.addEventListener('click', function(){ pdState.includeAdminOptional = btn.getAttribute('data-pd-admin-optional')==='1'; pdRender(); });
+      btn.addEventListener('click', function(){ pdState.includeAdminOptional = btn.getAttribute('data-pd-admin-optional')==='1'; pdAdminSave('nucks-admin-opt', pdState.includeAdminOptional); pdRender(); });
+    });
+    document.querySelectorAll('[data-pd-admin-nx]').forEach(function(btn){
+      btn.addEventListener('click', function(){ pdState.includeAdminNx = btn.getAttribute('data-pd-admin-nx')==='1'; pdAdminSave('nucks-admin-nx', pdState.includeAdminNx); pdRender(); });
     });
     document.querySelectorAll('[data-pd-status4]').forEach(function(btn){
       btn.addEventListener('click', function(){ pdState.status4 = btn.getAttribute('data-pd-status4'); pdRender(); });
@@ -3175,10 +3198,15 @@ var DC = (function(){
             '<button class="seg-btn'+(pdState.includeAdmin?' on':'')+'" data-pd-admin="1">포함</button>' +
             '<button class="seg-btn'+(!pdState.includeAdmin?' on':'')+'" data-pd-admin="0">미포함</button>' +
           '</span>' +
-          '<label style="margin-left:6px;" title="퇴직급여 — 매년 반복되는 운영비로 보기 애매해 선택적으로 뺄 수 있게 했습니다(영업권·중간배당금 등 비용이 아닌 계정은 항상 제외)">퇴직급여</label>' +
+          '<label style="margin-left:6px;" title="퇴직급여 — 매년 반복되는 운영비로 보기 애매해 선택적으로 뺄 수 있게 했습니다(보증금·영업권·배당 등 비용이 아닌 계정은 옆의 \'자산·자본성\' 토글)">퇴직급여</label>' +
           '<span class="seg">' +
             '<button class="seg-btn'+(pdState.includeAdminOptional?' on':'')+'" data-pd-admin-optional="1">포함</button>' +
             '<button class="seg-btn'+(!pdState.includeAdminOptional?' on':'')+'" data-pd-admin-optional="0">미포함</button>' +
+          '</span>' +
+          '<label style="margin-left:6px;" title="보증금·영업권·자본금·중간배당금·가지급처럼 비용이 아닌 계정이 \'일반관리\' 태그로 들어 있는 금액입니다.">자산·자본성</label>' +
+          '<span class="seg">' +
+            '<button class="seg-btn'+(pdState.includeAdminNx!==false?' on':'')+'" data-pd-admin-nx="1">포함</button>' +
+            '<button class="seg-btn'+(pdState.includeAdminNx===false?' on':'')+'" data-pd-admin-nx="0">미포함</button>' +
           '</span>' +
         '</div>' +
         (peers.length > 1 ?
@@ -3211,7 +3239,10 @@ var DC = (function(){
       btn.addEventListener('click', function(){ setIncludeAdmin(btn.getAttribute('data-pd-admin')==='1'); });
     });
     document.querySelectorAll('[data-pd-admin-optional]').forEach(function(btn){
-      btn.addEventListener('click', function(){ pdState.includeAdminOptional = btn.getAttribute('data-pd-admin-optional')==='1'; pdRender(); });
+      btn.addEventListener('click', function(){ pdState.includeAdminOptional = btn.getAttribute('data-pd-admin-optional')==='1'; pdAdminSave('nucks-admin-opt', pdState.includeAdminOptional); pdRender(); });
+    });
+    document.querySelectorAll('[data-pd-admin-nx]').forEach(function(btn){
+      btn.addEventListener('click', function(){ pdState.includeAdminNx = btn.getAttribute('data-pd-admin-nx')==='1'; pdAdminSave('nucks-admin-nx', pdState.includeAdminNx); pdRender(); });
     });
     document.querySelectorAll('.pd-cmp-link').forEach(function(a){
       a.addEventListener('click', function(e){
@@ -3510,14 +3541,14 @@ var DC = (function(){
         LABOR_BY_YEAR[m][y] = (SNAP.LABOR_BY_YEAR[m] && SNAP.LABOR_BY_YEAR[m][y]) || 0;
       });
     });
-    ADMIN_OPTIONAL_BY_YEAR['설계'] = {}; YEARS.forEach(function(y){ ADMIN_OPTIONAL_BY_YEAR['설계'][y] = 0; });
+    ADMIN_OPTIONAL_BY_YEAR['설계'] = {}; ADMIN_NX_BY_YEAR['설계'] = {}; YEARS.forEach(function(y){ ADMIN_OPTIONAL_BY_YEAR['설계'][y] = 0; ADMIN_NX_BY_YEAR['설계'][y] = 0; });
     projects.forEach(function(p){
       var y = p.code ? p.code.slice(0,4) : null;
       if(y && MAJOR_DATA[p.major] && MAJOR_DATA[p.major][y]){ MAJOR_DATA[p.major][y].count++; MAJOR_DATA[p.major][y].contractAmount += p.contractAmt; }
     });
     if(LIVE.dc){
       (LIVE.dc.byYear||[]).forEach(function(b){ if(DIRECT_BY_YEAR[b.m] && DIRECT_BY_YEAR[b.m][b.y]) DIRECT_BY_YEAR[b.m][b.y].base += ex ? b.supply : b.paid; });
-      (LIVE.dc.admin||[]).forEach(function(a){ if(DIRECT_BY_YEAR['설계'][a.y]){ DIRECT_BY_YEAR['설계'][a.y].admin = a.pool; ADMIN_OPTIONAL_BY_YEAR['설계'][a.y] = a.opt; } });
+      (LIVE.dc.admin||[]).forEach(function(a){ if(DIRECT_BY_YEAR['설계'][a.y]){ DIRECT_BY_YEAR['설계'][a.y].admin = a.pool; ADMIN_OPTIONAL_BY_YEAR['설계'][a.y] = a.opt; ADMIN_NX_BY_YEAR['설계'][a.y] = a.nx || 0; } });
     }else{
       MAJORS.forEach(function(m){ YEARS.forEach(function(y){
         var s = SNAP.DIRECT_BY_YEAR[m] && SNAP.DIRECT_BY_YEAR[m][y]; if(!s) return;
@@ -3621,7 +3652,7 @@ var DC = (function(){
   // 리뉴얼(구워둔 스냅샷 → 출납부·근무일지 직접 읽기) 뒤에 일반관리비·매입원가·인건비가 어디서 달라졌는지 연도별로 보여준다.
   function diagBuild(entries){
     var Y = {}, ex = LIVE.vat === 'ex';
-    function yy(y){ return Y[y] = Y[y] || {cnt:0, outSum:0, adm:{cnt:0, total:0, excl:0}, blank:{cnt:0, sum:0, acct:{}}, first:'', last:''}; }
+    function yy(y){ return Y[y] = Y[y] || {cnt:0, outSum:0, adm:{cnt:0, total:0, excl:0, ex:{}}, blank:{cnt:0, sum:0, acct:{}, list:[]}, first:'', last:''}; }
     (entries||[]).forEach(function(e){
       if(e.status !== '확정' || e.type !== '출금') return;
       var d = String(e.date||'').slice(0,10); if(!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
@@ -3629,8 +3660,8 @@ var DC = (function(){
       var y = yy(d.slice(0,4)); y.cnt++; y.outSum += amt;
       if(!y.first || d < y.first) y.first = d; if(d > y.last) y.last = d;
       var proj = String(e.project||'').trim(), ac = e.account || '(계정없음)';
-      if(proj === '일반관리'){ y.adm.cnt++; y.adm.total += amt; if(DC.ADMIN_EXCL[ac]) y.adm.excl += amt; }
-      else if(!proj && !DC.ADMIN_EXCL[ac]){ y.blank.cnt++; y.blank.sum += amt; y.blank.acct[ac] = (y.blank.acct[ac]||0) + amt; }
+      if(proj === '일반관리'){ y.adm.cnt++; y.adm.total += amt; if(DC.ADMIN_EXCL[ac]){ y.adm.excl += amt; y.adm.ex[ac] = (y.adm.ex[ac]||0) + amt; } else if(DC.ADMIN_NX[ac]){ y.adm.nx = (y.adm.nx||0) + amt; } }
+      else if(!proj && !DC.ADMIN_EXCL[ac] && !DC.ADMIN_NX[ac]){ y.blank.cnt++; y.blank.sum += amt; y.blank.acct[ac] = (y.blank.acct[ac]||0) + amt; y.blank.list.push({d:d, c:String(e.content||'').slice(0,30), x:amt, a:e.account||'', s:e.src||'수기', ch:e.channel||'', b:e.bank||''}); }
     });
     return Y;
   }
@@ -3669,12 +3700,27 @@ var DC = (function(){
       h += '<tr>' + '<td style="text-align:left"><b>' + y + '</b></td>' + td(won(snap)) + td(won(cur), warn) + diffCell(cur, snap) + td(won(c.adm.total)) + td(c.adm.cnt) + td(won(c.adm.excl)) + td(won(c.blank.sum) + ' (' + c.blank.cnt + '건)', c.blank.sum > 0 ? 'var(--mid)' : '') + '</tr>';
     });
     h += '</tbody></table>';
-    h += '<div style="font-size:11.5px; color:var(--muted); margin:6px 0 4px; line-height:1.7;">· 지금 적용 = 출납부에서 프로젝트 칸이 <b>"일반관리"</b>로 된 확정 지출 − 급여·미지급금·자산/자본성 계정. 예전 값은 원본 엑셀에서 "일반관리" 태그를 단 지출 전체였습니다.<br>· <b>"태그 없는 지출(후보)"</b>는 출납부에서 프로젝트 칸이 비어 있는 확정 지출(급여·자산성 계정 제외)입니다. 임차료·보험·통신비 같은 회사 공통비가 여기 들어 있으면 일반관리비 풀에 <b>잡히지 않고</b> 빠집니다.<br>· 출납부에 기록이 없는 연도는 지금 적용 값이 0이 됩니다(스냅샷으로 되돌아가지 않음).</div>';
+    h += '<div style="font-size:11.5px; color:var(--muted); margin:6px 0 4px; line-height:1.7;">· 지금 적용 = 출납부에서 프로젝트 칸이 <b>"일반관리"</b>로 된 확정 지출 − 급여·미지급금·내부이체 (리뉴얼 전과 같은 기준). 보증금·영업권 같은 자산·자본성 계정은 "자산·자본성" 토글을 미포함으로 하면 빠집니다.<br>· <b>"태그 없는 지출(후보)"</b>는 출납부에서 프로젝트 칸이 비어 있는 확정 지출(급여·자산성 계정 제외)입니다. 임차료·보험·통신비 같은 회사 공통비가 여기 들어 있으면 일반관리비 풀에 <b>잡히지 않고</b> 빠집니다.<br>· 출납부에 기록이 없는 연도는 지금 적용 값이 0이 됩니다(스냅샷으로 되돌아가지 않음).</div>';
 
     // 태그 없는 지출 상위 계정
     var agg = {}; Object.keys(Y).forEach(function(y){ Object.keys(Y[y].blank.acct).forEach(function(a){ agg[a] = (agg[a]||0) + Y[y].blank.acct[a]; }); });
     var top = Object.keys(agg).sort(function(a,b){ return agg[b] - agg[a]; }).slice(0, 8);
     if(top.length) h += '<div style="font-size:11.5px; margin:2px 0 10px;"><b>프로젝트 칸이 빈 지출 상위 계정(전체 연도):</b> ' + top.map(function(a){ return esc(a) + ' ' + fmtWon(agg[a]) + '원'; }).join(' · ') + '</div>';
+
+    // 풀에서 뺀 계정 내역(연도별)
+    h += '<div style="font-size:11.5px; margin:2px 0 10px; line-height:1.8;"><b>일반관리비 풀에서 뺀 계정 내역</b> (임원·직원급여는 근무일지 인건비에 따로 들어가고, 미지급금은 카드 이중계산, 내부이체는 계좌 이동이라 항상 뺍니다)<br>' + yrs.filter(function(y){ return Y[y] && Y[y].adm.excl > 0; }).map(function(y){
+      var ex = Y[y].adm.ex; return '<b>' + y + '</b> ' + Object.keys(ex).sort(function(a,b){ return ex[b]-ex[a]; }).slice(0,6).map(function(a){ return esc(a) + ' ' + fmtWon(ex[a]); }).join(', ');
+    }).join('<br>') + '</div>';
+
+    // 프로젝트 칸이 빈 지출 목록
+    var bl = []; Object.keys(Y).forEach(function(y){ bl = bl.concat(Y[y].blank.list); });
+    bl.sort(function(a,b){ return b.x - a.x; });
+    if(bl.length){
+      var SRC = {'kb-upload':'국민은행 업로드', 'card-upload':'카드 업로드', 'excel':'엑셀 가져오기'};
+      h += '<details open style="margin:2px 0 12px;"><summary style="cursor:pointer; font-size:12px; font-weight:700;">프로젝트 칸이 빈 지출 ' + bl.length + '건 (금액 큰 순, 최대 40건)</summary><div style="max-height:260px; overflow:auto;"><table class="fin-table" style="width:100%; font-size:12px;"><thead><tr><th style="text-align:left">날짜</th><th style="text-align:left">내용</th><th style="text-align:left">계정</th><th>금액</th><th style="text-align:left">들어온 경로</th></tr></thead><tbody>' +
+        bl.slice(0, 40).map(function(r){ return '<tr><td style="text-align:left; white-space:nowrap">' + esc(r.d) + '</td><td style="text-align:left">' + esc(r.c) + '</td><td style="text-align:left">' + (r.a ? esc(r.a) : '<span style="color:var(--neg)">비어 있음</span>') + '</td><td class="num">' + won(r.x) + '</td><td style="text-align:left; color:var(--muted)">' + esc(SRC[r.s] || (r.s === '수기' ? '수기 입력' : r.s)) + (r.ch ? ' · ' + esc(r.ch) + (r.b ? ' ' + esc(r.b) : '') : '') + '</td></tr>'; }).join('') +
+        '</tbody></table></div></details>';
+    }
 
     // 2) 출납부 범위
     h += '<div class="modal-sub-hd" style="margin-top:12px;"><span>② 출납부에 실제로 들어 있는 기간(확정 출금)</span><span></span></div>';
