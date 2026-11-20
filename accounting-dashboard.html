@@ -453,6 +453,16 @@ tr.group-hd .group-hd-meta{float:right; color:var(--muted); font-size:11.5px;}
       <button class="seg-btn" id="topAdminOn" data-top-admin="1">포함</button>
       <button class="seg-btn" id="topAdminOff" data-top-admin="0">미포함</button>
     </span>
+    <label style="margin-left:10px;" title="보증금·영업권·자본금·중간배당금·가지급처럼 비용이 아닌 계정이 '일반관리' 태그로 들어 있는 금액">자산·자본성</label>
+    <span class="seg">
+      <button class="seg-btn" id="topNxOn" data-top-nx="1">포함</button>
+      <button class="seg-btn" id="topNxOff" data-top-nx="0">미포함</button>
+    </span>
+    <label style="margin-left:10px;" title="퇴직급여 — 매년 반복되는 운영비로 보기 애매해 선택적으로 뺄 수 있게 했습니다">퇴직급여</label>
+    <span class="seg">
+      <button class="seg-btn" id="topOptOn" data-top-opt="1">포함</button>
+      <button class="seg-btn" id="topOptOff" data-top-opt="0">미포함</button>
+    </span>
     <span class="desc" style="font-size:12px; color:var(--muted);">아래 요약·구성 타일과 "프로젝트 상세" 목록에 함께 적용됩니다 · 설계 프로젝트에만 반영(공사 제외)</span>
   </div>
 
@@ -2595,6 +2605,8 @@ var DC = (function(){
   function syncTopAdminToggle(){
     var on = document.getElementById('topAdminOn'), off = document.getElementById('topAdminOff');
     if(on && off){ on.classList.toggle('on', !!pdState.includeAdmin); off.classList.toggle('on', !pdState.includeAdmin); }
+    var nxI = pdState.includeAdminNx !== false, opI = pdState.includeAdminOptional !== false;
+    [['topNxOn', nxI], ['topNxOff', !nxI], ['topOptOn', opI], ['topOptOff', !opI]].forEach(function(a){ var e = document.getElementById(a[0]); if(e) e.classList.toggle('on', a[1]); });
   }
   function setIncludeAdmin(v){
     pdState.includeAdmin = v;
@@ -3081,10 +3093,10 @@ var DC = (function(){
       btn.addEventListener('click', function(){ setIncludeAdmin(btn.getAttribute('data-pd-admin')==='1'); });
     });
     document.querySelectorAll('[data-pd-admin-optional]').forEach(function(btn){
-      btn.addEventListener('click', function(){ pdState.includeAdminOptional = btn.getAttribute('data-pd-admin-optional')==='1'; pdAdminSave('nucks-admin-opt', pdState.includeAdminOptional); pdRender(); try{ renderProfitCards(); renderCharts(); }catch(e){} });
+      btn.addEventListener('click', function(){ pdState.includeAdminOptional = btn.getAttribute('data-pd-admin-optional')==='1'; pdAdminSave('nucks-admin-opt', pdState.includeAdminOptional); pdRender(); try{ syncTopAdminToggle(); renderKPI(); renderMosaic(); renderProfitCards(); renderCharts(); }catch(e){} });
     });
     document.querySelectorAll('[data-pd-admin-nx]').forEach(function(btn){
-      btn.addEventListener('click', function(){ pdState.includeAdminNx = btn.getAttribute('data-pd-admin-nx')==='1'; pdAdminSave('nucks-admin-nx', pdState.includeAdminNx); pdRender(); try{ renderProfitCards(); renderCharts(); }catch(e){} });
+      btn.addEventListener('click', function(){ pdState.includeAdminNx = btn.getAttribute('data-pd-admin-nx')==='1'; pdAdminSave('nucks-admin-nx', pdState.includeAdminNx); pdRender(); try{ syncTopAdminToggle(); renderKPI(); renderMosaic(); renderProfitCards(); renderCharts(); }catch(e){} });
     });
     document.querySelectorAll('[data-pd-status4]').forEach(function(btn){
       btn.addEventListener('click', function(){ pdState.status4 = btn.getAttribute('data-pd-status4'); pdRender(); });
@@ -3290,10 +3302,10 @@ var DC = (function(){
       btn.addEventListener('click', function(){ setIncludeAdmin(btn.getAttribute('data-pd-admin')==='1'); });
     });
     document.querySelectorAll('[data-pd-admin-optional]').forEach(function(btn){
-      btn.addEventListener('click', function(){ pdState.includeAdminOptional = btn.getAttribute('data-pd-admin-optional')==='1'; pdAdminSave('nucks-admin-opt', pdState.includeAdminOptional); pdRender(); try{ renderProfitCards(); renderCharts(); }catch(e){} });
+      btn.addEventListener('click', function(){ pdState.includeAdminOptional = btn.getAttribute('data-pd-admin-optional')==='1'; pdAdminSave('nucks-admin-opt', pdState.includeAdminOptional); pdRender(); try{ syncTopAdminToggle(); renderKPI(); renderMosaic(); renderProfitCards(); renderCharts(); }catch(e){} });
     });
     document.querySelectorAll('[data-pd-admin-nx]').forEach(function(btn){
-      btn.addEventListener('click', function(){ pdState.includeAdminNx = btn.getAttribute('data-pd-admin-nx')==='1'; pdAdminSave('nucks-admin-nx', pdState.includeAdminNx); pdRender(); try{ renderProfitCards(); renderCharts(); }catch(e){} });
+      btn.addEventListener('click', function(){ pdState.includeAdminNx = btn.getAttribute('data-pd-admin-nx')==='1'; pdAdminSave('nucks-admin-nx', pdState.includeAdminNx); pdRender(); try{ syncTopAdminToggle(); renderKPI(); renderMosaic(); renderProfitCards(); renderCharts(); }catch(e){} });
     });
     document.querySelectorAll('.pd-cmp-link').forEach(function(a){
       a.addEventListener('click', function(e){
@@ -3316,6 +3328,13 @@ var DC = (function(){
   function renderAll(){
     document.querySelectorAll('[data-top-admin]').forEach(function(btn){
       btn.onclick = function(){ setIncludeAdmin(btn.getAttribute('data-top-admin')==='1'); };
+    });
+    function topAdminRefresh(){ syncTopAdminToggle(); renderKPI(); renderMosaic(); renderCharts(); try{ renderProfitCards(); }catch(e){} pdRender(); }
+    document.querySelectorAll('[data-top-nx]').forEach(function(btn){
+      btn.onclick = function(){ pdState.includeAdminNx = btn.getAttribute('data-top-nx')==='1'; pdAdminSave('nucks-admin-nx', pdState.includeAdminNx); topAdminRefresh(); };
+    });
+    document.querySelectorAll('[data-top-opt]').forEach(function(btn){
+      btn.onclick = function(){ pdState.includeAdminOptional = btn.getAttribute('data-top-opt')==='1'; pdAdminSave('nucks-admin-opt', pdState.includeAdminOptional); topAdminRefresh(); };
     });
     syncTopAdminToggle();
     pdRefreshViews();
