@@ -435,6 +435,7 @@ tr.group-hd .group-hd-meta{float:right; color:var(--muted); font-size:11.5px;}
       </span>
       <button class="lb-act" id="lbUpload" type="button" title="출납부 프로젝트 태그가 충분하면 자동으로 계산되므로 보통은 필요 없습니다">직접비 엑셀 업로드(보조)</button>
       <button class="lb-act" id="lbRefresh" type="button">서버에서 새로고침</button>
+      <button class="lb-act" id="lbDiag" type="button" title="일반관리비·매입원가·인건비가 예전(스냅샷)과 얼마나 달라졌는지, 어디서 빠졌는지 연도별로 보여줍니다">🔍 데이터 점검</button>
     </div>
     <div id="lbStatus">프로젝트현황 데이터를 불러오는 중…</div>
   </div>
@@ -570,7 +571,7 @@ var DC = (function(){
   var NON = {'일반관리':1,'보험':1,'대출자본':1,'대출이자 및 상환':1,'기타수입':1,'세금':1};
   // 일반관리비 풀에서 뺄 계정(임원·직원급여는 배분인건비와 중복, 미지급금은 법인카드결제대금이라 이중계산)
   // 2026-11: 비용이 아닌 계정(자산·자본·대여·차입 원금·배당 등 — 재무 현황의 NONEXP와 같은 목록)도 풀에서 뺀다.
-  var ADMIN_EXCL = {'직원급여':1,'임원급여':1,'미지급금':1,
+  var ADMIN_EXCL = {'직원급여':1,'임원급여':1,'미지급금':1,'내부이체':1,
     '보증금':1,'가지급':1,'가수금':1,'중간배당금':1,'영업권':1,'자본금':1,'예금저축':1,'상환':1,'채권':1,'선지급금':1,'전도금':1,'보통예금':1,'차량운반구':1,'공사매출':1,'기타매출':1,'국고지원금':1,'배당금수익':1,'이자수익':1};
   // 일반관리비 중 "매년 반복되는 운영비로 보기 애매한" 계정(토글로 포함/제외)
   var ADMIN_OPT = {'퇴직급여':1};
@@ -823,7 +824,7 @@ var DC = (function(){
       stats:{rows:projRows.length, matchedRows:mRows, paid:Math.round(paidAll), supply:Math.round(supAll), matchedPaid:Math.round(mPaid), invoices:(invoices||[]).length}};
   }
 
-  return {ymd:ymd, num:num, p2:p2, parseTrade:parseTrade, parseInvoices:parseInvoices, looksLikeTrade:looksLikeTrade, looksLikeInvoice:looksLikeInvoice, link:link, run:run, NON:NON};
+  return {ymd:ymd, num:num, p2:p2, parseTrade:parseTrade, parseInvoices:parseInvoices, looksLikeTrade:looksLikeTrade, looksLikeInvoice:looksLikeInvoice, link:link, run:run, NON:NON, ADMIN_EXCL:ADMIN_EXCL};
 })();
 </script>
 <script>
@@ -3615,6 +3616,111 @@ var DC = (function(){
     }
   }
 
+
+  // ── 데이터 점검 (2026-11) ─────────────────────────────────────────────────────────────────
+  // 리뉴얼(구워둔 스냅샷 → 출납부·근무일지 직접 읽기) 뒤에 일반관리비·매입원가·인건비가 어디서 달라졌는지 연도별로 보여준다.
+  function diagBuild(entries){
+    var Y = {}, ex = LIVE.vat === 'ex';
+    function yy(y){ return Y[y] = Y[y] || {cnt:0, outSum:0, adm:{cnt:0, total:0, excl:0}, blank:{cnt:0, sum:0, acct:{}}, first:'', last:''}; }
+    (entries||[]).forEach(function(e){
+      if(e.status !== '확정' || e.type !== '출금') return;
+      var d = String(e.date||'').slice(0,10); if(!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+      var amt = +e.amount || 0; if(!amt) return;
+      var y = yy(d.slice(0,4)); y.cnt++; y.outSum += amt;
+      if(!y.first || d < y.first) y.first = d; if(d > y.last) y.last = d;
+      var proj = String(e.project||'').trim(), ac = e.account || '(계정없음)';
+      if(proj === '일반관리'){ y.adm.cnt++; y.adm.total += amt; if(DC.ADMIN_EXCL[ac]) y.adm.excl += amt; }
+      else if(!proj && !DC.ADMIN_EXCL[ac]){ y.blank.cnt++; y.blank.sum += amt; y.blank.acct[ac] = (y.blank.acct[ac]||0) + amt; }
+    });
+    return Y;
+  }
+  function openDiagModal(){
+    if(document.getElementById('diagBackdrop')) return;
+    var holder = document.createElement('div');
+    holder.innerHTML = '<div class="modal-backdrop" id="diagBackdrop"><div class="modal-card" style="max-width:980px;"><div class="modal-hd"><div class="modal-title">🔍 데이터 점검 — 리뉴얼 전(스냅샷)과 지금 비교</div><button class="modal-close" id="diagClose">✕</button></div><div id="diagBody" style="font-size:12.5px; color:var(--ink-2);">출납부를 읽는 중…</div></div></div>';
+    document.body.appendChild(holder.firstChild);
+    var bd = document.getElementById('diagBackdrop');
+    function close(){ bd.remove(); }
+    document.getElementById('diagClose').addEventListener('click', close);
+    bd.addEventListener('mousedown', function(e){ if(e.target === bd) close(); });
+    var pr = (typeof window.__cbGet === 'function') ? window.__cbGet() : Promise.resolve([]);
+    pr.then(function(entries){ diagRender(diagBuild(entries), (entries||[]).length); })
+      .catch(function(e){ var b = document.getElementById('diagBody'); if(b) b.textContent = '출납부를 읽지 못했습니다: ' + ((e && e.message) || e); });
+  }
+  function diagRender(Y, nEntries){
+    var body = document.getElementById('diagBody'); if(!body) return;
+    var ex = LIVE.vat === 'ex', k = ex ? 1/1.1 : 1, h = '';
+    var yrs = YEARS.slice();
+    Object.keys(Y).forEach(function(y){ if(yrs.indexOf(y) < 0) yrs.push(y); });
+    yrs.sort();
+    function td(v, cls){ return '<td class="num"' + (cls ? ' style="color:' + cls + '"' : '') + '>' + v + '</td>'; }
+    function diffCell(a, b){ var d = a - b; if(Math.abs(d) < 1) return td('-'); return td((d > 0 ? '+' : '') + won(d), d < 0 ? 'var(--neg)' : 'var(--pos)'); }
+    var th = function(a){ return '<th' + (a ? ' style="text-align:left"' : '') + '>'; };
+
+    // 1) 일반관리비 풀
+    h += '<div class="modal-sub-hd"><span>① 일반관리비 풀(설계에 배분되는 연간 총액) — 구워둔 값 vs 지금 적용값</span><span></span></div>';
+    h += '<table class="fin-table" style="width:100%; font-size:12px;"><thead><tr>' + th(1) + '연도</th>' + th() + '예전(스냅샷)</th>' + th() + '지금 적용</th>' + th() + '차이</th>' + th() + '출납부 \'일반관리\' 태그</th>' + th() + '건수</th>' + th() + '그중 풀에서 뺀 계정</th>' + th() + '태그 없는 지출(후보)</th></tr></thead><tbody>';
+    yrs.forEach(function(y){
+      var snap = (SNAP.DIRECT_BY_YEAR['설계'] && SNAP.DIRECT_BY_YEAR['설계'][y]) ? SNAP.DIRECT_BY_YEAR['설계'][y].admin : 0;
+      var cur = DIRECT_BY_YEAR['설계'][y] ? DIRECT_BY_YEAR['설계'][y].admin : 0;
+      var c = Y[y] || {adm:{cnt:0,total:0,excl:0}, blank:{cnt:0,sum:0,acct:{}}};
+      if(!snap && !cur && !c.adm.cnt && !c.blank.cnt) return;
+      var warn = (snap > 0 && cur < snap * 0.7) ? 'var(--neg)' : '';
+      h += '<tr>' + '<td style="text-align:left"><b>' + y + '</b></td>' + td(won(snap)) + td(won(cur), warn) + diffCell(cur, snap) + td(won(c.adm.total)) + td(c.adm.cnt) + td(won(c.adm.excl)) + td(won(c.blank.sum) + ' (' + c.blank.cnt + '건)', c.blank.sum > 0 ? 'var(--mid)' : '') + '</tr>';
+    });
+    h += '</tbody></table>';
+    h += '<div style="font-size:11.5px; color:var(--muted); margin:6px 0 4px; line-height:1.7;">· 지금 적용 = 출납부에서 프로젝트 칸이 <b>"일반관리"</b>로 된 확정 지출 − 급여·미지급금·자산/자본성 계정. 예전 값은 원본 엑셀에서 "일반관리" 태그를 단 지출 전체였습니다.<br>· <b>"태그 없는 지출(후보)"</b>는 출납부에서 프로젝트 칸이 비어 있는 확정 지출(급여·자산성 계정 제외)입니다. 임차료·보험·통신비 같은 회사 공통비가 여기 들어 있으면 일반관리비 풀에 <b>잡히지 않고</b> 빠집니다.<br>· 출납부에 기록이 없는 연도는 지금 적용 값이 0이 됩니다(스냅샷으로 되돌아가지 않음).</div>';
+
+    // 태그 없는 지출 상위 계정
+    var agg = {}; Object.keys(Y).forEach(function(y){ Object.keys(Y[y].blank.acct).forEach(function(a){ agg[a] = (agg[a]||0) + Y[y].blank.acct[a]; }); });
+    var top = Object.keys(agg).sort(function(a,b){ return agg[b] - agg[a]; }).slice(0, 8);
+    if(top.length) h += '<div style="font-size:11.5px; margin:2px 0 10px;"><b>프로젝트 칸이 빈 지출 상위 계정(전체 연도):</b> ' + top.map(function(a){ return esc(a) + ' ' + fmtWon(agg[a]) + '원'; }).join(' · ') + '</div>';
+
+    // 2) 출납부 범위
+    h += '<div class="modal-sub-hd" style="margin-top:12px;"><span>② 출납부에 실제로 들어 있는 기간(확정 출금)</span><span></span></div>';
+    h += '<div style="font-size:12px; line-height:1.8;">' + (Object.keys(Y).sort().map(function(y){ var c = Y[y]; return '<b>' + y + '</b> ' + c.cnt + '건 (' + esc(c.first.slice(5)) + ' ~ ' + esc(c.last.slice(5)) + ', ' + fmtWon(c.outSum) + '원)'; }).join(' &nbsp;|&nbsp; ') || '확정 출금이 없습니다') + '</div>';
+    h += '<div style="font-size:11.5px; color:var(--muted); margin:4px 0;">출납부 전체 ' + nEntries + '건 중 확정 출금만 센 값입니다. 연도 중간부터 시작하거나 몇 달이 비면 그 연도의 일반관리비·직접비가 실제보다 작게 나옵니다.</div>';
+
+    // 3) 프로젝트 매입원가 · 인건비 (계약연도별)
+    h += '<div class="modal-sub-hd" style="margin-top:12px;"><span>③ 프로젝트별 매입원가·인건비 (프로젝트 코드 연도 기준)</span><span></span></div>';
+    h += '<table class="fin-table" style="width:100%; font-size:12px;"><thead><tr>' + th(1) + '연도·대분류</th>' + th() + '프로젝트</th>' + th() + '계약금액</th>' + th() + '원가 확정</th>' + th() + '원가 미확정</th>' + th() + '매입원가(지금)</th>' + th() + '매입원가(예전)</th>' + th() + '인건비(지금)</th>' + th() + '인건비(예전)</th></tr></thead><tbody>';
+    var snapBy = {};
+    PD_SNAPSHOT.forEach(function(p){
+      var y = p.code ? String(p.code).slice(0,4) : null; if(!y) return;
+      var o = snapBy[p.major + '|' + y] = snapBy[p.major + '|' + y] || {cost:0, labor:0};
+      if(p.directCost !== null && p.directCost !== undefined) o.cost += Math.round(p.directCost * k);
+      o.labor += (p.laborAlloc || 0);
+    });
+    var curBy = {};
+    PD_PROJECTS.forEach(function(p){
+      var y = p.code ? String(p.code).slice(0,4) : null; if(!y) return;
+      var o = curBy[p.major + '|' + y] = curBy[p.major + '|' + y] || {n:0, amt:0, known:0, unk:0, unkAmt:0, cost:0, labor:0};
+      o.n++; o.amt += p.contractAmt || 0;
+      if(pdHasCost(p)){ o.known++; o.cost += p.directCost || 0; } else { o.unk++; o.unkAmt += p.contractAmt || 0; }
+      o.labor += pdEffectiveLaborAlloc(p);
+    });
+    Object.keys(curBy).sort().forEach(function(key){
+      var o = curBy[key], s = snapBy[key] || {cost:0, labor:0}, parts = key.split('|');
+      var warnU = (o.unk > 0 && o.unkAmt > o.amt * 0.2) ? 'var(--neg)' : '';
+      h += '<tr><td style="text-align:left"><b>' + parts[1] + '</b> ' + parts[0] + '</td>' + td(o.n) + td(fmtWon(o.amt)) + td(o.known) + td(o.unk ? o.unk + '건 · ' + fmtWon(o.unkAmt) : '-', warnU) + td(fmtWon(o.cost)) + td(fmtWon(s.cost)) + td(fmtWon(o.labor)) + td(fmtWon(s.labor)) + '</tr>';
+    });
+    h += '</tbody></table>';
+    h += '<div style="font-size:11.5px; color:var(--muted); margin:6px 0 4px; line-height:1.7;">· <b>원가 미확정</b>: 출납부 프로젝트 칸에서 이름이 연결되지 않아 매입원가를 못 찾은 프로젝트입니다. 이런 프로젝트는 손익 계산에서 빠집니다(예전 스냅샷은 추정치로라도 채워 줬음).<br>· 매입원가(예전)은 스냅샷 지급액' + (ex ? '÷1.1' : '') + '이고, 인건비(예전)은 급여명세서 월급여×투입비중 방식, 인건비(지금)은 근무일지 시간×(기본급÷209) 방식이라 구조적으로 값이 다를 수 있습니다.</div>';
+
+    // 4) 요약 판정
+    var notes = [];
+    yrs.forEach(function(y){
+      var snap = (SNAP.DIRECT_BY_YEAR['설계'] && SNAP.DIRECT_BY_YEAR['설계'][y]) ? SNAP.DIRECT_BY_YEAR['설계'][y].admin : 0;
+      var cur = DIRECT_BY_YEAR['설계'][y] ? DIRECT_BY_YEAR['설계'][y].admin : 0;
+      var c = Y[y];
+      if(snap > 0 && cur === 0) notes.push('<b>' + y + '년</b>: 일반관리비가 0원으로 나옵니다(출납부에 \'일반관리\' 태그 기록 없음' + (c ? '' : ' · 해당 연도 기록 자체가 없음') + ').');
+      else if(snap > 0 && cur < snap * 0.7) notes.push('<b>' + y + '년</b>: 일반관리비가 예전의 ' + Math.round(cur/snap*100) + '%로 줄었습니다' + (c && c.blank.sum > 0 ? ' — 태그 없는 지출 ' + fmtWon(c.blank.sum) + '원이 풀에 안 들어간 영향일 수 있습니다.' : '.'));
+    });
+    h = '<div style="background:var(--surface-2); border-radius:10px; padding:10px 14px; margin:4px 0 12px; line-height:1.8;">' +
+        '<b>자동 판정</b><br>' + (notes.length ? notes.join('<br>') : '일반관리비 풀은 예전 값과 크게 어긋나지 않습니다.') + '</div>' + h;
+    body.innerHTML = h;
+  }
+
   // ── Firestore 읽기
   function fsOk(){ try{ return typeof firebase !== 'undefined' && typeof db !== 'undefined' && !!db; }catch(e){ return false; } }
   function fetchLive(){
@@ -3664,7 +3770,7 @@ var DC = (function(){
     entries.forEach(function(e){
       if(e.status !== '확정' || e.type !== '출금') return;
       var proj = String(e.project||'').trim(); if(!proj) return;
-      if(e.account === '미지급금') return;
+      if(e.account === '미지급금' || e.account === '내부이체') return;
       var d = ymdOf(e.date); if(!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
       var paid = +e.amount || 0; if(!paid) return;   // 카드 취소·환불처럼 마이너스 금액도 그대로 더해 상쇄시킨다
       var r = { d:d, y:d.slice(0,4), paid:paid, proj:proj, major:e.pmajor||'', acct:e.account||'', content:String(e.content||''), memo:String(e.memo||''), kind:'', ev:e.evType||'' };
@@ -3932,6 +4038,7 @@ var DC = (function(){
     });
   });
   var _up = document.getElementById('lbUpload'); if(_up) _up.addEventListener('click', function(){ UP.msg = ''; openUploadModal(); });
+  var _dg = document.getElementById('lbDiag'); if(_dg) _dg.addEventListener('click', openDiagModal);
   var _rf = document.getElementById('lbRefresh');
   if(_rf) _rf.addEventListener('click', function(){
     _rf.disabled = true;
