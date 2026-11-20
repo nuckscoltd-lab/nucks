@@ -2626,7 +2626,7 @@ var DC = (function(){
   function pdYearBucket(p, year){
     if(p.status4 === '완료'){
       var endSrc = (p.endReal !== undefined) ? p.endReal : p.end;
-      var endYear = endSrc ? String(endSrc).slice(0,4) : (p.code ? String(p.code).slice(0,4) : null);
+      var endYear = (endSrc && /^\d{4}/.test(String(endSrc))) ? String(endSrc).slice(0,4) : (p.code ? String(p.code).slice(0,4) : null);
       return (endYear && endYear === year) ? '완료' : null;
     }
     if(p.status4 === '진행'){
@@ -2851,9 +2851,22 @@ var DC = (function(){
     if(sub) filtered = filtered.filter(function(p){ return p.subLabel === sub; });
     // 2026-11: 연도는 페이지 맨 위 "연도" 선택(프로젝트 코드 연도 = 계약 연도 기준) 하나로 통일 — 요약 타일과 같은 프로젝트 집합에서 진행상태로 거른다
     var gy = pdGYear();
-    if(gy) filtered = filtered.filter(function(p){ return pdProjectYear(p) === gy; });
-    if(status4 === '진행+완료') filtered = filtered.filter(function(p){ return p.status4 === '진행' || p.status4 === '완료'; });
-    else if(status4 !== 'all') filtered = filtered.filter(function(p){ return p.status4 === status4; });
+    // 2026-11 진행상태 기준 (사용자 확인):
+    //  · 전체·계약·실주 → 위 "연도"(프로젝트 코드 연도 = 계약 연도) 안의 프로젝트에서 그 상태만 본다
+    //  · 진행 → 계약 연도와 상관없이 지금 진행 중인 건 전부(연도가 올해일 때만. 지난 해를 고르면 진행 건은 없음)
+    //  · 완료 → 그 연도에 완료된 건(종료일이 있으면 종료 연도, 없으면 코드 연도)
+    //  · 진행+완료 → 위 두 가지의 합 (올해: 진행 중인 전 연도 계약건 + 올해 완료건 / 지난 해: 그 해 완료건)
+    if(status4 === '진행' || status4 === '완료' || status4 === '진행+완료'){
+      filtered = filtered.filter(function(p){
+        if(p.status4 !== '진행' && p.status4 !== '완료') return false;
+        if(!gy) return status4 === '진행+완료' || p.status4 === status4;   // 연도 전체 선택: 상태만 본다
+        var b = pdYearBucket(p, gy);
+        return b !== null && (status4 === '진행+완료' || b === status4);
+      });
+    } else {
+      if(gy) filtered = filtered.filter(function(p){ return pdProjectYear(p) === gy; });
+      if(status4 !== 'all') filtered = filtered.filter(function(p){ return p.status4 === status4; });
+    }
     if(q) filtered = filtered.filter(function(p){ return (p.name+p.client).toLowerCase().indexOf(q.toLowerCase()) >= 0; });
 
     var totalAmt = filtered.reduce(function(s,p){ return s+p.contractAmt; }, 0);
@@ -2966,7 +2979,14 @@ var DC = (function(){
           PD_STATUS4_OPTIONS.map(function(s){ return '<button class="seg-btn'+(status4===s?' on':'')+'" data-pd-status4="'+s+'">'+s+'</button>'; }).join('') +
           '<button class="seg-btn'+(status4==='진행+완료'?' on':'')+'" data-pd-status4="진행+완료" title="진행과 완료를 함께 봅니다">진행+완료</button>' +
         '</span>' +
-        '<span class="hint" style="margin-left:4px; font-size:11.5px; color:var(--muted);">'+(gy ? esc(gy)+'년 계약 프로젝트 중 (연도는 맨 위 선택 기준)' : '전체 연도 (연도는 맨 위에서 선택)')+'</span>' +
+        '<span class="hint" style="margin-left:4px; font-size:11.5px; color:var(--muted);">'+(function(){
+          var carry = (gy && gy === PD_CURRENT_YEAR) ? '진행 중인 이전 연도 계약건 포함' : '';
+          if(!gy) return '전체 연도 (연도는 맨 위에서 선택)';
+          if(status4 === '진행') return gy === PD_CURRENT_YEAR ? '지금 진행 중인 건 전체 (이전 연도 계약건 포함)' : esc(gy)+'년은 지난 해라 진행 중인 건이 없습니다';
+          if(status4 === '완료') return esc(gy)+'년에 완료된 건';
+          if(status4 === '진행+완료') return esc(gy)+'년 기준 — '+(carry ? carry+' + ' : '')+esc(gy)+'년에 완료된 건';
+          return esc(gy)+'년 계약 프로젝트 중 (연도는 맨 위 선택 기준)';
+        })()+'</span>' +
         '</span>' +
         '<input class="search-input" id="pdSearchBox" placeholder="프로젝트명·발주처 검색" value="'+q.replace(/"/g,'&quot;')+'">' +
         (sub ? '<span class="sub-filter-chip">소분류 · '+sub+' <a href="#" class="sub-filter-clear pd-clear-sub" title="필터 해제">✕</a></span>' : '') +
@@ -3391,7 +3411,7 @@ var DC = (function(){
     (r.bars || []).forEach(function(b){ add(ds, b.start); if(!b.startOnly) add(de, b.end); });
     (f.items || []).forEach(function(x){ [x.claimDate, x.payDate, x.dueDate].forEach(function(d){ d = isoD(d); if(d){ ds.push(d); de.push(d); } }); });
     (r.events || []).forEach(function(e){ add(ds, e.date); add(de, e.date); });
-    var fe = isoD(f.endDate);
+    var fe = isoD(f.endDate) || isoD(r.settle && r.settle.endDate);   // 계약정보 종료일이 없으면 결산서에 적은 종료일
     if(!ds.length && !fe) return null;
     ds.sort(); de.sort();
     var start = ds.length ? ds[0] : fe, end = fe;
@@ -3451,7 +3471,7 @@ var DC = (function(){
         conf = snap.directConf || 'none';
         if(snap.directCost !== null && snap.directCost !== undefined){ cost = (LIVE.vat === 'ex') ? Math.round(snap.directCost/1.1) : snap.directCost; est = (LIVE.vat === 'ex' && snap.directCost > 0); }
       }
-      var end = f.endDate || ((st === '진행' && b && b.end) ? b.end : null);
+      var end = isoD(f.endDate) || isoD(r.settle && r.settle.endDate) || ((st === '진행' && b && b.end) ? b.end : null);   // 종료일: 계약정보 → 결산서 순
       var per = periodOf(r, st);
       out.push({
         code: r.projCode || null, subCode: code ? code.cc : null, subLabel: subInfo ? subInfo[0] : null, major: major,
