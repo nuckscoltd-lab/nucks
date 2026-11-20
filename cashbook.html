@@ -714,6 +714,11 @@
       <option value="있음">증빙 있음(전체)</option>
       <option value="없음">증빙 미입력</option>
     </select>
+    <select id="clsFilter" title="회계종합현황 계산에서 빠지는 거래(프로젝트 칸이 빈 지출)를 모아 봅니다">
+      <option value="전체">분류 전체</option>
+      <option value="프로젝트비어있음">프로젝트 칸 빈 지출 (집계에서 빠짐)</option>
+      <option value="계정비어있음">계정과목 빈 거래</option>
+    </select>
     <input type="search" id="searchFilter" placeholder="내용·계정과목·프로젝트 검색">
   </div>
   <div class="import-help" style="margin-bottom:10px;">기본적으로 최근 3개월 내역만 표시됩니다. 이전 내역은 위 필터에서 "전체 월" 또는 원하는 월을 선택하면 볼 수 있어요. (잔액 계산에는 전체 데이터가 그대로 반영됩니다.)</div>
@@ -1364,6 +1369,14 @@
   document.getElementById('channelFilter').addEventListener('change', () => renderTable());
   document.getElementById('bankFilter').addEventListener('change', () => renderTable());
   document.getElementById('evFilter').addEventListener('change', () => renderTable());
+  document.getElementById('clsFilter').addEventListener('change', (e) => {
+    // 빈 건은 옛날 달에도 있을 수 있어서, 이 필터를 고르면 기간·상태를 전체로 풀어 줌
+    if (e.target.value !== '전체') {
+      activeMonth = '전체'; const mf = document.getElementById('monthFilter'); if (mf) mf.value = '전체';
+      activeStatus = '확정'; const sf = document.getElementById('statusFilter'); if (sf) sf.value = '확정';
+    }
+    renderAll();
+  });
   document.getElementById('searchFilter').addEventListener('input', () => renderTable());
 
   function renderAll(){
@@ -1504,6 +1517,13 @@
     if (bkF !== '전체') rows = rows.filter(e => isBank(e) && bankOf(e) === bkF);
     const evF = document.getElementById('evFilter').value;
     if (evF === '있음') rows = rows.filter(e => e.evType); else if (evF === '없음') rows = rows.filter(e => !e.evType); else if (evF !== '전체') rows = rows.filter(e => e.evType === evF);
+    const clsF = document.getElementById('clsFilter').value;
+    if (clsF === '프로젝트비어있음') {
+      const SKIP = {'내부이체':1,'미지급금':1,'직원급여':1,'임원급여':1,'보증금':1,'가지급':1,'가수금':1,'중간배당금':1,'영업권':1,'자본금':1,'예금저축':1,'상환':1,'채권':1,'선지급금':1,'전도금':1,'보통예금':1,'차량운반구':1,'공사매출':1,'기타매출':1,'국고지원금':1,'배당금수익':1,'이자수익':1};
+      rows = rows.filter(e => e.status === '확정' && e.type === '출금' && !String(e.project || '').trim() && !SKIP[e.account]);
+    } else if (clsF === '계정비어있음') {
+      rows = rows.filter(e => !String(e.account || '').trim());
+    }
     const qF = normC(document.getElementById('searchFilter').value);
     if (qF) rows = rows.filter(e => normC([e.content, e.memo, e.account, e.project, e.client].join(' ')).includes(qF));
 
