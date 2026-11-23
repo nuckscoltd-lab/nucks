@@ -9,7 +9,7 @@
 :root{
   --bg:#e9ebee; --paper:#ffffff; --ink:#1c2227; --muted:#6b737b; --line:#cfd4d9; --line-strong:#2b3036;
   --grid:#e7eaed; --grid-week:#c9ced4; --off:#eef0f3; --head:#f5f6f8; --chip:#f4efe9;
-  --accent:#d0702e; --accent-soft:#f6e3d4; --sat:#2d6bd1; --sun:#d4392e; --sel:#1f6feb; --danger:#c9372c; --ok:#1e7a44; --okbg:#e3f3e8; --warn:#b35a14; --warnbg:#fdecdc; --bad:#b3261e; --badbg:#fbe1df;
+  --accent:#d0702e; --accent-soft:#f6e3d4; --sat:#2d6bd1; --sun:#d4392e; --sel:#1f6feb; --danger:#c9372c; --ok:#1e7a44; --okbg:#e3f3e8; --warn:#b35a14; --warnbg:#fdecdc; --pre:#5b45b8; --prebg:#ebe6fb; --bad:#b3261e; --badbg:#fbe1df;
   --font-ui:'IBM Plex Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
   --font-num:'IBM Plex Mono',ui-monospace,Menlo,monospace;
   --rowh:38px;
@@ -22,7 +22,7 @@
 :root[data-theme="dark"]{
   --bg:#15181b; --paper:#1d2125; --ink:#e7eaed; --muted:#98a1a9; --line:#363c43; --line-strong:#aeb6be;
   --grid:#272c31; --grid-week:#3a4148; --off:#252a2f; --head:#22272c; --chip:#2b2621;
-  --accent:#e58a4a; --accent-soft:#3b2a1e; --sat:#6b9df0; --sun:#f0685e; --sel:#5b9bff; --danger:#f0685e; --ok:#6fd39a; --okbg:#1f3a2a; --warn:#f0a868; --warnbg:#3b2a1e; --bad:#ff8a80; --badbg:#3d2020; color-scheme:dark}
+  --accent:#e58a4a; --accent-soft:#3b2a1e; --sat:#6b9df0; --sun:#f0685e; --sel:#5b9bff; --danger:#f0685e; --ok:#6fd39a; --okbg:#1f3a2a; --warn:#f0a868; --warnbg:#3b2a1e; --pre:#b9a8ff; --prebg:#2d2848; --bad:#ff8a80; --badbg:#3d2020; color-scheme:dark}
 *{box-sizing:border-box}
 html,body{margin:0}
 [hidden]{display:none!important}
@@ -92,10 +92,10 @@ body.colresize,body.colresize *{cursor:col-resize!important;user-select:none}
 .lg-name.horiz{writing-mode:horizontal-tb;letter-spacing:0;font-size:11px;line-height:1.35;padding:0 4px;text-align:center;word-break:keep-all}
 .lg-name.horiz .lgn-t{display:block;width:100%;text-align:center}
 .lr{height:var(--rowh);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:center;text-align:center;padding:0 6px;font-size:12px;line-height:1.2;cursor:pointer;overflow:hidden;word-break:keep-all;overflow-wrap:anywhere;touch-action:none}
-.lr.pre{background:var(--warnbg);box-shadow:inset 3px 0 0 var(--warn);flex-direction:column;gap:2px}
-.lr.pre .pwb{font-size:9.5px;font-weight:700;color:var(--warn);border:1px solid var(--warn);border-radius:8px;padding:0 5px;line-height:1.35;background:var(--bg,#fff);white-space:nowrap}
-.pwb{display:inline-block;font-size:10px;font-weight:700;color:var(--warn);border:1px solid var(--warn);border-radius:8px;padding:0 6px;line-height:1.4;margin-left:6px;white-space:nowrap}
-tr.pr.pre>td{background:var(--warnbg)}
+.lr.pre{background:var(--prebg);flex-direction:column;gap:2px}
+.lr.pre .pwb{font-size:9.5px;font-weight:700;color:var(--pre);border:1px solid var(--pre);border-radius:8px;padding:0 5px;line-height:1.35;background:var(--bg,#fff);white-space:nowrap}
+.pwb{display:inline-block;font-size:10px;font-weight:700;color:var(--pre);border:1px solid var(--pre);border-radius:8px;padding:0 6px;line-height:1.4;margin-left:6px;white-space:nowrap}
+tr.pr.pre>td{background:var(--prebg)}
 @media print{.lr.pre,tr.pr.pre>td{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 .lr.drop-a{box-shadow:inset 0 3px 0 var(--sel)!important}.lr.drop-b{box-shadow:inset 0 -3px 0 var(--sel)!important}
 .lg-name.drop-in{background:var(--accent-soft);box-shadow:inset 0 0 0 2px var(--sel)}
@@ -1078,7 +1078,7 @@ function visGroups(cs=VCS(),ce=VCE()){
   const out=[];for(const g of P.groups){
     const rows=g.rows.filter(r=>{
       if(g.hidden||r.hidden){VIEW.manual++;return showAll}
-      if(hideEmpty&&(r.bars.length||r.fin)){const R=projRange(r);const on=r.bars.some(b=>b.end>=cs&&b.start<=ce)||(R&&R.start<=ce&&R.end>=cs);if(!on){VIEW.hidden++;return false}}
+      if(hideEmpty&&(r.bars.length||r.fin)){const R=projRange(r);const on=r.bars.some(b=>b.end>=cs&&b.start<=ce)||(R&&R.start<=ce&&R.end>=cs)||(!R&&!r.bars.length&&r.newAt);/* 새로 등록했는데 날짜가 아직 하나도 없는 줄은 숨기지 않는다 */if(!on){VIEW.hidden++;return false}}
       return true});
     if(rows.length)out.push({id:g.id,name:g.name,hidden:g.hidden,rows})}
   return out.length?out:P.groups}
@@ -2313,7 +2313,7 @@ $('#fAttachList').addEventListener('click',async e=>{
 });
 
 function preInfo(){const el=$('#fPreInfo');if(!el)return;const cdT=$('#fCD').value.trim(),cd=cdT?parseD(cdT,refYear()):'',pT=$('#fPer').value.trim(),per=pT?parsePeriod(pT):null;
-  el.textContent=$('#fPre').value==='1'?(cd?'계약일이 입력되어 있습니다. 계약이 확정됐다면 "아니오"로 바꿔 표시를 해제하세요.':'목록에 주황색 "선작업" 표시가 붙습니다. 계약이 확정되면 해제하세요.'):(per&&cd&&per[0]<cd?`용역 시작(${fmtS(per[0])})이 계약일(${fmtS(cd)})보다 빠릅니다. 선작업이면 위에서 선택하세요.`:'')}
+  el.textContent=$('#fPre').value==='1'?(cd?'계약일이 입력되어 있습니다. 계약이 확정됐다면 "아니오"로 바꿔 표시를 해제하세요.':'목록에 보라색 "선작업" 표시가 붙습니다. 계약이 확정되면 해제하세요.'):(per&&cd&&per[0]<cd?`용역 시작(${fmtS(per[0])})이 계약일(${fmtS(cd)})보다 빠릅니다. 선작업이면 위에서 선택하세요.`:'')}
 document.addEventListener('change',e=>{if(e.target&&(e.target.id==='fPre'||e.target.id==='fCD'||e.target.id==='fPer'))preInfo()});
 function openFin(rowId){
   const f=rowId?findRow(rowId):null,r=f&&f.r,b=r&&r.bars[0],fn=(r&&r.fin)||{};
@@ -2422,7 +2422,7 @@ $('#fSave').onclick=()=>{
   if(!g&&co){g={id:uid(),name:co,rows:[]};P.groups.push(g)}
   if(!g){g=P.groups[P.groups.length-1];if(!g){g={id:uid(),name:'새 '+(P.hdG||'구획'),rows:[]};P.groups.push(g)}}
   let r;const f=FD.rowId&&findRow(FD.rowId);
-  if(f){r=f.r;if(f.g!==g){f.g.rows.splice(f.g.rows.indexOf(r),1);g.rows.push(r)}}else{r={id:uid(),name,bars:[]};g.rows.push(r)}
+  if(f){r=f.r;if(f.g!==g){f.g.rows.splice(f.g.rows.indexOf(r),1);g.rows.push(r)}}else{r={id:uid(),name,bars:[],newAt:Date.now()};g.rows.push(r)}
   r.name=name;r.code=$('#fCode').value.trim()||null;r.projCode=$('#fCode2').value.trim()||null;
   if(FD.attachments&&FD.attachments.length)r.attachments=FD.attachments;else delete r.attachments;
   // 이름도 없고(아직 이름을 입력/자동배정 받지 않았고) 금액·날짜도 전혀 안 채운, 진짜 빈 줄만 저장에서
@@ -2449,7 +2449,7 @@ $('#fSave').onclick=()=>{
   const stv=$('#fSt').value;if(stv&&r.bars[0]){r.bars[0].inner=stv;r.bars[0].color={'완료':'#b9b0a8','진행':'#e1863a','계약':'#9aa0a6','실주':'#c9372c'}[stv]}
   if(P.rowRemarks&&/^계약 /.test(P.rowRemarks[r.id]||''))delete P.rowRemarks[r.id];
   if(!P.remark)P.remark='right';
-  sel={t:'row',id:r.id};save();$('#dFin').close();renderAll();if($('#dFinAll').open)renderFinAll();if($('#dCash').open)renderCash();toast(f?'저장했습니다':'새 프로젝트를 등록했습니다');settleOnFinSave(r.id).catch(e=>console.error('결산서 자동 작성 실패',e));if(!f)registerOfficialNames([r.name]).then(n=>{if(n)toastL('근무일지 프로젝트명 자동완성 목록에도 등록했습니다',3500)})};
+  sel={t:'row',id:r.id};save();$('#dFin').close();renderAll();if($('#dFinAll').open)renderFinAll();if($('#dCash').open)renderCash();toast(f?'저장했습니다':'새 프로젝트를 등록했습니다');setTimeout(()=>{try{const vis=visGroups().some(x=>x.rows.some(y=>y.id===r.id));if(!vis)toastL('저장은 됐지만 지금 "줄 표시"·보기 기간 설정 때문에 표에서 숨겨져 있어요. 위쪽 "줄 표시"를 "일정 없는 줄도 표시"로 바꾸면 보입니다',7000)}catch(_){}},80);settleOnFinSave(r.id).catch(e=>console.error('결산서 자동 작성 실패',e));if(!f)registerOfficialNames([r.name]).then(n=>{if(n)toastL('근무일지 프로젝트명 자동완성 목록에도 등록했습니다',3500)})};
 
 /* ---------- 프로젝트 결산서 (2026-11 신규) ----------
    기존 project-settlement.html(프로젝트 결산) 페이지의 구성(기본정보·대외업체·진행내용·투입인원·특이사항)을
