@@ -92,6 +92,11 @@ body.colresize,body.colresize *{cursor:col-resize!important;user-select:none}
 .lg-name.horiz{writing-mode:horizontal-tb;letter-spacing:0;font-size:11px;line-height:1.35;padding:0 4px;text-align:center;word-break:keep-all}
 .lg-name.horiz .lgn-t{display:block;width:100%;text-align:center}
 .lr{height:var(--rowh);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:center;text-align:center;padding:0 6px;font-size:12px;line-height:1.2;cursor:pointer;overflow:hidden;word-break:keep-all;overflow-wrap:anywhere;touch-action:none}
+.lr.pre{background:var(--warnbg);box-shadow:inset 3px 0 0 var(--warn);flex-direction:column;gap:2px}
+.lr.pre .pwb{font-size:9.5px;font-weight:700;color:var(--warn);border:1px solid var(--warn);border-radius:8px;padding:0 5px;line-height:1.35;background:var(--bg,#fff);white-space:nowrap}
+.pwb{display:inline-block;font-size:10px;font-weight:700;color:var(--warn);border:1px solid var(--warn);border-radius:8px;padding:0 6px;line-height:1.4;margin-left:6px;white-space:nowrap}
+tr.pr.pre>td{background:var(--warnbg)}
+@media print{.lr.pre,tr.pr.pre>td{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 .lr.drop-a{box-shadow:inset 0 3px 0 var(--sel)!important}.lr.drop-b{box-shadow:inset 0 -3px 0 var(--sel)!important}
 .lg-name.drop-in{background:var(--accent-soft);box-shadow:inset 0 0 0 2px var(--sel)}
 body.rowdrag,body.rowdrag *{cursor:grabbing!important;user-select:none}
@@ -552,6 +557,7 @@ textarea.inp{width:100%;resize:vertical}
       <div class="f"><label for="fEnd">작업완료일 (준공일·최종도서 납품일)</label><input id="fEnd" class="inp" placeholder="예) 2026.12.31" autocomplete="off"></div>
       <div class="f"><label for="fCode">코드 (대분류 · 작업분류)</label><div style="display:flex;gap:6px"><input id="fCode" class="inp" style="flex:1;min-width:0" placeholder="예) D-2026" autocomplete="off"><input id="fCode2" class="inp" style="flex:1;min-width:0" placeholder="예) 2026-01-01" autocomplete="off"></div><div style="margin-top:4px"><button type="button" class="lchip lgh" id="fCodePick" title="근무일지의 프로젝트 코드표에서 골라 코드·프로젝트명을 채웁니다">근무일지 코드표에서 고르기</button></div></div>
       <div class="f"><label for="fPay">기본 결제수단 (이 프로젝트)</label><select id="fPay" class="inp"><option value="">현금 (계좌이체)</option><option value="bill">전자어음 (B2B)</option></select></div>
+      <div class="f"><label for="fPre">선작업 (계약 확정 전 착수)</label><select id="fPre" class="inp"><option value="">아니오 (일반)</option><option value="1">선작업 중 (계약 전 먼저 착수)</option></select><div class="hint" id="fPreInfo" style="margin-top:4px"></div></div>
       <div class="f"><label for="fSt">상태 (막대 색·글씨)</label><select id="fSt" class="inp"><option value="">그대로 두기</option><option>계약</option><option>실주</option><option>진행</option><option>완료</option></select></div>
       <div class="f span2"><label for="fTot">계약금액</label><div style="display:flex;gap:6px"><select id="fVat" class="inp" style="width:auto" aria-label="부가세"><option value="ex">부가세 별도 (공급가 입력)</option><option value="in">부가세 포함 (합계 입력)</option></select><input id="fTot" class="inp num" style="flex:1;min-width:0" placeholder="21,781,818 또는 2178만" autocomplete="off"></div><div class="hint" id="fVatInfo" style="margin-top:4px;font-family:var(--font-num)"></div></div>
       <div class="f span2"><label for="fFinal">최종사업비 <small style="font-weight:400;color:var(--muted)">(중단·감액 등으로 계약금과 다르게 확정된 때만 입력 · 위 계약금액과 같은 부가세 기준 · 비우면 계약금액 그대로)</small></label><input id="fFinal" class="inp num" placeholder="예) 16,000,000" autocomplete="off"><div class="hint" id="fFinalInfo" style="margin-top:4px;font-family:var(--font-num)"></div></div>
@@ -1205,7 +1211,7 @@ function sheetInner(pg,pi,pn){
   let L=`<div class="left"><div class="lh"><div data-hd="g" title="더블클릭해서 이름 바꾸기">${esc(P.hdG||'공사구획')}</div><div data-hd="r" title="더블클릭해서 이름 바꾸기">${esc(P.hdR||'공종')}</div></div>`;
   for(const g of pg.groups){
     L+=`<div class="lg"><div class="lg-name ${sel&&sel.t==='group'&&sel.id===g.id?'on':''} ${g.hidden?'hid':''}" data-g="${g.id}" title="더블클릭해서 이름 바꾸기"><span class="lgn-t">${esc(g.name)}</span></div><div>`;
-    for(const r of g.rows)L+=`<div class="lr ${sel&&sel.t==='row'&&sel.id===r.id?'on':''} ${(r.hidden||g.hidden)?'hid':''}" data-row="${r.id}" title="더블클릭: 이름 수정 · 끌기: 순서·구획 이동">${esc(r.name)}</div>`;
+    for(const r of g.rows)L+=`<div class="lr ${sel&&sel.t==='row'&&sel.id===r.id?'on':''} ${(r.hidden||g.hidden)?'hid':''}${r.preWork?' pre':''}" data-row="${r.id}" title="${r.preWork?'선작업 건 (계약 확정 전 먼저 착수) · ':''}더블클릭: 이름 수정 · 끌기: 순서·구획 이동">${esc(r.name)}${r.preWork?'<span class="pwb">선작업</span>':''}</div>`;
     L+=`</div></div>`;
   }
   L+=`<span class="cw full" data-cw="g" style="left:calc(var(--gw) - 5px)" title="좌우로 끌어서 칸 너비 조절"></span><span class="cw full" data-cw="r" style="right:-6px" title="좌우로 끌어서 칸 너비 조절"></span></div>`;
@@ -2301,13 +2307,16 @@ $('#fAttachList').addEventListener('click',async e=>{
   finally{FD.attachments.splice(i,1);renderFinAttach()}
 });
 
+function preInfo(){const el=$('#fPreInfo');if(!el)return;const cdT=$('#fCD').value.trim(),cd=cdT?parseD(cdT,refYear()):'',pT=$('#fPer').value.trim(),per=pT?parsePeriod(pT):null;
+  el.textContent=$('#fPre').value==='1'?(cd?'계약일이 입력되어 있습니다. 계약이 확정됐다면 "아니오"로 바꿔 표시를 해제하세요.':'목록에 주황색 "선작업" 표시가 붙습니다. 계약이 확정되면 해제하세요.'):(per&&cd&&per[0]<cd?`용역 시작(${fmtS(per[0])})이 계약일(${fmtS(cd)})보다 빠릅니다. 선작업이면 위에서 선택하세요.`:'')}
+document.addEventListener('change',e=>{if(e.target&&(e.target.id==='fPre'||e.target.id==='fCD'||e.target.id==='fPer'))preInfo()});
 function openFin(rowId){
   const f=rowId?findRow(rowId):null,r=f&&f.r,b=r&&r.bars[0],fn=(r&&r.fin)||{};
   FD={rowId:rowId||null,items:JSON.parse(JSON.stringify(fn.items||[])),attachments:JSON.parse(JSON.stringify((r&&r.attachments)||[]))};$('#fPay').value=fn.payType!=null?fn.payType:(f&&/HDC|현대산업/.test(f.g.name)?'bill':'');if(fn.payType==null)FD.items.forEach(x=>{if(x.payType==null&&!+x.paid)x.payType=$('#fPay').value});
   $('#fTitle').textContent=r?'계약·기성 관리':'새 프로젝트 등록';
   $('#fCoList').innerHTML=P.groups.map(g=>`<option value="${esc(g.name)}">`).join('');
   $('#fCo').value=f?f.g.name:((curGroup()||{}).name||'');$('#fName').value=r?r.name:'';$('#fCode').value=r?(r.code||''):'';$('#fCode2').value=r?(r.projCode||''):'';
-  $('#fCD').value=fmtS(fn.contractDate);$('#fEnd').value=fmtS(fn.endDate);$('#fPer').value=b?`${fmtS(b.start)} ~ ${fmtS(b.end)}`:'';
+  $('#fCD').value=fmtS(fn.contractDate);$('#fEnd').value=fmtS(fn.endDate);$('#fPer').value=b?((b.startOnly||(b.start===b.end&&!fn.endDate))?fmtS(b.start):`${fmtS(b.start)} ~ ${fmtS(b.end)}`):'';$('#fPre').value=(r&&r.preWork)?'1':'';preInfo();
   // 저장 시 상태를 고르면 r.bars[0].inner/color에 바로 반영되는데, 다시 열 때마다 이 선택창을
   // 항상 비워뒀었다. 저장이 실제로는 됐는데도 "다시 들어오면 원복됐다"는 오해를 주기 쉬워서,
   // 이제는 현재 막대에 저장돼 있는 상태(계약/실주/진행/완료)를 그대로 보여준다. 그 외의 글씨
@@ -2420,8 +2429,18 @@ $('#fSave').onclick=()=>{
   r.fin={total,payType:$('#fPay').value,vatEx:vEx,supply:vEx?parseAmt($('#fTot').value,0):Math.round(total/1.1),contractDate:cd||'',endDate:en||'',items};
   if(finalCost>0&&finalCost!==total)r.fin.finalCost=finalCost;if(fnote)r.fin.note=fnote;
   if(en&&!per&&r.bars[0]&&(r.bars[0].startOnly||r.bars[0].end<en)){const b=r.bars[0];if(en>=b.start){b.end=en;if(en>P.chartEnd)P.chartEnd=en}}
-  if(per){let b=r.bars[0];if(!b){b=B(per[0],per[1],cd?`계약 ${fmtS(cd)}`:'','#e1863a');r.bars.unshift(b)}b.start=per[0];b.end=per[1];
-    if(per[1]>P.chartEnd)P.chartEnd=per[1];if(per[0]<P.chartStart&&!r.bars.length)P.chartStart=per[0]}
+  if(per){
+    /* 용역기간에 시작일만 적고 종료일이 없으면(작업완료일도 없으면) "종료일 미정" 막대로 처리한다.
+       (가져오기·자동 생성 막대와 같은 방식: 점선 안내 + 작업일수 비움) */
+    const perStartOnly=per[0]===per[1]&&!/[~～∼]|부터/.test(perT);
+    const endUse=perStartOnly&&en&&en>per[0]?en:per[1];
+    const stillOpen=perStartOnly&&endUse===per[0];
+    let b=r.bars[0];if(!b){b=B(per[0],endUse,cd?`계약 ${fmtS(cd)}`:'','#e1863a');r.bars.unshift(b)}b.start=per[0];b.end=endUse;
+    const SFX=' · 종료일 입력 필요';
+    if(stillOpen){b.startOnly=true;b.work=b.work||'all';if(!b.label||/^계약 \d/.test(b.label)){if(!String(b.label||'').includes(SFX))b.label=(b.label||(cd?`계약 ${fmtS(cd)}`:'시작'))+SFX}}
+    else if(b.startOnly){delete b.startOnly;b.label=String(b.label||'').replace(SFX,'')}
+    if(endUse>P.chartEnd)P.chartEnd=endUse;if(per[0]<P.chartStart&&!r.bars.length)P.chartStart=per[0]}
+  if($('#fPre').value==='1')r.preWork=true;else delete r.preWork;
   const stv=$('#fSt').value;if(stv&&r.bars[0]){r.bars[0].inner=stv;r.bars[0].color={'완료':'#b9b0a8','진행':'#e1863a','계약':'#9aa0a6','실주':'#c9372c'}[stv]}
   if(P.rowRemarks&&/^계약 /.test(P.rowRemarks[r.id]||''))delete P.rowRemarks[r.id];
   if(!P.remark)P.remark='right';
@@ -3070,7 +3089,7 @@ function renderFinAll(){const won=n=>WON(vx(n)),man=n=>MAN(vx(n));
     if(g!==lastG){h+=`<tr class="fgrp"><td colspan="${10+maxN}">${esc(g.name)}${g.hidden?' (숨김)':''}</td></tr>`;lastG=g}
     const f=r.fin||{},c=finCalc(f),b=r.bars[0];
     if(hasFin(r)){T.total+=c.total;T.claim+=c.claim;T.paid+=c.paid;T.unpaid+=c.unpaid;T.bal+=c.bal;T.unclaimed+=c.unclaimed;T.late+=c.late.length;T.bill+=c.bill;T.fee+=c.fee}
-    h+=`<tr class="pr" data-r="${r.id}"><td class="nm">${esc(r.name)}${r.hidden?' <span class="st plan">숨김</span>':''}</td><td>${fmtS(f.contractDate)}</td><td>${(()=>{const R=projRange(r);if(!R)return'';return`${fmtS(R.start)} ~ ${R.known?`<b>${fmtS(R.end)}</b>`:`<span style="color:var(--muted)" title="작업완료일 미입력 · 막대·기성 날짜로 추정">${fmtS(R.end)}?</span>`}`})()}</td>`;
+    h+=`<tr class="pr${r.preWork?' pre':''}" data-r="${r.id}"><td class="nm">${esc(r.name)}${r.preWork?'<span class="pwb" title="계약 확정 전에 먼저 착수한 건">선작업</span>':''}${r.hidden?' <span class="st plan">숨김</span>':''}</td><td>${fmtS(f.contractDate)}</td><td>${(()=>{const R=projRange(r);if(!R)return'';return`${fmtS(R.start)} ~ ${R.known?`<b>${fmtS(R.end)}</b>`:`<span style="color:var(--muted)" title="작업완료일 미입력 · 막대·기성 날짜로 추정">${fmtS(R.end)}?</span>`}`})()}</td>`;
     if(!hasFin(r)){const lost=finStatus(r)==='lost';h+=`<td class="n" colspan="${6+maxN}" style="text-align:left;color:var(--muted)">${lost?'실주 (계약 불발)':'계약금액 미입력 (눌러서 입력)'}</td><td><span class="st ${lost?'lost':'plan'}">${lost?'실주':'계약 대기'}</span></td></tr>`;continue}
     h+=`<td class="n">${won(c.total)}</td><td class="n">${won(c.claim)}</td><td class="n">${won(c.paid)}</td><td class="n ${c.unpaid?(c.late.length?'bad':'due'):''}">${won(c.unpaid)}</td><td class="n">${won(c.bal)}</td><td class="n">${won(c.unclaimed)}</td>`;
     for(let i=0;i<maxN;i++){const x=(f.items||[])[i];if(!x){h+='<td></td>';continue}const st=itemState(x,f.items);
