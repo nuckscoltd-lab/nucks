@@ -189,7 +189,10 @@ body.dlgresize,body.dlgresize *{cursor:ew-resize!important;user-select:none}
 .dh .wbtn{border:1px solid var(--line)}
 .g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .g3 .span2{grid-column:span 2}
-@media (max-width:640px){.g3{grid-template-columns:1fr}.g3 .span2{grid-column:auto}}
+.g3 .span3{grid-column:1/-1}
+.g3 .row4{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1.7fr) repeat(3,minmax(0,1fr));gap:10px;align-items:start}
+.g3 .hint.span3:empty{display:none}
+@media (max-width:640px){.g3{grid-template-columns:1fr}.g3 .span2,.g3 .span3{grid-column:auto}.g3 .row4{grid-template-columns:1fr 1fr}}
 .tw{overflow-x:auto;min-width:0}
 .ft{border-collapse:collapse;width:100%;font-size:12px}
 .ft th{font-size:11px;font-weight:600;color:var(--muted);text-align:left;padding:6px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--head);position:sticky;top:0;z-index:1}
@@ -555,11 +558,12 @@ textarea.inp{width:100%;resize:vertical}
       <div class="f"><label for="fCD">계약일</label><input id="fCD" class="inp" placeholder="2026.4.23" autocomplete="off"></div>
       <div class="f"><label for="fPer">용역기간 (막대로 그려짐)</label><input id="fPer" class="inp" placeholder="2026.4.23 ~ 12.31" autocomplete="off"></div>
       <div class="f"><label for="fEnd">작업완료일 (준공일·최종도서 납품일)</label><input id="fEnd" class="inp" placeholder="예) 2026.12.31" autocomplete="off"></div>
-      <div class="f"><label for="fCode">코드 (대분류 · 작업분류)</label><div style="display:flex;gap:6px"><input id="fCode" class="inp" style="flex:1;min-width:0" placeholder="예) D-2026" autocomplete="off"><input id="fCode2" class="inp" style="flex:1;min-width:0" placeholder="예) 2026-01-01" autocomplete="off"></div><div style="margin-top:4px"><button type="button" class="lchip lgh" id="fCodePick" title="근무일지의 프로젝트 코드표에서 골라 코드·프로젝트명을 채웁니다">근무일지 코드표에서 고르기</button></div></div>
+      <div class="row4"><div class="f"><label for="fCode">코드 (대분류 · 작업분류)</label><div style="display:flex;gap:6px"><input id="fCode" class="inp" style="flex:1;min-width:0" placeholder="예) D-2026" autocomplete="off"><input id="fCode2" class="inp" style="flex:1;min-width:0" placeholder="예) 2026-01-01" autocomplete="off"></div><div style="margin-top:4px"><button type="button" class="lchip lgh" id="fCodePick" title="근무일지의 프로젝트 코드표에서 골라 코드·프로젝트명을 채웁니다">근무일지 코드표에서 고르기</button></div></div>
       <div class="f"><label for="fPay">기본 결제수단 (이 프로젝트)</label><select id="fPay" class="inp"><option value="">현금 (계좌이체)</option><option value="bill">전자어음 (B2B)</option></select></div>
-      <div class="f"><label for="fPre">선작업 (계약 확정 전 착수)</label><select id="fPre" class="inp"><option value="">아니오 (일반)</option><option value="1">선작업 중 (계약 전 먼저 착수)</option></select><div class="hint" id="fPreInfo" style="margin-top:4px"></div></div>
-      <div class="f"><label for="fSt">상태 (막대 색·글씨)</label><select id="fSt" class="inp"><option value="">그대로 두기</option><option>계약</option><option>실주</option><option>진행</option><option>완료</option></select></div>
-      <div class="f span2"><label for="fTot">계약금액</label><div style="display:flex;gap:6px"><select id="fVat" class="inp" style="width:auto" aria-label="부가세"><option value="ex">부가세 별도 (공급가 입력)</option><option value="in">부가세 포함 (합계 입력)</option></select><input id="fTot" class="inp num" style="flex:1;min-width:0" placeholder="21,781,818 또는 2178만" autocomplete="off"></div><div class="hint" id="fVatInfo" style="margin-top:4px;font-family:var(--font-num)"></div></div>
+      <div class="f"><label for="fPre">선작업 (계약 확정 전 착수)</label><select id="fPre" class="inp"><option value="">아니오 (일반)</option><option value="1">선작업 중 (계약 전 먼저 착수)</option></select></div>
+      <div class="f"><label for="fSt">상태 (막대 색·글씨)</label><select id="fSt" class="inp"><option value="">그대로 두기</option><option>계약</option><option>실주</option><option>진행</option><option>완료</option></select></div></div>
+      <div class="hint span3" id="fPreInfo" style="margin-top:-4px"></div>
+      <div class="f span3"><label for="fTot">계약금액</label><div style="display:flex;gap:6px"><select id="fVat" class="inp" style="width:auto" aria-label="부가세"><option value="ex">부가세 별도 (공급가 입력)</option><option value="in">부가세 포함 (합계 입력)</option></select><input id="fTot" class="inp num" style="flex:1;min-width:0" placeholder="21,781,818 또는 2178만" autocomplete="off"></div><div class="hint" id="fVatInfo" style="margin-top:4px;font-family:var(--font-num)"></div></div>
       <div class="f span2"><label for="fFinal">최종사업비 <small style="font-weight:400;color:var(--muted)">(중단·감액 등으로 계약금과 다르게 확정된 때만 입력 · 위 계약금액과 같은 부가세 기준 · 비우면 계약금액 그대로)</small></label><input id="fFinal" class="inp num" placeholder="예) 16,000,000" autocomplete="off"><div class="hint" id="fFinalInfo" style="margin-top:4px;font-family:var(--font-num)"></div></div>
       <div class="f span2"><label for="fNote">특이사항</label><textarea id="fNote" class="inp" rows="2" placeholder="예) 인지세 납부 · 지급예상시기 26년 10월경" style="width:100%;resize:vertical"></textarea></div>
     </div>
@@ -1277,7 +1281,8 @@ function sheetInner(pg,pi,pn){
   return h+`<div class="scroller"><div class="gwrap"><div class="gantt">${L}<div class="right">${H}${T}</div>${RR}</div>${showCash()?cashStrip(pg,W):''}${RB}</div></div>`;
 }
 function barHTML(b,pg,pi){
-  if(b.startOnly&&b.end>b.start){delete b.startOnly;b.label=String(b.label||'').replace(' · 종료일 입력 필요','')}
+  if(b.startOnly&&b.end>b.start){delete b.startOnly;b.label=String(b.label||'').replace(/\s*(·\s*종료일 입력 필요|\(종료일 미정\))/g,'')}
+  if(b.startOnly&&String(b.label||'').includes(' · 종료일 입력 필요'))b.label=b.label.replace(' · 종료일 입력 필요',' (종료일 미정)');
   const dw=pg.dw;
   const s=b.start<pg.cs?pg.cs:b.start,e=b.end>pg.ce?pg.ce:b.end;
   if(s>e)return'';
@@ -1391,7 +1396,7 @@ $('#insp').addEventListener('change',e=>{
   if(sel.t==='bar'){const f=findBar(sel.id);const b=f.b;
     if(['iS','iE','iWD','iWork','iRow'].includes(t.id))snap();
     if(t.id==='iS'&&t.value){const wd=bDays(b);b.start=t.value;b.end=wd?bAdd(b,b.start,wd):(b.end<b.start?b.start:b.end)}
-    if(t.id==='iE'&&t.value){b.end=t.value<b.start?b.start:t.value;if(b.startOnly&&b.end>b.start){delete b.startOnly;b.label=String(b.label||'').replace(' · 종료일 입력 필요','')}}
+    if(t.id==='iE'&&t.value){b.end=t.value<b.start?b.start:t.value;if(b.startOnly&&b.end>b.start){delete b.startOnly;b.label=String(b.label||'').replace(/\s*(·\s*종료일 입력 필요|\(종료일 미정\))/g,'')}}
     if(b.end>P.chartEnd)P.chartEnd=b.end;if(b.start<P.chartStart)P.chartStart=b.start;
     if(t.id==='iWD'){const n=Math.max(1,parseInt(t.value)||1);b.end=bAdd(b,b.start,n)}
     if(t.id==='iLa'){snap();if(t.value)b.la=t.value;else delete b.la}
@@ -2436,9 +2441,9 @@ $('#fSave').onclick=()=>{
     const endUse=perStartOnly&&en&&en>per[0]?en:per[1];
     const stillOpen=perStartOnly&&endUse===per[0];
     let b=r.bars[0];if(!b){b=B(per[0],endUse,cd?`계약 ${fmtS(cd)}`:'','#e1863a');r.bars.unshift(b)}b.start=per[0];b.end=endUse;
-    const SFX=' · 종료일 입력 필요';
-    if(stillOpen){b.startOnly=true;b.work=b.work||'all';if(!b.label||/^계약 \d/.test(b.label)){if(!String(b.label||'').includes(SFX))b.label=(b.label||(cd?`계약 ${fmtS(cd)}`:'시작'))+SFX}}
-    else if(b.startOnly){delete b.startOnly;b.label=String(b.label||'').replace(SFX,'')}
+    const SFX=' (종료일 미정)';
+    if(stillOpen){b.startOnly=true;b.work=b.work||'all';b.label=String(b.label||'').replace(' · 종료일 입력 필요',SFX);if(!b.label||/^계약 \d/.test(b.label)){if(!String(b.label||'').includes(SFX))b.label=(b.label||(cd?`계약 ${fmtS(cd)}`:'시작'))+SFX}}
+    else if(b.startOnly){delete b.startOnly;b.label=String(b.label||'').replace(/\s*(·\s*종료일 입력 필요|\(종료일 미정\))/g,'')}
     if(endUse>P.chartEnd)P.chartEnd=endUse;if(per[0]<P.chartStart&&!r.bars.length)P.chartStart=per[0]}
   if($('#fPre').value==='1')r.preWork=true;else delete r.preWork;
   const stv=$('#fSt').value;if(stv&&r.bars[0]){r.bars[0].inner=stv;r.bars[0].color={'완료':'#b9b0a8','진행':'#e1863a','계약':'#9aa0a6','실주':'#c9372c'}[stv]}
@@ -3432,7 +3437,7 @@ function mergeFin(o){
     if(it.note){P.rowRemarks=P.rowRemarks||{};if(!P.rowRemarks[f.r.id])P.rowRemarks[f.r.id]=it.note}
     if(it.contractDate){const r=f.r;r.fin=r.fin||{total:0,contractDate:'',items:[]};if(!r.fin.contractDate||o.setContract)r.fin.contractDate=it.contractDate;
       if(it.startBar&&!r.bars.length){const c=finCalc(r.fin),done=c.total>0&&c.bal<=0,cancel=!c.total;
-        const b=B(it.contractDate,it.contractDate,`계약 ${fmtS(it.contractDate)} · 종료일 입력 필요`,cancel?'#9aa0a6':done?'#b9b0a8':'#e1863a');b.work='all';b.inner=cancel?'':done?'완료':'진행';b.startOnly=true;r.bars.push(b);
+        const b=B(it.contractDate,it.contractDate,`계약 ${fmtS(it.contractDate)} (종료일 미정)`,cancel?'#9aa0a6':done?'#b9b0a8':'#e1863a');b.work='all';b.inner=cancel?'':done?'완료':'진행';b.startOnly=true;r.bars.push(b);
         if(it.contractDate<P.chartStart)P.chartStart=it.contractDate;dated++}}}
   if(!P.remark)P.remark='right';save();$('#dData').close();renderAll();
   toast(o.kind==='contract'?`계약일 ${hit}건을 넣고, 막대가 없던 ${dated}건은 계약일부터 시작 막대를 그렸습니다`:`${hit?`기존 ${hit}건에 금액을 채우고 `:''}${add?`새 프로젝트 ${add}건을 추가했습니다`:'합쳤습니다'}${kept.length?` · 이미 금액이 있는 ${kept.length}건은 그대로 둠`:''}`);
