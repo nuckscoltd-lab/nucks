@@ -1705,6 +1705,11 @@ var DC = (function(){
       var o = map[name] || (map[name] = {m:{}, mx:{}});
       o.m[ym] = (o.m[ym]||0) + g; o.mx[ym] = (o.mx[ym]||0) + x;
     }
+    var EXPSET = {};   // 출금에 쓰인 비용 계정 → 같은 계정으로 들어온 통장 입금은 환급(지출 차감)으로 본다
+    conf.forEach(function(e){
+      if(e.type !== '출금') return; var a0 = normAcct(e);
+      if(a0 && !NONEXP[a0] && a0 !== '미지급금' && a0 !== '직원급여' && a0 !== '임원급여' && a0 !== '내부이체') EXPSET[a0] = 1;
+    });
     if(acctReady){
       conf.forEach(function(e){
         var ym = ymOf(e.date), y = ym.slice(0,4), amt = num(e.amount); yearsSet[y] = 1;
@@ -1714,7 +1719,7 @@ var DC = (function(){
           var mo = monthly[ym] || (monthly[ym] = {inc:0, exp:0});
           if(e.type === '입금') mo.inc += amt; else mo.exp += amt;
         }
-        if(e.type !== '출금' && !isCard) return;       // 통장 입금은 지출 집계 대상 아님
+        if(e.type !== '출금' && !isCard && !EXPSET[normAcct(e)]) return;   // 통장 입금은 지출 집계 대상 아님 (단, 비용 계정으로 들어온 환급 입금은 차감)
         var sign = e.type === '출금' ? 1 : -1;          // 카드 취소/환불은 차감
         var a = normAcct(e), g = sign*amt, x = sign*amt*netRatio(e);
         if(a === '미지급금'){ add(cardM, 'c', ym, g, g); return; }
@@ -1763,6 +1768,7 @@ var DC = (function(){
     if(raw.cb){
       raw.cb.forEach(function(e){
         if(!e.evType || e.channel === '카드') return;
+        if(e.account === '내부이체') return;   // 계좌간 이체에 세금계산서가 연결돼 있어도 매출·매입으로 이중 집계하지 않는다
         var t = EV.filter(function(x){ return x.label === e.evType; })[0]; if(!t) return;
         var ym = ymOf(e.evDate || e.date); if(!/^\d{4}-\d{2}$/.test(ym) || !inRange(ym)) return;
         var amt = num(e.evTotal) > 0 ? num(e.evTotal) : num(e.amount);
@@ -3883,12 +3889,15 @@ var DC = (function(){
     if(!entries || !entries.length) return null;
     var rows = [], ymdOf = function(v){ return String(v||'').slice(0,10); };
     var evCut = LIVE.evStart || '';
+    var expAcc = {};   // 프로젝트 비용으로 쓰인 계정 → 같은 계정으로 들어온 입금(발주처 환급 등)은 직접비에서 차감
+    entries.forEach(function(e){ if(e.status === '확정' && e.type === '출금' && String(e.project||'').trim() && e.account && !DC.ADMIN_NX[e.account] && !DC.ADMIN_EXCL[e.account]) expAcc[e.account] = 1; });
     entries.forEach(function(e){
-      if(e.status !== '확정' || e.type !== '출금') return;
+      var isRef = e.type === '입금' && e.channel !== '카드' && e.account && expAcc[e.account];
+      if(e.status !== '확정' || (e.type !== '출금' && !isRef)) return;
       var proj = String(e.project||'').trim(); if(!proj) return;
       if(e.account === '미지급금' || e.account === '내부이체') return;
       var d = ymdOf(e.date); if(!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
-      var paid = +e.amount || 0; if(!paid) return;   // 카드 취소·환불처럼 마이너스 금액도 그대로 더해 상쇄시킨다
+      var paid = (isRef ? -1 : 1) * (+e.amount || 0); if(!paid) return;   // 카드 취소·환불처럼 마이너스 금액도 그대로 더해 상쇄시킨다
       var r = { d:d, y:d.slice(0,4), paid:paid, proj:proj, major:e.pmajor||'', acct:e.account||'', content:String(e.content||''), memo:String(e.memo||''), kind:'', ev:e.evType||'' };
       if(e.account === '노무비'){
         // 노무비는 계산서가 아니라 노무신고 후 차인지급액이 나간 것이라 부가세가 없다 → ÷1.1 추정 없이 지급액 그대로
@@ -3899,7 +3908,7 @@ var DC = (function(){
       } else if(evCut && d < evCut){
         // 증빙 관리 시작일 이전: 증빙 연결 여부와 관계없이 지급액÷1.1(부가세 별도)로 추정
         r.pre = { sup:Math.round(paid/1.1), shop:'', est:true }; r.ev = '추정(÷1.1)';
-      } else if(e.channel !== '카드' && e.evType){
+      } else if(e.channel !== '카드' && e.evType && !isRef){
         var tot = (+e.evTotal > 0) ? +e.evTotal : paid, sup;
         if(e.evType === '세금계산서' || e.evType === '현금영수증'){
           var sp = (typeof e.evSupply === 'number') ? e.evSupply : Math.round(tot/1.1);

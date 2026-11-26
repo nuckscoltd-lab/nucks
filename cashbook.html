@@ -2544,6 +2544,12 @@
   function syncBankField(){ document.getElementById('f-bank-field').style.display = document.getElementById('f-channel').value === '카드' ? 'none' : ''; }
   document.getElementById('f-channel').addEventListener('change', syncBankField);
   function readClassFields(){
+    const o = readClassFieldsRaw();
+    // 계좌간 이체(내부이체)는 매출·매입이 아니므로 세금계산서 등 증빙 연결을 같이 지운다 (수정 저장 시 기존 연결도 해제됨)
+    if (o.account === '내부이체') { o.evType = ''; o.evDate = ''; o.evTotal = 0; o.evSupply = null; o.evTax = null; o.evApprNo = null; o.evParty = null; }
+    return o;
+  }
+  function readClassFieldsRaw(){
     return {
       channel: document.getElementById('f-channel').value === '카드' ? '카드' : '통장',
       bank: document.getElementById('f-channel').value === '카드' ? '' : (document.getElementById('f-bank').value === '국민' ? '국민' : '신한'),
@@ -2966,7 +2972,7 @@
   function evAggregate(entries){
     const byMonth = {};
     entries.forEach(e => {
-      if (!e.evType || isCard(e)) return;
+      if (!e.evType || isCard(e) || e.account === '내부이체') return;   // 계좌간 이체는 증빙 매출·매입에 넣지 않는다
       const ym = evMonthOf(e); if (!/^\d{4}-\d{2}$/.test(ym)) return;
       const dir = e.type === '입금' ? 'sales' : 'purchase';
       const m = byMonth[ym] || (byMonth[ym] = {});
