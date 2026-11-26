@@ -341,7 +341,9 @@ if ('serviceWorker' in navigator) {
             <a href="board.html" id="boardNavLink" style="display: inline-block; position: relative;">Board<span id="boardBadge" style="display:none; position:absolute; top:-4px; right:-10px; width:8px; height:8px; border-radius:50%; background:#a4453c;"></span></a>
             <a href="contacts.html" id="contactsNavLink" style="display: none;">Contacts</a>
             <a href="gallery-admin.html" id="galleryNavLink" style="display: none;">Gallery</a>
-            <a href="project-settlement.html" id="settlementNavLink" style="display: none;">Settlement</a>
+            <a href="nucks-projectlog.html" id="projlogNavLink" style="display: none;">Project Log</a>
+            <!-- Settlement 메뉴는 숨김 처리 (다시 쓰려면 아래 style의 display:none!important 를 지우고, 스크립트의 settlementLink 줄을 원래대로 되돌리세요) -->
+            <a href="project-settlement.html" id="settlementNavLink" style="display: none !important;">Settlement</a>
 
             <div class="nav-item-dropdown" id="filesNavLink" style="display: inline-block;">
                 <a href="files.html" class="nav-dropdown-toggle">Files <span class="caret" onclick="return toggleNavDropdown(event, this)">▾</span></a>
@@ -363,7 +365,9 @@ if ('serviceWorker' in navigator) {
                     <a href="investment-status.html" target="_blank" rel="noopener">투자·가수금현황</a>
                     <a href="세금계산서_통합본.html" target="_blank" rel="noopener">세금계산서(개인)</a>
                     <a href="nucks-schedule.html" target="_blank" rel="noopener">프로젝트현황</a>
+                    <!-- 기성청구현황 숨김 처리 (다시 쓰려면 아래 줄의 주석을 풀어주세요)
                     <a href="project-billing.html" target="_blank" rel="noopener">기성청구현황</a>
+                    -->
                     <a href="corporate-card.html" target="_blank" rel="noopener">법인카드 관리</a>
                     <a href="utilities.html" target="_blank" rel="noopener">공과금 관리</a>
                     <a href="office-equipment-contracts.html" target="_blank" rel="noopener">사무실비품계약관리현황</a>
@@ -767,6 +771,9 @@ if ('serviceWorker' in navigator) {
                 const leaveLink = document.getElementById('leaveNavLink');
                 leaveLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
 
+                const projlogLink = document.getElementById('projlogNavLink');
+                projlogLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
+
                 const boardLink = document.getElementById('boardNavLink');
                 boardLink.style.display = (role === 'worker' || role === 'admin') ? 'inline-block' : 'none';
 
@@ -778,7 +785,7 @@ if ('serviceWorker' in navigator) {
                 const settlementLink = document.getElementById('settlementNavLink');
                 if (role === 'admin') {
                     galleryLink.style.display = 'inline-block';
-                    settlementLink.style.display = 'inline-block';
+                    settlementLink.style.display = 'none'; // 숨김 처리 (원래: 'inline-block')
                 } else {
                     galleryLink.style.display = 'none';
                     settlementLink.style.display = 'none';
@@ -818,6 +825,9 @@ if ('serviceWorker' in navigator) {
 
                 const leaveLink = document.getElementById('leaveNavLink');
                 leaveLink.style.display = 'none';
+
+                const projlogLink = document.getElementById('projlogNavLink');
+                projlogLink.style.display = 'none';
 
                 const boardLink = document.getElementById('boardNavLink');
                 boardLink.style.display = 'none';
