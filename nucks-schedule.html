@@ -578,6 +578,10 @@ textarea.inp{width:100%;resize:vertical}
       <div id="fLabor" class="hint" style="margin:0">코드를 저장하면 볼 수 있습니다.</div>
     </div>
     <div class="f" style="border:1px solid var(--line);border-radius:8px;padding:10px 12px">
+      <label style="margin-bottom:4px">변경지시 · 추가금액·공기 <small style="color:var(--muted);font-weight:400">· 프로젝트 기록부(nucks-projectlog.html)에 적은 변경지시를 모아 보여줍니다 (여기서는 읽기만)</small></label>
+      <div id="fChg" class="hint" style="margin:0">프로젝트를 저장한 뒤 열면 볼 수 있습니다.</div>
+    </div>
+    <div class="f" style="border:1px solid var(--line);border-radius:8px;padding:10px 12px">
       <label style="margin-bottom:4px">프로젝트 결산서</label>
       <div id="fSettle" class="hint" style="margin:0"></div>
     </div>
@@ -852,6 +856,20 @@ const SCHED_COL='scheduleProjects';
 const SYNC_PUSHAT_KEY='nucks-schedule-pushat-v1';
 function loadLastPushAt(){try{return JSON.parse(localStorage.getItem(SYNC_PUSHAT_KEY))||{}}catch(e){return{}}}
 function saveLastPushAt(){try{localStorage.setItem(SYNC_PUSHAT_KEY,JSON.stringify(SYNC.lastPushAt))}catch(e){}}
+/* ---------- 프로젝트 기록부(nucks-projectlog.html)용 "자금 뺀 사본" ----------
+   기록부는 직원도 쓰는 페이지라, 계약금액·기성·결산 같은 자금 정보가 들어 있는 scheduleProjects를 직원이 읽게 할 수 없다.
+   그래서 서버에 올릴 때마다 거래처·프로젝트명·코드·일정 막대만 추려서 projectLogBoards 컬렉션에 한 벌 더 올린다
+   (fin·결산·첨부·비고 등 자금성 항목은 절대 넣지 않는다). 실패해도 원래 저장에는 영향 없음. */
+function boardCopy(p){
+  return{id:p.id,name:p.name||'',chartStart:p.chartStart||'',chartEnd:p.chartEnd||'',
+    groups:(p.groups||[]).map(g=>({id:g.id,name:g.name,hidden:!!g.hidden,rows:(g.rows||[]).map(r=>({id:r.id,name:r.name,code:r.code||'',projCode:r.projCode||'',hidden:!!r.hidden,preWork:!!r.preWork,
+      wlNames:(r.wlNames||[]).slice(),wlExclude:(r.wlExclude||[]).slice(),
+      bars:(r.bars||[]).map(b=>({id:b.id,start:b.start,end:b.end,label:b.label||'',color:b.color||'',inner:b.inner||'',startOnly:!!b.startOnly}))}))}))};
+}
+async function publishBoard(p){
+  try{const d=boardCopy(p);d._pushedAt=firebase.firestore.FieldValue.serverTimestamp();await db.collection('projectLogBoards').doc(p.id).set(d)}
+  catch(e){console.warn('기록부용 사본 올리기 실패(규칙에 projectLogBoards 허용이 필요합니다)',e&&e.message||e)}
+}
 const SYNC={pushTimer:null,pushing:new Set(),lastPushAt:loadLastPushAt(),lastErr:''};
 function fsReady(){try{return typeof firebase!=='undefined'&&typeof db!=='undefined'&&!!db}catch(e){return false}}
 function scheduleServerPush(p){
@@ -872,6 +890,7 @@ async function pushProjectToServer(p){
     data._pushedAt=firebase.firestore.FieldValue.serverTimestamp();
     try{data._pushedBy=(firebase.auth().currentUser&&firebase.auth().currentUser.email)||'';}catch(_){data._pushedBy=''}
     await db.collection(SCHED_COL).doc(p.id).set(data);
+    publishBoard(p);
     SYNC.lastPushAt[p.id]=Date.now();saveLastPushAt();SYNC.lastErr='';if(EDIT_SEQ===seq0)setDirty(p.id,false);
   }catch(e){console.error('서버 저장 실패',e);SYNC.lastErr=String(e&&e.message||e)}
   finally{SYNC.pushing.delete(p.id);updateSyncStatus()}
@@ -903,7 +922,7 @@ async function pushAllToServer(){
       const data=JSON.parse(JSON.stringify(p));
       data._pushedAt=firebase.firestore.FieldValue.serverTimestamp();
       try{data._pushedBy=(firebase.auth().currentUser&&firebase.auth().currentUser.email)||''}catch(_){data._pushedBy=''}
-      await db.collection(SCHED_COL).doc(p.id).set(data);SYNC.lastPushAt[p.id]=Date.now();saveLastPushAt();setDirty(p.id,false);ok++;
+      await db.collection(SCHED_COL).doc(p.id).set(data);await publishBoard(p);SYNC.lastPushAt[p.id]=Date.now();saveLastPushAt();setDirty(p.id,false);ok++;
     }catch(e){fail++;console.error('올리기 실패',p.id,e)}
   }
   updateSyncStatus();
@@ -2005,6 +2024,21 @@ function laborMatch(data,projCode,projName,linked,excluded){
     stale:(()=>{const o={};hits.forEach(e=>{if(e.rawCode&&e.mapCode&&e.rawCode!==e.mapCode)o[e.rawCode]=(o[e.rawCode]||0)+1});return o})()};
 }
 const hrs=h=>Math.round(h*10)/10;
+/* 프로젝트 기록부(projectLogs)의 변경지시 건과 관리자 전용 금액(projectLogAmounts)을 읽어 보여준다(읽기 전용) */
+async function renderFinChg(rowId){
+  const el=$('#fChg');if(!el)return;
+  if(!rowId||!fsReady()){el.textContent='프로젝트를 저장한 뒤 열면 볼 수 있습니다.';return}
+  el.textContent='불러오는 중…';
+  try{
+    const[rs,as]=await Promise.all([db.collection('projectLogs').where('rowId','==',rowId).get(),db.collection('projectLogAmounts').where('rowId','==',rowId).get().catch(()=>({docs:[]}))]);
+    const am={};as.docs.forEach(d=>am[d.id]=d.data().amount);
+    const L=rs.docs.map(d=>Object.assign({id:d.id},d.data())).filter(x=>!x.deleted&&(x.type==='변경지시'||x.scheduleDays||am[x.id])).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    if(!L.length){el.textContent='기록부에 등록된 변경지시가 없습니다.';return}
+    const days=L.reduce((a,x)=>a+(x.scheduleDays||0),0),amt=L.reduce((a,x)=>a+(am[x.id]||0),0);
+    const sg=n=>(n>0?'+':'')+Number(n).toLocaleString();
+    el.innerHTML=`<table class="ft" style="font-size:12px"><thead><tr><th>일자</th><th>변경지시</th><th>상태</th><th style="text-align:right">공기(일)</th><th style="text-align:right">금액(원)</th></tr></thead><tbody>${L.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.title)}</td><td>${esc(x.status||'')}</td><td style="text-align:right">${x.scheduleDays?sg(x.scheduleDays):''}</td><td style="text-align:right">${am[x.id]?sg(am[x.id]):''}</td></tr>`).join('')}</tbody><tfoot><tr><td colspan="3"><b>합계 ${L.length}건</b></td><td style="text-align:right"><b>${days?sg(days):'-'}</b></td><td style="text-align:right"><b>${amt?sg(amt):'-'}</b></td></tr></tfoot></table><div class="hint" style="margin-top:4px">금액은 계약금액에 자동 반영되지 않습니다. 기록부에 입력한 값 그대로 표시합니다.</div>`;
+  }catch(e){el.textContent='불러오지 못했습니다 ('+(e&&e.message||e)+') — Firestore 규칙에 projectLogs·projectLogAmounts 읽기 허용이 필요합니다.'}
+}
 async function renderFinLabor(){
   const el=$('#fLabor');if(!el)return;
   const projCode=$('#fCode2').value.trim(),projName=$('#fName').value.trim(),key=projCode+'\u0001'+projName;
@@ -2331,7 +2365,7 @@ function openFin(rowId){
   $('#fSt').value=(b&&['계약','실주','진행','완료'].includes(b.inner))?b.inner:suggestFinStatus(r);const vx=true;/* 2026-11: 항상 "부가세 별도"를 기본으로 연다(포함/별도를 바꾸면 칸의 금액도 그 기준으로 바뀐다) */$('#fVat').value=vx?'ex':'in';$('#fVat').dataset.prev='ex';$('#fTot').value=+fn.total?won((fn.vatEx===true&&+fn.supply)?+fn.supply:Math.round(fn.total/1.1)):'';setTimeout(vatInfo);
   $('#fFinal').value=+fn.finalCost?won(vx?Math.round(fn.finalCost/1.1):fn.finalCost):'';$('#fNote').value=fn.note||'';setTimeout(finalInfo);
   if(!FD.items.length)FD.items.push({claimDate:'',claim:0,payDate:'',paid:0});
-  vatNote();$('#fDelFin').hidden=!(r&&r.fin);renderFinItems();finSum();renderFinAttach();renderFinLabor();renderFinSettle(rowId);$('#dFin').showModal();
+  vatNote();$('#fDelFin').hidden=!(r&&r.fin);renderFinItems();finSum();renderFinAttach();renderFinLabor();renderFinChg(rowId);renderFinSettle(rowId);$('#dFin').showModal();
   setTimeout(()=>{(r?$('#fTot'):$('#fCo')).focus()},30)}
 function renderFinItems(){const won=n=>WON(vx(n)),man=n=>MAN(vx(n));
   const tot=fTotal()||0;
@@ -3499,7 +3533,7 @@ async function checkServerNewer(){
   }catch(e){console.warn('서버 최신본 확인 실패',e);SYNC.ready=true}
 }
 setTimeout(()=>{SYNC.ready=true},12000); // 로그인이 안 되는 등 확인이 영영 안 끝나도 12초 뒤엔 올리기 허용
-try{if(typeof auth!=='undefined'&&auth&&auth.onAuthStateChanged)auth.onAuthStateChanged(u=>{if(u)setTimeout(checkServerNewer,700)})}catch(e){}
+try{if(typeof auth!=='undefined'&&auth&&auth.onAuthStateChanged)auth.onAuthStateChanged(u=>{if(u){setTimeout(checkServerNewer,700);setTimeout(()=>{if(!SYNC.stale&&P&&P.id)publishBoard(P)},4500)}})}catch(e){}
 try{migrateBillingExtras()}catch(e){console.warn('기성청구 정보 이전 실패',e)}
 renderAll();
 })();
