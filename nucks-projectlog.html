@@ -598,7 +598,7 @@ function renderPJ(keepScroll){
   const html=`<div class="ov" id="pjOv"><div class="md" role="dialog" aria-label="프로젝트 기록">
    <div class="mh"><h2>${esc(r.name)}<small>${esc(g.name)} · ${perTxt}${r.projCode?' · '+esc(r.projCode):''}</small></h2>
      ${b0&&b0.inner?`<span class="pill ${st==='done'?'done':st==='lost'?'lost':'on'}">${esc(b0.inner)}</span>`:''}${openN?`<span class="tg over">처리중 ${openN}건</span>`:''}${chgSum(recAll)}
-     <button class="btn pri sm" data-act="newRec">＋ 기록 추가</button><button class="btn line sm" data-act="ai">💬 카톡 자동기록</button><button class="btn line sm" data-act="sum">📊 AI 경과 요약</button>
+     <button class="btn pri sm" data-act="newRec">＋ 기록 추가</button><button class="btn line sm" data-act="ai">💬 카톡 자동기록</button><button class="btn line sm" data-act="sum">📊 AI 경과 요약</button><button class="btn line sm" data-act="sumbox" title="저장해 둔 AI 경과 요약 모아 보기">📁 요약 보관함 ${sumsOf(PJ.rowId).length}</button>
      <button class="btn line sm" data-act="view">${PJ.view==='cal'?'📋 목록으로 보기':'📅 달력으로 보기'}</button><button class="btn line sm" data-act="print">🖨 인쇄</button><button class="x" data-act="close" aria-label="닫기">×</button></div>
    <div class="fb">${typeChips}<span style="flex:1"></span>
      <span class="chip ${PJ.open?'on':''}" data-flag="open">처리중만</span>
@@ -1057,13 +1057,13 @@ function renderSumList(){
       <div class="sb"><div class="mdl">${mdLite(x.content)}</div><div class="sa"><button class="btn line sm" data-sumcopy="${esc(x.id)}">복사</button>${canEdit(x)?`<button class="btn line sm danger" data-sumdel="${esc(x.id)}">삭제</button>`:''}</div></div></details>`;
   }).join('');
 }
-function openSummary(){
+function openSummary(viewOnly){
   if(!PJ)return;
   const o=ROWIDX[PJ.rowId];if(!o)return;
   const rec=recsOf(PJ.rowId);
-  layer2().innerHTML=`<div class="ov" style="z-index:150"><div class="md mid" role="dialog"><div class="mh"><h2>📊 AI 경과 요약<small>${esc(o.r.name)} · 기록 ${rec.length}건</small></h2><button class="x" data-m="close">×</button></div>
-   <div class="mb"><div class="sech" style="margin-top:0">새 요약 만들기</div><div id="sumBody">${sumIntro(rec)}</div>
-   <div class="sech" style="margin-top:20px">보관된 요약 <small class="hint" style="font-weight:400">· 최신순 · 눌러서 펼치기</small></div><div id="sumList"></div></div>
+  layer2().innerHTML=`<div class="ov" style="z-index:150"><div class="md mid" role="dialog"><div class="mh"><h2>${viewOnly?'📁 요약 보관함':'📊 AI 경과 요약'}<small>${esc(o.r.name)} · 기록 ${rec.length}건</small></h2><button class="x" data-m="close">×</button></div>
+   <div class="mb">${viewOnly?'<div style="display:flex;justify-content:flex-end"><button class="btn line sm" data-act="sum">＋ 새 요약 만들기</button></div><div id="sumBody" hidden></div>':`<div class="sech" style="margin-top:0">새 요약 만들기</div><div id="sumBody">${sumIntro(rec)}</div>`}
+   <div class="sech" style="margin-top:${viewOnly?4:20}px">보관된 요약 <small class="hint" style="font-weight:400">· 최신순 · 눌러서 펼치기</small></div><div id="sumList"></div></div>
    <div class="mf"><span class="hint" id="sumMsg" style="flex:1"></span><button class="btn line" id="sumCopy" hidden>복사</button><button class="btn pri" id="sumSave" hidden>요약 보관함에 저장</button><button class="btn line" data-m="close">닫기</button></div></div></div>`;
   SUMTXT='';renderSumList();
 }
@@ -1165,6 +1165,7 @@ document.addEventListener('click',e=>{
     else if(act==='newRecDay')openForm(null,{rowId:PJ.rowId,date:PJ.sel||todayStr});
     else if(act==='ai')openAI({rowId:PJ.rowId,date:PJ.sel||todayStr});
     else if(act==='sum')openSummary();
+    else if(act==='sumbox')openSummary(true);
     return;
   }
   const ed=t.closest('[data-edit]');if(ed){const x=RECS[ed.dataset.edit];if(x)openForm(x);return}
