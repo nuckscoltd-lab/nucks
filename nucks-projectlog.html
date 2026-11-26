@@ -301,6 +301,7 @@ function startData(){
   if(!fsReady()){$('#board').innerHTML='<div class="empty" style="padding:30px">서버에 연결할 수 없습니다. 로그인 상태를 확인해 주세요.</div>';return}
   db.collection(BOARDC).onSnapshot(snap=>{
     BOARDS=snap.docs.map(d=>Object.assign({id:d.id},d.data()));
+    if(!BOARDS.length&&ME.admin&&!window.__autoSynced){window.__autoSynced=1;setTimeout(()=>syncFromSchedule(true),300)}
     BOARDS.sort((a,b)=>(a.id==='nucks-all-projects'?-1:0)-(b.id==='nucks-all-projects'?-1:0));
     setBoard(BOARD&&BOARD.id);renderAll();
   },err=>{
@@ -434,7 +435,7 @@ function renderCards(){
 }
 function renderBoard(){
   const host=$('#board');
-  if(!BOARD){host.innerHTML='<div class="empty" style="padding:30px">표시할 프로젝트가 아직 없습니다.<br>프로젝트현황 페이지를 한 번 열어 두면(서버에 자동 저장) 이곳에 프로젝트가 나타납니다.</div>';return}
+  if(!BOARD){host.innerHTML='<div class="empty" style="padding:30px">표시할 프로젝트가 아직 없습니다.<br>'+(ME.admin?'위의 “프로젝트현황에서 가져오기”를 누르면 프로젝트가 나타납니다.':'관리자가 프로젝트현황에서 가져오면 이곳에 프로젝트가 나타납니다.')+'</div>';return}
   const rows=ROWS.filter(rowVisible);
   const{cs,ce}=calcRange(),dw=V.zoom,nd=diff(cs,ce)+1,W=nd*dw;
   const X=d=>diff(cs,d)*dw;
@@ -475,10 +476,39 @@ function renderBoard(){
   if(!sl&&V.range==='recent'&&todayStr>=cs)host.scrollLeft=Math.max(0,X(addD(todayStr,-90)));
   $('#stat').textContent=`프로젝트 ${n}개 · 기록 ${Object.values(RECS).length}건`;
 }
+/* ----- 프로젝트현황 → 기록부 가져오기 (관리자 전용) -----
+   프로젝트현황(scheduleProjects, 금액 포함)에서 거래처·프로젝트명·코드·일정 막대만 추려 projectLogBoards로 복사한다.
+   직원은 금액이 없는 사본만 읽는다. */
+function boardCopy(p,id){
+  return{id:id,name:p.name||'',chartStart:p.chartStart||'',chartEnd:p.chartEnd||'',
+    groups:(p.groups||[]).map(g=>({id:g.id,name:g.name,hidden:!!g.hidden,rows:(g.rows||[]).map(r=>({id:r.id,name:r.name,code:r.code||'',projCode:r.projCode||'',hidden:!!r.hidden,preWork:!!r.preWork,
+      wlNames:(r.wlNames||[]).slice(),wlExclude:(r.wlExclude||[]).slice(),
+      bars:(r.bars||[]).map(b=>({id:b.id,start:b.start,end:b.end,label:b.label||'',color:b.color||'',inner:b.inner||'',startOnly:!!b.startOnly}))}))}))};
+}
+let SYNCING=false;
+async function syncFromSchedule(auto){
+  if(!ME.admin||SYNCING)return;
+  SYNCING=true;const bt=$('#bSync');if(bt){bt.disabled=true;bt.textContent='가져오는 중…'}
+  try{
+    const snap=await db.collection('scheduleProjects').get();
+    if(snap.empty){toast(auto?'프로젝트현황에 저장된 프로젝트가 없습니다. 프로젝트현황 페이지를 열어 한 번 서버에 저장해 주세요.':'서버에 저장된 프로젝트현황이 없습니다. 프로젝트현황 페이지(최신 파일)를 열어 서버로 올린 뒤 다시 눌러 주세요.',7000);return}
+    let n=0,rows=0;
+    for(const d of snap.docs){
+      const data=d.data()||{};if(!data.groups)continue;
+      const c=boardCopy(data,d.id);c._pushedAt=Date.now();c._syncedBy='기록부';
+      await db.collection(BOARDC).doc(d.id).set(c);n++;
+      (c.groups||[]).forEach(g=>rows+=(g.rows||[]).length);
+    }
+    toast(n?`프로젝트현황에서 일정표 ${n}개(프로젝트 ${rows}줄)를 가져왔습니다`:'가져올 프로젝트가 없습니다',5000);
+  }catch(e){toast('가져오기 실패: '+(e&&e.message||e),7000)}
+  finally{SYNCING=false;const b2=$('#bSync');if(b2){b2.disabled=false;b2.textContent='🔄 프로젝트현황에서 가져오기'}}
+}
 function renderBoardNote(){
   let h='';
+  if(ME.admin)h+=`<div class="grp" style="width:max-content;margin-bottom:6px"><button class="btn" id="bSync">🔄 프로젝트현황에서 가져오기</button><span class="hint" style="padding:0 6px">프로젝트현황의 프로젝트를 이 기록부로 복사합니다 (금액은 복사되지 않음)</span></div>`;
   if(BOARDS.length>1)h+=`<div class="grp" style="width:max-content"><span class="hint" style="padding:0 6px">일정표</span><select class="inp" id="fBoard">${BOARDS.map(b=>`<option value="${esc(b.id)}" ${BOARD&&b.id===BOARD.id?'selected':''}>${esc(b.name||b.id)}</option>`).join('')}</select></div>`;
   $('#boardNote').innerHTML=h;
+  const sb=$('#bSync');if(sb)sb.onclick=()=>syncFromSchedule(false);
 }
 function renderAll(){rangeOptions();renderBoardNote();renderCards();renderBoard();updTitle()}
 
