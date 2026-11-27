@@ -558,7 +558,9 @@ textarea.inp{width:100%;resize:vertical}
       <div class="f"><label for="fCD">계약일</label><input id="fCD" class="inp" placeholder="2026.4.23" autocomplete="off"></div>
       <div class="f"><label for="fPer">용역기간 (막대로 그려짐)</label><input id="fPer" class="inp" placeholder="2026.4.23 ~ 12.31" autocomplete="off"></div>
       <div class="f"><label for="fEnd">작업완료일 (준공일·최종도서 납품일)</label><input id="fEnd" class="inp" placeholder="예) 2026.12.31" autocomplete="off"></div>
-      <div class="row4"><div class="f"><label for="fCode">코드 (대분류 · 작업분류)</label><div style="display:flex;gap:6px"><input id="fCode" class="inp" style="flex:1;min-width:0" placeholder="예) D-2026" autocomplete="off"><input id="fCode2" class="inp" style="flex:1;min-width:0" placeholder="예) 2026-01-01" autocomplete="off"></div><div style="margin-top:4px"><button type="button" class="lchip lgh" id="fCodePick" title="근무일지의 프로젝트 코드표에서 골라 코드·프로젝트명을 채웁니다">근무일지 코드표에서 고르기</button></div></div>
+      <div class="row4"><div class="f"><label for="fCode">코드 (대분류 · 작업분류)</label><div style="display:flex;gap:6px"><input id="fCode" class="inp" style="flex:1;min-width:0" placeholder="예) D-2026" autocomplete="off"><input id="fCode2" class="inp" style="flex:1;min-width:0" placeholder="예) 2026-01-01" autocomplete="off"></div><div style="margin-top:4px"><button type="button" class="lchip lgh" id="fCodePick" title="근무일지의 프로젝트 코드표에서 골라 코드·프로젝트명을 채웁니다">근무일지 코드표에서 고르기</button></div>
+        <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;align-items:center"><select id="fGenYear" class="inp" style="width:auto" aria-label="코드 연도"></select><select id="fGenClass" class="inp" style="width:auto;max-width:150px" aria-label="작업분류"></select><button type="button" class="lchip lgh" id="fCodeGen" title="근무일지 코드표와 같은 규칙(연도-분류-일련번호)으로 다음 번호를 만들어 아래 칸에 넣습니다">새 코드 자동 생성</button></div>
+        <div class="hint" id="fCodeGenInfo" style="margin-top:3px">저장하면 이 프로젝트가 근무일지 프로젝트 목록·코드표에 자동 등록됩니다.</div></div>
       <div class="f"><label for="fPay">기본 결제수단 (이 프로젝트)</label><select id="fPay" class="inp"><option value="">현금 (계좌이체)</option><option value="bill">전자어음 (B2B)</option></select></div>
       <div class="f"><label for="fPre">선작업 (계약 확정 전 착수)</label><select id="fPre" class="inp"><option value="">아니오 (일반)</option><option value="1">선작업 중 (계약 전 먼저 착수)</option></select></div>
       <div class="f"><label for="fSt">상태 (막대 색·글씨)</label><select id="fSt" class="inp"><option value="">그대로 두기</option><option>계약</option><option>실주</option><option>진행</option><option>완료</option></select></div></div>
@@ -2308,6 +2310,39 @@ $('#cpBody').addEventListener('click',e=>{
   $('#dCodePick').close();renderFinLabor();toast('코드 '+o.code+' 를 입력했습니다');
 });
 
+/* ---------- 새 코드 자동 생성 (근무일지 코드표와 같은 규칙: 연도-작업분류-일련번호, 예 2026-02-03) ---------- */
+const WORK_CLASSES=[['00','대안설계'],['01','견본주택설계'],['02','세대설계'],['03','상업공간설계'],['04','관공서설계'],['11','시공-관공서'],['12','시공-개인APT'],['13','시공-메뉴얼(상업공간)'],['20','OA 관리업무'],['21','마케팅업무'],['22','디자인연구부업무'],['23','영업보고서'],['24','교육'],['25','지명원업데이트']];
+function initCodeGen(){
+  const ny=new Date().getFullYear(),ys=[];for(let y=ny+1;y>=2018;y--)ys.push(y);
+  $('#fGenYear').innerHTML=ys.map(y=>`<option value="${y}" ${y===ny?'selected':''}>${y}</option>`).join('');
+  $('#fGenClass').innerHTML=WORK_CLASSES.map(([c,l])=>`<option value="${c}">${c} ${l}</option>`).join('');
+  let last='';try{last=localStorage.getItem('nucks-gen-class')||''}catch(e){}
+  if(last&&WORK_CLASSES.some(x=>x[0]===last))$('#fGenClass').value=last;
+}
+function nextSerial(year,cls,pool){
+  const prefix=`${year}-${cls}-`;let mx=0;
+  pool.forEach(c=>{c=String(c||'').trim();if(!c.startsWith(prefix))return;const n=parseInt(c.slice(prefix.length),10);if(!isNaN(n)&&n>mx)mx=n});
+  return String(mx+1).padStart(2,'0');
+}
+$('#fCodeGen').onclick=async()=>{
+  const year=$('#fGenYear').value,cls=$('#fGenClass').value,btn=$('#fCodeGen'),info=$('#fCodeGenInfo');
+  try{localStorage.setItem('nucks-gen-class',cls)}catch(e){}
+  btn.disabled=true;info.textContent='근무일지 코드표를 확인하는 중…';
+  try{
+    const data=await loadLaborData(true);
+    if(data.err){info.textContent='코드표를 불러오지 못해 번호를 만들 수 없습니다: '+data.err;return}
+    const ex=new Set(data.excluded||[]),pool=[];
+    Object.entries(data.codeMap||{}).forEach(([n,c])=>{if(!ex.has(n)&&c)pool.push(c)});
+    data.entries.forEach(e=>{if(e.rawCode)pool.push(e.rawCode);if(e.code)pool.push(e.code)});
+    DB.projects.forEach(pr=>(pr.groups||[]).forEach(g=>(g.rows||[]).forEach(r=>{if(r.projCode&&r.id!==FD.rowId)pool.push(r.projCode)})));
+    const code=`${year}-${cls}-${nextSerial(year,cls,pool)}`;
+    $('#fCode2').value=code;renderFinLabor();
+    info.textContent=`코드 ${code} 를 넣었습니다. 아래 저장 버튼을 누르면 근무일지 프로젝트 목록·코드표에 자동 등록됩니다.`;
+  }catch(e){info.textContent='코드 생성 실패: '+(e&&e.message||e)}
+  finally{btn.disabled=false}
+};
+initCodeGen();
+
 /* ---------- 계약서·참조문서 첨부 (Firebase Storage) ---------- */
 function renderFinAttach(){
   const box=$('#fAttachList');if(!box)return;
@@ -2457,6 +2492,7 @@ $('#fSave').onclick=()=>{
   if(!g){g=P.groups[P.groups.length-1];if(!g){g={id:uid(),name:'새 '+(P.hdG||'구획'),rows:[]};P.groups.push(g)}}
   let r;const f=FD.rowId&&findRow(FD.rowId);
   if(f){r=f.r;if(f.g!==g){f.g.rows.splice(f.g.rows.indexOf(r),1);g.rows.push(r)}}else{r={id:uid(),name,bars:[],newAt:Date.now()};g.rows.push(r)}
+  const prevName=f?f.r.name:'',prevCode=f?(f.r.projCode||''):'';
   r.name=name;r.code=$('#fCode').value.trim()||null;r.projCode=$('#fCode2').value.trim()||null;
   if(FD.attachments&&FD.attachments.length)r.attachments=FD.attachments;else delete r.attachments;
   // 이름도 없고(아직 이름을 입력/자동배정 받지 않았고) 금액·날짜도 전혀 안 채운, 진짜 빈 줄만 저장에서
@@ -2483,7 +2519,21 @@ $('#fSave').onclick=()=>{
   const stv=$('#fSt').value;if(stv&&r.bars[0]){r.bars[0].inner=stv;r.bars[0].color={'완료':'#b9b0a8','진행':'#e1863a','계약':'#9aa0a6','실주':'#c9372c'}[stv]}
   if(P.rowRemarks&&/^계약 /.test(P.rowRemarks[r.id]||''))delete P.rowRemarks[r.id];
   if(!P.remark)P.remark='right';
-  sel={t:'row',id:r.id};save();$('#dFin').close();renderAll();if($('#dFinAll').open)renderFinAll();if($('#dCash').open)renderCash();toast(f?'저장했습니다':'새 프로젝트를 등록했습니다');setTimeout(()=>{try{const vis=visGroups().some(x=>x.rows.some(y=>y.id===r.id));if(!vis)toastL('저장은 됐지만 지금 "줄 표시"·보기 기간 설정 때문에 표에서 숨겨져 있어요. 위쪽 "줄 표시"를 "일정 없는 줄도 표시"로 바꾸면 보입니다',7000)}catch(_){}},80);settleOnFinSave(r.id).catch(e=>console.error('결산서 자동 작성 실패',e));if(!f)registerOfficialNames([r.name]).then(n=>{if(n)toastL('근무일지 프로젝트명 자동완성 목록에도 등록했습니다',3500)})};
+  sel={t:'row',id:r.id};save();$('#dFin').close();renderAll();if($('#dFinAll').open)renderFinAll();if($('#dCash').open)renderCash();toast(f?'저장했습니다':'새 프로젝트를 등록했습니다');
+  /* 새 프로젝트이거나 이름·코드를 바꾼 경우에만, 근무일지 프로젝트 목록·코드표에 자동 등록 (완료·실주 건은 제외) */
+  {const stNow=(r.bars[0]&&r.bars[0].inner)||'';
+   if((!f||name!==prevName||(r.projCode&&r.projCode!==prevCode))&&stNow!=='완료'&&stNow!=='실주'){
+     registerWorklogProject([{name,code:r.projCode||''}]).then(res=>{
+       if(res.err)return toastL('근무일지 목록 등록 실패: '+res.err+' (Firestore 규칙의 officialProjects 쓰기 권한을 확인하세요)',7000);
+       const msg=[];
+       if(res.added||res.codeSet)msg.push(`근무일지 프로젝트 목록에 등록했습니다${res.codeSet?` (코드 ${r.projCode})`:''}`);
+       if(!r.projCode&&res.added)msg.push('코드 칸이 비어 있어 이름만 등록했습니다 (코드를 만들어 저장하면 근무일지에도 반영됩니다)');
+       if(res.codeKept.length)msg.push(`근무일지 코드표에는 이미 다른 코드(${res.codeKept[0][1]})가 있어 그대로 두었습니다`);
+       if(res.codeConflict.length)msg.push(`코드 ${r.projCode}는 "${res.codeConflict[0][1]}"가 이미 쓰고 있어 근무일지에 넣지 않았습니다. 새 코드로 다시 생성하세요`);
+       if(res.excluded.length)msg.push('근무일지에서 제외 처리된 이름이라 목록에 올리지 않았습니다');
+       if(msg.length)toastL(msg.join(' · '),7000)});
+   }}
+setTimeout(()=>{try{const vis=visGroups().some(x=>x.rows.some(y=>y.id===r.id));if(!vis)toastL('저장은 됐지만 지금 "줄 표시"·보기 기간 설정 때문에 표에서 숨겨져 있어요. 위쪽 "줄 표시"를 "일정 없는 줄도 표시"로 바꾸면 보입니다',7000)}catch(_){}},80);settleOnFinSave(r.id).catch(e=>console.error('결산서 자동 작성 실패',e))};
 
 /* ---------- 프로젝트 결산서 (2026-11 신규) ----------
    기존 project-settlement.html(프로젝트 결산) 페이지의 구성(기본정보·대외업체·진행내용·투입인원·특이사항)을
@@ -2510,20 +2560,53 @@ function migrateBillingExtras(){
     if(x.finalCost&&!(+r.fin.finalCost)){r.fin.finalCost=x.finalCost;n++}});
   P.extrasMig=1;save();
 }
-/* 새 프로젝트를 만들거나 이름을 바꿀 때, 근무일지 프로젝트명 자동완성 목록(officialProjects/list.names)에 이름을 올린다.
-   근무일지에서 "프로젝트명 정리"로 일부러 제외한 이름(excluded)은 다시 넣지 않고, 코드(codes)는 건드리지 않는다
-   (코드는 근무일지가 원본이라 이 페이지에서 쓰지 않는다). 올린 이름 수를 돌려준다. */
-async function registerOfficialNames(names){
+/* 프로젝트현황에서 새 프로젝트를 만들거나 코드를 정하면, 근무일지가 보는 목록에 자동으로 올린다.
+   officialProjects/list 문서에 다음을 채운다(근무일지 작성폼은 usedNames+preRegistered를, 코드는 codes를 읽는다):
+   ① names(공식 프로젝트명 목록)  ② preRegistered(아직 근무일지에 안 쓰였지만 미리 등록한 이름 → 근무일지 자동완성에 뜸)
+   ③ codes[프로젝트명]=코드(근무일지에서 프로젝트를 고르면 코드가 자동으로 채워짐 - 이미 코드가 있으면 덮어쓰지 않음)
+   근무일지의 "프로젝트명 정리"로 일부러 제외한 이름(excluded)은 되살리지 않는다. 다른 이름이 이미 쓰는 코드는 넣지 않는다.
+   결과 {added,codeSet,codeKept,codeConflict,excluded}를 돌려준다. */
+async function registerWorklogProject(items){
+  const res={added:0,codeSet:0,codeKept:[],codeConflict:[],excluded:[]};
   try{
-    if(!fsReady())return 0;
-    const list=[...new Set((names||[]).map(n=>String(n||'').trim()).filter(Boolean))];if(!list.length)return 0;
+    if(!fsReady())return res;
+    const list=(items||[]).map(x=>({name:String(x.name||'').trim(),code:String(x.code||'').trim()})).filter(x=>x.name);
+    if(!list.length)return res;
     const ref=db.collection('officialProjects').doc('list'),doc=await ref.get(),d=(doc.exists&&doc.data())||{};
-    const ex=d.excluded||[],cur=d.names||[];
-    const add=list.filter(n=>!ex.includes(n)&&!cur.includes(n));
-    if(!add.length)return 0;
-    await ref.set({names:[...new Set([...cur,...add])].sort(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
-    LABOR_CACHE=null;return add.length;
-  }catch(e){console.warn('프로젝트명 자동완성 목록 등록 실패',e);return 0}
+    const ex=d.excluded||[],curNames=d.names||[],pre=d.preRegistered||[],used=d.usedNames||[],codes=d.codes||{};
+    const addNames=[],addPre=[],setCodes={};
+    list.forEach(x=>{
+      if(ex.includes(x.name)){res.excluded.push(x.name);return}
+      if(!curNames.includes(x.name))addNames.push(x.name);
+      if(!pre.includes(x.name)&&!used.includes(x.name))addPre.push(x.name);
+      if(x.code){
+        if(codes[x.name]){if(codes[x.name]!==x.code)res.codeKept.push([x.name,codes[x.name]])}
+        else{
+          const other=Object.entries(codes).find(([n,c])=>c===x.code&&n!==x.name&&!ex.includes(n));
+          if(other)res.codeConflict.push([x.name,other[0]]);else setCodes[x.name]=x.code;
+        }
+      }
+    });
+    res.added=new Set([...addNames,...addPre]).size;res.codeSet=Object.keys(setCodes).length;
+    if(!addNames.length&&!addPre.length&&!res.codeSet)return res;
+    const FV=firebase.firestore.FieldValue;
+    if(doc.exists){
+      const args=[];
+      if(addNames.length)args.push('names',FV.arrayUnion(...addNames));
+      if(addPre.length)args.push('preRegistered',FV.arrayUnion(...addPre));
+      Object.entries(setCodes).forEach(([n,c])=>args.push(new firebase.firestore.FieldPath('codes',n),c));
+      args.push('updatedAt',FV.serverTimestamp());
+      await ref.update(...args);
+    }else{
+      await ref.set({names:addNames,preRegistered:addPre,codes:setCodes,updatedAt:FV.serverTimestamp()},{merge:true});
+    }
+    LABOR_CACHE=null;
+    return res;
+  }catch(e){console.warn('근무일지 프로젝트 목록 등록 실패',e);res.err=String(e&&e.message||e);return res}
+}
+async function registerOfficialNames(names){
+  const r=await registerWorklogProject((names||[]).map(n=>({name:n,code:''})));
+  return r.added||0;
 }
 
 const SETTLE_PARTNERS=[['orderer','발주처'],['developer','시행사'],['constructor','건설사'],['architect','건축사'],['salesAgency','분양대행사']];
