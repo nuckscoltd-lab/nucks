@@ -81,6 +81,15 @@ if ('serviceWorker' in navigator) {
     display:flex; gap:12px; align-items:flex-end; margin-bottom:10px; flex-wrap:wrap;
   }
   .project-row-top .field{ flex:1; min-width:160px; }
+  /* 프로젝트 선택: 발주처별로 묶어 보여주는 목록 */
+  .pc-wrap{ position:relative; }
+  .pc-panel{ position:absolute; left:0; top:100%; margin-top:2px; z-index:80; min-width:100%; width:max-content; max-width:min(92vw,560px);
+    max-height:min(55vh,430px); overflow-y:auto; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 10px 28px rgba(0,0,0,.16); }
+  .pc-g{ position:sticky; top:0; padding:7px 12px; font-weight:700; font-size:12.5px; background:#f1f2ef; border-bottom:1px solid var(--line); color:var(--ink); }
+  .pc-i{ padding:7px 12px 7px 24px; font-size:13px; cursor:pointer; line-height:1.4; }
+  .pc-i:hover, .pc-i.act{ background:#e8f0fb; }
+  .pc-i.sel{ font-weight:700; }
+  .pc-empty{ padding:12px; font-size:12.5px; color:var(--muted); }
   .project-row-top .hours-field{ max-width:120px; min-width:100px; }
   .project-row-top .code-field{ max-width:210px; min-width:170px; }
   .row-code-display{
@@ -571,7 +580,7 @@ if ('serviceWorker' in navigator) {
     <div id="projectCleanupList" style="max-height:220px; overflow-y:auto; border:1px solid var(--line); border-radius:4px; padding:12px; margin-bottom:12px; background:#fff;"></div>
     <div class="field" style="max-width:320px; margin-bottom:12px;">
       <label for="mergeTargetName">통합/변경할 이름</label>
-      <input type="text" id="mergeTargetName" list="projectList" placeholder="예: 힐스테이트 장위">
+      <input type="text" id="mergeTargetName" autocomplete="off" placeholder="예: 힐스테이트 장위">
     </div>
     <button class="submit-btn" id="mergeProjectsBtn">선택한 이름을 위 이름으로 통합/변경</button>
     <button class="submit-btn" id="deleteProjectsBtn" style="background:#a4453c; margin-left:8px;">선택한 항목 삭제</button>
@@ -678,7 +687,7 @@ if ('serviceWorker' in navigator) {
     <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:12px;">
       <div class="field" style="flex:1; min-width:200px;">
         <label for="officeClassNameInput">업무명</label>
-        <input type="text" id="officeClassNameInput" list="projectList" placeholder="예: OA 관리업무">
+        <input type="text" id="officeClassNameInput" autocomplete="off" placeholder="예: OA 관리업무">
       </div>
       <div class="field" style="min-width:200px;">
         <label for="officeClassCodeSelect">분류</label>
@@ -1294,6 +1303,7 @@ if ('serviceWorker' in navigator) {
         OFFICE_CLASS_CODES = doc.data().officeClassCodes || {};
         USED_PROJECT_NAMES = doc.data().usedNames || [];
         PRE_REGISTERED_PROJECTS = doc.data().preRegistered || [];
+        await loadBoardGroups();
         renderProjectCodesDatalist();
         updateProjectDatalist();
         renderCodeRefList();
@@ -1416,6 +1426,104 @@ if ('serviceWorker' in navigator) {
     });
   }
 
+  // ===== 프로젝트 선택 목록: 발주처(거래처)별로 묶어 보여주기 =====
+  // 묶음 기준은 프로젝트현황에서 올려 둔 거래처 구분(projectLogBoards - 금액 정보 없는 사본)이다.
+  // 프로젝트의 코드가 같거나 이름이 같으면 그 거래처 아래에 놓고, 어디에도 없으면 맨 아래 "기타"로 모은다.
+  let PROJECT_NAME_OPTIONS = [];   // 자동완성에 뜨는 프로젝트명 전체(정리·제외 반영)
+  let BOARD_GROUP_ORDER = [];      // 거래처 구분 순서(프로젝트현황과 같은 순서)
+  let BOARD_NAME_GROUP = {};       // 정규화한 프로젝트명 → 거래처
+  let BOARD_CODE_GROUP = {};       // 프로젝트 코드 → 거래처
+  const normProjKey = s => String(s || '').toLowerCase().replace(/m\s*\/\s*h/g, 'mh').replace(/\(주\)|㈜|주식회사/g, '').replace(/[^0-9a-z가-힣]/g, '');
+  async function loadBoardGroups() {
+    try {
+      const snap = await db.collection('projectLogBoards').get();
+      const order = [], byN = {}, byC = {};
+      snap.docs.forEach(d => {
+        ((d.data() || {}).groups || []).forEach(g => {
+          const gn = String(g.name || '').trim();
+          if (!gn) return;
+          if (!order.includes(gn)) order.push(gn);
+          (g.rows || []).forEach(r => {
+            const k = normProjKey(r.name);
+            if (k && !byN[k]) byN[k] = gn;
+            const c = String(r.projCode || '').trim();
+            if (c && !byC[c]) byC[c] = gn;
+          });
+        });
+      });
+      BOARD_GROUP_ORDER = order; BOARD_NAME_GROUP = byN; BOARD_CODE_GROUP = byC;
+    } catch (err) {
+      console.warn('거래처 구분(projectLogBoards)을 불러오지 못해 프로젝트 목록을 묶지 않고 보여줍니다:', err && err.message || err);
+    }
+  }
+  function groupOfProjectName(name) {
+    const code = PROJECT_CODES[name] || '';
+    return (code && BOARD_CODE_GROUP[code]) || BOARD_NAME_GROUP[normProjKey(name)] || '';
+  }
+  function groupedProjectOptions(filter) {
+    const q = normProjKey(filter), raw = String(filter || '').trim().toLowerCase();
+    const names = PROJECT_NAME_OPTIONS.filter(n => !q || normProjKey(n).includes(q) || n.toLowerCase().includes(raw));
+    const by = {};
+    names.forEach(n => { const g = groupOfProjectName(n) || ''; (by[g] = by[g] || []).push(n); });
+    const out = [];
+    BOARD_GROUP_ORDER.forEach(g => { if (by[g]) out.push({ group: g, names: by[g].sort((a, b) => a.localeCompare(b, 'ko')) }); });
+    // 순서 목록에 없는 거래처가 생겨도 놓치지 않게(혹시 모를 경우) + 미분류는 맨 아래
+    Object.keys(by).filter(g => g && !BOARD_GROUP_ORDER.includes(g)).forEach(g => out.push({ group: g, names: by[g].sort((a, b) => a.localeCompare(b, 'ko')) }));
+    if (by['']) out.push({ group: out.length ? '기타 (거래처 구분 없음)' : '프로젝트', names: by[''].sort((a, b) => a.localeCompare(b, 'ko')) });
+    return out;
+  }
+  function attachProjectCombo(input) {
+    const wrap = input.parentElement;
+    wrap.classList.add('pc-wrap');
+    const panel = document.createElement('div');
+    panel.className = 'pc-panel';
+    panel.hidden = true;
+    wrap.appendChild(panel);
+    let typing = false, active = -1;
+    const items = () => Array.from(panel.querySelectorAll('.pc-i'));
+    const setActive = i => {
+      const list = items();
+      list.forEach(el => el.classList.remove('act'));
+      if (!list.length) { active = -1; return; }
+      active = (i + list.length) % list.length;
+      list[active].classList.add('act');
+      list[active].scrollIntoView({ block: 'nearest' });
+    };
+    const render = () => {
+      const groups = groupedProjectOptions(typing ? input.value : '');
+      const cur = input.value.trim();
+      panel.innerHTML = groups.length
+        ? groups.map(g => `<div class="pc-g">${esc(g.group)}</div>` + g.names.map(n => `<div class="pc-i${n === cur ? ' sel' : ''}" data-v="${esc(n)}">${esc(n)}</div>`).join('')).join('')
+        : `<div class="pc-empty">${typing && input.value.trim() ? '목록에 없는 이름이에요. 그대로 입력하면 새 프로젝트로 저장됩니다.' : '표시할 프로젝트가 없습니다. 직접 입력해 주세요.'}</div>`;
+      active = -1;
+      const sel = panel.querySelector('.pc-i.sel');
+      if (sel && !typing) setTimeout(() => sel.scrollIntoView({ block: 'center' }), 0);
+    };
+    const open = () => { render(); panel.hidden = false; };
+    const close = () => { panel.hidden = true; typing = false; };
+    const choose = v => {
+      input.value = v;
+      close();
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    input.addEventListener('focus', () => { typing = false; open(); try { input.select(); } catch (e) {} });
+    input.addEventListener('click', () => { if (panel.hidden) { typing = false; open(); } });
+    input.addEventListener('input', () => { typing = true; open(); });
+    input.addEventListener('blur', () => setTimeout(close, 120));
+    input.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (panel.hidden) open(); setActive(active + 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); if (panel.hidden) open(); setActive(active - 1); }
+      else if (e.key === 'Enter') { if (!panel.hidden && active >= 0) { e.preventDefault(); choose(items()[active].dataset.v); } else if (!panel.hidden) { close(); } }
+      else if (e.key === 'Escape') { close(); }
+    });
+    panel.addEventListener('mousedown', e => {
+      const it = e.target.closest('.pc-i');
+      if (!it) return;
+      e.preventDefault();
+      choose(it.dataset.v);
+    });
+  }
+
   async function updateProjectDatalist() {
     // 자동완성 목록/정리 목록은 목록 화면의 월별 필터(allRows)와 무관하게 항상 전체 기간 기준으로 보여준다.
     // (그렇지 않으면 "이번 달"만 보고 있을 때 다른 달에만 있는 프로젝트명/중복은 안 보여서 놓칠 수 있음)
@@ -1441,6 +1549,7 @@ if ('serviceWorker' in navigator) {
     const datalistPoolNames = [...new Set([...USED_PROJECT_NAMES, ...PRE_REGISTERED_PROJECTS, ...usedProjects])].sort();
     const datalistMerged = datalistPoolNames.filter(p => !EXCLUDED_PROJECTS.includes(p));
     document.getElementById('projectList').innerHTML = datalistMerged.map(p => `<option value="${esc(p)}">`).join('');
+    PROJECT_NAME_OPTIONS = datalistMerged;
 
     if (currentRole === 'admin') {
       // 정리/미지정/코드 목록 같은 관리자 전용 도구는 "등록만 되어있고 아직 한 번도 안 쓰인 이름"까지
@@ -2540,7 +2649,7 @@ if ('serviceWorker' in navigator) {
       <div class="project-row-top">
         <div class="field">
           <label>프로젝트</label>
-          <input type="text" class="row-project" list="projectList" placeholder="선택 또는 직접 입력" value="${p['프로젝트'] || ''}">
+          <input type="text" class="row-project" autocomplete="off" placeholder="선택 또는 직접 입력" value="${esc(p['프로젝트'] || '')}">
         </div>
         <div class="field code-field">
           <label>코드</label>
@@ -2561,20 +2670,9 @@ if ('serviceWorker' in navigator) {
     const projectInput = row.querySelector('.row-project');
     const codeDisplay = row.querySelector('.row-code-display');
 
-    // 이미 프로젝트명이 채워진 상태에서 드롭다운 화살표(▼)를 눌러도 브라우저가 "지금 입력된 값과
-    // 일치하는 항목"으로만 후보를 필터링해서 사실상 아무것도 안 뜨는 것처럼 보이는 문제 - 포커스가
-    // 잡히는 순간 입력칸을 비워서 전체 후보가 다시 펼쳐지게 하고, 아무것도 선택하지 않고 다른 곳을
-    // 클릭하면(빈 칸으로 남으면) 원래 값으로 되돌린다. 다른 프로젝트를 고르거나 직접 타이핑하면
-    // 정상적으로 그 값이 남는다.
-    projectInput.addEventListener('focus', () => {
-      projectInput.dataset.prevValue = projectInput.value;
-      projectInput.value = '';
-    });
-    projectInput.addEventListener('blur', () => {
-      if (!projectInput.value.trim() && projectInput.dataset.prevValue) {
-        projectInput.value = projectInput.dataset.prevValue;
-      }
-    });
+    // 프로젝트 선택칸: 발주처(거래처)별로 묶인 목록을 펼친다. 글자를 치면 이름이 포함된 것만 걸러 보여주고,
+    // 목록에 없는 새 이름은 그대로 직접 입력할 수 있다.
+    attachProjectCombo(projectInput);
 
     // 프로젝트명을 실제로 바꾸면(자동완성 선택이든 직접 타이핑이든) 코드 표시를 중앙 코드 매핑
     // 기준으로 다시 맞춘다 - 매핑에 없는 이름이면 "미지정"으로 비워 보여주고, 관리자가 "예정
@@ -2605,6 +2703,9 @@ if ('serviceWorker' in navigator) {
 
   document.getElementById('addProjectBtn').addEventListener('click', () => createProjectRow());
   resetProjectRows();
+
+  // 관리자용 도구의 프로젝트명 입력칸도 같은 발주처별 목록으로 (프로젝트명 정리 · 사무업무 코드)
+  ['mergeTargetName', 'officeClassNameInput'].forEach(id => { const el = document.getElementById(id); if (el) attachProjectCombo(el); });
 
   // 날짜를 바꾸면(새 항목 작성 중이든, 기존 항목을 수정하며 날짜를 고치든) 사무업무 코드(연도별
   // 자동) 대상인 행들의 코드 표시도 그 즉시 새 날짜 기준으로 다시 계산해서 보여준다. 일반 프로젝트
