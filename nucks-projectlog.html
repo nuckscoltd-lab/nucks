@@ -416,8 +416,10 @@ function statusOf(r){
 const isSum=x=>x&&(x.kind==='summary'||(x.source==='ai'&&/^AI 경과 요약 /.test(x.title||'')));
 const sumsOf=rowId=>Object.values(SUMS).filter(x=>x.rowId===rowId).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
 const recsOf=rowId=>Object.values(RECS).filter(x=>x.rowId===rowId).sort((a,b)=>(a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
-const isOpenRec=x=>x.status==='접수'||x.status==='진행';
-const ov=x=>isOpenRec(x)&&ok(x.dueDate)&&x.dueDate<todayStr;
+const isActiveRec=x=>x.status==='접수'||x.status==='진행';
+const isOpenRec=x=>isActiveRec(x)||x.status==='보류';   // 처리 중 + 보류(보류도 미완 상태로 계속 점검)
+const STAT_ICON={'접수':'📝','진행':'⏰','완료':'👌','보류':'⚠️'};
+const ov=x=>isActiveRec(x)&&ok(x.dueDate)&&x.dueDate<todayStr;   // 기한 지남 표시는 접수·진행만
 
 /* ===== 메인 화면 ===== */
 function rangeOptions(){
@@ -451,14 +453,14 @@ function rowVisible({g,r}){
 }
 function renderCards(){
   const recs=Object.values(RECS).filter(x=>ROWIDX[x.rowId]);
-  const open=recs.filter(isOpenRec).sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999')||a.date.localeCompare(b.date));
+  const open=recs.filter(isOpenRec).sort((a,b)=>(isActiveRec(b)-isActiveRec(a))||(a.dueDate||'9999').localeCompare(b.dueDate||'9999')||a.date.localeCompare(b.date));
   const recent=recs.slice().sort((a,b)=>(b.date+(b.time||'')).localeCompare(a.date+(a.time||''))||(b.createdAt||0)-(a.createdAt||0)).slice(0,6);
   const pn=x=>(ROWIDX[x.rowId]?ROWIDX[x.rowId].r.name:'');
   const item=(x,showDue)=>`<div class="li ${ov(x)?'over':''}" data-open-rec="${x.id}"><span class="d">${showDue&&ok(x.dueDate)?'~'+md(x.dueDate):md(x.date)}</span><span class="p">${esc(pn(x))}</span><span class="t">${esc(x.title)}</span>${x.status?`<span class="tg">${esc(x.status)}</span>`:''}</div>`;
   const unread=recs.filter(needMyRead).sort((a,b)=>b.date.localeCompare(a.date));
   $('#cards').innerHTML=
    (unread.length?`<div class="card" style="border-color:#e9a39c;background:#fffafa"><h3>📣 확인이 필요한 전달사항 <small>${unread.length}건 · 눌러서 열고 “확인했어요”</small></h3>${unread.slice(0,7).map(x=>item(x,false)).join('')}</div>`:'')+
-   `<div class="card"><h3>⏰ 처리 중인 변경지시·후속조치 <small>${open.length}건 · 기한 순</small></h3>${open.length?open.slice(0,7).map(x=>item(x,true)).join('')+(open.length>7?`<div class="hint" style="padding-top:4px">외 ${open.length-7}건 (아래 프로젝트에서 확인)</div>`:''):'<div class="empty">처리 중인 건이 없습니다. 기록에 "접수/진행" 상태를 주면 여기에 모입니다.</div>'}</div>`+
+   `<div class="card"><h3>⏰ 처리 중·보류 중인 변경지시·후속조치 <small>${open.length}건 · 처리중 먼저, 기한 순</small></h3>${open.length?open.slice(0,7).map(x=>item(x,true)).join('')+(open.length>7?`<div class="hint" style="padding-top:4px">외 ${open.length-7}건 (아래 프로젝트에서 확인)</div>`:''):'<div class="empty">처리 중인 건이 없습니다. 기록에 "접수/진행/보류" 상태를 주면 여기에 모입니다.</div>'}</div>`+
    `<div class="card"><h3>🆕 최근 기록 <small>${recs.length}건 누적</small></h3>${recent.length?recent.map(x=>item(x,false)).join(''):'<div class="empty">아직 기록이 없습니다. 위의 “＋ 새 기록” 또는 “📷 캡처로 자동 기록”으로 시작하세요.</div>'}</div>`;
 }
 function renderBoard(){
@@ -506,7 +508,7 @@ function renderBoard(){
     let mk='';
     for(const d in byD){const L=byD[d],hi=L.find(isOpenRec)||L[0];
       mk+=`<div class="mk ${L.some(isOpenRec)?'o':''}" data-day="${d}" data-row="${r.id}" style="left:${X(d)+dw/2}px;background:${TYPES[hi.type]||'#6b7280'}" title="${esc(md(d)+' · '+L.map(x=>x.title).join(' / '))}"></div>`}
-    h+=`<div class="rw" data-row="${r.id}"><div class="lf"><span class="nm" title="${esc(r.name)}">${esc(r.name)}</span>${r.preWork?'<span class="pill ct">선작업</span>':''}${stTxt?`<span class="pill ${st==='done'?'done':st==='lost'?'lost':stTxt==='계약'?'ct':'on'}">${esc(stTxt)}</span>`:''}</div><div class="tl" style="width:${W}px">${vl}${todayX}${bars}${mk}</div><div class="rt">${rec.length?`<b>${rec.length}</b>건`:'<span>-</span>'}${op?`<span class="open">처리중 ${op}</span>`:''}${last?`<span class="lastd">${md(last)}</span>`:''}</div></div>`;
+    h+=`<div class="rw" data-row="${r.id}"><div class="lf"><span class="nm" title="${esc(r.name)}">${esc(r.name)}</span>${r.preWork?'<span class="pill ct">선작업</span>':''}${stTxt?`<span class="pill ${st==='done'?'done':st==='lost'?'lost':stTxt==='계약'?'ct':'on'}">${esc(stTxt)}</span>`:''}</div><div class="tl" style="width:${W}px">${vl}${todayX}${bars}${mk}</div><div class="rt">${rec.length?`<b>${rec.length}</b>건`:'<span>-</span>'}${op?`<span class="open" title="접수·진행·보류">처리중·보류 ${op}</span>`:''}${last?`<span class="lastd">${md(last)}</span>`:''}</div></div>`;
     n++;
   }
   if(!n)h+='<div class="empty" style="padding:24px">조건에 맞는 프로젝트가 없습니다.</div>';
@@ -617,11 +619,11 @@ function renderPJ(keepScroll){
   const wlNote=WL?(WL.err?`<div class="warn" style="margin:8px 16px 0">근무일지를 읽지 못했습니다 (${esc(WL.err)})</div>`:WL.partial?`<div class="warn" style="margin:8px 16px 0">근무일지는 <b>내 기록만</b> 표시됩니다. (공유 서버 함수 projectLogWorklogs가 아직 배포되지 않았을 수 있습니다${WL.fnErr?' · '+esc(WL.fnErr):''})</div>`:WL.mode==='shared'?`<div class="hint" style="margin:8px 16px 0">근무일지는 <b>내 기록과 공유가 허용된 근로자의 기록</b>만 표시됩니다.</div>`:''):'';
   const html=`<div class="ov" id="pjOv"><div class="md" role="dialog" aria-label="프로젝트 기록">
    <div class="mh"><h2>${esc(r.name)}<small>${esc(g.name)} · ${perTxt}${r.projCode?' · '+esc(r.projCode):''}</small></h2>
-     ${b0&&b0.inner?`<span class="pill ${st==='done'?'done':st==='lost'?'lost':'on'}">${esc(b0.inner)}</span>`:''}${openN?`<span class="tg over">처리중 ${openN}건</span>`:''}${chgSum(recAll)}
+     ${b0&&b0.inner?`<span class="pill ${st==='done'?'done':st==='lost'?'lost':'on'}">${esc(b0.inner)}</span>`:''}${openN?`<span class="tg over">처리중·보류 ${openN}건</span>`:''}${chgSum(recAll)}
      <button class="btn pri sm" data-act="newRec">＋ 기록 추가</button><button class="btn line sm" data-act="ai">💬 카톡 자동기록</button><button class="btn line sm" data-act="sum">📊 AI 경과 요약</button><button class="btn line sm" data-act="sumbox" title="저장해 둔 AI 경과 요약 모아 보기">📁 요약 보관함 ${sumsOf(PJ.rowId).length}</button>
      <button class="btn line sm" data-act="view">${PJ.view==='cal'?'📋 목록으로 보기':'📅 달력으로 보기'}</button><button class="btn line sm" data-act="print">🖨 인쇄</button><button class="x" data-act="close" aria-label="닫기">×</button></div>
    <div class="fb">${typeChips}<span style="flex:1"></span>
-     <span class="chip ${PJ.open?'on':''}" data-flag="open">처리중만</span>
+     <span class="chip ${PJ.open?'on':''}" data-flag="open" title="접수·진행·보류">처리중·보류만</span>
      <span class="chip ${PJ.rec?'':'off'}" data-flag="rec">📝 기록</span><span class="chip ${PJ.wl?'':'off'}" data-flag="wl">📒 근무일지${WL?' '+Object.keys(wdays).length+'일':''}</span>
      <input class="inp" id="pjQ" value="${esc(PJ.q)}" placeholder="이 프로젝트에서 검색" style="width:170px"></div>
    <div class="minimap" id="mmap" title="프로젝트 전체 기간 — 월을 누르면 이동합니다">${mm}</div>
@@ -646,7 +648,7 @@ function chgSum(L){
 }
 function chipRec(x){
   const c=TYPES[x.type]||'#6b7280';
-  return `<span class="ch ${isOpenRec(x)?'open':''}" style="--c:${c}" data-rec="${x.id}" title="${esc(x.type+' · '+x.title)}">${CH_ICON[x.channel]||''} ${esc(x.title)}</span>`;
+  return `<span class="ch ${isOpenRec(x)?'open':''}" style="--c:${c}" data-rec="${x.id}" title="${esc((x.status?'['+x.status+'] ':'')+x.type+' · '+x.title)}">${STAT_ICON[x.status]||''}${CH_ICON[x.channel]||''} ${esc(x.title)}</span>`;
 }
 function calHTML(r,D,per){
   const m=PJ.month,first=m+'-01',start=addD(first,-dow(first));
@@ -658,7 +660,7 @@ function calHTML(r,D,per){
     if(i>=35&&out&&i%7===0)break;
     const dd=D[d]||{recs:[],wl:[],due:[]},w=dow(d);
     const inpj=per&&d>=per.start&&(!per.end||d<=per.end);
-    const items=[...dd.recs.map(chipRec),...dd.due.map(x=>`<span class="ch due" style="--c:${TYPES[x.type]||'#6b7280'}" data-rec="${x.id}" title="후속조치 기한">⏰ ${esc(x.title)}</span>`)];
+    const items=[...dd.recs.map(chipRec),...dd.due.map(x=>`<span class="ch due" style="--c:${TYPES[x.type]||'#6b7280'}" data-rec="${x.id}" title="후속조치 기한일">⏳ ${esc(x.title)} <small>기한</small></span>`)];
     const show=items.slice(0,3);
     const wlh=dd.wl.length?`<span class="ch wl" data-day="${d}" title="${esc(dd.wl.map(e=>e.emp+' '+e.hours+'h').join(', '))}">📒 근무일지 ${new Set(dd.wl.map(e=>e.emp)).size}명 · ${Math.round(dd.wl.reduce((a,e)=>a+e.hours,0)*10)/10}h</span>`:'';
     cells+=`<div class="dc ${out?'out':''} ${inpj?'inpj':''} ${d===todayStr?'td':''} ${PJ.sel===d?'sel':''} ${w===0?'sun':w===6?'sat':''} ${holName(d)?'hol':''}" data-day="${d}"><span class="n">${+d.slice(8)}</span>${holName(d)?`<span class="more" style="color:#d4392e"> ${holName(d)}</span>`:''}${show.join('')}${items.length>3?`<div class="more">+${items.length-3}건 더</div>`:''}${wlh}</div>`;
@@ -775,7 +777,7 @@ function openForm(rec,pre){
     <div class="fr top"><label>내용</label><textarea class="inp" id="fmContent" rows="7" placeholder="대화·통화 내용, 결정·지시 사항, 수치(금액·수량·일정) 등을 적어 두세요">${esc(d.content||'')}</textarea></div>
     <div class="fr"><label>중요도 · 처리</label><div class="row2"><select class="inp" id="fmPri">${PRI.map(t=>`<option ${t===d.priority?'selected':''}>${t}</option>`).join('')}</select><select class="inp" id="fmSt">${STATUS.map(t=>`<option value="${t}" ${t===(d.status||'')?'selected':''}>${t||'처리상태 없음'}</option>`).join('')}</select><input type="date" class="inp" id="fmDue" value="${esc(d.dueDate||'')}" title="후속조치 기한"></div></div>
     <div class="fr"><label>영향 · 공유</label><div class="row2"><input type="number" step="1" class="inp" id="fmDays" value="${d.scheduleDays||''}" placeholder="공기 영향(일, 늘면 +)" title="일정이 늘어나면 +, 줄면 −">${ME.admin?`<input type="number" step="1" class="inp" id="fmAmt" value="${rec&&AM[rec.id]&&AM[rec.id].amount!==undefined?AM[rec.id].amount:''}" placeholder="금액 영향(원, 추가 +) · 관리자만 보임" title="이 항목은 관리자에게만 보이고 직원은 볼 수 없습니다">`:''}<label style="display:flex;gap:5px;align-items:center;flex:2;min-width:160px"><input type="checkbox" id="fmShare" ${d.share?'checked':''}> 직원에게 공유하고 확인받기</label></div></div>
-    <div class="hint" style="margin:-4px 0 8px 106px">처리상태를 “접수/진행”으로 두고 기한을 넣으면 달력에 ⏰로 표시되고 맨 위 “처리 중” 목록에 모입니다.</div>
+    <div class="hint" style="margin:-4px 0 8px 106px">처리상태를 “접수/진행/보류”로 두면 맨 위 “처리 중·보류 중” 목록에 모이고(기한을 넣으면 그날 달력에도 표시), 달력에는 상태 아이콘이 붙습니다: 접수 📝 · 진행 ⏰ · 완료 👌 · 보류 ⚠️ (기한일은 ⏳로 표시)</div>
     <div class="fr top"><label>원본 캡처<br><span class="hint" style="font-weight:400">증빙용</span></label><div id="fmAttBox"></div></div>
    </div>
    <div class="mf"><span class="hint" id="fmMsg" style="flex:1"></span><button class="btn line" data-m="close">취소</button><button class="btn pri" id="fmSave">저장</button></div></div></div>`;
