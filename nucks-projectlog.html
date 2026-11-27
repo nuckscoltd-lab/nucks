@@ -71,7 +71,7 @@ h1{font-size:19px;margin:0}
 .rw.hd .rt{background:var(--head);z-index:7;font-weight:600}
 .rt b{color:var(--ink);font-family:var(--font-num);font-weight:500}
 .rt .open{background:var(--badbg);color:var(--bad);border-radius:8px;padding:0 6px;font-weight:600}
-.mo{position:absolute;top:0;height:100%;border-left:1px solid var(--line);font-size:11px;color:var(--muted);padding:4px 5px;white-space:nowrap;overflow:hidden}
+.mo{position:absolute;top:0;height:100%;border-left:1px solid var(--line);font-size:11px;color:var(--muted);padding:4px 5px;white-space:nowrap;overflow:hidden;text-overflow:clip;box-sizing:border-box}
 .mo.yr{border-left:2px solid #9aa2aa}
 .mo.yr b{color:var(--ink)}
 .vl{position:absolute;top:0;bottom:0;border-left:1px solid #eef0f3;pointer-events:none}
@@ -347,24 +347,34 @@ async function loadWL(){
   if(WL)return WL;
   if(WLP)return WLP;
   WLP=(async()=>{
-    const out={entries:[],partial:false,err:''};
+    const out={entries:[],partial:false,mode:'',err:''};
     try{
-      let snap,partial=false;
-      try{snap=await db.collection('workLogs').get()}
-      catch(e){ // 규칙상 전체 읽기가 안 되면 내 근무일지만
-        if(ME.uid){snap=await db.collection('workLogs').where('uid','==',ME.uid).get();partial=true}else throw e;
+      let list=[]; // {date,emp,detail,projects:[{name,code,hours,tasks[]}]}
+      const fromDoc=d=>{const row=d.data();return{date:row['날짜']||'',emp:row['사원명']||'(이름없음)',detail:row['상세내용']||'',projects:(row.projects||[]).map(p=>({name:String(p['프로젝트']||'').trim(),code:String(p['프로젝트코드']||'').trim(),hours:Number(p['투입시간'])||0,tasks:Object.keys(p.tasks||{}).filter(k=>p.tasks[k])}))}};
+      if(ME.admin){
+        const snap=await db.collection('workLogs').get();
+        list=snap.docs.map(fromDoc);out.mode='all';
+      }else{
+        // 근로자: 서버 함수가 "공유가 허용된 근로자의 근무일지 + 내 근무일지"만 골라 준다(보안 규칙은 본인·관리자 전용 그대로).
+        try{
+          const r=await firebase.functions().httpsCallable('projectLogWorklogs',{timeout:60000})({});
+          list=((r.data&&r.data.rows)||[]).map(x=>({date:x.date||'',emp:x.emp||'(이름없음)',detail:x.detail||'',projects:(x.projects||[]).map(p=>({name:String(p.name||'').trim(),code:String(p.code||'').trim(),hours:Number(p.hours)||0,tasks:p.tasks||[]}))}));
+          out.mode='shared';
+        }catch(e){ // 함수가 아직 배포되지 않았거나 실패하면 내 근무일지만
+          if(!ME.uid)throw e;
+          const snap=await db.collection('workLogs').where('uid','==',ME.uid).get();
+          list=snap.docs.map(fromDoc);out.partial=true;out.mode='own';out.fnErr=(e&&e.code)||'';
+        }
       }
       let codes={};try{const o=await db.collection('officialProjects').doc('list').get();if(o.exists)codes=(o.data()||{}).codes||{}}catch(e){}
-      snap.docs.forEach(d=>{
-        const row=d.data(),emp=row['사원명']||'(이름없음)';
+      list.forEach(row=>{
         (row.projects||[]).forEach(p=>{
-          const name=String(p['프로젝트']||'').trim(),raw=String(p['프로젝트코드']||'').trim(),code=String(codes[name]||'').trim()||raw;
+          const name=p.name,raw=p.code,code=String(codes[name]||'').trim()||raw;
           if(!name&&!code)return;
-          out.entries.push({date:row['날짜']||'',emp,name,code,ncode:normCode(code),nname:normName(name),hours:Number(p['투입시간'])||0,
-            tags:Object.keys(p.tasks||{}).filter(k=>p.tasks[k]),detail:row['상세내용']||''});
+          out.entries.push({date:row.date,emp:row.emp,name,code,ncode:normCode(code),nname:normName(name),hours:p.hours,
+            tags:p.tasks,detail:row.detail});
         });
       });
-      out.partial=partial;
     }catch(e){out.err=String(e&&e.message||e)}
     WL=out;return out;
   })();
@@ -459,12 +469,22 @@ function renderBoard(){
   const X=d=>diff(cs,d)*dw;
   // 눈금(월)
   let mo='',vl='';
-  for(let m=ym(cs);;m=addM(m,1)){
-    const s=m+'-01';if(s>ce)break;const x=s<cs?0:X(s);
-    const yr=m.endsWith('-01');
-    mo+=`<div class="mo ${yr?'yr':''}" style="left:${x}px">${yr||m===ym(cs)?`<b>${m.slice(0,4)}</b> `:''}${+m.slice(5)}월</div>`;
+  // 월 눈금: 각 칸의 폭(다음 달 시작까지)에 맞춰 글자를 줄이거나 자른다 - 앞 달 글자가 다음 달(연도) 글자와 겹치지 않게
+  const ms=[];
+  for(let m=ym(cs);;m=addM(m,1)){const s=m+'-01';if(s>ce)break;ms.push({m,s,x:s<cs?0:X(s)})}
+  ms.forEach((o,i)=>{
+    const{m,s,x}=o,nx=i+1<ms.length?ms[i+1].x:W,w=Math.max(0,nx-x);
+    const yr=m.endsWith('-01'),withYear=yr||i===0,mon=+m.slice(5),y4=m.slice(0,4),y2="'"+y4.slice(2);
+    let label;
+    if(w<22)label='';
+    else if(!withYear)label=w>=34?`${mon}월`:`${mon}`;
+    else if(w>=64)label=`<b>${y4}</b> ${mon}월`;
+    else if(w>=52)label=`<b>${y2}</b> ${mon}월`;
+    else if(w>=34)label=`<b>${y2}</b> ${mon}`;
+    else label=`<b>${y2}</b>`;
+    mo+=`<div class="mo ${yr?'yr':''}" style="left:${x}px;width:${w}px" title="${y4}년 ${mon}월">${label}</div>`;
     if(s>=cs)vl+=`<div class="vl ${yr?'y':''}" style="left:${x}px"></div>`;
-  }
+  });
   const todayX=todayStr>=cs&&todayStr<=ce?`<div class="today" style="left:${X(todayStr)+dw/2}px"></div>`:'';
   let h=`<div class="rw hd"><div class="lf">거래처 · 프로젝트</div><div class="tl" style="width:${W}px">${mo}${todayX}</div><div class="rt">기록</div></div>`;
   let lastG=null,n=0;
@@ -594,7 +614,7 @@ function renderPJ(keepScroll){
   else main=listHTML(r,D);
   const sel=PJ.sel;
   const side=sel?dayPanel(r,D,sel):`<div class="empty">달력에서 날짜를 누르면 그날의 기록·근무일지가 여기에 펼쳐집니다.<br><br>빈 날짜를 <b>두 번 누르면</b> 그 날짜로 새 기록을 쓸 수 있어요.</div>`;
-  const wlNote=WL?(WL.err?`<div class="warn" style="margin:8px 16px 0">근무일지를 읽지 못했습니다 (${esc(WL.err)})</div>`:WL.partial?`<div class="warn" style="margin:8px 16px 0">근무일지는 권한상 <b>내 기록만</b> 표시됩니다.</div>`:''):'';
+  const wlNote=WL?(WL.err?`<div class="warn" style="margin:8px 16px 0">근무일지를 읽지 못했습니다 (${esc(WL.err)})</div>`:WL.partial?`<div class="warn" style="margin:8px 16px 0">근무일지는 <b>내 기록만</b> 표시됩니다. (공유 서버 함수 projectLogWorklogs가 아직 배포되지 않았을 수 있습니다${WL.fnErr?' · '+esc(WL.fnErr):''})</div>`:WL.mode==='shared'?`<div class="hint" style="margin:8px 16px 0">근무일지는 <b>내 기록과 공유가 허용된 근로자의 기록</b>만 표시됩니다.</div>`:''):'';
   const html=`<div class="ov" id="pjOv"><div class="md" role="dialog" aria-label="프로젝트 기록">
    <div class="mh"><h2>${esc(r.name)}<small>${esc(g.name)} · ${perTxt}${r.projCode?' · '+esc(r.projCode):''}</small></h2>
      ${b0&&b0.inner?`<span class="pill ${st==='done'?'done':st==='lost'?'lost':'on'}">${esc(b0.inner)}</span>`:''}${openN?`<span class="tg over">처리중 ${openN}건</span>`:''}${chgSum(recAll)}
@@ -994,8 +1014,32 @@ function openSettings(){
     <div class="fr top"><label>개인 API 키<br><span class="hint" style="font-weight:400">(선택)</span></label><div><input class="inp" id="stKey" type="password" placeholder="sk-ant-… (보통은 비워 두세요)" value="${esc(localStorage.getItem(KEYK)||'')}" autocomplete="off"><div class="hint" style="margin-top:4px">이 PC의 브라우저에만 저장됩니다. 서버 함수를 쓰는 경우에는 필요 없습니다.</div></div></div>
     <div class="fr"><label>모델(개인 키용)</label><input class="inp" id="stModel" value="${esc(localStorage.getItem(MODELK)||DEF_MODEL)}"></div>
     <div class="fr top"><label>근무일지</label><div><button class="btn line sm" id="stWL">다시 불러오기</button><div class="hint" style="margin-top:4px">근무일지는 읽기만 하며, 급여·인건비 정보는 읽지 않습니다.</div></div></div>
+    ${ME.admin?'<div class="fr top"><label>근무일지 공유<br><span class="hint" style="font-weight:400">(관리자 전용)</span></label><div><div class="hint" style="line-height:1.6;margin-bottom:6px">체크한 사람의 근무일지는 <b>다른 근로자도</b> 볼 수 있습니다. 체크를 풀면 <b>본인과 관리자만</b> 봅니다. (처음 설정: 근로자는 공유, 관리자는 비공유)</div><div id="shareList" class="hint">불러오는 중…</div><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn line sm" id="shareDefault">처음 설정으로 되돌리기</button><button class="btn pri sm" id="shareSave">공유 범위 저장</button></div><div id="shareMsg" class="hint" style="margin-top:4px"></div></div></div>':''}
     <div id="stMsg" class="hint"></div></div>
    <div class="mf"><button class="btn line" id="stTest">연결 테스트</button><button class="btn line" data-m="close">닫기</button><button class="btn pri" id="stSave">저장</button></div></div></div>`;
+  if(ME.admin)loadShareList();
+}
+let SHARE_USERS=[];
+const shareDefaultOf=u=>u.role==='worker';
+const shareEffective=u=>u.worklogShared===true||(u.worklogShared!==false&&u.role==='worker');
+async function loadShareList(){
+  const box=$('#shareList');if(!box)return;
+  try{
+    const snap=await db.collection('users').get();
+    SHARE_USERS=snap.docs.map(d=>Object.assign({uid:d.id},d.data())).filter(u=>!u.isPlaceholder&&['worker','admin'].includes(u.role))
+      .sort((a,b)=>(a.employmentStatus==='퇴사')-(b.employmentStatus==='퇴사')||(a.role===b.role?0:a.role==='admin'?-1:1)||String(a.displayName||'').localeCompare(String(b.displayName||''),'ko'));
+    box.innerHTML=SHARE_USERS.map(u=>`<label style="display:flex;gap:6px;align-items:center;padding:3px 0;cursor:pointer${u.employmentStatus==='퇴사'?';opacity:.55':''}"><input type="checkbox" data-su="${esc(u.uid)}" ${shareEffective(u)?'checked':''}><span>${esc(u.displayName||u.email||u.uid)}</span><span class="hint">${u.role==='admin'?'관리자':'근로자'}${u.employmentStatus==='퇴사'?' · 퇴사':''}</span></label>`).join('')||'<span class="hint">사용자를 찾지 못했습니다.</span>';
+  }catch(e){box.textContent='사용자 목록을 읽지 못했습니다: '+(e&&e.message||e)}
+}
+async function saveShare(){
+  const msg=$('#shareMsg');let n=0,fail=0;
+  const jobs=SHARE_USERS.map(u=>{
+    const el=document.querySelector(`[data-su="${u.uid}"]`);if(!el)return null;
+    if(el.checked===shareEffective(u))return null;
+    return db.collection('users').doc(u.uid).update({worklogShared:el.checked}).then(()=>{u.worklogShared=el.checked;n++},()=>{fail++});
+  }).filter(Boolean);
+  msg.textContent='저장 중…';await Promise.all(jobs);
+  msg.textContent=fail?`저장 실패 ${fail}명 (사용자 정보 수정 권한을 확인하세요)`:(n?`공유 범위를 저장했습니다 (${n}명 변경)`:'바뀐 내용이 없습니다');
 }
 async function testKey(){
   const key=$('#stKey').value.trim(),model=$('#stModel').value.trim()||DEF_MODEL,m=$('#stMsg');
@@ -1131,6 +1175,8 @@ document.addEventListener('click',e=>{
   if(t.id==='fmSave'){saveForm();return}
   if(t.id==='stSave'){const k=$('#stKey').value.trim(),mo=$('#stModel').value.trim();try{if(k)localStorage.setItem(KEYK,k);else localStorage.removeItem(KEYK);if(mo&&mo!==DEF_MODEL)localStorage.setItem(MODELK,mo);else localStorage.removeItem(MODELK)}catch(x){}closeModal();toast('설정을 저장했습니다');return}
   if(t.id==='stTest'){testKey();return}
+  if(t.id==='shareSave'){saveShare();return}
+  if(t.id==='shareDefault'){SHARE_USERS.forEach(u=>{const el=document.querySelector(`[data-su="${u.uid}"]`);if(el)el.checked=shareDefaultOf(u)});$('#shareMsg').textContent='처음 설정으로 바꿨습니다. “공유 범위 저장”을 눌러야 적용됩니다.';return}
   if(t.id==='stWL'){WL=null;WLP=null;ROWS.forEach(({r})=>{delete r._wl});loadWL().then(()=>{toast('근무일지를 다시 불러왔습니다');if(PJ)renderPJ(true)});return}
   // 툴바
   if(t.id==='bNew'){openForm(null,{});return}
